@@ -140,3 +140,21 @@ test("a disabled menu item says why in text, and the legend's tracks stay on a p
   assert.match(tableView, /element\("p", \{ className: "note", textContent: payload\.nifti_reason/);
   assert.match(page, /\.rt-table \.rt-track \{ display: none; \}/);
 });
+
+test("a long file name in the uploaded files is cut, not squeezed or scrolled", () => {
+  // The name columns share the room that is left, and show an ellipsis; the full name is the cell's tooltip.
+  assert.match(page, /#uploaded td:first-child, #uploaded td:nth-child\(4\) \{ width: 50%; max-width: 0; overflow: hidden; text-overflow: ellipsis; \}/);
+  assert.doesNotMatch(page, /#uploaded td:first-child \{[^}]*overflow-wrap: anywhere/);
+  assert.match(readFileSync(new URL("repl.js", dir), "utf8"), /textContent: text, title: text/);
+});
+
+test("an uploaded image has a Decode button that offers its decoding query again", () => {
+  const script = readFileSync(new URL("repl.js", dir), "utf8");
+  // The upload's answer is kept, also when the session's files are uploaded again, and dropped with the file.
+  assert.match(script, /if \(answer\.query\) decodings\.set\(name, answer\); else decodings\.delete\(name\);/);
+  assert.match(script, /iconButton\("decode", "Decode", `Decode \$\{name\}`/);
+  assert.match(script, /uploads\.delete\(name\); decodings\.delete\(name\);/);
+  assert.match(script, /uploads\.clear\(\); decodings\.clear\(\);/);
+  // Like the others, the row's buttons are icons with the name as label.
+  assert.match(page, /#uploaded td\.upload-actions button \{[^}]*font-size: 0;/);
+});

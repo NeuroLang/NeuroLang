@@ -74,6 +74,31 @@
     menu_docs: { drive: () => $("#docs > summary").click() },
     brain: { answer: () => [reply({ viewers: [bigPage("brain viewer (mock)")], graph: bigPage("graph (mock)") })], drive: async () => { run(QUERY); await wait(300); click("#tab-brain"); } },
     graph: { answer: () => [reply({ viewers: [bigPage("brain viewer (mock)")], graph: bigPage("graph (mock)") })], drive: async () => { run(QUERY); await wait(300); click("#tab-graph"); } },
+    // An image uploaded under a long name: its row is cut, and has the Decode button.
+    uploads_long: {
+      upload: (name) => ({ name, relation: "image", statement: `.image '${name}' --name image`, kind: "map", threshold: 3.1, cortex_query: "", query: "ans(concept, p) :- decoded(concept, p)" }),
+      answer: () => [reply({ uploads: { used: 7234560, most: 209715200, files: [{ name: "autobiographical_memory_association-test_z_FDR_0.01.nii", size: 7234560, loaded: ["autobiographical_memory_association_test_z_fdr_0_01"] }] } })],
+      drive: () => {
+        const data = new DataTransfer();
+        data.items.add(new File([new Uint8Array(8)], "autobiographical_memory_association-test_z_FDR_0.01.nii"));
+        $("#upload-file").files = data.files;
+        $("#upload-file").dispatchEvent(new Event("change"));
+        setTimeout(() => $("#decode-offer-no").click(), 600); // the offer is put aside: the row keeps its Decode button
+      },
+    },
+    // ... and the row's Decode button brings the offer back.
+    uploads_decode_again: {
+      upload: (name) => ({ name, relation: "image", statement: `.image '${name}' --name image`, kind: "map", threshold: 3.1, cortex_query: "", query: "ans(concept, p) :- decoded(concept, p)" }),
+      answer: () => [reply({ uploads: { used: 7234560, most: 209715200, files: [{ name: "autobiographical_memory_association-test_z_FDR_0.01.nii", size: 7234560, loaded: ["autobiographical_memory_association_test_z_fdr_0_01"] }] } })],
+      drive: () => {
+        const data = new DataTransfer();
+        data.items.add(new File([new Uint8Array(8)], "autobiographical_memory_association-test_z_FDR_0.01.nii"));
+        $("#upload-file").files = data.files;
+        $("#upload-file").dispatchEvent(new Event("change"));
+        setTimeout(() => $("#decode-offer-no").click(), 600);
+        setTimeout(() => $("#uploaded-list .upload-decode").click(), 900);
+      },
+    },
     stderr: { answer: () => [reply({ failed: true, tables: [], ratable: false, html: "<pre>Traceback (most recent call last):\n  File \"&lt;repl&gt;\", line 1\nUnsupportedProgramError: the query is not liftable, and the weighted model counting of 412 variables was stopped.</pre>" })], drive: () => run("ans(x) :- PROB(x) :- p(x) & q(x)") },
     query_error: { answer: () => [reply({ failed: true, tables: [], ratable: false, html: "<pre>Syntax error at 1:19: unexpected token ')' after a comparison that has no right-hand side, in a rule whose body is long enough for its error to be wider than the card\n  ans(pmid) :- term_in_study_tfidf(pmid, 'pain', t) & (t > )\n                                                      ^</pre>" })], drive: () => { run("ans(pmid) :- term_in_study_tfidf(pmid, 'pain', t) & (t > )"); } },
     assistant_live: { answer: null, events: [ASK, STEP1, PENDING], drive: () => ask() },
@@ -121,6 +146,7 @@
         setTimeout(() => { this.#send(spec.ready ?? ready); if (spec.drive) setTimeout(spec.drive, 400); }, 300);
         return;
       }
+      if (message.type === "upload") return spec.upload && this.#send({ type: "uploaded", ...spec.upload(message.name) });
       if (message.type) return;
       if (spec.events) spec.events.forEach((event, i) => setTimeout(() => this.#send(event), 100 + i * 150));
       if (spec.answer === null) return; // never answers: the statement runs

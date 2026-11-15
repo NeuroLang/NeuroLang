@@ -649,6 +649,8 @@ const workerMessages = {
 // The buttons of a row of the uploads: an icon and a word each.
 const UPLOAD_ICONS = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  // a brain with a spark: the image is decoded into the concepts it resembles
+  decode: '<path d="M9.5 5a3 3 0 0 0-5.3 1.9A3.6 3.6 0 0 0 2.7 12a3.6 3.6 0 0 0 1.4 5.2A3.2 3.2 0 0 0 9.5 19.3V5"/><path d="M9.5 5a3 3 0 0 1 4.2-1.5M16.3 9a3.6 3.6 0 0 1 .5 5.5 3.6 3.6 0 0 1-1.7 2.7 3.2 3.2 0 0 1-5.6 2.1"/><path d="M5.2 11.5h2.3M9.5 14c1.5 0 2.6-.8 3.2-2.2"/><path fill="currentColor" stroke-width="1" d="M19.6 1.2c.4 2.2 1.1 2.9 3.2 3.3-2.1.4-2.8 1.1-3.2 3.3-.4-2.2-1.1-2.9-3.3-3.3 2.2-.4 2.9-1.1 3.3-3.3z"/>',
   remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
 };
 function iconButton(kind, text, label, action) {
@@ -721,13 +723,20 @@ function showUploads(listed) {
   $("uploaded-summary").textContent = summary;
   $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells) => {
     const row = document.createElement("tr");
-    for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text }));
+    for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text, title: text }));
     const name = cells[0];
     const actions = document.createElement("td");
     actions.className = "upload-actions";
     if (uploads.has(name)) { // the page has its bytes (it uploaded it)
       actions.append(iconButton("download", "Download", `Download ${name}`,
         () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) })));
+    }
+    const decoding = decodings.get(name); // an image: its decoding query may be offered again
+    if (decoding) {
+      actions.append(iconButton("decode", "Decode", `Decode ${name}`, () => {
+        offerDecoding(name, decoding.query, decoding.kind, decoding.threshold, decoding.cortex_query, decoding.relation);
+        $("decode-offer").scrollIntoView({ block: "nearest" });
+      }));
     }
     actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
     row.append(actions);
@@ -741,7 +750,7 @@ function applyReply(data) {
     // A file the session no longer has (.uploads remove) is not uploaded,
     // nor loaded, again when the session is given back.
     const removed = removedUploads([...uploads.keys()], data.uploads);
-    for (const name of removed) uploads.delete(name);
+    for (const name of removed) { uploads.delete(name); decodings.delete(name); }
     if (removed.length) session.replace(withoutUploads(session.entries, removed));
     showUploads(data.uploads);
   }
@@ -875,11 +884,15 @@ function goOn(text) {
 // The files uploaded in this tab (.load NAME), by name: a session started
 // anew has none, so they are sent again before its statements are restored.
 const uploads = new Map();
+const decodings = new Map(); // the answer of the upload of each image that can be decoded
 let uploaded = null; // resolves on the worker's answer to an upload
 
 function sendUpload(name, bytes) {
   return new Promise((resolve) => {
-    uploaded = resolve;
+    uploaded = (answer) => { // an image that can be decoded keeps what its Decode button offers
+      if (answer.query) decodings.set(name, answer); else decodings.delete(name);
+      resolve(answer);
+    };
     worker.postMessage({ type: "upload", name, bytes: bytes.slice() });
   });
 }
@@ -1105,7 +1118,7 @@ $("llm-forget").addEventListener("click", () => {
   $("refine-run").hidden = true;
 });
 $("restart").addEventListener("click", () => {
-  uploads.clear(); // a fresh session: without the rules, nor the files uploaded
+  uploads.clear(); decodings.clear(); // a fresh session: without the rules, nor the files uploaded
   closeDecodingOffer();
   showUploads(null);
   start();
