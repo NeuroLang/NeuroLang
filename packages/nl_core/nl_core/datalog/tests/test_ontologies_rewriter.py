@@ -587,3 +587,51 @@ def test_rewritings_with_a_blocked_atom_without_values_are_left_out():
     assert {r.antecedent for r in valued(pruned)} >= {
         Conjunction((Symbol(f"K{i}")(s),)) for i in range(4)
     }
+
+
+def test_a_chain_through_unnamed_values_builds_few_rewritings(monkeypatch):
+    """With ``T_i ⊑ ∃h.K_i`` and ``K_i ⊑ ∃m.W_i``, ``W_i ⊑ R``, the query
+    ``h(s, x), m(x, c), R(c)`` is rewritten to the ``T_i(s)``. A step that
+    moves ``x`` or ``c`` into the unnamed position of an ``aux`` that their
+    other atoms cannot reach in one step is not built."""
+    n = 8
+    ttl = """
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix owl: <http://www.w3.org/2002/07/owl#> .
+    @prefix : <http://ex.org/> .
+    :R a owl:Class .
+    """ + "".join(
+        f"""
+    :T{i} a owl:Class ; rdfs:subClassOf [
+        a owl:Restriction ; owl:onProperty :h ; owl:someValuesFrom :K{i}
+    ] .
+    :K{i} a owl:Class ; rdfs:subClassOf [
+        a owl:Restriction ; owl:onProperty :m ; owl:someValuesFrom :W{i}
+    ] .
+    :W{i} a owl:Class ; rdfs:subClassOf :R .
+    """ for i in range(n)
+    )
+    onto = OntologyParser(io.StringIO(ttl), load_format="turtle")
+    constraints, _, _ = onto.parse_ontology()
+    s, x, c, q = Symbol("s"), Symbol("x"), Symbol("c"), Symbol("q")
+    query = Union((I_(q(s), Conjunction((
+        Symbol("h")(s, x), Symbol("m")(x, c), Symbol("R")(c)
+    ))),))
+    holds = frozenset(Symbol(f"T{i}") for i in range(n))
+    constraints = constraints_that_can_hold(constraints, holds)
+    built = []
+    combine = OntologyRewriter._combine_rewriting
+    monkeypatch.setattr(
+        OntologyRewriter, "_combine_rewriting",
+        lambda self, *args: built.append(1) or combine(self, *args)
+    )
+    rewritings = OntologyRewriter(
+        query, constraints, chased=True, holds=holds
+    ).Xrewrite()
+    assert {
+        r.antecedent for r in rewritings
+        if not any(
+            a.functor.is_fresh for a in extract_logic_atoms(r.antecedent)
+        )
+    } >= {Conjunction((Symbol(f"T{i}")(s),)) for i in range(n)}
+    assert len(built) < 20 * n  # 2,072 without the test of steps
