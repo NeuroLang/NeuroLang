@@ -22,6 +22,19 @@ export function definesRules(text, mode = "datalog") {
   });
 }
 
+// The file a statement loads (.load NAME, .image NAME), or null.
+function loadedFile(text) {
+  const match = /^\.(?:load|image)\s+(?:'([^']*)'|"([^"]*)"|(\S+))/.exec(text);
+  return match ? match[1] ?? match[2] ?? match[3] : null;
+}
+
+// The *entries* without those loading a file of *names*, removed from the
+// session (.uploads remove): they are not run again when the session is.
+export function withoutUploads(entries, names) {
+  const removed = new Set(names);
+  return entries.filter(({ text }) => !removed.has(loadedFile(text)));
+}
+
 // The texts that give a session's rules back: ``.clear`` first if asked, the
 // statements that define rules each in its language, and the language at the end.
 export function replayTexts(entries, finalMode, { clear = false } = {}) {
