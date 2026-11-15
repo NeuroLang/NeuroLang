@@ -17,6 +17,12 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+Nothing yet.
+
+
+v0.1a23 (2026-11-15)
+--------------------
+
 **New features:**
 
 * A tractogram is decoded as an image is, where its streamlines end:
