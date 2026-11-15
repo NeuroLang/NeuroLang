@@ -486,6 +486,12 @@ def test_the_local_server_answers_the_worker(serve, tmp_path, monkeypatch):
                 upload(name, data, kind)
             with error.value:
                 assert error.value.code == code, name
+        # The size the server is given (--max-upload-mb) is the one kept.
+        backend.uploads = {"most_file": 2}
+        with pytest.raises(urllib.error.HTTPError) as error:
+            upload("w.csv", b"abc")
+        with error.value:
+            assert error.value.code == 413
         events.close()
     finally:
         server.shutdown()
@@ -2943,6 +2949,9 @@ def test_the_defaults_of_the_options_are_those_of_their_file(serve):
     assert f"({defaults['idle_minutes']}, above 0)" in server
     assert f"({defaults['query_minutes']}; 0, never)" in server
     assert f"guests at once ({defaults['max_guest_sessions']})" in server
+    assert f"in DIR (``{defaults['uploads_dir']}``)" in server
+    assert f"at most MB megabytes ({defaults['max_upload_mb']})" in server
+    assert f"together at most MB ({defaults['max_uploads_mb']})" in server
     contributing = " ".join((docs / "contributing.rst").read_text().split())
     assert f"``--max-sessions`` ({defaults['max_sessions']}," in contributing
     assert f"``--idle-minutes`` ({defaults['idle_minutes']}," in contributing

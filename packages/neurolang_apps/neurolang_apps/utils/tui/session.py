@@ -17,10 +17,12 @@ Datalog, and the Datalog rules of a predicate (``.datalog``).
 
 import re
 import shlex
+import shutil
 import traceback
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 from neurolang.confine import confined_roots
@@ -448,8 +450,9 @@ def _load_arguments(arg: str):
     return words if 1 <= len(words) <= 2 else None
 
 
-# The files a page uploads (WebRepl.upload): their names, the bytes of
-# one, and of all those of a session, which keeps them in its memory.
+# The files a page uploads (WebRepl.upload): their names, and by default
+# the bytes of one and of all those of a session (a server sets its own:
+# neurolang-repl-serve --max-upload-mb, --max-uploads-mb).
 UPLOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,99}\Z")
 MOST_UPLOAD_BYTES = 50 << 20
 MOST_UPLOADS_BYTES = 200 << 20
@@ -462,12 +465,61 @@ def is_image(name: str) -> bool:
     return name.lower().endswith(IMAGE_SUFFIXES)
 
 
+class Uploads:
+    """
+    The files the page of a session uploaded, by name, for ``.load NAME``
+    and ``.image NAME``: in the memory of the session, or, on a server that
+    gives one (neurolang-repl-serve --uploads-dir), as the files of the
+    session's *directory*, which the server removes when the session ends.
+    A file is at most *most_file* bytes, and all those of the session
+    *most_all*: a ValueError tells which is exceeded. A new store of a
+    directory empties it, as the page forgets its files on a restart.
+    """
+
+    def __init__(self, directory=None, most_file: int = MOST_UPLOAD_BYTES,
+                 most_all: int = MOST_UPLOADS_BYTES):
+        self.directory = Path(directory) if directory else None
+        self.most_file = int(most_file)
+        self.most_all = int(most_all)
+        self._sizes = {}  # name -> bytes
+        self._memory = {}  # name -> data, without a directory
+        if self.directory is not None and self.directory.exists():
+            shutil.rmtree(self.directory, ignore_errors=True)
+
+    def get(self, name: str) -> Optional[bytes]:
+        """Return the bytes of the file *name*, or None."""
+        if name not in self._sizes:
+            return None
+        if self.directory is None:
+            return self._memory[name]
+        return (self.directory / name).read_bytes()
+
+    def put(self, name: str, data: bytes) -> None:
+        """Keep the bytes *data* as the file *name*, replacing one of that
+        name; *name* is that of a file of the directory (store_upload
+        checks it)."""
+        if len(data) > self.most_file:
+            raise ValueError(f"{name} is over {self.most_file >> 20} MB")
+        kept = sum(size for n, size in self._sizes.items() if n != name)
+        if kept + len(data) > self.most_all:
+            raise ValueError(f"The uploads of a session hold at most "
+                             f"{self.most_all >> 20} MB")
+        if self.directory is None:
+            self._memory[name] = bytes(data)
+        else:
+            self.directory.mkdir(parents=True, exist_ok=True)
+            (self.directory / name).write_bytes(data)
+        self._sizes[name] = len(data)
+
+    __setitem__ = put
+
+
 def store_upload(app, name: str, data: bytes) -> None:
     """
     Keep the file *name*, of the bytes *data*, that the page uploaded, for
-    ``.load NAME`` (``.image NAME`` for a NIfTI image): in the memory of
-    the session, never on a disk, and gone with it. A ValueError tells why
-    it is refused (its name, its format, its size).
+    ``.load NAME`` (``.image NAME`` for a NIfTI image), in the uploads of
+    the session (:class:`Uploads`), gone with it. A ValueError tells why it
+    is refused (its name, its format, its size).
     """
     if not isinstance(name, str) or not UPLOAD_NAME.match(name) \
             or ".." in name:
@@ -475,13 +527,7 @@ def store_upload(app, name: str, data: bytes) -> None:
                          "digits, '.', '_', '-' and spaces")
     if not is_image(name):
         engine_registry.relation_file_separator(name)  # .csv, .tsv(.gz)
-    if len(data) > MOST_UPLOAD_BYTES:
-        raise ValueError(f"{name} is over {MOST_UPLOAD_BYTES >> 20} MB")
-    kept = sum(len(d) for n, d in app.uploads.items() if n != name)
-    if kept + len(data) > MOST_UPLOADS_BYTES:
-        raise ValueError(f"The uploads of a session hold at most "
-                         f"{MOST_UPLOADS_BYTES >> 20} MB")
-    app.uploads[name] = bytes(data)
+    app.uploads.put(name, data)
 
 
 @command(

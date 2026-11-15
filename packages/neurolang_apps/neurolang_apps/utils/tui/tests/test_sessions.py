@@ -250,6 +250,37 @@ def test_a_session_loads_what_its_page_uploads(sessions):
         ann.upload(name="../pets.csv", data=b"pet\n")
 
 
+def test_uploads_are_files_of_a_folder_removed_with_the_session(tmp_path):
+    """With an uploads directory (neurolang-repl-serve --uploads-dir), a
+    session keeps what its page uploads in a folder of its own, removed
+    when it ends (stopped, or idle for too long); the server removes, at
+    its start and from time to time, the folders of no session it runs."""
+    directory = tmp_path / "uploads"
+    directory.mkdir()
+    (directory / "999").mkdir()  # left by an earlier run of the server
+    sessions = Sessions(tmp_path, build=build, uploads={
+        "directory": str(directory), "most_file": 1 << 20,
+        "most_all": 2 << 20})
+    try:
+        assert list(directory.iterdir()) == []
+        ann = sessions.session("ann", "t1")
+        ann.start("neurosynth")
+        ann.upload(name="pets.csv", data=b"pet\ncat\n")
+        folder = directory / str(ann.starts)
+        assert (folder / "pets.csv").read_bytes() == b"pet\ncat\n"
+        ann.submit(".load pets.csv")
+        assert _rows(ann.submit("ans(x) :- pets(x)")) == [["cat"]]
+        with pytest.raises(RuntimeError, match="over 1 MB"):
+            ann.upload(name="big.csv", data=b"x" * ((1 << 20) + 1))
+        (directory / "123").mkdir()  # of a session that crashed
+        sessions._sweep_uploads()
+        assert sorted(p.name for p in directory.iterdir()) == [folder.name]
+        ann.end()
+        assert not folder.exists()
+    finally:
+        sessions.close()
+
+
 def test_a_busy_session_is_not_ended_for_another(tmp_path):
     sessions = Sessions(tmp_path, build=build, most=1)
     try:

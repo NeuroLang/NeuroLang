@@ -16,3 +16,6 @@ max_sessions: 8               # --users --local: sessions at once
 idle_minutes: 120             # --users --local: an unused session ends
 query_minutes: 60             # --users --local: a query is stopped (0: never)
 max_guest_sessions: 2         # --guests: sessions of the guests at once
+uploads_dir: ~/.cache/neurolang/repl-uploads  # --users --local: a folder per session, removed when it ends
+max_upload_mb: 50             # --local: a file a page uploads, at most
+max_uploads_mb: 200           # --local: all those of a session, at most

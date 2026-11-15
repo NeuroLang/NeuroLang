@@ -26,7 +26,7 @@ from typing import Callable, Optional
 
 from neurolang.confine import lifted
 from neurolang_apps.utils import engine_registry
-from neurolang_apps.utils.tui import web
+from neurolang_apps.utils.tui import session, web
 from neurolang_apps.utils.tui.interrupt import _raise_in_thread
 
 
@@ -91,9 +91,12 @@ class LocalBackend:
     def __init__(
         self, data_dir, resolution: float = 2.0, light: bool = False,
         feedback: Optional[tuple] = None, build: Optional[Callable] = None,
-        preload_embeddings: bool = False,
+        preload_embeddings: bool = False, uploads: Optional[dict] = None,
     ):
         self.data_dir = Path(data_dir).resolve()
+        # Where the page's uploads go and how large they may be
+        # (session.Uploads), in memory without a directory.
+        self.uploads = uploads or {}
         self.resolution = resolution
         self.light = light
         self.feedback = feedback
@@ -214,6 +217,7 @@ class LocalBackend:
                 pass
         self._page_key = False
         repl = web.WebRepl(nl, engine, self.resolution, **options)
+        repl.app.uploads = session.Uploads(**self.uploads)
         repl.set_event_sink(lambda text: self.emit(json.loads(text)))
         self._use_machine_llm(repl)
         can_rate = False
