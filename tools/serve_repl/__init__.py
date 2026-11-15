@@ -474,13 +474,19 @@ class EngineChoice:
             kept = json.loads(self.saved.read_text()) if self.saved else {}
         except (OSError, ValueError):
             kept = {}
-        off = set(kept.get("off") or ()) & set(self.entries)
+        if not isinstance(kept, dict) or not isinstance(
+                kept.get("off", []), list):
+            kept = {}  # not one the console wrote
+        configured = self.default
+        off = {str(name) for name in kept.get("off", [])} & set(self.entries)
         if off != set(self.entries):  # one at least stays
             self.off = off
         if kept.get("default") in self.on():
             self.default = kept["default"]
         elif self.default in self.off:
             self.default = self.on()[0]
+        #: Whether the console's choice is not the configuration's.
+        self.overrides = bool(self.off) or self.default != configured
         self._write_bundle()
 
     def on(self) -> list:
@@ -3607,8 +3613,9 @@ def main(argv=None) -> None:
         page = engines.page
         print(f"The page offers the engines {', '.join(engines.on())}, "
               f"starting with {engines.default}"
-              + (f" (the admin console's choice is kept in "
-                 f"{engines.saved})" if engines.saved else ""), flush=True)
+              + (f": the admin console's choice, kept in {engines.saved}, "
+                 "holds over the configuration's (remove the file to go "
+                 "back to it)" if engines.overrides else ""), flush=True)
         if args.prepare:
             prepare_engines(
                 args.data_dir.resolve(),

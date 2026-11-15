@@ -1744,6 +1744,14 @@ def test_the_admin_console_chooses_the_engines_of_the_page(serve, tmp_path):
     engines = serve.prepare_local_site(tmp_path, ["neurostore"], True,
                                        "neurostore", saved)
     assert (engines.on(), engines.default) == (["neurostore"], "neurostore")
+    assert not engines.overrides
+    # a file the console did not write is not its choice
+    for text in ("[]", '{"off": 3}', "nonsense"):
+        saved.write_text(text)
+        engines = serve.prepare_local_site(
+            tmp_path, ["neurosynth", "neurostore"], True, "neurostore", saved)
+        assert (engines.on(), engines.default, engines.overrides) == (
+            ["neurosynth", "neurostore"], "neurostore", False)
 
 
 def test_the_default_engine_of_the_configuration(serve, tmp_path):
