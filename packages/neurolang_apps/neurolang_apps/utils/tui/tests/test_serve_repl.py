@@ -418,7 +418,8 @@ def test_the_local_site_has_the_page_answered_by_this_machine(
     assert any("Neurosynth: Yarkoni" in text for text in
                bundle["engines"]["neurosynth"]["acknowledgements"])
     assert (page.parent / "local_worker.js").is_file()
-    page = serve.prepare_local_site(tmp_path, ["neurosynth", "neurosynth_iit"]).page
+    page = serve.prepare_local_site(
+        tmp_path, ["neurosynth", "neurosynth_iit"]).page
     bundle = json.loads((page.parent / "bundle.json").read_text())
     assert bundle["default"] == getattr(
         serve.bundle_script(), "DEFAULT_ENGINE", "neurosynth"
@@ -1681,7 +1682,8 @@ def test_a_user_changes_their_own_password(console):
 
 
 def test_the_local_site_links_the_account_page_of_its_users(serve, tmp_path):
-    page = serve.prepare_local_site(tmp_path, ["neurosynth"], users=True).page
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"],
+                                    users=True).page
     assert json.loads((page.parent / "bundle.json").read_text())["users"]
     page = serve.prepare_local_site(tmp_path, ["neurosynth"]).page
     assert "users" not in json.loads((page.parent / "bundle.json").read_text())
