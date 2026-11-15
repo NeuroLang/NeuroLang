@@ -575,6 +575,15 @@ Unreleased
   text; and, on a phone, the legend of the empty result still draws the
   probability bars it explains.
 
+* The slider of the streamlines in the brain viewer sets their number, from
+  one to all of those the page has, on a logarithmic scale (a linear one
+  would put the counts worth seeing in its first notch), where it set their
+  opacity.  The file ranks the streamlines (``rank``, which NiiVue reads as
+  a value of each, ``dps``) so that the ``k`` drawn are an even sample of
+  them, spread over all, not the first ``k`` of the file, and the page asks
+  NiiVue to hide those under the rank of the ``k``-th: the count is exact,
+  not a multiple of a stride, and the label says it.
+
 
 v0.1a22 (2026-11-13)
 --------------------
