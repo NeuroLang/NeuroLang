@@ -1519,6 +1519,7 @@ class TestImage:
         tiny._handle_dot_command(".image 'my z.nii.gz'")
         assert "loaded image(i, j, k, value): 3 voxels from my z.nii.gz" in \
             " ".join(_output(tiny).split())
+        assert tiny.uploads.listing()[0]["loaded"] == ["image"]
 
     def test_the_help_quotes_the_defaults(self, tiny):
         threshold = nifti.IMAGE_DEFAULTS["threshold"]

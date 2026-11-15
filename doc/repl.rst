@@ -179,7 +179,8 @@ when the session ends, stopped or unused for a while (its limits and its
 folder are its options, see :doc:`repl_server`).  The page sends the file
 again when it gives the session's rules back (after **Stop**, or when a
 saved session is opened), and forgets it on **Restart**.  A server loads
-the files you upload, and no path of its own.
+the files you upload, and no path of its own.  ``.uploads`` lists the files
+of the session, what each was loaded as, and the room left.
 
 **Upload data** also takes a NIfTI image of activations (``.nii`` or
 ``.nii.gz``), a binary mask or a z-map: the page loads it with ``.image``
@@ -285,6 +286,10 @@ Every command
    * - ``.image PATH|UPLOADED``
      - a NIfTI image of activations as ``image(i, j, k, value)``, shown in
        the brain viewer
+     - both
+   * - ``.uploads``
+     - the files the page uploaded in the session: their kind, size, age,
+       the relations loaded from them, and the room left
      - both
    * - ``.sets``, ``.predicates``, ``.engines``
      - the engine's relations, and the engines

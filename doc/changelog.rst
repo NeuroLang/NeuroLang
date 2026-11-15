@@ -28,7 +28,8 @@ Unreleased
   stopped or unused for ``--idle-minutes``, or when its process died; their
   sizes are its ``--max-upload-mb`` (50) and ``--max-uploads-mb`` (200).
   The admin console shows them by session, with their sizes, ages and the
-  free disk space, and erases a file, a session's or all.  ``.image PATH|UPLOADED [--name
+  free disk space, and erases a file, a session's or all.  ``.uploads`` lists, in a session, the files its page uploaded, their
+  kind, size and age, the relations loaded from them and the room left.  ``.image PATH|UPLOADED [--name
   NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
   (resampled, a mask to the nearest voxel; at most ``image.max_mb``
   uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells
