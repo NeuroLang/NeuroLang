@@ -358,6 +358,16 @@ Unreleased
 
 **Performance:**
 
+* The greedy join ordering starts from the join of two relations with the
+  fewest rows at most, and adds at each step the relation whose join with
+  the joined ones has the fewest rows at most, rather than the smallest
+  relation: a relation all of whose columns are joined, which cannot add
+  rows, is joined first.  Decoding a whole map of z-scores with its voxels
+  as probabilistic facts and one chosen at random, which ran out of memory
+  (more than 24 GB) on neurosynth at 2 mm, takes 13.4 s and 6 GB for the
+  motor map of nilearn: the image is joined with the activations and
+  summed per study before the terms.
+
 * The plans of the lifted probabilistic queries sum each side of a join
   over the columns the projection drops before joining it
   (``PushSumsThroughJoins``), the

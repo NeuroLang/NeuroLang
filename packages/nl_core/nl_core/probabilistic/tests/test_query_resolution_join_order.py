@@ -54,7 +54,8 @@ def test_goo_optimiser_orders_joins_by_symbol_table_sizes():
 
     Symbols are resolved through the symbol table, and deterministic or
     probabilistic sets through their relation, so the smallest relation
-    ``labels`` is joined before the large ``voxel``.
+    ``labels`` starts, then ``voxel``, all of whose columns it has, before
+    ``reports`` and the choice.
     """
     symbol_table = {}
     reports, voxel, labels, choice = (
@@ -80,9 +81,48 @@ def test_goo_optimiser_orders_joins_by_symbol_table_sizes():
     query = NaturalJoin(NaturalJoin(NaturalJoin(r, v), l_), s)
 
     result = RAQueryGOOOptimiser(symbol_table=symbol_table).walk(query)
-    assert _left_deep_operands(result) == [l_, r, s, v]
+    assert _left_deep_operands(result) == [l_, v, r, s]
 
     assert RAQueryGOOOptimiser().walk(query) is query
+
+
+def test_goo_optimiser_joins_an_image_before_the_studies():
+    """
+    Check that the voxels of an image are joined with the activations
+    before the studies and their terms, the image having more voxels than
+    there are studies.
+
+    In the decoding of an image, ``voxel(v) ⋈ active(v) ⋈ activated(v, s)
+    ⋈ study(s) ⋈ term(s, t)``, the choice of a study, of 20 rows, is
+    smaller than the image, of 50; started from it, the order would join
+    the terms of the studies, then all the activations of each of them.
+    The join of ``voxel`` and ``active`` keeps at most 50 rows, the least.
+    """
+    symbol_table = {}
+    names = ("voxel", "active", "activated", "study", "term")
+    sizes = (50, 50, 1000, 20, 200)
+    arities = (1, 1, 2, 1, 2)
+    columns = ("v", "v", "vs", "s", "st")
+    symbols = [Symbol[AbstractSet](n) for n in names]
+    for symbol, name, size, arity in zip(symbols, names, sizes, arities):
+        symbol_table[symbol] = DeterministicFactSet(
+            _set_symbol(name, size, arity, symbol_table)
+        )
+    voxel, active, activated, study, term = (
+        _named_operand(symbol, c) for symbol, c in zip(symbols, columns)
+    )
+    query = NaturalJoin(
+        NaturalJoin(
+            NaturalJoin(NaturalJoin(term, study), activated), active
+        ),
+        voxel,
+    )
+
+    result = RAQueryGOOOptimiser(symbol_table=symbol_table).walk(query)
+
+    ordered = _left_deep_operands(result)
+    assert set(ordered[:2]) == {voxel, active}
+    assert ordered[2:] == [activated, study, term]
 
 
 def test_goo_optimiser_resolves_provenance_sets():

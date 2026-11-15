@@ -190,10 +190,16 @@ study :math:`s` hitting it if it activates the voxel chosen,
    p(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
 
 is so summed over the voxels for each study, a sum of the joined image's
-size, before the join with the terms of the studies, when the join order
-puts the voxels' relations together; the order of the greedy join ordering,
-which starts from the smallest relation, may not, and a whole map of
-z-scores still joins the terms first (the pushing does not order).
+size, before the join with the terms of the studies, as the join order
+puts the voxels' relations together. The greedy join ordering starts from
+the join of two relations with the fewest rows at most, and adds at each
+step the relation whose join with the joined ones has the fewest rows at
+most: a set all of whose columns are columns of the other side matches
+each of its rows at most once, so that ``image_active`` and then
+``activated`` are joined with ``image_voxel`` before the studies and their
+terms, even when the image has more voxels than there are studies. Started
+from the smallest relation, ``selected_study``, the order joined its terms,
+and then the activations of each study and term, before the image.
 
 The small dichotomy theorem
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1607,6 +1613,14 @@ Sums pushed through joins
    larger than the rows of that side, and the join of the summed sides no
    larger than that of the sides, so the rewriting keeps the plan
    polynomial.
+
+Join order
+   ``RAQueryGOOOptimiser`` only reorders the operands of a chain of
+   natural joins. The product of the semiring being commutative and
+   associative, so is the natural join of provenance sets: every order
+   gives each row the same number, and the bound of the number of rows
+   which picks the order (``_join_size_bound``) only decides the cost of
+   the plan, never its probabilities.
 
 Non-repeating queries
    :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
