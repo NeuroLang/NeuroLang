@@ -40,3 +40,14 @@ def test_the_sizes_of_the_uploads_are_bounded(tmp_path):
         uploads.put("b.csv", b"123")
     assert uploads.get("b.csv") is None
     assert not (tmp_path / "s" / "b.csv").exists()
+
+
+def test_a_file_erased_by_an_admin_is_gone_for_the_session(tmp_path):
+    """The admin console erases the files of a folder (Sessions.
+    erase_uploads): the session's uploads are what the folder holds."""
+    folder = tmp_path / "3"
+    uploads = Uploads(directory=folder, most_file=4, most_all=6)
+    uploads.put("a.csv", b"1234")
+    (folder / "a.csv").unlink()
+    assert uploads.get("a.csv") is None
+    uploads.put("b.csv", b"1234")  # a.csv no longer counts

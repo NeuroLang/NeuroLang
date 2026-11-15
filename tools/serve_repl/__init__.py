@@ -913,6 +913,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "query_seconds": getattr(self.sessions, "query_seconds",
                                          None),
                 "sessions": getattr(self.sessions, "most", None)},
+            # the files the pages uploaded, by session (--uploads-dir)
+            "uploads": self.sessions.uploads_info()
+            if hasattr(self.sessions, "uploads_info") else None,
             "activity": getattr(self.sessions, "activity", None) is not None,
             "dashboard": self.dashboard is not None,
             "feedback": bool(self.feedback_db),
@@ -1001,6 +1004,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/admin/api/end-session" and self.sessions:
             tab = body.get("tab")
             return {"ended": self.sessions.end(name, tab and str(tab))}
+        if path == "/admin/api/erase-uploads" and hasattr(
+            self.sessions, "erase_uploads"
+        ):
+            start, file = body.get("start"), body.get("name")
+            erased = self.sessions.erase_uploads(
+                None if start is None else str(start),
+                None if file is None else str(file),
+            )
+            print(f"{self.user} erased {erased} uploaded files"
+                  f"{f' of the session {start}' if start else ''}"
+                  f"{f': {file}' if file else ''}", flush=True)
+            return {"erased": erased}
         raise ValueError("no such change")
 
     #: The key that signs the login cookies (--users), and whether they

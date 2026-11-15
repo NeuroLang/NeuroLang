@@ -26,7 +26,9 @@ Unreleased
   session's page uploads go to a folder of its own in ``--uploads-dir``
   (``uploads_dir`` of ``server.yaml``), removed when the session ends,
   stopped or unused for ``--idle-minutes``, or when its process died; their
-  sizes are its ``--max-upload-mb`` (50) and ``--max-uploads-mb`` (200).  ``.image PATH|UPLOADED [--name
+  sizes are its ``--max-upload-mb`` (50) and ``--max-uploads-mb`` (200).
+  The admin console shows them by session, with their sizes, ages and the
+  free disk space, and erases a file, a session's or all.  ``.image PATH|UPLOADED [--name
   NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
   (resampled, a mask to the nearest voxel; at most ``image.max_mb``
   uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells

@@ -1362,6 +1362,37 @@ def test_the_console_is_the_admins(console):
     assert "password" not in json.dumps(state)
 
 
+def test_the_console_shows_and_erases_the_uploads(serve, tmp_path):
+    """The uploads of the sessions (--uploads-dir) in the admin console:
+    the state lists them, and an admin erases them."""
+    (tmp_path / "bundle.json").write_text("{}")
+    sessions = _FakeSessions()
+    sessions.info = lambda: []
+    sessions.uploads_info = lambda: {"directory": "/up", "folders": []}
+    erased = []
+    sessions.erase_uploads = lambda start=None, name=None: (
+        erased.append((start, name)) or 2)
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        state = _json_of(port, "/admin/api/state", "ann", "ann-pw")
+        assert state["uploads"] == {"directory": "/up", "folders": []}
+        body = {"start": "4", "name": "a.csv"}
+        assert _status(port, "/admin/api/erase-uploads",
+                       _basic("bob-pw", "bob"), "POST", body) == 403
+        assert _json_of(port, "/admin/api/erase-uploads", "ann", "ann-pw",
+                        body) == {"erased": 2}
+        _json_of(port, "/admin/api/erase-uploads", "ann", "ann-pw", {})
+        assert erased == [("4", "a.csv"), (None, None)]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_another_sites_post_is_refused(console):
     port, _ = console
     form = {**_basic("ann-pw", "ann"), "Content-Type": "text/plain"}
