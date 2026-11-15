@@ -105,7 +105,11 @@ ended after ``--idle-minutes`` unused. Each user changes their password at
 have the admin console at ``/admin``: the users, their groups and their
 assistant's key (whose, never the key), the sessions, and the ratings of
 ``--feedback-db FILE``, a SQLite database of the ratings of the page, signed
-by the user's name and groups.
+by the user's name and groups. Its *Update and restart* asks whether the
+upstream of the checkout's branch (origin/master) moved; if so, it brings
+the checkout there (a fast-forward only), the environment to the lock
+(``uv sync --frozen --inexact`` with the extras installed) and restarts the
+server, which ends the sessions.
 
 As a service of this user, started now and at each login, serving as the
 other options say::
@@ -230,6 +234,11 @@ REPOSITORY = "NeuroLang/NeuroLang"
 ARTIFACTS = ("repl-pr-", "documentation-html")
 # The run whose site a downloaded site is, in that site.
 RUN_FILE = ".neurolang-run"
+# The checkout the server runs from, which the console's update brings to
+# the upstream of its branch (origin/master), and the project whose
+# extras installed the update keeps.
+CHECKOUT = Path(__file__).resolve().parents[2]
+WORKSPACE = "neurolang-workspace"
 
 
 def _sibling(name: str):
@@ -781,7 +790,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/admin/logs" or path.startswith(DASHBOARD_PREFIX):
             return self._dashboard(path)
         if self.command == "POST":
-            return self._reply_json(self._admin_change(path, self._body()))
+            answer = self._admin_change(path, self._body())
+            self._reply_json(answer)
+            if answer.get("restarting"):  # once the page has its answer
+                self.server.restarting = True
+                threading.Thread(target=self.server.shutdown,
+                                 daemon=True).start()
+            return
         if path in ("/admin", "/admin/"):
             return self._reply(200, ADMIN_PAGE.read_bytes(),
                                "text/html; charset=utf-8")
@@ -789,6 +804,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._reply_json(self._admin_state())
         if path == "/admin/api/feedback":
             return self._reply_json(self._admin_feedback())
+        if path == "/admin/api/update":
+            return self._reply_json(update_check())
         activity = getattr(self.sessions, "activity", None)
         if path == "/admin/api/usage":
             return self._reply_json(activity.totals() if activity else [])
@@ -916,6 +933,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "dashboard": self.dashboard is not None,
             "feedback": bool(self.feedback_db),
             "feedback_engines": self._feedback_engines(),
+            "update": (CHECKOUT / ".git").exists(),
         }
 
     def _feedback_engines(self) -> list:
@@ -1000,6 +1018,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/admin/api/end-session" and self.sessions:
             tab = body.get("tab")
             return {"ended": self.sessions.end(name, tab and str(tab))}
+        if path == "/admin/api/update":  # and restart, if master moved
+            check = update()
+            return {**check, "restarting": bool(check["new"])}
         raise ValueError("no such change")
 
     #: The key that signs the login cookies (--users), and whether they
@@ -2323,6 +2344,104 @@ def _since(days: str):
     return datetime.now(timezone.utc) - timedelta(days=days)
 
 
+def _run(command: list, env=None) -> str:
+    """Return the output of *command*, run in the checkout; a failure is a
+    ValueError telling its errors."""
+    done = subprocess.run(command, cwd=CHECKOUT, capture_output=True,
+                          text=True, env=env)
+    if done.returncode:
+        errors = (done.stderr or done.stdout).strip()[-2000:]
+        raise ValueError(f"{shlex.join(command[:2])} failed: {errors}")
+    return done.stdout.strip()
+
+
+def _git(*args: str) -> str:
+    """Run git in the checkout, which it trusts if the server runs as
+    another user than the checkout's (the service's root)."""
+    return _run(["git", "-c", f"safe.directory={CHECKOUT}", *args])
+
+
+def update_check() -> dict:
+    """Fetch the upstream of the checkout's branch (origin/master); tell
+    the checkout's commit, its commits the checkout lacks, newest first,
+    and whether the checkout has changes of its own."""
+    if not (CHECKOUT / ".git").exists():
+        raise ValueError(f"The server runs from no git checkout: {CHECKOUT}")
+    upstream = _git("rev-parse", "--abbrev-ref", "--symbolic-full-name",
+                    "@{u}")
+    remote, _, branch = upstream.partition("/")
+    _git("fetch", "--quiet", remote, branch)
+    return {
+        "head": _git("log", "-1", "--format=%h %s"), "upstream": upstream,
+        "new": _git("log", "--format=%h %s", "HEAD..@{u}").splitlines(),
+        "changed": bool(_git("status", "--porcelain",
+                             "--untracked-files=no")),
+    }
+
+
+def update() -> dict:
+    """Bring the checkout to its upstream, if it moved, by a fast-forward,
+    and the server's environment to the lock, with the extras it has;
+    return what :func:`update_check` told before."""
+    check = update_check()
+    if not check["new"]:
+        return check
+    if check["changed"]:
+        raise ValueError("The checkout has changes of its own: update it "
+                         "by hand")
+    uv = shutil.which("uv")
+    if uv is None:
+        raise ValueError("The update needs uv, which the server's PATH "
+                         "lacks")
+    _git("merge", "--ff-only", "--quiet", "@{u}")
+    env = dict(os.environ)
+    if sys.prefix != sys.base_prefix:  # the server's, wherever it is
+        env["UV_PROJECT_ENVIRONMENT"] = sys.prefix
+    # --inexact: what the lock does not name stays (installed by hand)
+    _run([uv, "sync", "--frozen", "--inexact",
+          *(f"--extra={extra}" for extra in installed_extras())], env)
+    _give_back(CHECKOUT)
+    return check
+
+
+def installed_extras(project: str = WORKSPACE) -> list:
+    """Return the extras of *project* installed in this environment (all
+    their packages are, those of their extras too)."""
+    from importlib import metadata
+
+    def installed(name, extra=None):
+        try:
+            requires = metadata.requires(name) or []
+        except metadata.PackageNotFoundError:
+            return False
+        if extra is None:
+            return True
+        marker = re.compile(rf"""extra\s*==\s*["']{re.escape(extra)}["']""")
+        own = [re.match(r"\s*([\w.-]+)\s*(?:\[([^\]]*)\])?", line).groups()
+               for line in requires if marker.search(line)]
+        return bool(own) and all(
+            installed(name) and all(installed(name, e.strip())
+                                    for e in (extras or "").split(",")
+                                    if e.strip())
+            for name, extras in own)
+
+    try:
+        offered = metadata.metadata(project).get_all("Provides-Extra") or []
+    except metadata.PackageNotFoundError:
+        return []
+    return [extra for extra in offered if installed(project, extra)]
+
+
+def _give_back(directory: Path) -> None:
+    """Give the files of *directory* back to its owner, if the server runs
+    as root and wrote some: its owner's git and uv change them again."""
+    owner = directory.stat()
+    if os.geteuid() != 0 or owner.st_uid == 0:
+        return
+    for path in [directory, *directory.rglob("*")]:
+        os.lchown(path, owner.st_uid, owner.st_gid)
+
+
 def _zone(name: str):
     """The time zone *name* (IANA, the page's), UTC if none or unknown."""
     from datetime import timezone
@@ -3370,6 +3489,9 @@ def main(argv=None) -> None:
             backend.close()
         if board is not None:
             board.close()
+    if getattr(server, "restarting", False):  # updated: by the console
+        print("The server restarts, updated", flush=True)
+        os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])
 
 
 def _interrupt(signum, frame):
