@@ -19,6 +19,13 @@ Unreleased
 
 **New features:**
 
+* The admin console of ``neurolang-repl-serve`` has *Update and restart*:
+  it asks whether origin/master (the upstream of the server's checkout)
+  moved, lists its new commits, and, confirmed, fast-forwards the checkout,
+  syncs the environment to the lock with the extras installed (``uv sync
+  --frozen --inexact``) and restarts the server in place; the page reloads
+  once the server is back. A checkout with changes of its own is not
+  updated.
 * A dense whole-brain tractogram for tract_querier's bundles, the engines
   ``neurosynth_disconnectome7t`` and ``neurostore_disconnectome7t``:
   Disconnectome7T's tractography of the Human Connectome Project's 7 T
