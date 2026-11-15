@@ -560,7 +560,12 @@ Unreleased
   the faint text of the REPL's tokens, and the account and admin pages
   read their notes and states at 4.5:1 in a dark system and have 44 px
   controls on a touch screen, as the activity page, which had them only on
-  narrow ones.
+  narrow ones. The menus close with Escape and with a click elsewhere; the
+  result card says "Running…" while a query runs, and shows a failed
+  statement as one line with an icon above its log, which wraps; the steps
+  of the assistant are open while it works; a disabled menu item says why in
+  text; and, on a phone, the legend of the empty result still draws the
+  probability bars it explains.
 
 
 v0.1a22 (2026-11-13)

@@ -47,7 +47,8 @@ function downloadMenu(payload, download) {
   };
   const images = Array.isArray(payload.nifti)
     ? payload.nifti.map((value) => item(imageName(value), "nifti", value ?? ""))
-    : [item("NIfTI image", "nifti", "", payload.nifti_reason || "This result is not an image")];
+    : [item("NIfTI image", "nifti", "", payload.nifti_reason || "This result is not an image"),
+      element("p", { className: "note", textContent: payload.nifti_reason || "This result is not an image" })]; // the reason, to read, not only a tooltip
   const menu = element("details", { className: "rt-menu" },
     element("summary", { textContent: "Download", title: "Save the whole result as a file" }),
     element("div", { className: "rt-menu-items" }, item("All rows, CSV", "csv"), item("All rows, TSV", "tsv"), ...images));

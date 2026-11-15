@@ -118,3 +118,36 @@ for (const file of ["account.html", "admin.html"]) {
     assert.match(html, /@media \(pointer: coarse\) \{[^}]*min-height: 44px/);
   });
 }
+
+// The behaviour of the page's script, read as text (its modules need a browser).
+const script = readFileSync(new URL("repl.js", dir), "utf8");
+const tableView = readFileSync(new URL("table_view.js", dir), "utf8");
+
+test("a menu closes with Escape, the focus back on its button, and with a click elsewhere", () => {
+  assert.match(script, /details\.nav-menu\[open\], details\.menu\[open\], details\.rt-menu\[open\]/);
+  assert.match(script, /event\.key !== "Escape"[\s\S]*?querySelector\("summary"\)\.focus\(\)[\s\S]*?menu\.open = false/);
+  assert.match(script, /!menu\.contains\(event\.target\)\) menu\.open = false/);
+});
+
+test("the result card says Running while a query runs, and the empty text otherwise", () => {
+  assert.match(page, /<div class="empty-busy"><h3>Running…<\/h3>/);
+  assert.match(page, /body\[data-busy\] \.empty-ready > :not\(\.empty-busy\) \{ display: none; \}/);
+  assert.match(page, /\.empty-busy \{ display: none; \}/);
+});
+
+test("a failure is one line with an icon above its log, which wraps, and is not announced twice", () => {
+  assert.match(page, /<p id="failed" hidden><svg class="icon"[^>]*aria-hidden="true"/);
+  assert.doesNotMatch(page, /<p id="failed"[^>]*role=/);
+  assert.match(page, /#out\.failed pre \{ white-space: pre-wrap;/);
+  assert.match(script, /`Failed: \$\{\/\^Traceback\/\.test\(lines\[0\]\) \? last : lines\[0\]/);
+});
+
+test("the steps of the assistant open when it starts to work, and only then", () => {
+  assert.equal([...script.matchAll(/live\.open = true;/g)].length, 2); // that and the no-answer button's
+  assert.match(script, /data\.event === "ask"\) \{\n      live\.open = true;/);
+});
+
+test("a disabled menu item says why in text, and the legend's tracks stay on a phone", () => {
+  assert.match(tableView, /element\("p", \{ className: "note", textContent: payload\.nifti_reason/);
+  assert.match(page, /\.rt-table \.rt-track \{ display: none; \}/);
+});
