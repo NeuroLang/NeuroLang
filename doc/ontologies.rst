@@ -570,6 +570,39 @@ so the third axiom does not change the answers below.  The file holds no
 fact of ``cogpo:has_contrast`` or ``cogat:measures`` between individuals,
 and no individual of ``cogat:CAO_00487`` or ``cogat:CAO_00872``.
 
+**The Atlas, twice.**  Once loaded, the Atlas is in the engine in two
+forms.  Its triples are facts on the names of its classes:
+``rdfs:subClassOf``, ``owl:onProperty``, ``owl:someValuesFrom`` and
+``rdfs:label`` relate a class to its restrictions and to its label, and the
+engine's ``cogat_measures`` and ``cogat_term`` join them.  A query reads
+them as any data and finds a class by its label, without its identifier:
+
+.. code-block:: neurolang
+
+   has_contrast_class(t, k) :- rdfs:subClassOf(t, r), owl:onProperty(r, <http://www.cogpo.org/ontologies/working/CogPOver2011.owl#has_contrast>), owl:someValuesFrom(r, k)
+   ans(s) :- mentions(s, 'stroop task'), cogat_term(t, 'stroop task'), has_contrast_class(t, k), cogat_measures(k, c), cogat_term(c, 'response inhibition')
+
+The variables of its body that are not in its head, ``t``, ``k`` and
+``c``, are existential: a study is an answer when there are a task
+labelled *stroop task*, one of its contrasts, and a concept labelled
+*response inhibition* that the contrast measures.  It returns the 139
+studies that mention the Stroop task, in 4.2 s on master ``786f892e``.
+This reading needs no instance of any class, but it finds only what the
+class axioms say of the classes: it reaches a study through the task's
+name, never through a contrast of the study itself.
+
+The axioms are also constraints, with one predicate per class and per
+property (:ref:`ontologies-loading`).  This is the open world: the
+constraints apply to the instances of the classes, and the rewriting
+reaches the unnamed contrast of each study.  Its queries name the class
+predicates, ``cogat:CAO_00487`` for response inhibition, since an unnamed
+value does not pass from one rule to another (:ref:`ontologies-complete`).
+With the rule for ``cogat:CAO_00872`` below, ``ans(s) :-
+cogpo:has_contrast(s, x), cogat:CAO_01515(x)`` returns 139 studies; with
+``stroop_contrast(x) :- cogat:CAO_01515(x)`` and ``stroop_contrast(x)`` in
+place of ``cogat:CAO_01515(x)``, it returns none, as the contrast of each
+study is unnamed.  The questions below compare the two readings.
+
 The closed world is computed on the same engine with the constraints
 removed and ``cogpo:has_contrast``, ``cogat:measures`` and
 ``cogat:CAO_00487`` as empty relations: the plain Datalog reading of the
