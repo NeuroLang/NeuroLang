@@ -579,11 +579,51 @@ Unreleased
   read their notes and states at 4.5:1 in a dark system and have 44 px
   controls on a touch screen, as the activity page, which had them only on
   narrow ones. The menus close with Escape and with a click elsewhere; the
-  result card says "Running…" while a query runs, and shows a failed
+  result card says "Running…" while a query runs, telling that the answer
+  comes as a table that the Brain tab can then show on the brain, and shows a failed
   statement as one line with an icon above its log, which wraps; the steps
   of the assistant are open while it works; a disabled menu item says why in
   text; and, on a phone, the legend of the empty result still draws the
   probability bars it explains.
+
+* The account and admin pages of the REPL server (``neurolang-repl-serve
+  --users``) look like its login and activity pages: the tokens of the
+  REPL's page, light and dark with the REPL's choice of theme, its logo and
+  heading, cards and fields with a border read at 3:1, a focus ring on
+  every control, a mark with the colour of an error or a success, 44 px
+  controls on a touch screen, and tables that scroll by themselves on a
+  narrow one, with their column heads scoped and the empty ones named.  The
+  activity page keeps its theme under the same key as the others, so that one
+  choice serves the REPL and all its pages.
+  
+* The slider of the streamlines in the brain viewer sets their number, from
+  one to all of those the page has, on a logarithmic scale (a linear one
+  would put the counts worth seeing in its first notch), where it set their
+  opacity.  The file ranks the streamlines (``rank``, which NiiVue reads as
+  a value of each, ``dps``) so that the ``k`` drawn are an even sample of
+  them, spread over all, not the first ``k`` of the file, and the page asks
+  NiiVue to hide those under the rank of the ``k``-th: the count is exact,
+  not a multiple of a stride, and the label says it.
+  
+* The graph of a query (the Graph tab of the REPL, ``.graph``) opens at a
+  size its text can be read at, where it was shrunk to fit its frame (about
+  4 px text in the REPL's result column, 3 px on a phone): from the data on
+  its left, in a box as high as a frame can show, which pans by dragging the
+  mouse, with a finger or with the arrow keys and zooms around the point
+  under the pointer, ``+`` and ``-`` too; ``Fit`` and ``Actual size`` say
+  which is on, and a hint says when there is more to pan to.  Its intro is a
+  line, with the long text and the descriptions of the legend folded under
+  "How to read this", and its legend a row of short chips.  A node of an
+  ontology is a card with the three linked dots of a knowledge graph in a
+  band at its left, where it was an ellipse with four whiskers.
+
+* The graph of a query says what a random choice is once, on its node
+  ("random choice · 3 rows, 1/3 each", and "chooses one of its rows, each
+  with probability 1/3" when it is clicked), where each probability that
+  used it repeated it, and "so p is the share of those choices where A
+  holds", in a paragraph of its own.  A probability keeps one line on how it
+  is computed, ``p = P(A), the share of the choices where A holds`` (``p =
+  P(A, C) / P(C)`` given a condition), so that its card is shorter.
 
 
 v0.1a22 (2026-11-13)

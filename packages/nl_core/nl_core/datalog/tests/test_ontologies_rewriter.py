@@ -587,3 +587,52 @@ def test_rewritings_with_a_blocked_atom_without_values_are_left_out():
     assert {r.antecedent for r in valued(pruned)} >= {
         Conjunction((Symbol(f"K{i}")(s),)) for i in range(4)
     }
+
+
+def test_a_dead_rewriting_is_not_built(monkeypatch):
+    """The rewriting steps that give a query ``_dead`` drops, as
+    ``aux_i(s, c), aux_j(z, c)`` above, are told before they are built:
+    fewer are built, and the rewritings are the same, variable names
+    included."""
+    ttl = """
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix owl: <http://www.w3.org/2002/07/owl#> .
+    @prefix : <http://ex.org/> .
+    :CC a owl:Class .
+    """ + "".join(
+        f"""
+    :K{i} a owl:Class ; rdfs:subClassOf [
+        a owl:Restriction ; owl:onProperty :m ; owl:someValuesFrom :W{i}
+    ] .
+    :W{i} a owl:Class ; rdfs:subClassOf :CC .
+    """ for i in range(4)
+    )
+    onto = OntologyParser(io.StringIO(ttl), load_format="turtle")
+    constraints, _, _ = onto.parse_ontology()
+    s, c, q = Symbol("s"), Symbol("c"), Symbol("q")
+    query = Union((I_(q(s), Conjunction((Symbol("m")(s, c), Symbol("CC")(c)))),))
+    holds = frozenset(Symbol(f"K{i}") for i in range(4))
+    constraints = constraints_that_can_hold(constraints, holds)
+    built = []
+    combine = OntologyRewriter._combine_rewriting
+
+    def counted(self, *args):
+        built.append(args)
+        return combine(self, *args)
+
+    monkeypatch.setattr(OntologyRewriter, "_combine_rewriting", counted)
+
+    def rewrite():
+        built.clear()
+        rewritings = OntologyRewriter(
+            query, constraints, chased=True, holds=holds
+        ).Xrewrite()
+        return rewritings, len(built)
+
+    checked, fewer = rewrite()
+    monkeypatch.setattr(
+        OntologyRewriter, "_builds_dead", lambda self, q, S, sigma: False
+    )
+    unchecked, more = rewrite()
+    assert checked == unchecked
+    assert fewer < more

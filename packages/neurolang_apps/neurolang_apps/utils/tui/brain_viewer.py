@@ -439,10 +439,29 @@ def shown_streamlines(ids, cap=None) -> list:
             .astype(int)]
 
 
+def streamline_ranks(n: int) -> np.ndarray:
+    """
+    Return the ranks, *n* down to 1, of *n* streamlines, as float32, such
+    that the *k* highest are an even sample of them: the order of the ranks
+    is that of the indices with their bits reversed (0, n/2, n/4, 3n/4...).
+    The page shows the streamlines whose rank is at least ``n - k + 1``: *k*
+    streamlines spread over all, not the first *k* of the file.
+    """
+    bits = max(1, (n - 1).bit_length())
+    order = [
+        i for i in (int(format(j, f"0{bits}b")[::-1], 2)
+                    for j in range(1 << bits)) if i < n
+    ]
+    ranks = np.empty(n, dtype=np.float32)
+    ranks[order] = n - np.arange(n)
+    return ranks
+
+
 def trk_bytes(lines) -> bytes:
     """
     Return the TrackVis ``.trk`` file of the streamlines *lines*, (n, 3)
-    arrays of points in millimetres (RAS+).
+    arrays of points in millimetres (RAS+), each with its ``rank``
+    (:func:`streamline_ranks`), which NiiVue reads as its ``dps``.
 
     NiiVue 0.69.0 reads a ``.tck`` without its first streamline (its
     ``readTCK`` misses the offset 0), a ``.trk`` whole.
@@ -450,6 +469,7 @@ def trk_bytes(lines) -> bytes:
     tractogram = nib.streamlines.Tractogram(
         [np.asarray(line, dtype=np.float32) for line in lines],
         affine_to_rasmm=np.eye(4),
+        data_per_streamline={"rank": streamline_ranks(len(lines))[:, None]},
     )
     file = io.BytesIO()
     nib.streamlines.TrkFile(tractogram).save(file)
