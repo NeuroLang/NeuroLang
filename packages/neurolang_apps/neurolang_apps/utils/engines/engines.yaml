@@ -869,12 +869,30 @@ engines:
     # of the Cognitive Atlas with 30 studies or more, the lift of fewer
     # being noisy.
     image_decoding_query: |-
+      % The weight of the voxels of the image each study s
+      % activates (a peak within the kernel of the voxel).
+      % {condition} keeps its activated voxels: all those
+      % of a mask, those of a z-map from its threshold.
       image_score(s, sum(w)) :- {image}(i, j, k, w), {condition}, activated(i, j, k, s)
+      % The weight of all the activated voxels of the image.
       image_total(sum(w)) :- {image}(i, j, k, w), {condition}
+      % A study hits the image with the probability that a
+      % voxel chosen in it, the more likely the larger its
+      % value, is one the study activates.
       image_hit(s) :: p :- image_score(s, x), image_total(y), (p == x / y)
+      % For each term t, the probability that a study of t,
+      % chosen at random, hits the image.
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      % The probability that any study, chosen at random,
+      % hits the image.
       p_image(PROB) :- image_hit(s) & selected_study(s)
+      % The number of studies of each term: the lift of a
+      % term of few studies is noisy.
       term_studies(t, count(s)) :- term_in_study(s, t)
+      % The lift of each concept of the Cognitive Atlas of
+      % 30 studies or more: how many times more often its
+      % studies hit the image than the average study does.
+      % The larger, the more the concept decodes the image.
       ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
     # The Cognitive Atlas ontology, for open-world queries over concepts,
     # tasks and contrasts: see doc/tutorial_cognitive_atlas.rst.  Its

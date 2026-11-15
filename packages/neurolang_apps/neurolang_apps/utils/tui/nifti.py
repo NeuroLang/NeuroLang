@@ -2146,7 +2146,8 @@ def decoding_query(app, name: str, mask: bool) -> Tuple[str, List[str]]:
     query = config.get("image_decoding_query") or ""
     condition = "(w > 0)" if mask else f"(w >= {IMAGE_DEFAULTS['threshold']})"
     query = query.replace("{image}", name).replace("{condition}", condition)
-    rules = query.splitlines()
+    rules = [line for line in query.splitlines()
+             if not line.lstrip().startswith("%")]  # its comments
     heads = {rule.split("(")[0].strip() for rule in rules}
     read = {
         word for rule in rules if ":-" in rule

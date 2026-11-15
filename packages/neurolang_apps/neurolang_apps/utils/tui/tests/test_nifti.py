@@ -1612,12 +1612,27 @@ class TestImage:
         return {row[0]: round(row[1], 6)
                 for row in frame.itertuples(index=False, name=None)}
 
+    def test_each_line_of_the_query_is_explained(self, decoding):
+        """The decoding query, which the page offers to put in the box, has
+        a comment (%, not the %% documenting a rule) before each rule."""
+        query, missing = nifti.decoding_query(decoding, "image", False)
+        assert not missing
+        lines = query.splitlines()
+        rules = [n for n, line in enumerate(lines)
+                 if not line.startswith("%")]
+        assert len(rules) == 7
+        for n in rules:
+            assert n > 0 and lines[n - 1].startswith("% "), lines[n]
+        assert not any(line.startswith("%%") for line in lines)
+        assert "(w >= 3.1)" in query  # the condition of a z-map
+
     def test_the_query_decodes_a_mask(self, decoding, tmp_path):
         mask = self._mask(tmp_path, [(1, 2, 3)])
         decoding._handle_dot_command(f".image {mask}")
         out = " ".join(_output(decoding).split())
-        assert "Decode it with this query: image_score(s, sum(w)) :- " \
-            "image(i, j, k, w), (w > 0), activated(i, j, k, s)" in out
+        assert "Decode it with this query: % The weight of the voxels" in out
+        assert "image_score(s, sum(w)) :- image(i, j, k, w), (w > 0), " \
+            "activated(i, j, k, s)" in out
         # P(hit | pain) = 1 over P(hit) = 2/3; vision, of probability 0, is
         # no answer
         assert self._lifts(decoding) == {"pain": 1.5}

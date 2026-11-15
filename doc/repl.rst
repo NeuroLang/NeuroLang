@@ -202,8 +202,9 @@ The page keeps the descriptions with the rules of the session, after
 
 **Upload data** also takes a NIfTI image of activations (``.nii`` or
 ``.nii.gz``), a binary mask or a z-map: the page loads it with ``.image``,
-shows it, and puts in the box the query decoding it towards the terms of
-the studies (:doc:`tutorial_decoding`).
+shows it, and asks whether the query decoding it towards the terms of the
+studies, a comment explaining each line, goes in the box
+(:doc:`tutorial_decoding`).
 
 
 Results

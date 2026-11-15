@@ -990,6 +990,7 @@ $("llm-forget").addEventListener("click", () => {
 });
 $("restart").addEventListener("click", () => {
   uploads.clear(); // a fresh session: without the rules, nor the files uploaded
+  closeDecodingOffer();
   showUploads(null);
   start();
 });
@@ -1019,9 +1020,29 @@ $("upload-file").addEventListener("change", async (event) => {
   }
   uploads.set(answer.name, bytes);
   run(answer.statement, { remember: true });
-  // An image comes with the query decoding it, for the visitor to run.
-  if (answer.query) putQuery(answer.query);
+  // An image comes with the query decoding it: the visitor is asked
+  // whether it goes in the box, where it replaces what they wrote.
+  if (answer.query) offerDecoding(answer.name, answer.query);
 });
+
+// The offer to put the query decoding an uploaded image in the box.
+let decodingQuery = "";
+function offerDecoding(name, query) {
+  decodingQuery = query;
+  $("decode-offer-text").textContent = `Decode ${name}? The query decoding it towards the concepts of the Cognitive Atlas, each line explained by a comment, can go in the query box`
+    + (editor.value.trim() ? ", in place of what is there." : ".");
+  $("decode-offer").hidden = false;
+}
+function closeDecodingOffer() {
+  $("decode-offer").hidden = true;
+  decodingQuery = "";
+}
+$("decode-offer-yes").addEventListener("click", () => {
+  putQuery(decodingQuery);
+  closeDecodingOffer();
+  input.focus();
+});
+$("decode-offer-no").addEventListener("click", closeDecodingOffer);
 $("session-open").addEventListener("click", () => $("session-file").click());
 $("session-file").addEventListener("change", async (event) => {
   const [file] = event.target.files;

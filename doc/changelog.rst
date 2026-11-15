@@ -49,8 +49,9 @@ Unreleased
 
 * Decoding a brain image (:doc:`tutorial_decoding`): ``.image`` prints, on
   the meta-analysis engines, the query decoding the image it loaded
-  (``image_decoding_query`` in ``engines.yaml``), and the page puts it in
-  the box after an upload: a plain Datalog query over the image, so any
+  (``image_decoding_query`` in ``engines.yaml``, a comment explaining each
+  line), and the page asks, after an upload, whether it goes in the box: a
+  plain Datalog query over the image, so any
   relation of voxels and values is decoded the same way.  Its score is the
   lift of each term: the probability that a study of the term activates a
   voxel chosen in the image, the more likely the larger its value (all
