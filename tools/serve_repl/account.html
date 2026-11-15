@@ -6,7 +6,7 @@
 <title>NeuroLang REPL: your account</title>
 <style>
   /* The account page of a user of neurolang-repl-serve --users. */
-  :root { color-scheme: light dark; --dim: #888; --bad: #cf222e; --ok: #1a7f37; }
+  :root { color-scheme: light dark; --dim: light-dark(#595959, #a6a6a6); --bad: light-dark(#cf222e, #ff7b72); --ok: light-dark(#1a7f37, #3fb950); }
   body { margin: 0 auto; max-width: 32rem; padding: 1rem; font: 14px/1.45 system-ui, sans-serif; }
   h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
   h2 { font-size: 1.05rem; margin: 1.5rem 0 .5rem; }
@@ -16,6 +16,8 @@
   input, button { font: inherit; padding: .35rem .5rem; }
   button { justify-self: start; }
   .error { color: var(--bad); } .ok { color: var(--ok); }
+  /* A finger needs 44px. */
+  @media (pointer: coarse) { input:not([type=checkbox]), select, button { min-height: 44px; } }
 </style>
 </head>
 <body>

@@ -7,7 +7,7 @@
 <style>
   /* The admin console of neurolang-repl-serve --users, for the group admin.
      What users wrote (names, questions, comments) is shown as text only. */
-  :root { color-scheme: light dark; --line: #8884; --dim: #888; --bad: #cf222e; --ok: #1a7f37; }
+  :root { color-scheme: light dark; --line: #8884; --dim: light-dark(#595959, #a6a6a6); --bad: light-dark(#cf222e, #ff7b72); --ok: light-dark(#1a7f37, #3fb950); }
   body { margin: 0 auto; max-width: 70rem; padding: 1rem; font: 14px/1.45 system-ui, sans-serif; }
   h1 { font-size: 1.3rem; margin: 0 0 .25rem; }
   h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
@@ -24,6 +24,8 @@
   input, select, button { font: inherit; padding: .25rem .5rem; }
   .own { color: var(--ok); } .none { color: var(--bad); }
   #message { min-height: 1.2rem; } #message.error { color: var(--bad); }
+  /* A finger needs 44px. */
+  @media (pointer: coarse) { input:not([type=checkbox]), select, button { min-height: 44px; } }
 </style>
 </head>
 <body>

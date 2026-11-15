@@ -82,8 +82,8 @@
   .link { background: none; border: 0; padding: 6px 0; color: var(--accent); cursor: pointer; text-underline-offset: 3px; }
   .link:hover { text-decoration: underline; }
   .zone { margin-left: auto; }
-  @media (max-width: 719px) {
-    select, input[type="search"], .seg button, .link, nav a { min-height: 44px; }
+  @media (max-width: 719px), (pointer: coarse) {
+    select, input[type="search"], .seg button, .link, nav a, .check { min-height: 44px; }
     nav a { display: inline-flex; align-items: center; }
     .zone { margin-left: 0; }
   }
