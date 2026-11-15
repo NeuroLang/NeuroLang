@@ -809,14 +809,16 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def _declare_fresh_rule(self, predicate, head=None):
         """Declare, in the current scope, the rule ``fresh(x, ...) :-
-        predicate`` over the free variables of ``predicate``, those in the
-        query's ``head`` if given, and return it as stored in the program."""
-        variables = extract_logic_free_variables(predicate.expression)
-        if head is not None:
-            variables &= set().union(*(
+        predicate`` over the variables of the query's ``head``, none if not
+        given, and return it as stored in the program.  The program
+        translates its body to Datalog, as it does a rule's: an
+        ``exists(t; ...)`` in it included."""
+        variables = () if head is None else tuple(sorted(
+            set().union(*(
                 h._symbols for h in self._query_head_symbols(head)[0]
-            ))
-        variables = tuple(sorted(variables, key=lambda symbol: symbol.name))
+            )),
+            key=lambda symbol: symbol.name,
+        ))
         fresh = ir.Symbol.fresh()
         self.program_ir.walk(Union((
             Implication(fresh(*variables), predicate.expression),

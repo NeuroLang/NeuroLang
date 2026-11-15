@@ -374,9 +374,10 @@ Unreleased
   exists(t; mentions(s, t))``, failed in the probabilistic frontend, which
   the engines use ("Not a Datalog function application", or no
   ``functor``), and so did ``~exists(...)`` there; in a rule of the program
-  it worked.  The free variables of the frontend's ``&``, ``|`` and ``~``
-  now include those of a quantified formula, and a query whose body is one
-  is queried as a conjunction is.
+  it worked.  The rule the frontend declares for such a query takes its
+  variables from the query's head, as the deterministic frontend does, and
+  the program translates its body to Datalog as it does a rule's; a query
+  whose body is one quantified formula is queried as a conjunction is.
 
 * ``.view`` drew nothing of a region, a result of voxels without a value,
   or of an overlay of one value: its default threshold, the 95th
