@@ -495,3 +495,51 @@ def test_a_predicate_the_engine_leaves_out_is_not_available(nl):
     assert "has no facts or rules" not in result.message
     described = EngineContext(nl).describe("uniformity")
     assert "uniformity is not available in the browser" in described
+
+
+@pytest.mark.skipif(
+    __import__("sys").platform != "darwin",
+    reason="Apple's Accelerate, the BLAS of numpy on macOS",
+)
+def test_a_child_may_multiply_matrices_after_its_parent_did():
+    """
+    The BLAS of numpy on macOS, Accelerate, crashes a forked child
+    (SIGSEGV) once its parent has run it with threads: a bootstrap
+    interval or a similarity of texts, both matrix products, killed the
+    child checking the query. neurolang_apps keeps it to one thread, set
+    before numpy loads, in a fresh interpreter as the REPL and the server.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "import neurolang_apps, os, numpy as np\n"
+        "np.random.rand(500, 3000) @ np.random.rand(3000)\n"
+        "pid = os.fork()\n"
+        "if pid == 0:\n"
+        "    np.random.rand(500, 3000) @ np.random.rand(3000)\n"
+        "    os._exit(0)\n"
+        "_, status = os.waitpid(pid, 0)\n"
+        "print(os.WIFSIGNALED(status))\n"
+    )
+    run = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True,
+        env={k: v for k, v in __import__("os").environ.items()
+             if k != "VECLIB_MAXIMUM_THREADS"},
+    )
+    assert run.stdout.strip() == "False", run.stderr
+
+
+def test_a_child_is_not_forked_where_the_blas_would_crash_it(monkeypatch):
+    """Where numpy's BLAS loaded before neurolang_apps could keep it to one
+    thread (a notebook importing numpy first), the query runs in this
+    process, without the memory limit of a child, rather than crash."""
+    import os
+
+    import neurolang_apps
+
+    from .. import validation
+
+    monkeypatch.setattr(neurolang_apps, "BLAS_FORK_SAFE", False)
+    monkeypatch.setattr(validation, "_accelerate", lambda: True)
+    assert validation._in_child(os.getpid, 20, 4096) == os.getpid()
