@@ -486,6 +486,9 @@ class Uploads:
         self._memory = {}  # name -> data, without a directory
         self._times = {}  # name -> when it was uploaded, without one
         self._loaded = {}  # name -> the relations loaded from it
+        # The last file removed, for an undo (restore): its name, its
+        # bytes (without a directory) and the relations loaded from it.
+        self._removed = None
         if self.directory is not None and self.directory.exists():
             shutil.rmtree(self.directory, ignore_errors=True)
 
@@ -517,6 +520,7 @@ class Uploads:
         if kept + len(data) > self.most_all:
             raise ValueError(f"The uploads of a session hold at most "
                              f"{self.most_all >> 20} MB")
+        self._forget_removed()  # another change: no undo of a removal
         if self.directory is None:
             self._memory[name] = bytes(data)
             self._times[name] = time.time()
@@ -532,15 +536,47 @@ class Uploads:
 
     def remove(self, name: str) -> bool:
         """Remove the file *name*, from the memory of the session or from
-        its folder; return whether there was one."""
-        self._loaded.pop(name, None)
-        self._times.pop(name, None)
-        if self.directory is None:
-            return self._memory.pop(name, None) is not None
+        its folder; return whether there was one. It is kept aside, for
+        :meth:`restore`, until the next change of the uploads."""
         if name not in self:
             return False
-        (self.directory / name).unlink(missing_ok=True)
+        self._forget_removed()
+        loaded = self._loaded.pop(name, set())
+        self._times.pop(name, None)
+        if self.directory is None:
+            self._removed = (name, self._memory.pop(name), loaded)
+        else:
+            aside = self.directory / self.REMOVED
+            aside.mkdir(exist_ok=True)
+            (self.directory / name).replace(aside / name)
+            self._removed = (name, None, loaded)
         return True
+
+    #: The folder, in that of a session, of the file removed last.
+    REMOVED = ".removed"
+
+    def restore(self, name: str) -> bool:
+        """Bring back the file *name*, if it was the last removed and
+        nothing changed since; return whether it was."""
+        if self._removed is None or self._removed[0] != name:
+            return False
+        _, data, loaded = self._removed
+        self._removed = None
+        if self.directory is None:
+            self._memory[name] = data
+            self._times[name] = time.time()
+        else:
+            (self.directory / self.REMOVED / name).replace(
+                self.directory / name)
+        if loaded:
+            self._loaded[name] = loaded
+        return True
+
+    def _forget_removed(self) -> None:
+        """Forget the file removed last: it can no longer be restored."""
+        self._removed = None
+        if self.directory is not None:
+            shutil.rmtree(self.directory / self.REMOVED, ignore_errors=True)
 
     def loaded(self, name: str, relation: str) -> None:
         """Tell that the relation *relation* was loaded from the file
@@ -629,13 +665,13 @@ def cmd_load(app, arg: str) -> None:
         app.uploads.loaded(words[0], name)
 
 
-UPLOADS_USAGE = ".uploads [remove NAME]"
+UPLOADS_USAGE = ".uploads [remove NAME | restore NAME]"
 
 
 @command(
     ".uploads", "List the files the page uploaded in this session (Upload "
     "data): their kind, size, age and the relations loaded from them; "
-    "remove NAME deletes one",
+    "remove NAME deletes one, restore NAME brings back the one removed last",
     UPLOADS_USAGE,
 )
 def cmd_uploads(app, arg: str) -> None:
@@ -647,6 +683,15 @@ def cmd_uploads(app, arg: str) -> None:
         words = None
     if words and len(words) == 2 and words[0] == "remove":
         _remove_upload(app, words[1])
+        return
+    if words and len(words) == 2 and words[0] == "restore":
+        if app.uploads.restore(words[1]):
+            app.console.print(f"restored {words[1]}", style="green",
+                              markup=False)
+        else:
+            _warn(app, f"{words[1]} cannot be restored: only the file "
+                       "removed last can, before another is uploaded or "
+                       "removed.")
         return
     if words != []:
         _warn(app, f"Usage: {UPLOADS_USAGE}")
@@ -661,12 +706,13 @@ def cmd_uploads(app, arg: str) -> None:
         return
     table = Table(box=box.ROUNDED, header_style="bold cyan")
     for column in ("File", "Kind", "Size", "Uploaded", "Loaded as"):
-        table.add_column(column)
+        table.add_column(column, justify="right" if column == "Size"
+                         else "left")
     for upload in listing:
         table.add_row(
             upload["name"], "image" if is_image(upload["name"]) else "table",
             _megabytes(upload["size"]), _ago(upload["age"]),
-            ", ".join(upload["loaded"]) or "-",
+            ", ".join(upload["loaded"]) or "not loaded",
         )
     app.console.print(table)
     app.console.print(
