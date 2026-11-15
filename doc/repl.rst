@@ -204,9 +204,10 @@ The page keeps the descriptions with the rules of the session, after
 **Stop** or in a saved session.
 
 **Upload data** also takes a NIfTI image of activations (``.nii`` or
-``.nii.gz``), a binary mask or a z-map: the page loads it with ``.image``
-as the relation ``image(i, j, k, value)``, on the grid of the engine, and
-shows it in the brain viewer.  ``.image PATH`` loads one in a terminal.
+``.nii.gz``), a binary mask or a z-map: the page loads it with ``.image``,
+shows it, and asks whether the query decoding it towards the terms of the
+studies, a comment explaining each line, goes in the box
+(:doc:`tutorial_decoding`).
 
 
 Results
@@ -304,9 +305,10 @@ Every command
      - a CSV or TSV file as a relation: a path in a terminal, a file
        uploaded (**Upload data**) on the page
      - both
-   * - ``.image PATH|UPLOADED``
-     - a NIfTI image of activations as ``image(i, j, k, value)``, shown in
-       the brain viewer
+   * - ``.image PATH|UPLOADED [--mask | --zscore] [--cortex]``
+     - a NIfTI image of activations, shown and decoded as a mask
+       (``--mask``) or from z-scores (``--zscore``), in the brain or in
+       the cortex only (``--cortex``) (see :doc:`tutorial_decoding`)
      - both
    * - ``.uploads [remove NAME | restore NAME]``
      - the files the page uploaded in the session: their kind, size, age,

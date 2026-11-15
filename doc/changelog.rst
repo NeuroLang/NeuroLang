@@ -19,6 +19,19 @@ Unreleased
 
 **New features:**
 
+* ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF
+  says, for the types a program states with rules as for those of the
+  files: ``rdf:type(e, t) :- our_experiment(e, n), cogat_term(t, n)``
+  types our experiments as Cognitive Atlas tasks by their names, and the
+  Atlas's axioms then apply to them.  In a question, ``rdf:type(c, k),
+  cogat_term(k, 'response inhibition')`` names the class by its label,
+  for an unnamed ``c`` too, in the query and in the program's rules.  Only
+  the classes with instances get them, so the rewriting still drops the
+  others.  The example (IV) of :doc:`ontologies` is rewritten on it, with
+  no identifier of the Atlas in its queries: our experiments, then the
+  Stroop studies of Neurosynth, in the closed and the open world, every
+  query of it now ending.
+
 * Upload a brain image to the REPL: the page's *Upload data* takes a NIfTI
   image of activations (``.nii``/``.nii.gz``), a binary mask or a z-map,
   kept with the session as the CSV files are, so a server reading none of
@@ -43,24 +56,37 @@ Unreleased
   loaded from it stay until ``.drop``.  The list has a *Download* and a *Remove* button for each file;
   *Remove* leaves the output as it was and offers an *Undo*
   (``.uploads restore NAME``, the file removed last).  ``.image PATH|UPLOADED [--name
-  NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
+  NAME]`` loads it as ``NAME(i, j, k, value)``, NAME the file's name by
+  default (``motor_map`` for ``motor map.nii.gz``; an upload of another
+  file of the same name gets another), on the grid of the engine
   (resampled, a mask to the nearest voxel; at most ``image.max_mb``
   uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells
   the query assistant what it is; the page gives it back after *Stop* or
   *Open session*.
-  
-* ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF
-  says, for the types a program states with rules as for those of the
-  files: ``rdf:type(e, t) :- our_experiment(e, n), cogat_term(t, n)``
-  types our experiments as Cognitive Atlas tasks by their names, and the
-  Atlas's axioms then apply to them.  In a question, ``rdf:type(c, k),
-  cogat_term(k, 'response inhibition')`` names the class by its label,
-  for an unnamed ``c`` too, in the query and in the program's rules.  Only
-  the classes with instances get them, so the rewriting still drops the
-  others.  The example (IV) of :doc:`ontologies` is rewritten on it, with
-  no identifier of the Atlas in its queries: our experiments, then the
-  Stroop studies of Neurosynth, in the closed and the open world, every
-  query of it now ending.
+
+* Decoding a brain image (:doc:`tutorial_decoding`): ``.image`` loads, with
+  the image, ``image_probability(i, j, k, p)``, the probability that each
+  voxel is active: 1 for a mask, or a map of values from 3.1 taken as one
+  (``.image --mask``, masked decoding); for a map of z-scores, which
+  ``.image --zscore`` says it is, 1 - the local false discovery rate of its
+  z-score (Efron 2004: an empirical null of the map's median and MAD, a
+  kernel density; ``image.min_probability`` and ``image.kde_sample`` in
+  ``viewer.yaml``), with no threshold.  It prints, on the meta-analysis
+  engines, the query decoding the image (``image_decoding_query`` in
+  ``engines.yaml``, a comment explaining each line), and the page asks,
+  after an upload, whether it goes in the box, and, for a map of values,
+  how to decode it (*Decode as z-scores*, *Decode as a mask*), in the
+  brain or, *Only the cortex* (``.image --cortex``), in its cortex: a plain
+  Datalog query over the
+  probabilities, so any relation of voxels and probabilities is decoded
+  the same way.  Each voxel is a probabilistic fact of its probability and
+  a voxel of the brain is chosen at random (``selected_voxel``); its score
+  is the lift of each term: the
+  probability that a study of the term activates the chosen voxel, which
+  is active, over the same for all the studies.
+  The query assistant's bank and guidance decode an uploaded image, and
+  have the overlap query too (each voxel a probabilistic fact, a study
+  hitting the image if it activates one), for a mask or a small region.
 
 * The admin console of ``neurolang-repl-serve`` has *Update and restart*:
   it asks whether origin/master (the upstream of the server's checkout)

@@ -98,6 +98,7 @@ See :doc:`repl` for the REPL, :doc:`tutorial` for a first walkthrough, and
    similarity_calibration
    tutorial_neurosynth_tests
    tutorial_cognitive_atlas
+   tutorial_decoding
    concepts
    ontologies
    probabilistic_lifting

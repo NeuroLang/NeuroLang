@@ -354,12 +354,12 @@ def default_relation_name(path) -> str:
     """
     Return the default name of the relation loaded from *path*.
 
-    It is the file name without its ``.csv``/``.tsv`` and ``.gz``
+    It is the file name without its ``.csv``/``.tsv``/``.nii`` and ``.gz``
     extensions, in lower case, with the characters other than letters
     and digits replaced by ``_`` and ``rel_`` prepended if it would start
     with a digit.
     """
-    stem = re.sub(r"(\.(csv|tsv))?(\.gz)?$", "", Path(path).name.lower())
+    stem = re.sub(r"(\.(csv|tsv|nii))?(\.gz)?$", "", Path(path).name.lower())
     name = re.sub(r"[^a-z0-9]", "_", stem)
     return f"rel_{name}" if not name or name[0].isdigit() else name
 

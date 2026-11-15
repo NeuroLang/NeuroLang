@@ -200,6 +200,12 @@
   .toolbar { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
   #run { min-height: 2.25rem; padding-inline: 1rem 1.15rem; }
   .toolbar .spacer { flex: 1; }
+  #decode-offer { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .6rem; padding: .6rem .8rem; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); }
+  #decode-offer[hidden] { display: none; }
+  #decode-offer p { margin: 0; flex-basis: 100%; }
+  #decode-offer button[hidden], #decode-offer label[hidden] { display: none; }
+  #decode-offer label { display: inline-flex; align-items: center; gap: .35rem; margin-right: .25rem; }
+  @media (pointer: coarse) { #decode-offer button { min-height: 44px; } }
   #uploaded { margin-top: .6rem; }
   #uploaded table { border-collapse: collapse; font-size: .85rem; margin-top: .4rem; }
   #uploaded th, #uploaded td { text-align: left; padding: .2rem 1rem .2rem 0; white-space: nowrap; }
@@ -548,6 +554,14 @@
           <span class="spacer"></span>
           <span id="run-help" class="note"><kbd class="mod">Ctrl</kbd> <kbd>Enter</kbd> runs</span>
         </div>
+        <section id="decode-offer" role="group" aria-labelledby="decode-offer-text" aria-live="polite" hidden>
+          <p id="decode-offer-text"></p>
+          <label id="decode-offer-cortex-label" hidden><input id="decode-offer-cortex" type="checkbox"> Only the cortex</label>
+          <button id="decode-offer-yes" type="button" class="primary">Insert the decoding query</button>
+          <button id="decode-offer-mask" type="button" hidden>Decode as a mask</button>
+          <button id="decode-offer-no" type="button">Not now</button>
+          <button id="decode-offer-back" type="button" hidden>Bring back the query before</button>
+        </section>
         <details id="uploaded" class="disclosure" hidden>
           <summary id="uploaded-summary"></summary>
           <table>
