@@ -25,6 +25,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.text import Text
 
+from neurolang.confine import confined_roots
 from neurolang_apps.utils import query_highlight
 
 from .commands import HELP_TOPICS, command, uses_predicates
@@ -694,6 +695,15 @@ def cmd_llm(app, arg: str) -> None:
     from neurolang_apps.utils.llm import LLMConfigError
     value = value.strip()
     state = app.assistant
+    if action in ("provider", "reload") and confined_roots() is not None:
+        # On a server the assistant is the user's (their account, or the
+        # key the page gives), not one of the server's own configuration.
+        app.failed = True
+        app.console.print(
+            "[yellow]On this server the assistant is set in the page's "
+            "assistant settings, not with .llm provider or reload[/yellow]"
+        )
+        return
     try:
         if action == "provider" and value:
             state.config().provider(value)

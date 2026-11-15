@@ -181,3 +181,18 @@ def test_the_user_restores_a_removed_file(tmp_path):
     assert app.uploads.listing()[0]["loaded"] == ["scores"]
     app._handle_dot_command(".uploads restore s.csv")
     assert "s.csv cannot be restored" in console.file.getvalue()
+
+
+def test_an_upload_is_named_never_a_path(tmp_path):
+    """``.load NAME`` and ``.image NAME`` read a file of the session's
+    folder only: not another of the server, nor another session's."""
+    (tmp_path / "secret.csv").write_bytes(b"s\n1\n")
+    (tmp_path / "8").mkdir()
+    (tmp_path / "8" / "theirs.csv").write_bytes(b"t\n1\n")
+    uploads = Uploads(directory=tmp_path / "7")
+    uploads.put("mine.csv", b"m\n1\n")
+    for name in (str(tmp_path / "secret.csv"), "../secret.csv",
+                 "../8/theirs.csv", "/etc/passwd", ".", ""):
+        assert uploads.get(name) is None, name
+        assert name not in uploads
+    assert uploads.get("mine.csv") == b"m\n1\n"
