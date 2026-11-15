@@ -635,23 +635,48 @@ const workerMessages = {
   },
 };
 
+// The buttons of a row of the uploads: an icon and a word each.
+const UPLOAD_ICONS = {
+  download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+};
+function iconButton(kind, text, label, action, disabledWhy = "") {
+  const button = Object.assign(document.createElement("button"), {
+    type: "button", className: `upload-${kind}`, title: disabledWhy || label, disabled: Boolean(disabledWhy),
+  });
+  button.setAttribute("aria-label", label);
+  button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${UPLOAD_ICONS[kind]}</svg>`;
+  button.append(text);
+  button.addEventListener("click", action);
+  return button;
+}
+// The type of an uploaded file, for its download.
+function uploadMime(name) {
+  if (/\.gz$/i.test(name)) return "application/gzip";
+  if (/\.csv$/i.test(name)) return "text/csv";
+  if (/\.tsv$/i.test(name)) return "text/tab-separated-values";
+  return "application/octet-stream";
+}
+
 // The files uploaded in the session, as the latest reply tells them: hidden
 // without any.
-function showUploads(uploads) {
-  const summary = uploadsSummary(uploads);
+function showUploads(listed) {
+  const summary = uploadsSummary(listed);
   $("uploaded").hidden = !summary;
   $("uploaded-summary").textContent = summary;
-  $("uploaded-list").replaceChildren(...uploadRows(uploads).map((cells) => {
+  $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells) => {
     const row = document.createElement("tr");
     for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text }));
-    const remove = Object.assign(document.createElement("button"), {
-      type: "button", className: "quiet", textContent: "Remove",
-      title: `Delete ${cells[0]} from this session: the relations loaded from it stay until .drop`,
-    });
-    remove.addEventListener("click", () => run(`.uploads remove '${cells[0]}'`));
-    const cell = document.createElement("td");
-    cell.append(remove);
-    row.append(cell);
+    const name = cells[0];
+    const actions = document.createElement("td");
+    actions.className = "upload-actions";
+    actions.append(
+      iconButton("download", "Download", `Download ${name}`, () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) }),
+        uploads.has(name) ? "" : "This page no longer has the file: upload it again to download it"),
+      iconButton("remove", "Remove", `Remove ${name} from this session: the relations loaded from it stay until .drop`,
+        () => run(`.uploads remove '${name}'`)),
+    );
+    row.append(actions);
     return row;
   }));
 }

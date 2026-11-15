@@ -201,8 +201,12 @@
   .toolbar .spacer { flex: 1; }
   #uploaded { margin-top: .6rem; }
   #uploaded table { border-collapse: collapse; font-size: .85rem; margin-top: .4rem; }
-  #uploaded th, #uploaded td { text-align: left; padding: .2rem 1rem .2rem 0; }
+  #uploaded th, #uploaded td { text-align: left; padding: .2rem 1rem .2rem 0; white-space: nowrap; }
   #uploaded th { color: var(--muted); font-weight: 500; }
+  #uploaded td.upload-actions { display: flex; gap: .4rem; padding-right: 0; }
+  #uploaded td.upload-actions button { min-height: 1.75rem; padding: .2rem .6rem; font-size: .78rem; }
+  #uploaded button.upload-remove { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+  #uploaded button.upload-remove:hover:not(:disabled) { background: var(--bad-soft); border-color: var(--bad); }
   #run-help { white-space: nowrap; }
   .menu { position: relative; }
   .menu > summary { display: inline-flex; align-items: center; gap: .35rem; min-height: 2rem; padding: .3rem .7rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--raised); font-size: .8125rem; font-weight: 500; color: var(--text); }
@@ -521,7 +525,7 @@
             <thead><tr><th>File</th><th>Kind</th><th>Size</th><th>Loaded as</th><th></th></tr></thead>
             <tbody id="uploaded-list"></tbody>
           </table>
-          <p class="note">The files you uploaded in this session, which go with it: <code>.load NAME</code> loads a table again, under another name if given, and <code>.image NAME</code> an image; <em>Remove</em> (<code>.uploads remove NAME</code>) deletes one.</p>
+          <p class="note">The files you uploaded in this session, which go with it: <code>.load NAME</code> loads a table again, under another name if given, and <code>.image NAME</code> an image; <em>Download</em> saves one, and <em>Remove</em> (<code>.uploads remove NAME</code>) deletes it from the session.</p>
         </details>
       </form>
     </section>
