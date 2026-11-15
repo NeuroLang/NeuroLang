@@ -1733,6 +1733,29 @@ class TestImage:
             == expected
         assert len(expected) > 2 and max(n for *_, n in expected) == 1
 
+    def test_the_streamlines_of_a_tractogram_are_shown(
+        self, tiny, tmp_path, monkeypatch
+    ):
+        """The viewer draws its streamlines, in MNI mm, over the voxels
+        near their ends: at most MAX_STREAMLINES, evenly subsampled."""
+        calls = []
+
+        def viewer_html(img, background, **kwargs):
+            calls.append(kwargs)
+            return "<html></html>"
+
+        monkeypatch.setattr(nifti.brain_viewer, "viewer_html", viewer_html)
+        monkeypatch.setattr(nifti.brain_viewer, "MAX_STREAMLINES", 2)
+        path = self._tractogram(tmp_path, [
+            [(-1, -1, -1), (-3, -5, -7)], [(-1, -1, -1), (1, -1, -1)],
+            [(-3, -5, -7), (-3, -3, -7)],
+        ])
+        tiny._handle_dot_command(f".image {path}")
+        (kwargs,) = calls
+        assert kwargs["space"] == "MNI"
+        assert kwargs["streamlines"]["shown"] == 2
+        assert kwargs["streamlines"]["total"] == 3
+
     def test_a_tractogram_out_of_the_brain(self, tiny, tmp_path):
         """Ends out of the brain but near it are loaded with a warning
         (5.5 mm is 2.5 from the centre of voxel 3); none near, an error."""

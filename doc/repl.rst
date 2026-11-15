@@ -206,9 +206,9 @@ The page keeps the descriptions with the rules of the session, after
 **Upload data** also takes a NIfTI image of activations (``.nii`` or
 ``.nii.gz``), a binary mask or a z-map, and a tractogram (``.trk`` or
 ``.tck``), decoded where its streamlines end: the page loads it with
-``.image``, shows it, and asks whether the query decoding it towards the terms of the
-studies, a comment explaining each line, goes in the box
-(:doc:`tutorial_decoding`).
+``.image``, shows it, and asks whether the query decoding it towards the
+terms of the studies, a comment explaining each line, goes in the box and
+runs (:doc:`tutorial_decoding`).
 
 
 Results

@@ -543,7 +543,10 @@ const workerMessages = {
   // The login expired: the login page, then back here.
   login: () => location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`),
   status: (data) => setStatus(data.message, "busy"),
-  error: (data) => fail(data.message),
+  error: (data) => {
+    afterReply = null; // what was to run after is not
+    fail(data.message);
+  },
   ready: (data, restore) => {
     setStatus("Ready.");
     $("boot").hidden = true;
@@ -625,7 +628,7 @@ const workerMessages = {
       setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
       setBusy(false);
       after?.(data);
-      return;
+      return replied(data);
     }
     setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
     if (!data.failed) session.add(lastRun, $("mode").value);
@@ -643,6 +646,7 @@ const workerMessages = {
     // On a narrow screen the result is under the query: it is brought into view.
     if (stacked.matches && !$("no-answer").hidden) $("no-answer").scrollIntoView({ behavior: "smooth", block: "start" });
     else if (stacked.matches && (data.tables?.length || data.graph || data.failed)) $("result-title").scrollIntoView({ behavior: "smooth", block: "start" });
+    replied(data);
   },
 };
 
@@ -921,7 +925,18 @@ function replayStep(data) {
 // uploads and says what it did in their panel, not the output nor the
 // results being read; ``before`` and ``after`` take the reply.
 let quietRun = null;
-function run(text, { remember = false, quiet = null } = {}) {
+// What runs once the statement running replies (whenReady), given the reply.
+let afterReply = null;
+function whenReady(action) {
+  if ($("run").disabled) afterReply = action;
+  else action();
+}
+function replied(data) {
+  const next = afterReply;
+  afterReply = null;
+  next?.(data);
+}
+function run(text, { remember = false, quiet = null, keepOffer = false } = {}) {
   text = text.trim();
   if (!text) return;
   if (quiet) {
@@ -932,7 +947,7 @@ function run(text, { remember = false, quiet = null } = {}) {
     return;
   }
   setUploadsStatus(""); // what was undoable is so no longer
-  if ($("decode-offer-back") && !$("decode-offer-back").hidden) closeDecodingOffer();
+  if (!keepOffer && $("decode-offer-back") && !$("decode-offer-back").hidden) closeDecodingOffer();
   if (remember) {
     history.add(text);
     showHistory();
@@ -1167,7 +1182,7 @@ function offerDecoding(name, query, kind, threshold = 3.1, cortex = "", relation
     : `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`;
   const where = cortex ? " Only the cortex decodes the voxels of the image in the cortex alone." : "";
   $("decode-offer-text").textContent = what + where + (editor.value.trim() ? " It replaces the query in the box." : "");
-  $("decode-offer-yes").textContent = kind === "map" ? "Decode as z-scores" : "Insert the decoding query";
+  $("decode-offer-yes").textContent = kind === "map" ? "Decode as z-scores" : "Run the decoding query";
   $("decode-offer-mask").textContent = `Decode as a mask (from ${threshold})`;
   $("decode-offer-mask").hidden = kind !== "map";
   $("decode-offer-yes").hidden = $("decode-offer-no").hidden = false;
@@ -1178,16 +1193,25 @@ function closeDecodingOffer() {
   $("decode-offer").hidden = true;
   decodingQuery = cortexQuery = replacedQuery = decodedMap = "";
 }
-// Put the decoding query in the box, a map loaded again as *flag* says.
+// Put the decoding query in the box and run it, a map loaded again as
+// *flag* says first; once the statement running (the upload's .image)
+// has replied.
 function insertDecoding(flag) {
   const cortex = cortexQuery && $("decode-offer-cortex").checked;
-  if (decodedMap) run(`.image '${decodedMap}' --name ${decodedRelation} ${flag}${cortex ? " --cortex" : ""}`, { remember: true });
+  const query = cortex ? cortexQuery : decodingQuery;
+  const reload = decodedMap && `.image '${decodedMap}' --name ${decodedRelation} ${flag}${cortex ? " --cortex" : ""}`;
+  const decode = () => run(query, { remember: true, keepOffer: true });
+  whenReady(() => {
+    if (!reload) return decode();
+    afterReply = (data) => data.failed || decode();
+    run(reload, { remember: true, keepOffer: true });
+  });
   replacedQuery = editor.value;
-  putQuery(cortex ? cortexQuery : decodingQuery);
+  putQuery(query);
   if (!replacedQuery.trim()) {
     closeDecodingOffer();
   } else {
-    $("decode-offer-text").textContent = "The decoding query is in the box, in place of the query that was there.";
+    $("decode-offer-text").textContent = "The decoding query is in the box, in place of the query that was there, and runs.";
     $("decode-offer-yes").hidden = $("decode-offer-mask").hidden = $("decode-offer-no").hidden = true;
     $("decode-offer-cortex-label").hidden = true;
     $("decode-offer-back").hidden = false;

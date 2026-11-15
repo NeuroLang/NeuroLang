@@ -2055,9 +2055,10 @@ that each voxel is active, which the decoding weighs the voxels by:
 A map without either has none, and is not decoded.
 
 A tractogram (.trk, .tck, in mm in the engine's space) is loaded as the
-voxels of the brain whose centre is within {IMAGE_DEFAULTS["endpoint_radius"]} mm
-of an end of one of its streamlines ([bold]--radius MM[/bold] changes it),
-value the number of ends near each, and decoded as a mask: p = 1 for each.
+voxels of the brain whose centre is within
+{IMAGE_DEFAULTS["endpoint_radius"]} mm of an end of one of its streamlines
+([bold]--radius MM[/bold] changes it), value the number of ends near each,
+shown with its streamlines, and decoded as a mask: p = 1 for each.
 
 On an engine of studies and their peaks (neurosynth, neurostore), it prints
 the query decoding the image towards the concepts of the Cognitive Atlas:
@@ -2178,20 +2179,31 @@ def is_mask(image) -> bool:
     return np.unique(values[np.isfinite(values) & (values != 0)]).size <= 1
 
 
-def tractogram_endpoints(data: bytes) -> Tuple[np.ndarray, int]:
+def tractogram_endpoints(data: bytes) -> tuple:
     """
     Return the ends of the streamlines of the tractogram of the bytes
     *data* (``.trk``, ``.tck``), in mm (RAS+, nibabel's ``to_world``), the
-    first and the last point of each, and the number of streamlines.
+    first and the last point of each, and its streamlines of a point or
+    more (a nibabel ``ArraySequence``).
     """
     streamlines = nib.streamlines.load(
         io.BytesIO(data)).tractogram.to_world().streamlines
+    streamlines = streamlines[np.asarray(streamlines._lengths) > 0]
     lengths = np.asarray(streamlines._lengths)
-    lengths = lengths[lengths > 0]
     points = streamlines.get_data()  # the points of one after the other
     last = np.cumsum(lengths) - 1
     return np.concatenate([points[last - lengths + 1], points[last]]), \
-        len(lengths)
+        streamlines
+
+
+def shown_tractogram(streamlines) -> dict:
+    """Return the keyword arguments of the viewer drawing the
+    *streamlines* of a tractogram, in MNI mm: at most
+    :data:`~.brain_viewer.MAX_STREAMLINES`, evenly subsampled."""
+    shown = brain_viewer.shown_streamlines(range(len(streamlines)))
+    lines = [np.asarray(streamlines[n], dtype=np.float32) for n in shown]
+    return {"streamlines": brain_viewer.streamlines_state(
+        lines, len(streamlines)), "space": "MNI"}
 
 
 def endpoint_counts(
@@ -2418,13 +2430,15 @@ def cmd_image(app, arg: str) -> None:
     if source in app.uploads:
         app.uploads.loaded(source, name)
     app._nl.document_predicate(
-        name, tractogram_description(source, streamlines, len(rows), radius)
-        if tracts else
+        name, tractogram_description(
+            source, len(streamlines), len(rows), radius
+        ) if tracts else
         image_description(source, rows["value"].to_numpy(), mask),
         replace=True,
     )
     kind = (f"the voxels within {radius:g} mm of the ends of its "
-            f"{streamlines} streamlines, value the number of ends near each"
+            f"{len(streamlines)} streamlines, value the number of ends near "
+            "each"
             if tracts else "a mask" if mask else "a map of z-scores" if zscore
             else "a map taken as a mask from "
             f"{IMAGE_DEFAULTS['threshold']}" if as_mask
@@ -2453,7 +2467,8 @@ def cmd_image(app, arg: str) -> None:
     request = parse_view_args("")
     if (rows["value"] >= threshold).any():
         request = request._replace(threshold=threshold, threshold_given=True)
-    _view_nifti(app, [(name, Path(shown_path))], request, name)
+    _view_nifti(app, [(name, Path(shown_path))], request, name,
+                **(shown_tractogram(streamlines) if tracts else {}))
 
 
 def _load_probabilities(

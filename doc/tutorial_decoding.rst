@@ -48,12 +48,13 @@ image`` replaces the image loaded first.
 
 In the browser, and on a server, *Upload data* (in the toolbar) takes the
 ``.nii`` or ``.nii.gz`` file: the page keeps it with the session, runs
-``.image`` on it, and asks whether the decoding query, a comment explaining
-each of its lines, goes in the box (*Insert the decoding query*, or
-*Not now*): it replaces what is there, which *Bring back the query before*
-puts back until the next run.  For a map of values, the page offers the
-two decodings, *Decode as z-scores* and *Decode as a mask (from 3.1)*, and
-loads it again with ``--zscore`` or ``--mask``.  *Only the cortex*, checked,
+``.image`` on it, and asks whether to decode it (*Run the decoding query*,
+or *Not now*): the decoding query, a comment explaining each of its lines,
+goes in the box and runs.  It replaces what is there, which *Bring back
+the query before* puts back until the next run.  For a map of values, the
+page offers the two decodings, *Decode as z-scores* and *Decode as a mask
+(from 3.1)*, loads it again with ``--zscore`` or ``--mask``, then runs the
+query.  *Only the cortex*, checked,
 decodes the cortex of the image alone (``--cortex``, below).  A
 server reads none of its own files for its users, so an image must be
 uploaded there.  The engine of the page in the browser leaves out the peaks
@@ -321,7 +322,9 @@ MNI152) is decoded where its streamlines end: ``.image`` loads it as the
 voxels of the brain whose centre is within 3 mm (``image.endpoint_radius``,
 ``--radius MM`` for another distance) of the first or the last point of
 one of its streamlines, the value of each the number of ends near it, and
-each of probability 1, as a mask.  The decoding query is the same, and
+each of probability 1, as a mask; the brain viewer shows them, its
+streamlines drawn over them (evenly subsampled, as ``.view`` draws a
+bundle).  The decoding query is the same, and
 *Upload data* takes the file and offers it as for an image.  The voxels
 near the ends are found when the file is loaded, with a k-d tree of the
 ends, not by a rule: in Datalog, it would be a join of every voxel of the
