@@ -1461,10 +1461,11 @@ def test_sort_join_operands_prefers_small_connected_operands():
     """
     Check that known sizes drive the greedy order of join operands.
 
-    The smallest operand sharing columns with the others starts the
-    order, then the smallest operand connected to the placed ones is
-    picked, never introducing a cross product. Without sizes the order
-    only depends on column overlap.
+    The operand of the join of two with the fewest rows at most starts the
+    order, then the operand whose join with the placed ones has the fewest
+    rows at most: ``voxel(x)``, all of whose columns are joined, before
+    ``reports(s, x)``, never introducing a cross product. Without sizes
+    the order only depends on column overlap.
     """
     reports = _sized_constant(("s", "x"), 50)
     voxel = _sized_constant(("x",), 100)
@@ -1474,7 +1475,7 @@ def test_sort_join_operands_prefers_small_connected_operands():
     sizes = [50, 100, 5, 2]
 
     assert _sort_join_operands(operands, sizes) == [
-        label, labels, reports, voxel
+        label, labels, voxel, reports
     ]
     assert _sort_join_operands(operands) == [labels, reports, voxel, label]
     assert _sort_join_operands(operands, [None, None, None, 2]) == (
@@ -1486,9 +1487,10 @@ def test_greedy_join_ordering_joins_small_relation_first():
     """
     Check that GreedyJoinOrdering joins the smallest relations first.
 
-    In ``(R(a, b) ⋈ V(b)) ⋈ L(b, c)`` with sizes 50, 100 and 5, joining
-    the small relation ``L`` with ``R`` before the large ``V`` keeps the
-    intermediate results small. The result of the plan is unchanged.
+    In ``(R(a, b) ⋈ V(b)) ⋈ L(b, c)`` with sizes 50, 100 and 5, the
+    small relation ``L`` starts, then ``V``, all of whose columns are
+    joined, which keeps at most the 5 rows of ``L``, then ``R``. The result
+    of the plan is unchanged.
     """
     r = _sized_constant(("a", "b"), 50)
     v = _sized_constant(("b",), 100)
@@ -1497,7 +1499,7 @@ def test_greedy_join_ordering_joins_small_relation_first():
 
     result = GreedyJoinOrderingWalker().walk(tree)
 
-    assert _left_deep_operands(result) == [l_, r, v]
+    assert _left_deep_operands(result) == [l_, v, r]
     assert (
         RelationalAlgebraSolver().walk(result).value
         == RelationalAlgebraSolver().walk(tree).value
@@ -1549,7 +1551,7 @@ def test_greedy_join_ordering_resolves_symbol_sizes():
 
     result = SymbolTableJoinOrdering().walk(tree)
 
-    assert _left_deep_operands(result) == [l_, r, v]
+    assert _left_deep_operands(result) == [l_, v, r]
 
 
 def test_greedy_join_ordering_sizes_order_product_components():
@@ -1558,7 +1560,8 @@ def test_greedy_join_ordering_sizes_order_product_components():
 
     ``Product(A(a), B(b)) ⋈ C(a, b) ⋈ D(b)``: the cross product is
     eliminated and, within the connected group, the smallest operand
-    ``D`` starts the join, followed by the smallest connected ones.
+    ``D`` starts the join, followed by ``B``, of the same columns, then by
+    the smallest connected ones.
     """
     a = _sized_constant(("a",), 40)
     b = _sized_constant(("b",), 30)
@@ -1568,7 +1571,7 @@ def test_greedy_join_ordering_sizes_order_product_components():
 
     result = GreedyJoinOrderingWalker().walk(tree)
 
-    assert _left_deep_operands(result) == [d, c, b, a]
+    assert _left_deep_operands(result) == [d, b, c, a]
     assert (
         RelationalAlgebraSolver().walk(result).value
         == RelationalAlgebraSolver().walk(tree).value

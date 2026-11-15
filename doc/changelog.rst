@@ -409,6 +409,27 @@ Unreleased
 
 **Performance:**
 
+* The greedy join ordering starts from the join of two relations with the
+  fewest rows at most, and adds at each step the relation whose join with
+  the joined ones has the fewest rows at most, rather than the smallest
+  relation: a relation all of whose columns are joined, which cannot add
+  rows, is joined first.  Decoding a whole map of z-scores with its voxels
+  as probabilistic facts and one chosen at random, which ran out of memory
+  (more than 24 GB) on neurosynth at 2 mm, takes 13.4 s and 6 GB for the
+  motor map of nilearn: the image is joined with the activations and
+  summed per study before the terms.
+
+* The plans of the lifted probabilistic queries sum each side of a join
+  over the columns the projection drops before joining it
+  (``PushSumsThroughJoins``), the
+  product of the probabilities distributing over their sum: the same
+  probabilities, from smaller joins.  Decoding an image with each voxel a
+  probabilistic fact of its probability and one chosen at random takes
+  8.4 s instead of 13.5 s on neurosynth
+  at 2 mm for a mask, the voxels summed out per study before the terms
+  are joined; ``uniformity('pain', ...)`` 5.9 s instead of 6.4 s.  The
+  other queries of the example banks take the same time.
+
 * The pattern matching of the walkers, which every compilation of a
   program goes through, tries for an expression only the patterns its class
   does not rule out, from a list made once per walker class, and builds its

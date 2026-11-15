@@ -1,7 +1,7 @@
 """Optimisers flattening, simplifying and reordering joins and products."""
 
 from functools import reduce
-from itertools import combinations
+from itertools import combinations, permutations
 
 from nl_expr import expression_walker as ew
 from nl_expr.expressions import Constant
@@ -146,28 +146,77 @@ def _sizes_known(sizes):
     return sum(size is not None for size in sizes) >= 2
 
 
-def _smallest_connected(indices, sizes, overlap):
+def _join_size_bound(left_size, left_cols, right_size, right_cols):
     """
-    Pick the smallest connected operand of known size.
+    Bound the number of rows of the join of two sets.
 
-    Among ``indices`` of known size with a positive ``overlap``, return the
-    one of smallest size and then of largest overlap, ``None`` if there is
-    none.
+    A set whose columns are all columns of the other matches each row of
+    the other at most once: the join has at most the rows of the other.
+    Otherwise it has at most the product of their rows.
     """
-    candidates = [i for i in indices if sizes[i] is not None and overlap(i)]
-    return min(
-        candidates, key=lambda i: (sizes[i], -overlap(i)), default=None
-    )
+    bounds = []
+    if right_cols <= left_cols:
+        bounds.append(left_size)
+    if left_cols <= right_cols:
+        bounds.append(right_size)
+    return min(bounds, default=left_size * right_size)
+
+
+def _cheapest_connected(indices, sizes, col_sets, placed, placed_size):
+    """
+    Pick the operand of known size whose join with the placed ones is the
+    smallest.
+
+    Among ``indices`` of known size sharing columns with ``placed``, of
+    ``placed_size`` rows (``None`` if unknown), return the one of the
+    smallest :func:`_join_size_bound`, then of the smallest size and of the
+    largest overlap; ``None`` if there is none.
+    """
+    def cost(i):
+        bound = 0 if placed_size is None else _join_size_bound(
+            placed_size, placed, sizes[i], col_sets[i]
+        )
+        return bound, sizes[i], -len(col_sets[i] & placed)
+
+    candidates = [
+        i for i in indices if sizes[i] is not None and col_sets[i] & placed
+    ]
+    return min(candidates, key=cost, default=None)
+
+
+def _cheapest_start(col_sets, sizes):
+    """
+    Pick the operand of known size starting the cheapest join of two.
+
+    The operand of a pair of operands of known size sharing columns of the
+    smallest :func:`_join_size_bound`, the smaller of the two; ``None`` if
+    there is no such pair.
+    """
+    pairs = [
+        (i, j) for i, j in permutations(range(len(col_sets)), 2)
+        if sizes[i] is not None and sizes[j] is not None
+        and col_sets[i] & col_sets[j]
+    ]
+
+    def cost(pair):
+        i, j = pair
+        bound = _join_size_bound(sizes[i], col_sets[i], sizes[j], col_sets[j])
+        return bound, sizes[i]
+
+    best = min(pairs, key=cost, default=None)
+    return None if best is None else best[0]
 
 
 def _greedy_chain(col_sets, sizes, start, cumulative):
     """
     Order indices of ``col_sets`` by nearest-neighbour expansion.
 
-    When at least two ``sizes`` are known, the chain starts at the smallest
-    operand sharing columns with the others and, at each step, appends the
-    smallest operand sharing columns with the placed ones: cross products
-    are avoided first, then small operands are joined first.
+    When at least two ``sizes`` are known, the chain starts at the cheapest
+    join of two operands sharing columns and, at each step, appends the
+    operand sharing columns with the placed ones whose join with them is
+    the cheapest, as bounded by :func:`_join_size_bound`: cross products
+    are avoided first, then the joins which cannot grow the rows, such as
+    those of an operand all of whose columns are joined, are made first.
 
     Otherwise, or when no such operand has a known size, the chain starts
     at the operand chosen by ``start`` (``max`` or ``min``) on the overlap
@@ -178,9 +227,7 @@ def _greedy_chain(col_sets, sizes, start, cumulative):
     if not _sizes_known(sizes):
         sizes = [None] * len(col_sets)
     degrees = _overlap_degrees(col_sets)
-    first = _smallest_connected(
-        range(len(col_sets)), sizes, degrees.__getitem__
-    )
+    first = _cheapest_start(col_sets, sizes)
     if first is None:
         first = start(range(len(col_sets)), key=degrees.__getitem__)
     remaining = set(range(len(col_sets)))
@@ -188,12 +235,18 @@ def _greedy_chain(col_sets, sizes, start, cumulative):
     order = [first]
     reference = set(col_sets[first])
     placed = set(col_sets[first])
+    placed_size = sizes[first]
     while remaining:
-        best = _smallest_connected(
-            sorted(remaining), sizes, lambda j: len(col_sets[j] & placed)
+        best = _cheapest_connected(
+            sorted(remaining), sizes, col_sets, placed, placed_size
         )
         if best is None:
             best = max(remaining, key=lambda j: len(col_sets[j] & reference))
+            placed_size = None
+        elif placed_size is not None:
+            placed_size = _join_size_bound(
+                placed_size, placed, sizes[best], col_sets[best]
+            )
         order.append(best)
         remaining.remove(best)
         placed |= col_sets[best]
