@@ -74,9 +74,10 @@ test("the third theme is the computer's", () => {
   assert.match(page, /data-theme="system" title="Computer" aria-label="Computer"/);
 });
 
-test("a menu, open in a narrow screen, is in the flow: an absolute one from the left of the screen leaves it", () => {
+test("the menus, open in a narrow screen, do not leave it: Docs opens rightwards, the others in the flow", () => {
   const narrow = page.match(/@media \(max-width: 40rem\) \{([\s\S]*?)\n  \}/)[1];
-  assert.match(narrow, /\.nav-menu-items, \.menu-items, \.rt-menu-items \{ position: static; \}/);
+  assert.match(narrow, /\.nav-menu-items \{ right: auto; left: 0; \}/);
+  assert.match(narrow, /\.menu-items, \.rt-menu-items \{ position: static; \}/);
 });
 
 test("the log of the assistant is one column the width of its box, so that its lines wrap in it", () => {

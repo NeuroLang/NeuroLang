@@ -549,13 +549,12 @@ Unreleased
   menus, which is kept as a way to render these states without the engine
   (``doc/tools/repl_page_states``), found and fixed that on a phone the
   menus (More, Docs, a table's Download) opened off the left of the screen,
-  out of reach, and now open in the flow, and that the Escape key and a
-  click elsewhere close them; that the log of the assistant was wider than
-  its box, its first line cut; that the faint text (the row numbers) was at
-  4.3:1 where a row is hovered; that the chips DOI and PMC were 14 px high
-  targets; that the previous and next page buttons, the filter, the
-  Download menu and the folds of the logs were short of 44 px on a touch
-  screen; that a sorted column's arrow was read aloud; that the ticks of a
+  out of reach, and now open in the flow, or rightwards; that the log of the
+  assistant was wider than its box, its first line cut; that the faint text
+  (the row numbers) was at 4.3:1 where a row is hovered; that the chips DOI
+  and PMC were 14 px high targets; that the previous and next page buttons,
+  the filter, the Download menu and the folds of the logs were short of
+  44 px on a touch screen; that a sorted column's arrow was read aloud; that the ticks of a
   plot of 18 million and some said 18.1M twice; and that the "#" of a
   table's head touched its border. The login page has the field border and
   the faint text of the REPL's tokens, and the account and admin pages

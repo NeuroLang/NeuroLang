@@ -29,7 +29,7 @@
   const reply = (extra = {}) => ({ html: "<pre>Query ran in 0.31 s: 1240 rows.</pre>", viewers: [], failed: false, tables: [table("", 0)], prompt: "", mode: "datalog", predicates: [], ratable: true, graph: "", ...extra });
 
   const ready = {
-    type: "ready", banner: "<pre>NeuroLang 0.0.9 - Neurosynth 0.7\nstudy(pmid)  term_in_study_tfidf(pmid, term, tfidf)  peak_reported(pmid, x, y, z)</pre>", source: "", providers: [{ id: "anthropic", label: "Anthropic", model: "claude-sonnet", base_url: "https://api.anthropic.com" }],
+    type: "ready", banner: "<pre>NeuroLang 0.0.9 - Neurosynth 0.7\nstudy(pmid)  term_in_study_tfidf(pmid, term, tfidf)  peak_reported(pmid, x, y, z)</pre>", source: "", providers: [{ id: "provider-a", label: "Provider A", model: "model-x", base_url: "https://api.example.org" }],
     examples: { datalog: [QUERY, "ans(s) :- term_in_study_tfidf(s, 'pain', t) & (t > 0.05)", "ans(region, p) :- PROB(region) :- activation(region) // peak_reported(s, x, y, z)"], squall: [] },
     questions: ["Which studies mention pain?", "Which regions are most probably active in studies of working memory?"],
     predicates: [{ name: "term_in_study_tfidf", signature: "term_in_study_tfidf(pmid, term, tfidf)", kind: "stored", description: "TF-IDF of a term in the abstract of a study.", arguments: [{ sort: "study", type: "int", columns: ["pmid"] }, { sort: "term", type: "str", columns: ["term"] }, { sort: "score", type: "float", columns: ["tfidf"] }] }, { name: "peak_reported", signature: "peak_reported(pmid, x, y, z)", kind: "stored", description: "A peak a study reports.", arguments: [] }],
@@ -39,7 +39,7 @@
   const noKey = { ...ready, assistant: false, canRate: false };
 
   // The steps of an assistant run, as neurolang_apps.utils.tui.assistant sends them.
-  const ASK = { type: "agent", event: "ask", question: "Which studies mention pain?", provider: "anthropic", model: "claude-sonnet", strategy: "react", language: "datalog" };
+  const ASK = { type: "agent", event: "ask", question: "Which studies mention pain?", provider: "provider-a", model: "model-x", strategy: "react", language: "datalog" };
   const STEP1 = { type: "agent", event: "step", thought: "I should look at the relations of the engine first.", action: "list_relations", arguments: {}, observation: "term_in_study_tfidf(pmid, term, tfidf)\npeak_reported(pmid, x, y, z)\nstudy(pmid)" };
   const STEP2 = { type: "agent", event: "step", thought: "Now a query for the studies whose abstract has the term pain.", action: "run_query", arguments: { query: "ans(pmid) :- term_in_study_tfidf(pmid, 'pain', tfidf) & (tfidf > 0.05)" }, observation: "412 rows; first rows:\n18001234\n18004953\n18008672" };
   const PENDING = { type: "agent", event: "reply", text: "Let me check the result with a verification query.", tool_calls: [{ name: "run_query", arguments: { query: "ans(n) :- n = count(pmid)" } }], usage: { input: 900, output: 80 }, seconds: 2.1 };
@@ -67,8 +67,8 @@
     answers: { answer: () => [reply({ tables: [table("by_term", 0, 40, 40), table("by_region", 1, 25, 25), table("counts", 2, 8, 8)] })], drive: () => run("ans[by_term](...) :- ...") },
     menu_download: { answer: () => [reply()], drive: async () => { run(QUERY); await wait(300); $(".rt-menu > summary").click(); } },
     menu_more: { drive: () => $(".menu > summary").click() },
-    menu_escape: { drive: async () => { $(".menu > summary").click(); $("#docs > summary").click(); await wait(100); $("#docs-links a").focus(); document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); } },
-    menu_outside: { drive: async () => { $(".menu > summary").click(); await wait(100); $("#result-title").click(); } },
+    focus_header: { answer: () => [reply()], drive: async () => { run(QUERY); await wait(300); $(".rt-table th:nth-child(4) button").focus(); } },
+    focus_link: { answer: () => [reply()], drive: async () => { run(QUERY); await wait(300); $(".rt-study a").focus(); } },
     menu_docs: { drive: () => $("#docs > summary").click() },
     brain: { answer: () => [reply({ viewers: [bigPage("brain viewer (mock)")], graph: bigPage("graph (mock)") })], drive: async () => { run(QUERY); await wait(300); click("#tab-brain"); } },
     graph: { answer: () => [reply({ viewers: [bigPage("brain viewer (mock)")], graph: bigPage("graph (mock)") })], drive: async () => { run(QUERY); await wait(300); click("#tab-graph"); } },
