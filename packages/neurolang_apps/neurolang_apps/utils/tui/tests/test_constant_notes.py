@@ -68,6 +68,7 @@ def test_without_declared_sorts_nothing_is_noted(terms):
         == []
 
 
+@pytest.mark.squall
 def test_squall_constants_are_noted(terms):
     assert constant_notes(
         terms, "neurosynth", "obtain every Study that mentions 'Pain'.", True

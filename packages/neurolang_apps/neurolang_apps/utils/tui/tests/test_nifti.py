@@ -310,6 +310,7 @@ class TestSaveOnTheTemplate:
         )
         assert np.asanyarray(img.dataobj)[1, 2, 3] == 1
 
+    @pytest.mark.squall
     def test_squall_voxels_in_3d(self, tiny, tmp_path):
         tiny.settings.squall = True
         img = _saved(
@@ -318,6 +319,7 @@ class TestSaveOnTheTemplate:
         data = np.asanyarray(img.dataobj)
         assert data[1, 2, 3] == 1 and data[0, 0, 0] == 1
 
+    @pytest.mark.squall
     def test_squall_probability(self, tiny, tmp_path):
         tiny._nl.add_uniform_probabilistic_choice_over_set(
             [(10,), (11,), (12,)], name="selected_study"
@@ -1380,6 +1382,28 @@ class TestViewSeveralQueries:
         assert "pairs: node strength" in names
         assert kwargs["streamlines"]["total"] == 2
         assert kwargs["connectome"]["nodes"]
+
+    def test_regions_beside_streamlines_of_a_finer_grid(
+        self, tracts, monkeypatch
+    ):
+        """
+        The voxels of an atlas, on its grid (3 mm), beside streamlines
+        counted on the grid of the background (1 mm): the viewer failed,
+        "The overlay 'tract: streamlines' is not on the grid of the first
+        one"; it draws both, on the finer grid.
+        """
+        monkeypatch.setattr(nifti.webbrowser, "open", lambda *a, **k: None)
+        fine = TINY_AFFINE.copy()
+        fine[:3, :3] /= 2
+        tracts._nl.streamline_background = lambda: nib.Nifti1Image(
+            np.ones((8, 8, 8), dtype=np.uint8), fine
+        )
+        out = " ".join(self._view(tracts, (
+            "ans[end_regions](i, j, k) :- atlas_voxel(i, j, k)\n"
+            "ans[tract](s) :- tract(s)\n"
+        )).split())
+        assert "failed" not in out
+        assert "Saved the viewer to" in out
 
     def test_one_set_of_streamlines_is_drawn(self, tracts, viewed):
         out = self._view(tracts, (

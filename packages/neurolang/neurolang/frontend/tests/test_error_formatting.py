@@ -102,6 +102,7 @@ def test_hints_only_match_the_error_line():
     assert "with WHERE" not in out
 
 
+@pytest.mark.squall
 def test_squall_errors_get_squall_hints_only():
     out = _format_parse_error("get every item.", "SQUALL")
     assert out.startswith("SQUALL parse error")
@@ -109,6 +110,7 @@ def test_squall_errors_get_squall_hints_only():
     assert "':-'" not in out
 
 
+@pytest.mark.squall
 def test_datalog_identifiers_are_not_taken_for_squall():
     out = _format_parse_error("ans(x) :- defined_region(x) <- R", "Datalog")
     assert out.startswith("Datalog parse error")
@@ -139,6 +141,7 @@ def test_leading_blank_lines_keep_line_numbers(language, code, location):
     assert "    3 | " in out
 
 
+@pytest.mark.squall
 def test_squall_semantic_error_keeps_line_numbers():
     code = "\n\ndefine as V for every Voxel ?v where a Study reports the Term"
     with pytest.raises(SquallSemanticError) as exc_info:
@@ -247,6 +250,7 @@ def test_neurolang_exception_with_location():
     assert "Tip:" not in out
 
 
+@pytest.mark.squall
 def test_squall_semantic_error_from_source_line_only():
     exc = SquallSemanticError(
         "Unresolved anaphora", line=4, column=3,
@@ -257,6 +261,7 @@ def test_squall_semantic_error_from_source_line_only():
     assert "Error: Unresolved anaphora" in out
 
 
+@pytest.mark.squall
 def test_squall_semantic_error_without_location():
     out = format_error(SquallSemanticError("Some error"))
     assert out == "SQUALL semantic error\n  Error: Some error"

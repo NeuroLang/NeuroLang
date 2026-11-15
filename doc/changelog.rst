@@ -553,6 +553,11 @@ Unreleased
   over NeuroSynth's 14,371 studies and 0.762 over NeuroStore's 64,920,
   where 0.75 would let 9% of the null through.
 
+* The SQUALL tests are skipped by default, ahead of the deprecation of the
+  SQUALL syntax: the ``squall`` pytest marker is on the tests of its
+  parser, grammar, translation, completion and command-line flags, and
+  ``pytest --run-squall`` runs them.
+
 
 v0.1a22 (2026-11-13)
 --------------------

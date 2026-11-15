@@ -40,6 +40,7 @@ def test_split_datalog_rules_open_brackets_and_comments():
     ]
 
 
+@pytest.mark.squall
 def test_split_squall_sentences():
     query = (
         "define as Painful every Study that mentions 'pain. chronic'. "
