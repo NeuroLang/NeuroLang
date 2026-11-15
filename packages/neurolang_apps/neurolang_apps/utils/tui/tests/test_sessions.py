@@ -281,6 +281,48 @@ def test_uploads_are_files_of_a_folder_removed_with_the_session(tmp_path):
         sessions.close()
 
 
+def test_the_admins_see_and_erase_the_uploads(tmp_path):
+    """The admin console lists the folders of the uploads, whose session
+    each is, its files, their sizes and ages, and erases a file, a folder
+    or all of them; never a path out of the uploads directory."""
+    directory = tmp_path / "uploads"
+    sessions = Sessions(tmp_path, build=build, uploads={
+        "directory": str(directory), "most_file": 1 << 20,
+        "most_all": 2 << 20})
+    try:
+        ann = sessions.session("ann", "t1")
+        ann.start("neurosynth")
+        ann.upload(name="pets.csv", data=b"pet\ncat\n")
+        ann.upload(name="toys.csv", data=b"toy\n")
+        (directory / "77").mkdir()  # of no session
+        (directory / "77" / "old.csv").write_bytes(b"x")
+        info = sessions.uploads_info()
+        assert info["directory"] == str(directory)
+        assert info["size"] == 13 and info["free"] > 0
+        assert info["most_file"] == 1 << 20 and info["most_all"] == 2 << 20
+        folders = {f["start"]: f for f in info["folders"]}
+        mine = folders[str(ann.starts)]
+        assert (mine["user"], mine["tab"], mine["running"]) == (
+            "ann", "t1", True)
+        assert [(f["name"], f["size"]) for f in mine["files"]] == [
+            ("pets.csv", 8), ("toys.csv", 4)]
+        assert all(f["age"] >= 0 for f in mine["files"])
+        assert folders["77"]["user"] is None
+        for start, name in (("..", None), ("1/..", None),
+                            (str(ann.starts), "../x"), ("x", None)):
+            with pytest.raises(ValueError):
+                sessions.erase_uploads(start, name)
+        assert sessions.erase_uploads(str(ann.starts), "toys.csv") == 1
+        assert not (directory / str(ann.starts) / "toys.csv").exists()
+        assert ann.submit(".load toys.csv")["failed"]
+        assert sessions.erase_uploads("77") == 1
+        assert not (directory / "77").exists()
+        assert sessions.erase_uploads() == 1  # all: pets.csv
+        assert list(directory.iterdir()) == []
+    finally:
+        sessions.close()
+
+
 def test_a_busy_session_is_not_ended_for_another(tmp_path):
     sessions = Sessions(tmp_path, build=build, most=1)
     try:

@@ -409,6 +409,13 @@ refusal (403).  It shows:
   unused, whether it works, the CPU seconds and the memory of its process
   (see `Activity and usage`_); it ends one.  Above them, the memory of the
   builder, which the sessions share.
+- **Uploads**: with ``--uploads-dir``, the files the pages uploaded, by
+  session (its user and tab, or *session ended* for a folder whose
+  session is gone), with their size and age, the space they take and that
+  free on the disk, and the limits; it erases a file, the files of a
+  session or all of them (the server's log tells who erased what).  A
+  session whose file is erased no longer has it: ``.load`` says so, and
+  the page uploads it again after a *Stop*.
 - **Usage by user**: with ``--activity-db``, each user's inputs run and
   failed, their time and CPU seconds, the most memory of their sessions,
   and a link to their log.

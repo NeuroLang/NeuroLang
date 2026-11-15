@@ -470,8 +470,9 @@ class Uploads:
     The files the page of a session uploaded, by name, for ``.load NAME``
     and ``.image NAME``: in the memory of the session, or, on a server that
     gives one (neurolang-repl-serve --uploads-dir), as the files of the
-    session's *directory*, which the server removes when the session ends.
-    A file is at most *most_file* bytes, and all those of the session
+    session's *directory*, which the server removes when the session ends
+    and its admins may erase (what the folder holds is the session's). A
+    file is at most *most_file* bytes, and all those of the session
     *most_all*: a ValueError tells which is exceeded. A new store of a
     directory empties it, as the page forgets its files on a restart.
     """
@@ -481,18 +482,27 @@ class Uploads:
         self.directory = Path(directory) if directory else None
         self.most_file = int(most_file)
         self.most_all = int(most_all)
-        self._sizes = {}  # name -> bytes
         self._memory = {}  # name -> data, without a directory
         if self.directory is not None and self.directory.exists():
             shutil.rmtree(self.directory, ignore_errors=True)
 
+    def _sizes(self) -> dict:
+        """Return the sizes of the files kept, by name."""
+        if self.directory is None:
+            return {name: len(data) for name, data in self._memory.items()}
+        if not self.directory.is_dir():
+            return {}
+        return {path.name: path.stat().st_size
+                for path in self.directory.iterdir() if path.is_file()}
+
     def get(self, name: str) -> Optional[bytes]:
         """Return the bytes of the file *name*, or None."""
-        if name not in self._sizes:
-            return None
         if self.directory is None:
-            return self._memory[name]
-        return (self.directory / name).read_bytes()
+            return self._memory.get(name)
+        try:
+            return (self.directory / name).read_bytes()
+        except OSError:  # never uploaded, or erased
+            return None
 
     def put(self, name: str, data: bytes) -> None:
         """Keep the bytes *data* as the file *name*, replacing one of that
@@ -500,7 +510,7 @@ class Uploads:
         checks it)."""
         if len(data) > self.most_file:
             raise ValueError(f"{name} is over {self.most_file >> 20} MB")
-        kept = sum(size for n, size in self._sizes.items() if n != name)
+        kept = sum(size for n, size in self._sizes().items() if n != name)
         if kept + len(data) > self.most_all:
             raise ValueError(f"The uploads of a session hold at most "
                              f"{self.most_all >> 20} MB")
@@ -509,7 +519,6 @@ class Uploads:
         else:
             self.directory.mkdir(parents=True, exist_ok=True)
             (self.directory / name).write_bytes(data)
-        self._sizes[name] = len(data)
 
     __setitem__ = put
 

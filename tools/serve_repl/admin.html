@@ -98,6 +98,14 @@
 </table></div>
 <p class="note">Memory is that of a session's own (MB, its most in parentheses), beyond what it shares with the engines' builder; CPU, the seconds of its process. Linux only.</p>
 
+<h2>Uploads</h2>
+<p class="note" id="uploads-note"></p>
+<div class="scroll"><table>
+  <thead><tr><th>User</th><th>Tab</th><th>Session</th><th>File</th><th>Size</th><th>Uploaded</th><th></th></tr></thead>
+  <tbody id="uploads"></tbody>
+</table></div>
+<p class="note">The files the pages uploaded (Upload data: tables, images), a folder per session in --uploads-dir, which the server removes when the session ends (stopped, or unused for --idle-minutes). Erasing a file of a running session: its page uploads it again after a Stop, or .load says it is not there.</p>
+
 <h2>Usage by user</h2>
 <p class="note" id="usage-note"></p>
 <div class="scroll"><table>
@@ -223,6 +231,44 @@ function actions(user, named) {
 function minutes(seconds) {
   return seconds < 120 ? `${seconds} s` : `${Math.round(seconds / 60)} min`;
 }
+function ago(seconds) {
+  return seconds < 7200 ? `${minutes(seconds)} ago` : `${Math.round(seconds / 3600)} h ago`;
+}
+function bytes(size) {
+  if (size == null) return "-";
+  if (size < 1024) return `${size} B`;
+  if (size < 1 << 20) return `${(size / 1024).toFixed(1)} KB`;
+  return size < 1 << 30 ? `${(size / (1 << 20)).toFixed(1)} MB` : `${(size / (1 << 30)).toFixed(1)} GB`;
+}
+
+// The files the sessions' pages uploaded (--uploads-dir), and erasing them.
+function showUploads(uploads) {
+  if (!uploads) {
+    $("uploads-note").textContent = "The sessions keep what their pages upload in their memory: the server has no --uploads-dir (or no --users --local).";
+    return $("uploads").replaceChildren();
+  }
+  const files = uploads.folders.reduce((n, f) => n + f.files.length, 0);
+  const erase = (body, what) => () => confirm(`Erase ${what}?`)
+    && change("/admin/api/erase-uploads", body, `Erased ${what}.`);
+  $("uploads-note").replaceChildren(
+    `${uploads.directory}: ${bytes(uploads.size)} in ${files} files of ${uploads.folders.length} sessions, ${bytes(uploads.free)} free on its disk. `
+    + `A file takes at most ${bytes(uploads.most_file)}, the files of a session ${bytes(uploads.most_all)}. `,
+    ...(uploads.folders.length ? [button("Erase all", erase({}, "every uploaded file"))] : []));
+  const rows = [];
+  for (const folder of uploads.folders) {
+    const user = folder.user ?? "(session ended)";
+    const tab = (folder.tab ?? "").slice(0, 8);
+    for (const file of folder.files) {
+      rows.push(row([user, tab, folder.start, file.name, bytes(file.size), ago(file.age),
+        button("Erase", erase({ start: folder.start, name: file.name }, `${file.name} of ${user}`))]));
+    }
+    if (folder.files.length !== 1) {
+      rows.push(row([user, tab, folder.start, `${folder.files.length} files`, bytes(folder.size), "",
+        button("Erase all its files", erase({ start: folder.start }, `the files of the session ${folder.start} of ${user}`))]));
+    }
+  }
+  $("uploads").replaceChildren(...(rows.length ? rows : [row(["No uploads."])]));
+}
 
 async function show() {
   const state = await call("/admin/api/state");
@@ -266,6 +312,7 @@ async function show() {
       s.cpu == null ? "-" : `${s.cpu} s`, s.memory == null ? "-" : `${s.memory} MB` + (s.peak ? ` (${s.peak})` : ""),
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
+  showUploads(state.uploads);
   $("activity-link").hidden = !state.activity;
   $("dashboard-link").hidden = !state.dashboard;
   const builder = state.builder;
