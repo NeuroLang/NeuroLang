@@ -24,6 +24,17 @@
     "/admin/api/activity/inputs": [{ id: 1, created: day(0.1), user: "alice", engine: "neurosynth", text: "ans(pmid, term, prob) :- PROB(pmid, term) :- term_in_study_tfidf(pmid, term, tfidf) & (tfidf > 0.01)", failed: false, seconds: 3.2, cpu: 2.9, tokens_in: 0, tokens_out: 0 },
       { id: 2, created: day(0.2), user: "bob", engine: "neurosynth", text: "ans(x) :- p(x", failed: true, seconds: 0.1, cpu: 0.1 }],
   };
+  // ?v=VARIANT: empty (nothing listed in the console), nokey (an account whose admin set the assistant),
+  // error and saved (the answer of a form submitted: the console's change of a user, the account's assistant).
+  const variant = new URLSearchParams(location.search).get("v");
+  if (variant === "empty") Object.assign(ANSWERS["/admin/api/state"], { users: [], requests: [], groups: [], sessions: [] }), ANSWERS["/admin/api/usage"] = [], ANSWERS["/admin/api/feedback"] = [];
+  if (variant === "nokey") ANSWERS["/account/api/me"].assistant = { assistant: "group", group: "lab", provider: "provider-b", own_key: false };
+  if (variant === "saved") ANSWERS["/account/api/llm"] = {};
+  if (variant === "error" || variant === "saved") addEventListener("load", () => setTimeout(() => {
+    const form = document.getElementById(location.pathname.endsWith("admin.html") ? "change" : "llm");
+    form.elements.name && (form.elements.name.value = "bob");
+    form.requestSubmit();
+  }, 800));
   const origFetch = window.fetch.bind(window);
   window.fetch = (url, options) => {
     const path = String(url).split("?")[0];
