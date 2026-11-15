@@ -525,6 +525,18 @@ def test_rule_added_to_a_predicate_replaces_its_rules(app):
     assert _query(app, "ans(x) :- active(x)") == {("alice",), ("bob",)}
 
 
+def test_documenting_a_predicate_says_so(app):
+    """A description given to a relation of the session (.document), which
+    the query assistant reads, is told, not "(nothing defined)"; that of a
+    rule given with it (%%) is the rule's definition."""
+    out = _submit(app, '.document(person, "The people of my lab.")')
+    assert "documented person" in out and "nothing defined" not in out
+    assert app._nl.predicate_documentation()["person"].description == (
+        "The people of my lab.")
+    out = _submit(app, "%% Those who sing.\nsinger(x) :- sings(x)")
+    assert "defined singer" in out and "documented" not in out
+
+
 def test_failed_query_without_definitions_says_nothing_more(app):
     out = _submit(app, "ans(x) :- person(x, y)")
     assert app.failed

@@ -1486,15 +1486,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def document_predicate(
         self, name: str, description: str,
-        arguments: Iterable[Tuple[str, str]] = (),
+        arguments: Iterable[Tuple[str, str]] = (), replace: bool = False,
     ) -> None:
         """
         Document the predicate *name* with its *description* and its
         *arguments*, ``(name, sort)`` pairs, as a ``%%`` block before its
-        rule does (see :meth:`predicate_documentation`).
+        rule does (see :meth:`predicate_documentation`); with *replace*,
+        in place of the description it had.
         """
         self.program_ir.walk(
-            documentation_command(name, description, arguments)
+            documentation_command(name, description, arguments, replace)
         )
 
     def predicate_parameter_names(

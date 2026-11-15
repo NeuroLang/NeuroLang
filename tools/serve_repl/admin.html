@@ -119,6 +119,11 @@
   .scroll table { min-width: 36rem; }
   @media (max-width: 40rem) { main > form label { flex-basis: 100%; } main > form > button { flex: 1 1 8rem; } }
   .own { color: var(--ok); } .none { color: var(--bad); }
+  /* The uploads: the message line, the erase buttons, a row per session. */
+  #message { min-height: 1.2rem; } #message.error { color: var(--bad); }
+  button.danger { color: var(--bad); background: transparent; border: 1px solid currentColor; }
+  tr.session-row th { font: 600 .9rem/1.4 var(--sans); text-transform: none; letter-spacing: 0; color: var(--text); padding-top: .6rem; }
+  .actions-line { margin-top: .4rem; text-align: right; }
 </style>
 </head>
 <body>
@@ -198,6 +203,13 @@
 </table></div>
 <p class="note">Memory is that of a session's own (MB, its most in parentheses), beyond what it shares with the engines' builder; CPU, the seconds of its process. Linux only.</p>
 
+<h2>Uploads</h2>
+<p class="note" id="uploads-note"></p>
+<div class="scroll"><table>
+  <thead><tr><th scope="col">User</th><th scope="col">Tab</th><th scope="col">Session</th><th scope="col">File</th><th scope="col">Size</th><th scope="col">Uploaded</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+  <tbody id="uploads"></tbody>
+</table></div>
+<p class="note">The files the pages uploaded (Upload data: tables, images), a folder per session in --uploads-dir, which the server removes when the session ends (stopped, or unused for --idle-minutes). Erasing a file of a running session: its page uploads it again after a Stop, or .load says it is not there.</p>
 <section id="update-box" hidden>
 <h2>Server</h2>
 <p><button type="button" id="update">Update and restart</button></p>
@@ -330,6 +342,64 @@ function actions(user, named) {
 function minutes(seconds) {
   return seconds < 120 ? `${seconds} s` : `${Math.round(seconds / 60)} min`;
 }
+function ago(seconds) {
+  return seconds < 7200 ? `${minutes(seconds)} ago` : `${Math.round(seconds / 3600)} h ago`;
+}
+function bytes(size) {
+  if (size == null) return "-";
+  if (size < 1024) return `${size} B`;
+  if (size < 1 << 20) return `${(size / 1024).toFixed(1)} KB`;
+  return size < 1 << 30 ? `${(size / (1 << 20)).toFixed(1)} MB` : `${(size / (1 << 30)).toFixed(1)} GB`;
+}
+
+// The files the sessions' pages uploaded (--uploads-dir), and erasing them.
+function showUploads(uploads) {
+  if (!uploads) {
+    $("uploads-note").textContent = "The sessions keep what their pages upload in their memory: the server has no --uploads-dir (or no --users --local).";
+    return $("uploads").replaceChildren();
+  }
+  const files = uploads.folders.reduce((n, f) => n + f.files.length, 0);
+  const erase = (body, question, done) => () => confirm(question)
+    && change("/admin/api/erase-uploads", body, done);
+  const danger = (text, action) => Object.assign(button(text, action), { className: "danger" });
+  const note = document.createElement("span");
+  note.textContent = `${uploads.directory}: ${bytes(uploads.size)} in ${files} files of ${uploads.folders.length} sessions, ${bytes(uploads.free)} free on its disk. `
+    + `A file takes at most ${bytes(uploads.most_file)}, the files of a session ${bytes(uploads.most_all)}.`;
+  const all = document.createElement("div");
+  all.className = "actions-line";
+  if (files) {
+    all.append(danger("Erase all", erase({}, `Erase all ${files} uploaded files of ${uploads.folders.length} sessions (${bytes(uploads.size)})?`,
+      "Erased every uploaded file.")));
+  }
+  $("uploads-note").replaceChildren(note, all);
+  const rows = [];
+  for (const folder of uploads.folders) {
+    const user = folder.user ?? "(session ended)";
+    const tab = (folder.tab ?? "").slice(0, 8);
+    // The session, then its files.
+    const header = document.createElement("tr");
+    header.className = "session-row";
+    const title = Object.assign(document.createElement("th"), { scope: "rowgroup" });
+    title.colSpan = 4;
+    title.textContent = `${user}${tab ? `, tab ${tab}` : ""}, session ${folder.start}: ${folder.files.length} file${folder.files.length === 1 ? "" : "s"}`;
+    const size = Object.assign(document.createElement("th"), { textContent: bytes(folder.size) });
+    const actions = document.createElement("th");
+    if (folder.files.length > 1) {
+      actions.append(danger("Erase all its files", erase({ start: folder.start },
+        `Erase the ${folder.files.length} files (${bytes(folder.size)}) of ${user}, session ${folder.start}?`,
+        `Erased the files of ${user}, session ${folder.start}.`)));
+    }
+    header.append(title, size, Object.assign(document.createElement("th")), actions);
+    rows.push(header);
+    for (const file of folder.files) {
+      rows.push(row(["", "", "", file.name, bytes(file.size), ago(file.age),
+        danger("Erase", erase({ start: folder.start, name: file.name },
+          `Erase ${file.name} (${bytes(file.size)}) of ${user}, session ${folder.start}? Their page uploads it again only after a Stop.`,
+          `Erased ${file.name} of ${user}.`))]));
+    }
+  }
+  $("uploads").replaceChildren(...(rows.length ? rows : [row(["No uploads."])]));
+}
 
 async function show() {
   const state = await call("/admin/api/state");
@@ -373,6 +443,7 @@ async function show() {
       s.cpu == null ? "-" : `${s.cpu} s`, s.memory == null ? "-" : `${s.memory} MB` + (s.peak ? ` (${s.peak})` : ""),
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
+  showUploads(state.uploads);
   $("activity-link").hidden = !state.activity;
   $("update-box").hidden = !state.update;
   sessionCount = sessions ? sessions.length : 0;

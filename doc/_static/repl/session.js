@@ -6,8 +6,10 @@ const MAX_ENTRIES = 500;
 const MAX_TEXT = 20000;
 const MODES = new Set(["datalog", "squall"]);
 
-// A statement that loads a file as a relation (an uploaded one, on the page).
-const LOAD = /^\.load\s/;
+// A statement that loads a file as a relation (an uploaded one, on the page),
+// a table (.load) or an image (.image), or describes a relation for the
+// query assistant (.document).
+const LOAD = /^\.(load\s|image\s|document\s*\()/;
 
 // Whether *text* defines a rule, whose head is not the answer, or loads a
 // relation: the statements that leave something in the session. A query only asks.
@@ -18,6 +20,19 @@ export function definesRules(text, mode = "datalog") {
     const head = /^\s*([A-Za-z_]\w*)\s*\(.*(:-|←)/.exec(line);
     return head !== null && head[1] !== "ans";
   });
+}
+
+// The file a statement loads (.load NAME, .image NAME), or null.
+function loadedFile(text) {
+  const match = /^\.(?:load|image)\s+(?:'([^']*)'|"([^"]*)"|(\S+))/.exec(text);
+  return match ? match[1] ?? match[2] ?? match[3] : null;
+}
+
+// The *entries* without those loading a file of *names*, removed from the
+// session (.uploads remove): they are not run again when the session is.
+export function withoutUploads(entries, names) {
+  const removed = new Set(names);
+  return entries.filter(({ text }) => !removed.has(loadedFile(text)));
 }
 
 // The texts that give a session's rules back: ``.clear`` first if asked, the

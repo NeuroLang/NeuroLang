@@ -6,6 +6,7 @@ import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { answerTabs, imageButtons, renderTable } from "./table_view.js";
+import { removedUploads, uploadRows, uploadsSummary } from "./uploads.js";
 import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
@@ -17,7 +18,7 @@ import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
 import { followUps } from "./follow_up.js";
 import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
-import { Session, parseSession, replayTexts } from "./session.js";
+import { Session, parseSession, replayTexts, withoutUploads } from "./session.js";
 import { PmcLookup } from "./study_links.js";
 import { frameHeight, themeMessage, themed } from "./frames.js";
 import { tabAfter } from "./tabs.js";
@@ -616,6 +617,16 @@ const workerMessages = {
   },
   reply: (data) => {
     rerun = null;
+    if (quietRun) {
+      const { before, after } = quietRun;
+      quietRun = null;
+      before?.(data);
+      applyReply(data);
+      setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
+      setBusy(false);
+      after?.(data);
+      return;
+    }
     setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
     if (!data.failed) session.add(lastRun, $("mode").value);
     showLog(html(data.html), !data.failed && Boolean(data.tables?.length), Boolean(data.failed));
@@ -635,8 +646,105 @@ const workerMessages = {
   },
 };
 
+// The buttons of a row of the uploads: an icon and a word each.
+const UPLOAD_ICONS = {
+  download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+};
+function iconButton(kind, text, label, action) {
+  const button = Object.assign(document.createElement("button"), {
+    type: "button", className: `upload-${kind}`, title: label,
+  });
+  button.setAttribute("aria-label", label);
+  button.setAttribute("aria-describedby", "uploaded-note");
+  button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${UPLOAD_ICONS[kind]}</svg>`;
+  button.append(text);
+  button.addEventListener("click", action);
+  return button;
+}
+// Remove the uploaded file *name* from the session, quietly: its panel
+// says so, with an Undo, and the focus goes to the next file's Remove.
+function removeUpload(name) {
+  const bytes = uploads.get(name);
+  const entries = session.entries.map((entry) => ({ ...entry }));
+  const rows = [...$("uploaded-list").rows];
+  const at = rows.findIndex((row) => row.cells[0].textContent === name);
+  run(`.uploads remove '${name}'`, { quiet: { after: (data) => {
+    if (data.failed) return setUploadsStatus(plainText(data.html), null, true);
+    setUploadsStatus(plainText(data.html), bytes && (() => restoreUpload(name, bytes, entries)));
+    const removes = $("uploaded-list").querySelectorAll("button.upload-remove");
+    (removes[Math.min(at, removes.length - 1)] ?? $("uploaded-summary")).focus();
+  } } });
+}
+// Undo a removal: the session brings the file back, and the page its bytes
+// and the statements loading it.
+function restoreUpload(name, bytes, entries) {
+  run(`.uploads restore '${name}'`, { quiet: {
+    before: (data) => {
+      if (data.failed) return;
+      uploads.set(name, bytes);
+      session.replace(entries);
+    },
+    after: (data) => {
+      setUploadsStatus(plainText(data.html), null, data.failed);
+      $("uploaded-summary").focus();
+    },
+  } });
+}
+// The line of the uploads panel telling what was done, with an Undo.
+function setUploadsStatus(text, undo = null, failed = false) {
+  const line = $("uploads-status");
+  line.replaceChildren(text);
+  line.classList.toggle("agent-bad", failed);
+  if (undo) {
+    const button = Object.assign(document.createElement("button"), { type: "button", textContent: "Undo" });
+    button.addEventListener("click", undo);
+    line.append(" ", button);
+  }
+  line.hidden = !text;
+}
+const plainText = (markup) => Object.assign(document.createElement("div"), { innerHTML: markup }).textContent.trim();
+
+// The type of an uploaded file, for its download.
+function uploadMime(name) {
+  if (/\.gz$/i.test(name)) return "application/gzip";
+  if (/\.csv$/i.test(name)) return "text/csv";
+  if (/\.tsv$/i.test(name)) return "text/tab-separated-values";
+  return "application/octet-stream";
+}
+
+// The files uploaded in the session, as the latest reply tells them: hidden
+// without any.
+function showUploads(listed) {
+  const summary = uploadsSummary(listed);
+  $("uploaded").hidden = !summary;
+  $("uploaded-summary").textContent = summary;
+  $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells) => {
+    const row = document.createElement("tr");
+    for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text }));
+    const name = cells[0];
+    const actions = document.createElement("td");
+    actions.className = "upload-actions";
+    if (uploads.has(name)) { // the page has its bytes (it uploaded it)
+      actions.append(iconButton("download", "Download", `Download ${name}`,
+        () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) })));
+    }
+    actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
+    row.append(actions);
+    return row;
+  }));
+}
+
 // What a reply changes in the page besides its output: the predicates, the language, and the box.
 function applyReply(data) {
+  if (data.uploads) {
+    // A file the session no longer has (.uploads remove) is not uploaded,
+    // nor loaded, again when the session is given back.
+    const removed = removedUploads([...uploads.keys()], data.uploads);
+    for (const name of removed) uploads.delete(name);
+    if (removed.length) session.replace(withoutUploads(session.entries, removed));
+    showUploads(data.uploads);
+  }
   if (data.predicates) guide.predicates = data.predicates;
   if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
   showGuide();
@@ -809,9 +917,21 @@ function replayStep(data) {
   replayNext();
 }
 
-function run(text, { remember = false } = {}) {
+// A run of the page's own (Remove, Undo), *quiet*: its reply changes the
+// uploads and says what it did in their panel, not the output nor the
+// results being read; ``before`` and ``after`` take the reply.
+let quietRun = null;
+function run(text, { remember = false, quiet = null } = {}) {
   text = text.trim();
   if (!text) return;
+  if (quiet) {
+    quietRun = quiet;
+    setBusy(true);
+    setStatus("Running…", "busy");
+    worker.postMessage({ text });
+    return;
+  }
+  setUploadsStatus(""); // what was undoable is so no longer
   if (remember) {
     history.add(text);
     showHistory();
@@ -985,6 +1105,7 @@ $("llm-forget").addEventListener("click", () => {
 });
 $("restart").addEventListener("click", () => {
   uploads.clear(); // a fresh session: without the rules, nor the files uploaded
+  showUploads(null);
   start();
 });
 // The next user of this browser does not have this one's key.
@@ -1013,6 +1134,7 @@ $("upload-file").addEventListener("change", async (event) => {
   }
   uploads.set(answer.name, bytes);
   run(answer.statement, { remember: true });
+  $("uploaded").open = true; // the file is listed, with its buttons
 });
 $("session-open").addEventListener("click", () => $("session-file").click());
 $("session-file").addEventListener("change", async (event) => {

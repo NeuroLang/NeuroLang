@@ -16,7 +16,7 @@ it imported defined (``.import``).
 from nl_core.datalog import Fact, Union as DatalogUnion
 from nl_core.datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from nl_expr.expressions import Constant, Query
-from neurolang.commands import IMPORTED_MODULES
+from neurolang.commands import IMPORTED_MODULES, PREDICATE_DOCUMENTATION
 from neurolang.frontend.datalog.squall_syntax_lark import (
     SquallProgram,
     parser as squall_parser,
@@ -114,6 +114,13 @@ def _commit(symbols, session) -> dict:
     return previous
 
 
+def _documentation(symbol_table) -> dict:
+    """Return the documentation of the predicates *symbol_table* sees, by
+    name (see :meth:`neurolang.commands.CommandsMixin.document`)."""
+    documentation = symbol_table.get(PREDICATE_DOCUMENTATION)
+    return dict(documentation.value) if documentation is not None else {}
+
+
 class Submission:
     """
     The scope of the program of an engine where one submission runs.
@@ -145,6 +152,7 @@ class Submission:
     def __enter__(self):
         """Open the submission's scope and return the submission."""
         self.session = self._program_ir.symbol_table
+        self._documented = _documentation(self.session)
         self._program_ir.push_scope()
         self.scope = self._program_ir.symbol_table
         self._copy_relations()
@@ -254,10 +262,18 @@ class Submission:
         See :func:`definition_line`; the symbols NeuroLang generates are
         left out (see :func:`is_user_symbol`).
         """
-        lines = []
+        lines, defined = [], set()
         for symbol, value in self.scope._symbols.items():
             extent = predicate_extent(value)
             if extent is not None and is_user_symbol(symbol):
                 previous = predicate_extent(self.previous.get(symbol))
                 lines.append(definition_line(symbol.name, extent, previous))
+                defined.add(symbol.name)
+        # A description given to a predicate (.document), which the query
+        # assistant reads, without defining it.
+        documented = _documentation(self.scope)
+        for name, documentation in sorted(documented.items()):
+            if name not in defined and \
+                    self._documented.get(name) != documentation:
+                lines.append(f"documented {name}")
         return lines

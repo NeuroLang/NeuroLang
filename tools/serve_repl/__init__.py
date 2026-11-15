@@ -228,6 +228,7 @@ DEFAULT_EMBEDDINGS = Path(DEFAULTS["embeddings"]).expanduser()
 # directory each, kept for the next build: a source down (OSF, GitHub) then
 # stops no rebuild.
 DEFAULT_DOWNLOADS = Path(DEFAULTS["downloads"]).expanduser()
+DEFAULT_UPLOADS = Path(DEFAULTS["uploads_dir"]).expanduser()
 # The repository whose CI uploads the site of each pull request, and the
 # artifacts holding it (.github/workflows/docs.yml).
 REPOSITORY = "NeuroLang/NeuroLang"
@@ -929,6 +930,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "query_seconds": getattr(self.sessions, "query_seconds",
                                          None),
                 "sessions": getattr(self.sessions, "most", None)},
+            # the files the pages uploaded, by session (--uploads-dir)
+            "uploads": self.sessions.uploads_info()
+            if hasattr(self.sessions, "uploads_info") else None,
             "activity": getattr(self.sessions, "activity", None) is not None,
             "dashboard": self.dashboard is not None,
             "feedback": bool(self.feedback_db),
@@ -1018,6 +1022,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/admin/api/end-session" and self.sessions:
             tab = body.get("tab")
             return {"ended": self.sessions.end(name, tab and str(tab))}
+        if path == "/admin/api/erase-uploads" and hasattr(
+            self.sessions, "erase_uploads"
+        ):
+            start, file = body.get("start"), body.get("name")
+            erased = self.sessions.erase_uploads(
+                None if start is None else str(start),
+                None if file is None else str(file),
+            )
+            print(f"{self.user} erased {erased} uploaded files"
+                  f"{f' of the session {start}' if start else ''}"
+                  f"{f': {file}' if file else ''}", flush=True)
+            return {"erased": erased}
         if path == "/admin/api/update":  # and restart, if master moved
             check = update()
             return {**check, "restarting": bool(check["new"])}
@@ -1394,8 +1410,10 @@ class LocalHandler(Handler):
         action = path[len("/api/"):]
         try:
             # A file the page uploads comes as it is, named in the address
-            # (?name=), up to the size of one (session.store_upload).
-            body = {"data": self._bytes(MOST_UPLOAD_BYTES), "name":
+            # (?name=), up to the size of one (--max-upload-mb).
+            most = (getattr(self.backend, "uploads", None) or {}).get(
+                "most_file", MOST_UPLOAD_BYTES)
+            body = {"data": self._bytes(most), "name":
                     urllib.parse.parse_qs(urllib.parse.urlsplit(
                         self.path).query).get("name", [""])[0]} \
                 if action == "upload" else self._body()
@@ -2690,10 +2708,13 @@ def service_command(args) -> list:
         command += [] if args.prepare else ["--no-prepare"]
         command += [] if args.preload_embeddings else [
             "--no-preload-embeddings"]
+    command += ["--max-upload-mb", str(args.max_upload_mb),
+                "--max-uploads-mb", str(args.max_uploads_mb)]
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes),
-                    "--query-minutes", str(args.query_minutes)]
+                    "--query-minutes", str(args.query_minutes),
+                    "--uploads-dir", str(args.uploads_dir.resolve())]
         if args.max_running:
             command += ["--max-running", str(args.max_running)]
     if args.secure_cookie:
@@ -2999,6 +3020,26 @@ def parse_args(argv=None):
         metavar="M",
         help="with --users and --local, end a session unused for M minutes "
         "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--uploads-dir", type=Path, default=DEFAULT_UPLOADS,
+        metavar="DIR",
+        help="with --users and --local, the directory of the files the "
+        "pages upload, a folder per session, removed when it ends (stopped, "
+        "or idle for --idle-minutes); emptied when the server starts "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--max-upload-mb", type=float,
+        default=float(DEFAULTS["max_upload_mb"]), metavar="MB",
+        help="a file a page uploads takes at most MB megabytes "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--max-uploads-mb", type=float,
+        default=float(DEFAULTS["max_uploads_mb"]), metavar="MB",
+        help="the files a session's page uploads take at most MB megabytes "
+        "together (default: %(default)s)",
     )
     parser.add_argument(
         "--max-running", type=int, metavar="N",
@@ -3427,6 +3468,9 @@ def main(argv=None) -> None:
     if args.local:
         from neurolang_apps.utils.tui.local_backend import LocalBackend
 
+        # How large the files the pages upload may be (session.Uploads).
+        uploads = {"most_file": int(args.max_upload_mb * (1 << 20)),
+                   "most_all": int(args.max_uploads_mb * (1 << 20))}
         args.site = args.site / "local"
         page = prepare_local_site(args.site, args.engines, bool(users))
         if args.prepare:
@@ -3453,6 +3497,7 @@ def main(argv=None) -> None:
 
             backend = Sessions(
                 args.data_dir, identity=identity, withhold=strip,
+                uploads={**uploads, "directory": str(args.uploads_dir)},
                 feedback_db=args.feedback_db and args.feedback_db.resolve(),
                 activity_db=args.activity_db and args.activity_db.resolve(),
                 most=args.max_sessions, idle=args.idle_minutes * 60,
@@ -3471,7 +3516,7 @@ def main(argv=None) -> None:
                     "groups": ""}
             backend = LocalBackend(
                 args.data_dir, preload_embeddings=args.preload_embeddings,
-                **options)
+                uploads=uploads, **options)
         if args.feedback_db:
             from neurolang_apps.utils.llm.feedback_server import (
                 FeedbackStore,

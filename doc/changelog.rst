@@ -19,6 +19,36 @@ Unreleased
 
 **New features:**
 
+* Upload a brain image to the REPL: the page's *Upload data* takes a NIfTI
+  image of activations (``.nii``/``.nii.gz``), a binary mask or a z-map,
+  kept with the session as the CSV files are, so a server reading none of
+  its files loads it.  On a server (``--users --local``), the files a
+  session's page uploads go to a folder of its own in ``--uploads-dir``
+  (``uploads_dir`` of ``server.yaml``), removed when the session ends,
+  stopped or unused for ``--idle-minutes``, or when its process died; their
+  sizes are its ``--max-upload-mb`` (50) and ``--max-uploads-mb`` (200).
+  The admin console shows them by session, with their sizes, ages and the
+  free disk space, and erases a file, a session's or all.  ``.uploads`` lists, in a session, the files its page uploaded, their
+  kind, size and age, the relations loaded from them and the room left.
+  The page has *Upload data* in its toolbar, and lists the files uploaded
+  in the session (each reply carries them).  ``.image`` describes the image
+  to the query assistant (its file, a mask or a map of values, its voxels),
+  replacing the description of an image loaded before under the same name
+  (``document_predicate(..., replace=True)``, ``.document(p, "...",
+  replace=True)``).  ``.document(p, "...")`` in the REPL says ``documented p`` (not
+  "nothing defined"), and the page keeps it with the rules of the session,
+  after *Stop* or in a saved session.  ``.uploads remove NAME``, the
+  *Remove* of the page's list, deletes an uploaded file from the session
+  (from its folder on a server), and the page forgets it: the relations
+  loaded from it stay until ``.drop``.  The list has a *Download* and a *Remove* button for each file;
+  *Remove* leaves the output as it was and offers an *Undo*
+  (``.uploads restore NAME``, the file removed last).  ``.image PATH|UPLOADED [--name
+  NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
+  (resampled, a mask to the nearest voxel; at most ``image.max_mb``
+  uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells
+  the query assistant what it is; the page gives it back after *Stop* or
+  *Open session*.
+  
 * ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF
   says, for the types a program states with rules as for those of the
   files: ``rdf:type(e, t) :- our_experiment(e, n), cogat_term(t, n)``

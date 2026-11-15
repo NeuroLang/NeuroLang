@@ -192,6 +192,14 @@ Who may use it
    With ``--users`` and ``--local``: the queries running at once, of all
    the sessions (the machine's CPUs, at least 1), and the minutes after
    which a query is stopped (60; 0, never); see `Sessions`_.
+``--uploads-dir DIR``, ``--max-upload-mb MB``, ``--max-uploads-mb MB``
+   The files the pages upload (**Upload data**: tables, images): with
+   ``--users`` and ``--local``, a session keeps them in a folder of its own
+   in DIR (``~/.cache/neurolang/repl-uploads``), removed when it ends,
+   stopped or unused for ``--idle-minutes``; the server empties DIR when it
+   starts, and removes the folders of the sessions whose process died.  A
+   file takes at most MB megabytes (50), all those of a session together
+   at most MB (200).
 ``--guests``, ``--max-guest-sessions N``
    With ``--users`` and ``--local``: let visitors in as guests, without an
    account, at most N sessions of guests at once (2); see `Guests`_.
@@ -270,6 +278,9 @@ log and the dashboard go there too::
    idle_minutes: 120
    max_running: 4              # queries at once (the machine's CPUs)
    query_minutes: 60           # 0: no limit
+   uploads_dir: /srv/neurolang/uploads  # a folder per session, removed when it ends
+   max_upload_mb: 50
+   max_uploads_mb: 200
    activity_db: activity.sqlite
    dashboard: true             # needs the dashboard extra
 
@@ -398,6 +409,13 @@ refusal (403).  It shows:
   unused, whether it works, the CPU seconds and the memory of its process
   (see `Activity and usage`_); it ends one.  Above them, the memory of the
   builder, which the sessions share.
+- **Uploads**: with ``--uploads-dir``, the files the pages uploaded, by
+  session (its user and tab, or *session ended* for a folder whose
+  session is gone), with their size and age, the space they take and that
+  free on the disk, and the limits; it erases a file, the files of a
+  session or all of them (the server's log tells who erased what).  A
+  session whose file is erased no longer has it: ``.load`` says so, and
+  the page uploads it again after a *Stop*.
 - **Usage by user**: with ``--activity-db``, each user's inputs run and
   failed, their time and CPU seconds, the most memory of their sessions,
   and a link to their log.
@@ -812,8 +830,9 @@ Security
 
 - With ``--local``, anyone who logs in runs queries and commands in the
   server's Python.  With users or a password, their statements are *confined*
-  (``neurolang.confine``): ``.load`` loads the files they upload (**Upload
-  data**, kept in the memory of their session), and no path;
+  (``neurolang.confine``): ``.load`` and ``.image`` load the files they
+  upload (**Upload data**, kept in the session's folder of
+  ``--uploads-dir``), and no path;
   ``.load_csv``, ``.load_atlas``, ``.import``, ``.load_tractogram`` and
   ``.view`` read the files of the data directory only (``--data-dir``) and
   fetch no address; ``.save``,
