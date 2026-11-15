@@ -1,6 +1,7 @@
 """Tests for the graph of a query: its data, rules and probabilities."""
 
 import io
+import json
 import re
 
 import pandas as pd
@@ -17,7 +18,7 @@ from neurolang_apps.utils.tui.app import (  # noqa: E402
     InteractiveTuiApp, TuiSettings
 )
 from neurolang_apps.utils.tui.query_graph import (  # noqa: E402
-    _BAND, _height, _relation_svg, _width,
+    _BAND, _height, _relation_svg, _subtitle, _width,
     graph_page, query_graph
 )
 from neurolang_apps.utils.tui.web import WebRepl  # noqa: E402
@@ -144,20 +145,35 @@ def test_a_probability_tells_how_it_is_computed(nl):
     notes = _prob(query_graph(nl, CO_ACTIVATION)).notes
     assert "joined on s" in notes
     assert "p = P(A, C) / P(C): A above given, C below" in notes
-    assert (
-        "selected_study chooses one of its 2 rows, each with probability 1/2"
-        in notes
-    )
-    assert (
-        "so p is the share of those choices where A and C hold, among "
-        "those where C holds" in notes
-    )
     assert "a probability p for each (r1, r2), summing over s" in notes
+    # One line of the formula; what the choice is, is said by its node.
+    assert not [n for n in notes if "chooses" in n or "so p is" in n]
     plain = _prob(query_graph(
         nl, "ans(r, p) :- PROB[activated(r, s), selected_study(s)] = p"
     )).notes
-    assert "p = P(A)" in plain
-    assert "so p is the share of those choices where A holds" in plain
+    assert "p = P(A), the share of the choices where A holds" in plain
+    assert not [n for n in plain if "chooses" in n or "so p is" in n]
+
+
+def test_a_random_choice_says_its_probabilities_once(nl):
+    graph = query_graph(nl, CO_ACTIVATION)
+    [choice] = [n for n in graph.nodes if n.kind == "choice"]
+    assert (
+        "chooses one of its rows, each with probability 1/2"
+        in choice.detail.splitlines()
+    )
+    assert _subtitle(choice) == "random choice · 2 rows, 1/2 each"
+    # Said by the choice only, not by the probability that uses it.
+    page = graph_page(graph, "q")
+    data = json.loads(
+        page.split('id="nodes">')[1].split("</script>")[0]
+    )
+    said = [
+        k for k, v in data.items()
+        if "each with probability" in v["detail"]
+    ]
+    assert said == [choice.id]
+    assert "random choice · 2 rows, 1/2 each" in page
 
 
 def test_no_share_is_claimed_with_probabilistic_facts_upstream(nl):
