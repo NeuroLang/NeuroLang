@@ -179,6 +179,11 @@ when a saved session is opened), and forgets it on **Restart**.  A server
 (``neurolang-repl-serve``) loads the files you upload, and no path of its
 own.
 
+**Upload data** also takes a NIfTI image of activations (``.nii`` or
+``.nii.gz``), a binary mask or a z-map: the page loads it with ``.image``
+as the relation ``image(i, j, k, value)``, on the grid of the engine, and
+shows it in the brain viewer.  ``.image PATH`` loads one in a terminal.
+
 
 Results
 -------
@@ -274,6 +279,10 @@ Every command
    * - ``.load PATH|UPLOADED [NAME]``
      - a CSV or TSV file as a relation: a path in a terminal, a file
        uploaded (**Upload data**) on the page
+     - both
+   * - ``.image PATH|UPLOADED``
+     - a NIfTI image of activations as ``image(i, j, k, value)``, shown in
+       the brain viewer
      - both
    * - ``.sets``, ``.predicates``, ``.engines``
      - the engine's relations, and the engines

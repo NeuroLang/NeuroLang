@@ -1416,3 +1416,112 @@ class TestViewSeveralQueries:
     def test_the_threshold_is_the_default_with_voxels(self, tiny, viewed):
         self._view(tiny, SEVERAL_QUERIES)
         assert viewed[0][1]["threshold"] == "95%"
+
+
+class TestImage:
+    """Check .image loads a NIfTI image of activations, a mask or a z-map,
+    as a relation of the session."""
+
+    @pytest.fixture
+    def zmap(self, tmp_path):
+        data = np.zeros((4, 4, 4), dtype=np.float32)
+        data[1, 2, 3], data[0, 0, 0], data[3, 3, 3] = 5.0, 3.0, -2.0
+        path = tmp_path / "z.nii.gz"
+        nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
+        return path
+
+    @staticmethod
+    def _mask(tmp_path, voxels, name="mask.nii"):
+        data = np.zeros((4, 4, 4), dtype=np.uint8)
+        for voxel in voxels:
+            data[voxel] = 1
+        path = tmp_path / name
+        nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
+        return path
+
+    def test_loads_the_voxels_and_their_values(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap}")
+        out = " ".join(_output(tiny).split())
+        assert "loaded image(i, j, k, value): 3 voxels" in out
+        assert "a map of values" in out
+        assert {tuple(row) for row in tiny._nl.symbols["image"].value} == {
+            (1, 2, 3, 5.0), (0, 0, 0, 3.0), (3, 3, 3, -2.0)
+        }
+
+    def test_the_assistant_is_told_what_the_image_is(self, tiny, zmap):
+        """The query assistant sees the image among the relations, with
+        what it is (its agent's schema of the engine)."""
+        from neurolang_apps.utils.llm.context import EngineContext
+
+        tiny._handle_dot_command(f".image {zmap}")
+        tiny._handle_dot_command(f".image {zmap} --name image")
+        schema = EngineContext(
+            tiny._nl, "tiny", tiny.loaded_relations
+        ).schema_summary()
+        line = next(row for row in schema.splitlines()
+                    if row.startswith("- image(i, j, k, value)"))
+        assert "brain image" in line and "z-map" in line
+        assert line.count("brain image") == 1  # loaded again, told once
+
+    def test_the_name(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap} --name z")
+        assert "loaded z(i, j, k, value)" in _output(tiny)
+
+    def test_loading_again_replaces_it_when_named(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap}")
+        tiny._handle_dot_command(f".image {zmap}")
+        assert "already loaded" in " ".join(_output(tiny).split())
+        tiny._handle_dot_command(f".image {zmap} --name image")
+        assert _output(tiny).count("loaded image(i, j, k, value)") == 2
+
+    def test_errors(self, tiny, zmap, tmp_path):
+        tiny._handle_dot_command(f".image {tmp_path / 'none.nii'}")
+        tiny._handle_dot_command(".image")
+        tiny._handle_dot_command(f".image {self._mask(tmp_path, [])}")
+        out = " ".join(_output(tiny).split())
+        assert "Cannot load" in out
+        assert "Usage: .image PATH" in out
+        assert "has no value other than 0 in the brain" in out
+
+    def test_an_image_too_large_uncompressed_is_refused(
+        self, tiny, zmap, monkeypatch
+    ):
+        monkeypatch.setitem(nifti.IMAGE_DEFAULTS, "max_mb", 0)
+        tiny._handle_dot_command(f".image {zmap}")
+        assert "more than 0 MB uncompressed" in _output(tiny)
+        assert "image" not in tiny.loaded_relations
+
+    def test_a_mask_on_another_grid_stays_a_mask(self, tiny, tmp_path):
+        """Resampled to the nearest voxel: a mask of 2 mm voxels resampled
+        from 1 mm ones is no fraction of a voxel."""
+        data = np.zeros((8, 8, 8), dtype=np.float32)
+        data[2:6, 2:6, 2:6] = 4.0
+        affine = TINY_AFFINE.copy()
+        affine[:3, :3] *= 0.5
+        path = tmp_path / "fine.nii.gz"
+        nib.save(nib.Nifti1Image(data, affine), path)
+        tiny._handle_dot_command(f".image {path}")
+        assert "a mask" in _output(tiny)
+        values = {row[-1] for row in tiny._nl.symbols["image"].value}
+        assert values == {4.0}
+
+    def test_an_uploaded_image_on_a_server(
+        self, tiny, zmap, tmp_path, monkeypatch
+    ):
+        """On a server (neurolang.confine), .image reads the images the
+        page uploaded, by their name, not its files."""
+        from neurolang.confine import CONFINE_ENV
+
+        monkeypatch.setenv(CONFINE_ENV, str(tmp_path / "data"))
+        tiny.uploads["my z.nii.gz"] = zmap.read_bytes()
+        tiny._handle_dot_command(f".image {zmap}")
+        assert "No image" in _output(tiny) and "was uploaded" in _output(tiny)
+        tiny._handle_dot_command(".image 'my z.nii.gz'")
+        assert "loaded image(i, j, k, value): 3 voxels from my z.nii.gz" in \
+            " ".join(_output(tiny).split())
+
+    def test_the_help_quotes_the_defaults(self, tiny):
+        threshold = nifti.IMAGE_DEFAULTS["threshold"]
+        assert f"from {threshold}" in " ".join(nifti.IMAGE_HELP.split())
+        tiny._handle_dot_command(".help image")
+        assert "--name" in _output(tiny)

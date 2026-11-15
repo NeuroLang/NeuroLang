@@ -18,6 +18,14 @@ mask_colormaps: [Blues, Oranges, Greens, Purples, Reds]
 colormaps: [hot, inferno, viridis, plasma, magma, cividis, cold_hot, RdBu_r,
             bwr, coolwarm, gray]
 
+# .image (nifti.py): the voxels of a z-map it takes as activated, those
+# of a value of at least threshold (3.1: p < 0.001, one-sided), and the
+# most an image may take uncompressed, in MB (a 1 mm MNI volume of floats
+# takes 29).
+image:
+  threshold: 3.1
+  max_mb: 256
+
 # The largest background embedded, in voxels: the 1 mm MNI grid fits.
 background_max_voxels: 16777216
 

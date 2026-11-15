@@ -19,6 +19,16 @@ Unreleased
 
 **New features:**
 
+* Upload a brain image to the REPL: the page's *Upload data* takes a NIfTI
+  image of activations (``.nii``/``.nii.gz``), a binary mask or a z-map,
+  kept in the memory of the session as the CSV files are, so a server
+  reading none of its files loads it.  ``.image PATH|UPLOADED [--name
+  NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
+  (resampled, a mask to the nearest voxel; at most ``image.max_mb``
+  uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells
+  the query assistant what it is; the page gives it back after *Stop* or
+  *Open session*.
+
 * A dense whole-brain tractogram for tract_querier's bundles, the engines
   ``neurosynth_disconnectome7t`` and ``neurostore_disconnectome7t``:
   Disconnectome7T's tractography of the Human Connectome Project's 7 T

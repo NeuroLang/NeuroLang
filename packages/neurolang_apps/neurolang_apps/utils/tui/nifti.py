@@ -29,6 +29,7 @@ has no voxel columns: ``ans(x, y, z)`` stays millimetres.
 """
 
 import gzip
+import io
 import os
 import shlex
 import tempfile
@@ -40,7 +41,10 @@ from typing import List, NamedTuple, Optional, Tuple
 import nibabel as nib
 import numpy as np
 import pandas as pd
-from neurolang.confine import ConfinedError, check_read, check_write
+from neurolang.confine import (
+    ConfinedError, check_read, check_write, confined_roots,
+)
+from nl_expr.expressions import Symbol
 
 from neurolang_apps.utils import engine_registry
 
@@ -2019,3 +2023,161 @@ def _view_title(request: ViewRequest, path: Path, titles) -> str:
     if len(titles) > 1:
         return f"Last results: {', '.join(titles)}"
     return f"Last result: {titles[0]}" if titles else "Last result"
+
+
+IMAGE_USAGE = ".image PATH|UPLOADED [--name NAME]"
+
+# The defaults of .image (viewer.yaml): the value from which the voxels of
+# a z-map are activated, and the most bytes an image may take uncompressed.
+IMAGE_DEFAULTS = brain_viewer.DEFAULTS["image"]
+
+IMAGE_HELP = f"""\
+[bold cyan]{IMAGE_USAGE}[/bold cyan] loads a NIfTI image of
+activations, a binary mask or a z-map, as the relation
+[bold]NAME(i, j, k, value)[/bold] (NAME is [bold]image[/bold] by default):
+its voxels of the brain with a value other than 0, on the grid of the engine
+(the image is resampled to it if it has another, a mask to the nearest
+voxel), and shows it in the brain viewer: a mask whole, a z-map from
+{IMAGE_DEFAULTS["threshold"]}. UPLOADED is the name of an image the page
+uploaded (Upload data).
+
+Load it again with --name and the same NAME to replace it."""
+
+HELP_TOPICS["image"] = IMAGE_HELP
+
+# What the query assistant is told of an image .image loaded (.document).
+IMAGE_DESCRIPTION = (
+    "A brain image loaded with .image or uploaded: its voxels (i, j, k) "
+    "on the grid of the engine, with their value. A binary mask has a "
+    "single value; a z-map, its activations from "
+    f"{IMAGE_DEFAULTS['threshold']}."
+)
+
+
+def nifti_from_bytes(data: bytes, most: Optional[int] = None):
+    """
+    Return the NIfTI image of the bytes *data*, gzipped or not; a
+    SaveError when it takes more than *most* bytes uncompressed.
+    """
+    if data[:2] == b"\x1f\x8b":
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as compressed:
+            data = compressed.read(-1 if most is None else most + 1)
+    if most is not None and len(data) > most:
+        raise SaveError(f"The image takes more than {most >> 20} MB "
+                        "uncompressed.")
+    try:
+        return nib.Nifti1Image.from_bytes(data)
+    except Exception:
+        return nib.Nifti2Image.from_bytes(data)
+
+
+def read_image(data: bytes):
+    """Return the image of the bytes *data* of a NIfTI file, of at most
+    ``max_mb`` uncompressed, and its first volume if it has several."""
+    image = nifti_from_bytes(data, int(IMAGE_DEFAULTS["max_mb"]) << 20)
+    return image.slicer[..., 0] if len(image.shape) == 4 else image
+
+
+def is_mask(image) -> bool:
+    """Whether *image* is a mask: of one value other than 0."""
+    values = np.asanyarray(image.dataobj)
+    return np.unique(values[np.isfinite(values) & (values != 0)]).size <= 1
+
+
+def _image_bytes(app, word: str) -> bytes:
+    """Return the bytes of the image *word*: one the page uploaded, or a
+    path (on a server, which reads none of its files, an uploaded one
+    only)."""
+    data = app.uploads.get(word)
+    if data is not None:
+        return data
+    if confined_roots() is not None:
+        raise SaveError(f"No image {word} was uploaded: this server loads "
+                        "the images you upload (Upload data), not its own "
+                        "files.")
+    path = Path(word).expanduser()
+    check_read(path, "image")
+    return path.read_bytes()
+
+
+def _image_values(image, template: nib.Nifti1Image, mask: bool):
+    """Return the values of *image* on the grid of *template*, a *mask*
+    resampled to the nearest voxel to stay one."""
+    if image.shape[:3] != template.shape[:3] or not np.allclose(
+        image.affine, template.affine
+    ):
+        from nibabel.processing import resample_from_to
+
+        image = resample_from_to(image, template, order=0 if mask else 1)
+    return np.nan_to_num(np.asanyarray(image.dataobj, dtype=float))
+
+
+@command(
+    ".image", "Load a NIfTI image of activations (a mask, a z-map) as a "
+    "relation NAME(i, j, k, value) and show it (.help image)", IMAGE_USAGE,
+)
+def cmd_image(app, arg: str) -> None:
+    """Load the NIfTI image of *arg* as a relation of the session."""
+    from .session import _load_failed, _name_problem
+
+    try:
+        words, options = split_args(arg, {"--name": 1}, IMAGE_USAGE)
+        if len(words) != 1:
+            raise SaveError(f"Usage: {IMAGE_USAGE}")
+        source = words[0]
+        name = options.get("--name", ["image"])[0]
+        problem = _name_problem(app, name, "--name" in options)
+        if problem:
+            raise SaveError(
+                problem.replace(".load PATH", ".image PATH --name")
+            )
+        template = engine_template(app._nl)
+        image = read_image(_image_bytes(app, source))
+        mask = is_mask(image)
+        data = _image_values(image, template, mask)
+    except (SaveError, ConfinedError) as exc:
+        _load_failed(app, str(exc))
+        return
+    except Exception as exc:
+        _load_failed(app, f"Cannot load {arg}: {exc}", exc)
+        return
+    if "brain_mask" in app._nl.symbols:
+        brain = np.array(list(app._nl.symbols["brain_mask"].value), dtype=int)
+    else:
+        brain = np.argwhere(np.asanyarray(template.dataobj) != 0)
+    index = tuple(brain.T)
+    values = data[index]
+    keep = values != 0
+    rows = pd.DataFrame(
+        {"i": brain[keep, 0], "j": brain[keep, 1], "k": brain[keep, 2],
+         "value": values[keep]}
+    )
+    if rows.empty:
+        _load_failed(app, f"{source} has no value other than 0 in the brain.")
+        return
+    if name in app.loaded_relations:
+        del app._nl.program_ir.symbol_table[Symbol(name)]
+    app._nl.add_tuple_set(rows, name=name)
+    app.loaded_relations[name] = ["i", "j", "k", "value"]
+    app._nl.execute_datalog_program(
+        f'.document({name}, "{IMAGE_DESCRIPTION}")'
+    )
+    kind = "a mask" if mask else "a map of values"
+    app.console.print(
+        f"loaded {name}(i, j, k, value): {len(rows)} voxels from {source}, "
+        f"{kind}", style="green", markup=False,
+    )
+    shown = np.zeros(template.shape[:3], dtype=np.float32)
+    shown[index[0][keep], index[1][keep], index[2][keep]] = values[keep]
+    fd, shown_path = tempfile.mkstemp(
+        suffix=".nii.gz", prefix="neurolang_view_"
+    )
+    os.close(fd)
+    write_nifti(nib.Nifti1Image(shown, template.affine), shown_path)
+    threshold = float(IMAGE_DEFAULTS["threshold"])
+    if mask:
+        threshold = float(rows["value"].min())
+    request = parse_view_args("")
+    if (rows["value"] >= threshold).any():
+        request = request._replace(threshold=threshold, threshold_given=True)
+    _view_nifti(app, [(name, Path(shown_path))], request, name)

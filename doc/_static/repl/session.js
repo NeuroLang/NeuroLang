@@ -6,8 +6,9 @@ const MAX_ENTRIES = 500;
 const MAX_TEXT = 20000;
 const MODES = new Set(["datalog", "squall"]);
 
-// A statement that loads a file as a relation (an uploaded one, on the page).
-const LOAD = /^\.load\s/;
+// A statement that loads a file as a relation (an uploaded one, on the page):
+// a table (.load) or an image (.image).
+const LOAD = /^\.(load|image)\s/;
 
 // Whether *text* defines a rule, whose head is not the answer, or loads a
 // relation: the statements that leave something in the session. A query only asks.
