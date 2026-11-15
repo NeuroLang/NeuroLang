@@ -182,6 +182,21 @@ saved session is opened), and forgets it on **Restart**.  A server loads
 the files you upload, and no path of its own.  ``.uploads`` lists the files
 of the session, what each was loaded as, and the room left.
 
+The query assistant reads, with the relations and their columns, their
+descriptions: describe yours, so that it finds them and knows what they
+hold.  ``.document`` describes a relation loaded or defined in the
+session, a ``%%`` line right before a rule describes it (see
+:doc:`tutorial_datalog`), and ``.image`` describes the image it loads
+(its file, a mask or a map of values)::
+
+   .load 'my scores.csv' scores
+   .document(scores, "The scores of the studies of my lab: study is a PubMed id, score from 0 to 1.")
+   %% The studies of my lab with a high score.
+   high(s) :- scores(s, x), (x > 0.4)
+
+The page keeps the descriptions with the rules of the session, after
+**Stop** or in a saved session.
+
 **Upload data** also takes a NIfTI image of activations (``.nii`` or
 ``.nii.gz``), a binary mask or a z-map: the page loads it with ``.image``
 as the relation ``image(i, j, k, value)``, on the grid of the engine, and
