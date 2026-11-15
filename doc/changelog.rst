@@ -370,6 +370,13 @@ Unreleased
 
 **Bug fixes:**
 
+* macOS: the query assistant's checks of a query no longer crash (SIGSEGV)
+  on a matrix product, such as a bootstrap interval or a similarity of
+  texts. Apple's Accelerate, the BLAS of numpy there, cannot run in a
+  forked child once the parent ran it with several threads:
+  ``neurolang_apps`` keeps it to one thread (``VECLIB_MAXIMUM_THREADS=1``,
+  unless set), and checks in-process where numpy loaded first.
+
 * ``.view`` drew nothing of a region, a result of voxels without a value,
   or of an overlay of one value: its default threshold, the 95th
   percentile, is that value, and NiiVue draws nothing of a colour range of
