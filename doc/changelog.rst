@@ -377,7 +377,8 @@ Unreleased
   it worked.  The rule the frontend declares for such a query takes its
   variables from the query's head, as the deterministic frontend does, and
   the program translates its body to Datalog as it does a rule's; a query
-  whose body is one quantified formula is queried as a conjunction is.
+  whose body is a formula, not an atom nor a conjunction, is declared that
+  way first.
 
 * ``.view`` drew nothing of a region, a result of voxels without a value,
   or of an overlay of one value: its default threshold, the 95th

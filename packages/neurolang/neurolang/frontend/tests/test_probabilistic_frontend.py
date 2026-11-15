@@ -3019,6 +3019,8 @@ def test_probabilistic_facts_of_values_of_several_types():
      "ans(s) :- study(s), mentions(s, t), mentions(u, t)"),
     ("ans(s) :- study(s), ~exists(t; mentions(s, t))",
      "m(s) :- mentions(s, t)\nans(s) :- study(s), ~m(s)"),
+    ("ans(count(s)) :- exists(t; mentions(s, t))",
+     "ans(count(s)) :- mentions(s, t)"),
 ])
 def test_exists_in_the_rule_of_the_query(query, without):
     """``exists(t; ...)`` in the query's own rule: the variables of its
