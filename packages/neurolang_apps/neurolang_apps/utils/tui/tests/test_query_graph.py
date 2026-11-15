@@ -282,6 +282,7 @@ def test_the_data_show_their_columns_and_size(nl):
     assert "tfidf(s, t, v)" in nodes["mentions"].detail
 
 
+@pytest.mark.squall
 def test_a_squall_query_has_its_graph(nl):
     graph = query_graph(
         nl, "obtain every Tfidf that mentions 'pain'.", squall=True

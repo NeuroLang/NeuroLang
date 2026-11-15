@@ -88,10 +88,12 @@ class TestNeuroLangReplCompleter:
     def test_nothing_offered_inside_a_comment(self, completer):
         assert _texts(completer, "ans(x) :- b(x) % b is ") == []
 
+    @pytest.mark.squall
     def test_squall_keywords(self):
         completer = NeuroLangReplCompleter(squall_keywords=squall_keywords())
         assert "obtain" in _texts(completer, "ob")
 
+    @pytest.mark.squall
     def test_squall_mode_uses_keywords(self):
         squall = {"on": False}
         completer = NeuroLangReplCompleter(
@@ -142,6 +144,7 @@ def test_lexer_no_capitalised_word_style():
     assert styles[">"] == "class:operator"
 
 
+@pytest.mark.squall
 def test_lexer_squall_keywords():
     line = 'define as Active every study that the a "x" mentions.'
     styles = _styles(line, squall=True)
@@ -152,6 +155,7 @@ def test_lexer_squall_keywords():
     assert all(word in squall_keywords() for word in ("every", "the", "a"))
 
 
+@pytest.mark.squall
 def test_lexer_follows_mode():
     squall = {"on": False}
     lexer = NeuroLangLexer(lambda: squall["on"])
@@ -439,6 +443,7 @@ class TestDynamicCompletion:
     def test_invalid_prefix_still_offers_predicates(self, neurosynth_app):
         assert "peak_reported" in _words(neurosynth_app, "ans(x) :- ) pe")
 
+    @pytest.mark.squall
     def test_squall_offers_predicates_and_keywords(self, neurosynth_app):
         neurosynth_app.settings.squall = True
         metas = _metas(neurosynth_app, "obtain every Te")
@@ -498,6 +503,7 @@ def squall_app(neurosynth_app):
     return neurosynth_app
 
 
+@pytest.mark.squall
 class TestSquallGrammarCompletion:
     def test_sentence_start(self, squall_app):
         words = _words(squall_app, "")
@@ -577,6 +583,7 @@ def test_current_sentence():
     )
 
 
+@pytest.mark.squall
 def test_squall_keywords_from_grammar():
     words = squall_keywords()
     assert {"obtain", "every", "all", "an", "count", "probably"} <= set(words)
@@ -609,6 +616,7 @@ def sorts_app():
 
 
 class TestSquallSorts:
+    @pytest.mark.squall
     def test_nouns_are_capitalised_with_their_entities(self, sorts_app):
         metas = _metas(sorts_app, "obtain every ")
         assert metas["Voxel"] == "voxel(i, j, k) · in 3D · stored"
@@ -616,6 +624,7 @@ class TestSquallSorts:
         assert "cos" not in metas and "voxel" not in metas
         assert _words(sorts_app, "obtain every Stu") == ["Study"]
 
+    @pytest.mark.squall
     def test_verbs_by_the_sort_of_their_subject(self, sorts_app):
         metas = _metas(sorts_app, "obtain every Study that ")
         verbs = [word for word, meta in metas.items() if "→" in meta]
@@ -623,10 +632,12 @@ class TestSquallSorts:
         assert metas["reports"] == "study → voxel(i, j, k) · derived"
         assert "is" in metas
 
+    @pytest.mark.squall
     def test_no_verb_from_another_sort(self, sorts_app):
         words = _words(sorts_app, "obtain every Term that ")
         assert "mentions" not in words and "reports" not in words
 
+    @pytest.mark.squall
     def test_object_clause_on_the_object_sort(self, sorts_app):
         assert "a Study mentions" in _words(sorts_app, "obtain every Term that ")
         metas = _metas(sorts_app, "obtain every Voxel in 3D that ")
@@ -634,22 +645,26 @@ class TestSquallSorts:
             "object clause · study → voxel(i, j, k) · derived"
         )
 
+    @pytest.mark.squall
     def test_verb_of_an_object_clause(self, sorts_app):
         words = _words(sorts_app, "obtain every Voxel that a Study ")
         assert "reports" in words and "mentions" not in words
 
+    @pytest.mark.squall
     def test_inverse_verbs_are_not_offered(self, sorts_app):
         for text in ("obtain every Term that ", "obtain every Voxel that "):
             assert not any(
                 word.startswith("~") for word in _words(sorts_app, text)
             )
 
+    @pytest.mark.squall
     def test_in_3d_after_a_multi_column_noun(self, sorts_app):
         words = _words(sorts_app, "obtain every Voxel ")
         assert words[:2] == ["in 3D", "(?i; ?j; ?k)"]
         assert _words(sorts_app, "obtain every Voxel i")[0] == "in 3D"
         assert "in 1D" not in _words(sorts_app, "obtain every Study ")
 
+    @pytest.mark.squall
     def test_with_probability_after_an_inferred_probability(self, sorts_app):
         sorts_app._execute_and_display(
             "define as Active_voxel with inferred probability "
@@ -661,6 +676,7 @@ class TestSquallSorts:
             sorts_app, "obtain every Selected_study "
         )
 
+    @pytest.mark.squall
     def test_hidden_predicates_not_offered_in_squall(self, sorts_app):
         assert "Peak_reported" not in _words(sorts_app, "obtain every ")
         assert "peak_reported" not in _words(sorts_app, "obtain every pe")
@@ -680,6 +696,7 @@ class TestSquallSorts:
             "reports(study(study_id), voxel(i, j, k)) · derived"
         )
 
+    @pytest.mark.squall
     def test_suggested_sentences_run(self, sorts_app):
         for sentence in (
             "obtain every Voxel in 3D that a Study reports.",
@@ -792,6 +809,7 @@ def test_arity_error_notes_the_entities(sorts_app):
     ) in out
 
 
+@pytest.mark.squall
 def test_squall_error_notes_the_entities(sorts_app, monkeypatch):
     """Check an error on a SQUALL noun of several columns tells how."""
     def failing(program):
