@@ -1381,6 +1381,28 @@ class TestViewSeveralQueries:
         assert kwargs["streamlines"]["total"] == 2
         assert kwargs["connectome"]["nodes"]
 
+    def test_regions_beside_streamlines_of_a_finer_grid(
+        self, tracts, monkeypatch
+    ):
+        """
+        The voxels of an atlas, on its grid (3 mm), beside streamlines
+        counted on the grid of the background (1 mm): the viewer failed,
+        "The overlay 'tract: streamlines' is not on the grid of the first
+        one"; it draws both, on the finer grid.
+        """
+        monkeypatch.setattr(nifti.webbrowser, "open", lambda *a, **k: None)
+        fine = TINY_AFFINE.copy()
+        fine[:3, :3] /= 2
+        tracts._nl.streamline_background = lambda: nib.Nifti1Image(
+            np.ones((8, 8, 8), dtype=np.uint8), fine
+        )
+        out = " ".join(self._view(tracts, (
+            "ans[end_regions](i, j, k) :- atlas_voxel(i, j, k)\n"
+            "ans[tract](s) :- tract(s)\n"
+        )).split())
+        assert "failed" not in out
+        assert "Saved the viewer to" in out
+
     def test_one_set_of_streamlines_is_drawn(self, tracts, viewed):
         out = self._view(tracts, (
             "ans[a](s) :- tract(s)\nans[b](s) :- tract(s)\n"
