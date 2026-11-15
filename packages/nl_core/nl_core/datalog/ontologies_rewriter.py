@@ -144,6 +144,15 @@ def projecting_rules(constraints):
     )
 
 
+def _repeated_functors(q):
+    """The predicates of two atoms or more of ``q``."""
+    seen, repeated = set(), set()
+    for f in getattr(q.antecedent, "formulas", (q.antecedent,)):
+        functor = getattr(f, "functor", None)
+        (repeated if functor in seen else seen).add(functor)
+    return repeated
+
+
 def _chased_only(sigma):
     """Whether the body of ``sigma`` has two atoms of its head's predicate,
     as ``p(x, y) ∧ p(y, z) → p(x, z)``: a rewriting with it never ends."""
@@ -178,6 +187,8 @@ class OntologyRewriter:
         self._null_positions_cache = {}
         self._backward_cache = {}
         self._sigma_cache = {}
+        self._kills_cache = {}
+        self._occurrences_cache = {}
 
     def _sigma(self, sigma):
         """What a rewriting step needs of ``sigma``, which is the same at
@@ -220,6 +231,7 @@ class OntologyRewriter:
                 selected_sigmas = self._get_related_sigmas(
                     q0, self.union_of_constraints
                 )
+                repeated = _repeated_functors(q0)
                 for sigma in selected_sigmas:
                     list_q0 = self.rewriting_step(q0, sigma, rename_count)
                     for new_q0 in list_q0:
@@ -228,6 +240,9 @@ class OntologyRewriter:
                             and not self._dead(new_q0)
                         ):
                             Q_rew.add((new_q0, "r", "u"))
+                    if sigma.consequent.functor not in repeated:
+                        # a factorization needs two atoms of sigma's head
+                        continue
                     list_q0 = self.factorization_step(q0, sigma)
                     for new_q0 in list_q0:
                         if (
@@ -289,6 +304,71 @@ class OntologyRewriter:
                 ):
                     return True
         return False
+
+    def _kills(self, sigma):
+        """The ``(j, B, i)`` of ``sigma``: its head's variable in position
+        ``j`` is, in its body, in position ``i`` of an atom over ``B``,
+        a position with no values (:meth:`_null_positions`).  None when
+        its head is not of distinct variables."""
+        key = id(sigma)
+        if key not in self._kills_cache:
+            _, body, plain_head, _ = self._sigma(sigma)
+            self._kills_cache[key] = None if body is None or not plain_head \
+                else tuple(
+                    (j, atom.functor, i)
+                    for j, v in enumerate(sigma.consequent.args)
+                    for atom in body
+                    for i in self._null_positions(atom.functor)
+                    if atom.args[i] == v
+                )
+        return self._kills_cache[key]
+
+    def _surely_dead(self, q, S, sigma):
+        """
+        Whether rewriting the atom ``S`` of ``q`` with ``sigma`` gives a
+        query :meth:`_dead` drops, told from what is precomputed of
+        ``sigma`` (:meth:`_kills`): the term of ``S`` that its body puts
+        in a position with no values is a constant, a variable of the
+        head or of a negated formula, or occurs in another atom of ``q``
+        from which no rewriting moves it there.  A sufficient condition:
+        :meth:`_builds_dead` tests the others in full.
+        """
+        kills = self._kills(sigma) if self.holds is not None else None
+        if not kills:
+            return False
+        occurrences, blocked = self._occurrences(q)
+        for j, functor, i in kills:
+            term = S.args[j]
+            if isinstance(term, Constant) or term in blocked:
+                return True
+            if any(
+                (functor, i) not in self._backward(other, k)
+                for atom, other, k in occurrences.get(term, ())
+                if atom is not S and atom != S
+            ):
+                return True
+        return False
+
+    def _occurrences(self, q):
+        """Where each term of ``q`` occurs, ``(atom, functor, position)``
+        triples, and the variables of its head and of its negated
+        formulas, computed once for each query explored."""
+        key = id(q)
+        cached = self._occurrences_cache.get(key)
+        if cached is None or cached[0] is not q:
+            occurrences, blocked = {}, set(q.consequent._symbols)
+            for f in getattr(q.antecedent, "formulas", (q.antecedent,)):
+                if hasattr(f, "functor"):
+                    for k, arg in enumerate(f.args):
+                        occurrences.setdefault(arg, []).append(
+                            (f, f.functor, k)
+                        )
+                else:
+                    blocked |= f._symbols
+            cached = self._occurrences_cache[key] = (
+                q, occurrences, blocked
+            )
+        return cached[1], cached[2]
 
     def _builds_dead(self, q, S, sigma):
         """
@@ -375,6 +455,11 @@ class OntologyRewriter:
         return new_sigmas
 
     def rewriting_step(self, q0, sigma, rename_count):
+        if all(
+            self._surely_dead(q0, S, sigma)
+            for S in self._get_term(q0.antecedent, sigma.consequent)
+        ):
+            return []
         S_applicable = self._get_applicable(sigma, q0)
         list_q0 = []
         # The renamed variables of sigma must not be those of q0.
