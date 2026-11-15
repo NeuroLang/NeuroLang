@@ -568,11 +568,24 @@ Unreleased
   read their notes and states at 4.5:1 in a dark system and have 44 px
   controls on a touch screen, as the activity page, which had them only on
   narrow ones. The menus close with Escape and with a click elsewhere; the
-  result card says "Running…" while a query runs, and shows a failed
+  result card says "Running…" while a query runs, telling that the answer
+  comes as a table that the Brain tab can then show on the brain, and shows a failed
   statement as one line with an icon above its log, which wraps; the steps
   of the assistant are open while it works; a disabled menu item says why in
   text; and, on a phone, the legend of the empty result still draws the
   probability bars it explains.
+
+* The graph of a query (the Graph tab of the REPL, ``.graph``) opens at a
+  size its text can be read at, where it was shrunk to fit its frame (about
+  4 px text in the REPL's result column, 3 px on a phone): from the data on
+  its left, in a box as high as a frame can show, which pans by dragging the
+  mouse, with a finger or with the arrow keys and zooms around the point
+  under the pointer, ``+`` and ``-`` too; ``Fit`` and ``Actual size`` say
+  which is on, and a hint says when there is more to pan to.  Its intro is a
+  line, with the long text and the descriptions of the legend folded under
+  "How to read this", and its legend a row of short chips.  A node of an
+  ontology is a card with the three linked dots of a knowledge graph in a
+  band at its left, where it was an ellipse with four whiskers.
 
 * The graph of a query says what a random choice is once, on its node
   ("random choice · 3 rows, 1/3 each", and "chooses one of its rows, each
