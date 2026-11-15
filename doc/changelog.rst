@@ -17,7 +17,15 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
-Nothing yet.
+**New features:**
+
+* ``neurolang-repl-serve --daemon install|reinstall --service-user USER``,
+  as root on Linux, installs a service of the system running as USER, not
+  root: it binds port 443 (``CAP_NET_BIND_SERVICE``) and gains no other
+  privilege, nor do the sessions it forks.  The install checks, as USER,
+  that it can run the service's Python, read the server's files and write
+  in its folders, and tells what is lacking; ``reinstall`` replaces root's
+  service of its user manager.
 
 
 v0.1a23 (2026-11-15)

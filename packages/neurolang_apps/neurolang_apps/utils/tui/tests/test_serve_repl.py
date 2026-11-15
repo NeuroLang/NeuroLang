@@ -718,16 +718,21 @@ def manager(serve, tmp_path, monkeypatch, request):
     verbs of ``fails`` fail as many times as they say."""
     state = SimpleNamespace(
         platform=request.param, managed=[], checked=[], built=[], fails={},
-        python=0, slept=[],
+        python=0, slept=[], files=[], lacking="", users=[],
     )
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(serve, "SYSTEM_UNITS", tmp_path / "system")
     monkeypatch.setattr(serve.sys, "platform", request.param)
     monkeypatch.setattr(serve.shutil, "which", lambda name: name)
     monkeypatch.setattr(serve.time, "sleep", state.slept.append)
 
     def run(command, check=True, **kwargs):
+        if command[1] == "-I":  # the check of the service user's files
+            state.files.append((json.loads(command[-1]), kwargs["user"]))
+            return subprocess.CompletedProcess(command, 0, state.lacking, "")
         if command[1] == "-c":  # the check of the service's Python
             state.checked.append(command[2])
+            state.users.append(kwargs.get("user"))
             return subprocess.CompletedProcess(
                 command, state.python, "", "ModuleNotFoundError: no rich")
         verb = command[2] if command[1] == "--user" else command[1]
@@ -769,6 +774,67 @@ def test_the_service_is_installed_reinstalled_and_removed(
     else:
         assert manager.managed == [
             "bootstrap", "bootout", "bootstrap", "bootout"]
+
+
+def test_a_service_of_the_system_runs_as_its_user(
+    serve, tmp_path, manager, monkeypatch
+):
+    """As root, ``--service-user`` installs a unit of the system running as
+    that user, who may bind 443 and nothing more; a reinstall replaces
+    root's own service of its user manager."""
+    if manager.platform != "linux":
+        with pytest.raises(SystemExit):
+            serve.main(["--daemon", "install", "--service-user", "repl"])
+        return
+    monkeypatch.setattr(serve.os, "geteuid", lambda: 0)
+    pwd = pytest.importorskip("pwd")
+    monkeypatch.setattr(pwd, "getpwnam", lambda name: name)
+    serve.main(["--daemon", "install", "--site", str(tmp_path / "site")])
+    users = tmp_path / "users.yaml"
+    users.write_text(f"ann: {{password: '{serve.hash_password('a')}'}}\n")
+    serve.main(["--daemon", "reinstall", "--local", "--users", str(users),
+                "--port", "443", "--service-user", "repl"])
+    assert not serve.service_file().exists()  # root's own: removed
+    unit = serve.service_file(system=True).read_text()
+    for line in ("User=repl", "AmbientCapabilities=CAP_NET_BIND_SERVICE",
+                 "CapabilityBoundingSet=CAP_NET_BIND_SERVICE",
+                 "NoNewPrivileges=yes", "WantedBy=multi-user.target"):
+        assert line + "\n" in unit
+    assert manager.users[-1] == "repl"  # its Python, run as the user
+    [(paths, user)] = manager.files
+    assert user == "repl"
+    assert [str(users), "r"] in paths
+    assert [str(tmp_path), "w"] in paths  # the users file is rewritten
+    assert manager.managed[-2:] == ["daemon-reload", "enable"]
+    serve.main(["--daemon", "remove"])
+    assert not serve.service_file(system=True).exists()
+
+
+def test_a_service_user_lacking_a_file_is_told(
+    serve, tmp_path, manager, monkeypatch
+):
+    if manager.platform != "linux":
+        return
+    monkeypatch.setattr(serve.os, "geteuid", lambda: 0)
+    pwd = pytest.importorskip("pwd")
+    monkeypatch.setattr(pwd, "getpwnam", lambda name: name)
+    manager.lacking = "/etc/key.pem (read)\n"
+    with pytest.raises(SystemExit, match="repl cannot: /etc/key.pem"):
+        serve.main(["--daemon", "install", "--service-user", "repl"])
+    assert not serve.service_file(system=True).exists()
+
+
+def test_the_service_user_is_that_of_an_install_as_root(
+    serve, manager, monkeypatch
+):
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--service-user", "repl"])
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--daemon", "remove", "--service-user", "repl"])
+    if manager.platform == "linux":
+        monkeypatch.setattr(serve.os, "geteuid", lambda: 1000)
+        with pytest.raises(SystemExit, match="as root"):
+            serve.main(["--daemon", "install", "--service-user", "repl"])
 
 
 def test_a_reinstall_that_cannot_serve_keeps_the_service_installed(
@@ -2884,7 +2950,9 @@ def test_the_dashboard_options(serve, tmp_path, monkeypatch):
 def test_the_status_of_the_service_is_its_managers(serve, tmp_path,
                                                    monkeypatch, capsys):
     unit = tmp_path / "neurolang-repl.service"
-    monkeypatch.setattr(serve, "service_file", lambda: unit)
+    monkeypatch.setattr(serve, "service_file",
+                        lambda system=False: tmp_path / "none" if system
+                        else unit)
     serve.main(["--daemon", "status"])
     assert "No service" in capsys.readouterr().out
     unit.write_text("")
