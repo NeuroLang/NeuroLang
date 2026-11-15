@@ -2026,7 +2026,7 @@ def _view_title(request: ViewRequest, path: Path, titles) -> str:
     return f"Last result: {titles[0]}" if titles else "Last result"
 
 
-IMAGE_USAGE = ".image PATH|UPLOADED [--name NAME]"
+IMAGE_USAGE = ".image PATH|UPLOADED [--name NAME] [--zscore]"
 
 # The defaults of .image (viewer.yaml): the value from which the voxels of
 # a z-map are activated, and the most bytes an image may take uncompressed.
@@ -2034,20 +2034,25 @@ IMAGE_DEFAULTS = brain_viewer.DEFAULTS["image"]
 
 IMAGE_HELP = f"""\
 [bold cyan]{IMAGE_USAGE}[/bold cyan] loads a NIfTI image of
-activations, a binary mask or a z-map, as the relation
+activations, a binary mask or a z-score map, as the relation
 [bold]NAME(i, j, k, value)[/bold] (NAME is [bold]image[/bold] by default):
 its voxels of the brain with a value other than 0, on the grid of the engine
 (the image is resampled to it if it has another, a mask to the nearest
 voxel), and shows it in the brain viewer. UPLOADED is the name of an image
 the page uploaded (Upload data).
 
+It loads, too, [bold]NAME_probability(i, j, k, p)[/bold]: the probability
+that each voxel is active, 1 for the voxels of a mask; for a map of
+z-scores, which [bold]--zscore[/bold] says it is, 1 - the local false
+discovery rate of its z-score (Efron), the voxels of less than
+{IMAGE_DEFAULTS["min_probability"]} left out. A map of other values has none.
+
 On an engine of studies and their peaks (neurosynth, neurostore), it prints
 the query decoding the image towards the concepts of the Cognitive Atlas:
 the probability that a study of a term activates a voxel chosen in the
-image, the more likely the larger its value, over the same for all the
-studies. The voxels of a mask are all activated; those of a z-map, from
-{IMAGE_DEFAULTS["threshold"]}. Any relation of voxels and values,
-NAME(i, j, k, w), is decoded by the same query with its name.
+image, the more likely the more probably active, over the same for all the
+studies. Any relation NAME_probability(i, j, k, p) is decoded by the same
+query with its NAME.
 
 Load it again with --name and the same NAME to replace it."""
 
@@ -2060,20 +2065,54 @@ def image_description(source: str, values: np.ndarray, mask: bool) -> str:
     not: its file, its kind and voxels, which its schema of the engine and
     describe_predicate show.
     """
-    threshold = IMAGE_DEFAULTS["threshold"]
     if mask:
         kind = (f"a binary mask of {len(values)} voxels (value "
                 f"{values[0]:.3g})")
     else:
         kind = (f"a map of values of {len(values)} voxels, from "
-                f"{values.min():.3g} to {values.max():.3g}; as a z-map, its "
-                f"activations are its {int((values >= threshold).sum())} "
-                f"voxels of {threshold} or more")
+                f"{values.min():.3g} to {values.max():.3g}")
     return (f"A brain image uploaded or loaded with .image, from {source}: "
             f"{kind}. Its voxels (i, j, k) are on the grid of the engine, "
             "value their value. Decode it as the examples decoding an image "
-            "do: a mask from its voxels of (value > 0), a z-map from those "
-            f"of (value >= {threshold}).")
+            "do, from the probabilities of its voxels (its relation of the "
+            "same name and _probability); a map of z-scores has them once "
+            "loaded with .image --zscore.")
+
+
+def probability_description(source: str, mask: bool, null=None) -> str:
+    """Return what the query assistant is told of the probabilities of
+    the image loaded from *source*: those of a *mask*, or of z-scores of
+    the *null* (its mean and deviation)."""
+    how = ("1 for each of its voxels, a mask" if mask else
+           "1 - the local false discovery rate of its z-score (Efron), the "
+           f"null of the map N({null[0]:.2f}, {null[1]:.2f})")
+    return (f"The probability p that each voxel (i, j, k) of the image from "
+            f"{source} is active: {how}. The examples decoding an image "
+            "weigh its voxels by it.")
+
+
+def activation_probability(z: np.ndarray):
+    """
+    Return the probability that each voxel of the z-scores *z* is active,
+    1 - its local false discovery rate (Efron 2004): pi0 f0(z) / f(z), f0
+    the empirical null, the normal of the median and the MAD of *z*, f
+    their density, a Gaussian kernel estimate of at most ``kde_sample`` of
+    them; pi0 is 1, and a z-score below the null's mean is never active.
+    Return the probabilities and the null's mean and deviation.
+    """
+    from scipy import stats
+
+    z = np.asarray(z, dtype=float)
+    delta0 = float(np.median(z))
+    sigma0 = float(stats.median_abs_deviation(z, scale="normal")) or 1.0
+    most = int(IMAGE_DEFAULTS["kde_sample"])
+    sample = z if len(z) <= most else np.random.default_rng(0).choice(
+        z, most, replace=False)
+    grid = np.linspace(z.min(), z.max(), 1024)
+    density = np.interp(z, grid, stats.gaussian_kde(sample)(grid))
+    null = stats.norm.pdf(z, delta0, sigma0)
+    lfdr = np.clip(null / np.maximum(density, np.finfo(float).tiny), 0, 1)
+    return np.where(z > delta0, 1 - lfdr, 0.0), (delta0, sigma0)
 
 
 def nifti_from_bytes(data: bytes, most: Optional[int] = None):
@@ -2134,18 +2173,16 @@ def _image_values(image, template: nib.Nifti1Image, mask: bool):
     return np.nan_to_num(np.asanyarray(image.dataobj, dtype=float))
 
 
-def decoding_query(app, name: str, mask: bool) -> Tuple[str, List[str]]:
+def decoding_query(app, name: str) -> Tuple[str, List[str]]:
     """
-    Return the query decoding the relation *name* of voxels and values on
-    the engine of *app* (its ``image_decoding_query``), from all the
-    voxels of a *mask* or from the threshold of a z-map, and the predicates
-    it reads that the engine lacks; an empty query on an engine without one.
+    Return the query decoding the image *name* on the engine of *app* (its
+    ``image_decoding_query``), from the probabilities of its voxels,
+    ``NAME_probability(i, j, k, p)``, and the predicates it reads, but
+    those, that the engine lacks; an empty query on an engine without one.
     """
     config = engine_registry.get_engine_config(app.settings.engine_name) \
         if app.settings.engine_name else {}
-    query = config.get("image_decoding_query") or ""
-    condition = "(w > 0)" if mask else f"(w >= {IMAGE_DEFAULTS['threshold']})"
-    query = query.replace("{image}", name).replace("{condition}", condition)
+    query = (config.get("image_decoding_query") or "").replace("{image}", name)
     rules = [line for line in query.splitlines()
              if not line.lstrip().startswith("%")]  # its comments
     heads = {rule.split("(")[0].strip() for rule in rules}
@@ -2155,7 +2192,7 @@ def decoding_query(app, name: str, mask: bool) -> Tuple[str, List[str]]:
     }
     symbols = app._nl.program_ir.symbol_table
     missing = sorted(
-        word for word in read - heads - {name}
+        word for word in read - heads - {name, f"{name}_probability"}
         if Symbol(word) not in symbols and word not in ("sum", "count")
     )
     return query, missing
@@ -2171,16 +2208,20 @@ def cmd_image(app, arg: str) -> None:
     from .session import _load_failed, _name_problem
 
     try:
-        words, options = split_args(arg, {"--name": 1}, IMAGE_USAGE)
+        words, options = split_args(
+            arg, {"--name": 1, "--zscore": 0}, IMAGE_USAGE
+        )
         if len(words) != 1:
             raise SaveError(f"Usage: {IMAGE_USAGE}")
         source = words[0]
         name = options.get("--name", ["image"])[0]
-        problem = _name_problem(app, name, "--name" in options)
-        if problem:
-            raise SaveError(
-                problem.replace(".load PATH", ".image PATH --name")
-            )
+        zscore = "--zscore" in options
+        for relation in (name, f"{name}_probability"):
+            problem = _name_problem(app, relation, "--name" in options)
+            if problem:
+                raise SaveError(
+                    problem.replace(".load PATH", ".image PATH --name")
+                )
         template = engine_template(app._nl)
         image = read_image(_image_bytes(app, source))
         mask = is_mask(image)
@@ -2205,8 +2246,10 @@ def cmd_image(app, arg: str) -> None:
     if rows.empty:
         _load_failed(app, f"{source} has no value other than 0 in the brain.")
         return
-    if name in app.loaded_relations:
-        del app._nl.program_ir.symbol_table[Symbol(name)]
+    for relation in (name, f"{name}_probability"):
+        if relation in app.loaded_relations:  # the image's, loaded before
+            del app._nl.program_ir.symbol_table[Symbol(relation)]
+            del app.loaded_relations[relation]
     app._nl.add_tuple_set(rows, name=name)
     app.loaded_relations[name] = ["i", "j", "k", "value"]
     if source in app.uploads:
@@ -2215,12 +2258,14 @@ def cmd_image(app, arg: str) -> None:
         name, image_description(source, rows["value"].to_numpy(), mask),
         replace=True,
     )
-    kind = "a mask" if mask else "a map of values"
+    kind = ("a mask" if mask else "a map of z-scores" if zscore
+            else "a map of values")
     app.console.print(
         f"loaded {name}(i, j, k, value): {len(rows)} voxels from {source}, "
         f"{kind}", style="green", markup=False,
     )
-    _tell_decoding(app, name, mask)
+    probable = _load_probabilities(app, name, source, rows, mask, zscore)
+    _tell_decoding(app, name, probable)
     shown = np.zeros(template.shape[:3], dtype=np.float32)
     shown[index[0][keep], index[1][keep], index[2][keep]] = values[keep]
     fd, shown_path = tempfile.mkstemp(
@@ -2237,10 +2282,41 @@ def cmd_image(app, arg: str) -> None:
     _view_nifti(app, [(name, Path(shown_path))], request, name)
 
 
-def _tell_decoding(app, name: str, mask: bool) -> None:
+def _load_probabilities(app, name, source, rows, mask, zscore) -> bool:
+    """Load the probabilities that the voxels *rows* of the image *name*
+    are active, ``NAME_probability``, if a *mask* or *zscore*s; return
+    whether they were."""
+    if not (mask or zscore):
+        return False
+    if mask:
+        probabilities = rows[["i", "j", "k"]].assign(p=1.0)
+        how, null = "1 for each voxel of the mask", None
+    else:
+        p, null = activation_probability(rows["value"].to_numpy())
+        probabilities = rows[["i", "j", "k"]].assign(p=p)
+        probabilities = probabilities[
+            probabilities["p"] >= float(IMAGE_DEFAULTS["min_probability"])
+        ]
+        how = ("1 - its local false discovery rate, the null of the map "
+               f"N({null[0]:.2f}, {null[1]:.2f})")
+    relation = f"{name}_probability"
+    app._nl.add_tuple_set(probabilities, name=relation)
+    app.loaded_relations[relation] = ["i", "j", "k", "p"]
+    app._nl.document_predicate(
+        relation, probability_description(source, mask, null), replace=True,
+    )
+    app.console.print(
+        f"loaded {relation}(i, j, k, p): {len(probabilities)} voxels, the "
+        f"probability that each is active: {how}", style="green",
+        markup=False,
+    )
+    return True
+
+
+def _tell_decoding(app, name: str, probable: bool) -> None:
     """Print the query decoding the image *name*, or why the engine
-    cannot."""
-    query, missing = decoding_query(app, name, mask)
+    cannot, or what the image needs: the *probable*-ities of its voxels."""
+    query, missing = decoding_query(app, name)
     if not query:
         return
     if missing:
@@ -2248,6 +2324,13 @@ def _tell_decoding(app, name: str, mask: bool) -> None:
             "The engine cannot decode the image: it has no "
             f"{', '.join(missing)} (in the browser, add ?engine=full to the "
             "address).", style="yellow", markup=False,
+        )
+        return
+    if not probable:
+        app.console.print(
+            "To decode it, its voxels need the probability to be active: "
+            "load it with --zscore if it is a map of z-scores.",
+            style="yellow", markup=False,
         )
         return
     app.console.print(f"Decode it with this query:\n{query}", markup=False)

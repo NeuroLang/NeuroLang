@@ -49,17 +49,24 @@ Unreleased
   the query assistant what it is; the page gives it back after *Stop* or
   *Open session*.
 
-* Decoding a brain image (:doc:`tutorial_decoding`): ``.image`` prints, on
-  the meta-analysis engines, the query decoding the image it loaded
-  (``image_decoding_query`` in ``engines.yaml``, a comment explaining each
-  line), and the page asks, after an upload, whether it goes in the box: a
-  plain Datalog query over the image, so any
-  relation of voxels and values is decoded the same way.  Its score is the
-  lift of each term: the probability that a study of the term activates a
-  voxel chosen in the image, the more likely the larger its value (all
-  those of a mask, those of a z-map from 3.1, ``image.threshold`` in
-  ``viewer.yaml``), over the same for all the studies.  The query
-  assistant's bank and guidance decode an uploaded image.
+* Decoding a brain image (:doc:`tutorial_decoding`): ``.image`` loads, with
+  the image, ``image_probability(i, j, k, p)``, the probability that each
+  voxel is active: 1 for a mask; for a map of z-scores, which
+  ``.image --zscore`` says it is, 1 - the local false discovery rate of its
+  z-score (Efron 2004: an empirical null of the map's median and MAD, a
+  kernel density; ``image.min_probability`` and ``image.kde_sample`` in
+  ``viewer.yaml``), with no threshold.  It prints, on the meta-analysis
+  engines, the query decoding the image (``image_decoding_query`` in
+  ``engines.yaml``, a comment explaining each line), and the page asks,
+  after an upload, whether it goes in the box, and, for a map of values,
+  whether they are z-scores: a plain Datalog query over the
+  probabilities, so any relation of voxels and probabilities is decoded
+  the same way.  Its score is the lift of each term: the probability that
+  a study of the term activates a voxel chosen in the image, the more
+  likely the more probably active, over the same for all the studies.
+  The query assistant's bank and guidance decode an uploaded image, and
+  have the overlap query too (each voxel a probabilistic fact, a study
+  hitting the image if it activates one), for a mask or a small region.
 
 * A dense whole-brain tractogram for tract_querier's bundles, the engines
   ``neurosynth_disconnectome7t`` and ``neurostore_disconnectome7t``:

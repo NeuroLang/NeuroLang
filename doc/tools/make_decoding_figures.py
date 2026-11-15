@@ -3,11 +3,11 @@ Make the images and figures of doc/tutorial_decoding.rst.
 
 Two images of activations are loaded with ``.image`` in the REPL on the
 neurosynth engine and decoded with the query ``.image`` offers: a mask of
-the right amygdala, a sphere of 8 mm, and nilearn's sample motor z-map
-(NeuroVault image 10426, left vs right button press). For each, it writes
-in the output directory the image, a picture of it on the brain and a
-chart of its ten largest lifts, in the light and the dark theme of the
-documentation.
+the right amygdala, a sphere of 8 mm, and nilearn's sample motor map
+(NeuroVault image 10426, left vs right button press), loaded as
+z-scores. For each, it writes in the output directory the image, a
+picture of it on the brain and a chart of its ten largest lifts, in the
+light and the dark theme of the documentation.
 
     python doc/tools/make_decoding_figures.py -d DATA_DIR [-o OUTPUT]
 """
@@ -141,8 +141,9 @@ def main() -> None:
         ("motor", zmap_path, "The motor map, left vs right button press",
          False),
     ):
-        app._handle_dot_command(f".image {path} --name image")
-        query, _ = nifti.decoding_query(app, "image", mask)
+        zscore = "" if mask else " --zscore"  # nilearn's map: z-scores
+        app._handle_dot_command(f".image {path} --name image{zscore}")
+        query, _ = nifti.decoding_query(app, "image")
         start = time.perf_counter()
         app._execute_and_display(query)
         seconds = time.perf_counter() - start

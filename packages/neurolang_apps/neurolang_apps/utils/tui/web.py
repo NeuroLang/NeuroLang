@@ -738,20 +738,22 @@ class WebRepl:
         memory of the session, and return the statement that loads it
         (``.load NAME``, or ``.image NAME`` replacing the image of the
         session) and for an image the ``query`` decoding it, if the engine
-        can: a ValueError tells why it is refused.
+        can, and its ``kind``: ``mask``, or ``map`` (of values: decoded
+        once loaded with ``--zscore``). A ValueError tells why it is
+        refused.
         """
         session.store_upload(self.app, name, data)
         if not session.is_image(name):
             return {"name": name, "statement": f".load {shlex.quote(name)}"}
-        try:  # a mask's query decodes all its voxels; a z-map's, the high ones
-            mask = nifti.is_mask(nifti.read_image(data))
-            query, missing = nifti.decoding_query(self.app, "image", mask)
+        try:  # a mask is decoded as it is, a map once said of z-scores
+            kind = "mask" if nifti.is_mask(nifti.read_image(data)) else "map"
+            query, missing = nifti.decoding_query(self.app, "image")
         except Exception:  # .image tells what is wrong with the file
-            query, missing = "", []
+            kind, query, missing = "", "", []
         return {
             "name": name,
             "statement": f".image {shlex.quote(name)} --name image",
-            "query": "" if missing else query,
+            "query": "" if missing else query, "kind": kind,
         }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:

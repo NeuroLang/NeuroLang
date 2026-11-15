@@ -305,9 +305,9 @@ Every command
      - a CSV or TSV file as a relation: a path in a terminal, a file
        uploaded (**Upload data**) on the page
      - both
-   * - ``.image PATH|UPLOADED``
-     - a NIfTI image of activations, shown and decoded (see
-       :doc:`tutorial_decoding`)
+   * - ``.image PATH|UPLOADED [--zscore]``
+     - a NIfTI image of activations, a mask or a map of z-scores
+       (``--zscore``), shown and decoded (see :doc:`tutorial_decoding`)
      - both
    * - ``.uploads [remove NAME | restore NAME]``
      - the files the page uploaded in the session: their kind, size, age,

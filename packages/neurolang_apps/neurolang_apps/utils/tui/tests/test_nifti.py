@@ -1494,9 +1494,8 @@ class TestImage:
         first = line()
         assert "brain image" in first and "z.nii.gz" in first
         assert "a map of values of 3 voxels, from -2 to 5" in first
-        assert "1 voxels of 3.1 or more" in first
         assert "examples decoding an image" in first
-        assert "(value >= 3.1)" in first
+        assert "--zscore" in first  # how its probabilities are had
         tiny._handle_dot_command(
             f".image {self._mask(tmp_path, [(1, 2, 3), (0, 0, 0)])} "
             "--name image"
@@ -1597,10 +1596,10 @@ class TestImage:
         return tiny
 
     @staticmethod
-    def _lifts(app, mask=True, name="image"):
+    def _lifts(app, name="image"):
         """The lifts of the query decoding *name*, without its keeping
         the terms of 30 studies or more, which the tiny engine has not."""
-        query, missing = nifti.decoding_query(app, name, mask)
+        query, missing = nifti.decoding_query(app, name)
         assert not missing
         rules = [rule for rule in query.splitlines()
                  if not rule.startswith("ans(")]
@@ -1612,10 +1611,14 @@ class TestImage:
         return {row[0]: round(row[1], 6)
                 for row in frame.itertuples(index=False, name=None)}
 
+    def _probabilities(self, app, name="image_probability"):
+        return {tuple(row[:3]): row[3]
+                for row in app._nl.symbols[name].value}
+
     def test_each_line_of_the_query_is_explained(self, decoding):
         """The decoding query, which the page offers to put in the box, has
         a comment (%, not the %% documenting a rule) before each rule."""
-        query, missing = nifti.decoding_query(decoding, "image", False)
+        query, missing = nifti.decoding_query(decoding, "image")
         assert not missing
         lines = query.splitlines()
         rules = [n for n, line in enumerate(lines)
@@ -1624,36 +1627,59 @@ class TestImage:
         for n in rules:
             assert n > 0 and lines[n - 1].startswith("% "), lines[n]
         assert not any(line.startswith("%%") for line in lines)
-        assert "(w >= 3.1)" in query  # the condition of a z-map
+        assert "image_probability(i, j, k, p)" in query
 
     def test_the_query_decodes_a_mask(self, decoding, tmp_path):
+        """A mask's voxels are active for sure: its probabilities are 1."""
         mask = self._mask(tmp_path, [(1, 2, 3)])
         decoding._handle_dot_command(f".image {mask}")
         out = " ".join(_output(decoding).split())
-        assert "Decode it with this query: % The weight of the voxels" in out
-        assert "image_score(s, sum(w)) :- image(i, j, k, w), (w > 0), " \
+        assert "loaded image_probability(i, j, k, p): 1 voxels" in out
+        assert "Decode it with this query: % " in out
+        assert "image_score(s, sum(p)) :- image_probability(i, j, k, p), " \
             "activated(i, j, k, s)" in out
+        assert self._probabilities(decoding) == {(1, 2, 3): 1.0}
         # P(hit | pain) = 1 over P(hit) = 2/3; vision, of probability 0, is
         # no answer
         assert self._lifts(decoding) == {"pain": 1.5}
 
-    def test_a_zmap_is_decoded_from_its_threshold_by_its_values(
+    def test_a_zscore_map_is_decoded_by_the_probabilities_of_its_voxels(
+        self, decoding, tmp_path
+    ):
+        """--zscore: each voxel weighs its probability of being active
+        (1 - its local false discovery rate); a voxel of twice the
+        probability is chosen twice as often."""
+        rng = np.random.default_rng(0)
+        data = rng.normal(0, 1, (4, 4, 4)).astype(np.float32)
+        data[1, 2, 3], data[0, 0, 0] = 8.0, -1.0
+        path = tmp_path / "zscores.nii.gz"
+        nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
+        decoding._handle_dot_command(f".image {path} --zscore")
+        out = " ".join(_output(decoding).split())
+        assert "loaded image_probability(i, j, k, p)" in out
+        assert "1 - its local false discovery rate" in out
+        probabilities = self._probabilities(decoding)
+        assert probabilities[(1, 2, 3)] > 0.99
+        assert (0, 0, 0) not in probabilities  # deactivated: never active
+        assert self._lifts(decoding) == {"pain": 1.5}
+        decoding._nl.add_tuple_set(
+            [(1, 2, 3, 0.4), (0, 0, 0, 0.8)], name="mine_probability"
+        )
+        # P(hit) = (0.4/1.2 + 0.4/1.2 + 0.8/1.2) / 3 = 4/9
+        assert self._lifts(decoding, name="mine") == {
+            "pain": round((1 / 3) / (4 / 9), 6),
+            "vision": round((2 / 3) / (4 / 9), 6),
+        }
+
+    def test_a_map_of_values_is_decoded_once_said_of_zscores(
         self, decoding, zmap
     ):
-        """The voxels of 3.1 or more: (1, 2, 3), of 5, alone, not (0, 0, 0)
-        of 3; a voxel of twice the value is chosen twice as often."""
+        """A map of values but no mask: its probabilities need z-scores,
+        which --zscore says it holds."""
         decoding._handle_dot_command(f".image {zmap}")
-        threshold = nifti.IMAGE_DEFAULTS["threshold"]
-        assert f"(w >= {threshold})" in _output(decoding)
-        assert self._lifts(decoding, mask=False) == {"pain": 1.5}
-        decoding._nl.add_tuple_set(
-            [(1, 2, 3, 4.0), (0, 0, 0, 8.0)], name="mine"
-        )
-        # P(hit) = (4/12 + 4/12 + 8/12) / 3 = 4/9; P(hit | vision) = 8/12
-        assert self._lifts(decoding, mask=False, name="mine") == {
-            "pain": round((4 / 12) / (4 / 9), 6),
-            "vision": round((8 / 12) / (4 / 9), 6),
-        }
+        out = " ".join(_output(decoding).split())
+        assert "--zscore" in out and "Decode it" not in out
+        assert "image_probability" not in decoding._nl.symbols
 
     def test_another_image_is_decoded_in_its_place(self, decoding, tmp_path):
         first = self._mask(tmp_path, [(1, 2, 3)], "first.nii")
@@ -1662,6 +1688,16 @@ class TestImage:
         assert self._lifts(decoding) == {"pain": 1.5}
         decoding._handle_dot_command(f".image {second} --name image")
         assert self._lifts(decoding) == {"vision": 3.0}
+
+    def test_a_map_loaded_after_a_mask_drops_its_probabilities(
+        self, decoding, tmp_path, zmap
+    ):
+        """Without probabilities of its own, an image loaded in place of
+        another leaves none of the other's, which would decode it."""
+        decoding._handle_dot_command(
+            f".image {self._mask(tmp_path, [(1, 2, 3)])}")
+        decoding._handle_dot_command(f".image {zmap} --name image")
+        assert "image_probability" not in decoding._nl.symbols
 
     def test_an_engine_without_peaks_does_not_decode(
         self, decoding, tmp_path
@@ -1676,7 +1712,21 @@ class TestImage:
         assert "Decode it" not in out
 
     def test_the_help_quotes_the_defaults(self, tiny):
-        threshold = nifti.IMAGE_DEFAULTS["threshold"]
-        assert f"from {threshold}" in " ".join(nifti.IMAGE_HELP.split())
+        help_text = " ".join(nifti.IMAGE_HELP.split())
+        assert "--zscore" in help_text
+        assert f"{nifti.IMAGE_DEFAULTS['min_probability']}" in help_text
         tiny._handle_dot_command(".help image")
         assert "--name" in _output(tiny)
+
+
+def test_the_probability_of_activation_of_z_scores():
+    """1 - the local false discovery rate of each z-score (Efron), its
+    null the normal of the median and the MAD of the map: the activations
+    are active, the null voxels and the deactivations are not."""
+    rng = np.random.default_rng(0)
+    z = np.concatenate([rng.normal(0, 1, 20000), np.full(500, 6.0), [-6.0]])
+    p, (delta0, sigma0) = nifti.activation_probability(z)
+    assert p[20000:20500].min() > 0.99
+    assert np.median(p[:20000]) < 0.01 and p[-1] == 0
+    assert abs(delta0) < 0.1 and abs(sigma0 - 1) < 0.1
+    assert ((0 <= p) & (p <= 1)).all()

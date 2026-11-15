@@ -24,9 +24,15 @@ as the relation ``image(i, j, k, value)``: the voxels of the brain where
 the image is not 0, with their value, on the grid of the engine.  The image
 is resampled to that grid if it has another, a mask (an image of one value
 other than 0) to the nearest voxel so that it stays a mask, and its first
-volume is kept if it has several.  ``.image`` shows the image in the brain
-viewer, and prints the query decoding it.  ``--name NAME`` names the
-relation ``NAME`` instead, to load several images; ``.image PATH --name
+volume is kept if it has several.  It loads, too,
+``image_probability(i, j, k, p)``, the probability that each voxel is
+active, which the decoding weighs the voxels by (see `The score: the lift
+of a term`_): 1 for each voxel of a mask; for a map of z-scores, which
+``--zscore`` says it is, the probability that its z-score is that of an
+active voxel.  A map of other values has none, and is not decoded.
+``.image`` shows the image in the brain viewer, and prints the query
+decoding it.  ``--name NAME`` names the relations ``NAME`` and
+``NAME_probability`` instead, to load several images; ``.image PATH --name
 image`` replaces the image loaded first.
 
 In the browser, and on a server, *Upload data* (in the toolbar) takes the
@@ -34,7 +40,9 @@ In the browser, and on a server, *Upload data* (in the toolbar) takes the
 ``.image`` on it, and asks whether the decoding query, a comment explaining
 each of its lines, goes in the box (*Insert the decoding query*, or
 *Not now*): it replaces what is there, which *Bring back the query before*
-puts back until the next run.  A
+puts back until the next run.  For a map of values, the page asks whether
+they are z-scores (*They are z-scores: insert the decoding query*), and
+loads it again with ``--zscore``.  A
 server reads none of its own files for its users, so an image must be
 uploaded there.  The engine of the page in the browser leaves out the peaks
 of the studies' activations (``activated``) to fit in a tab: it loads and
@@ -49,19 +57,33 @@ The score: the lift of a term
 The meta-analysis engines choose a study at random, ``selected_study(s)``,
 and say that it activates the voxel :math:`v`, :math:`A_v`, if one of its
 peaks is within 6 mm of it.  A term :math:`T` holds when the study mentions
-it (``term_in_study``).  Decoding chooses, besides, a voxel :math:`V` among
-the activated voxels of the image, independently of the study, the more
-likely the larger its value :math:`w_v`:
+it (``term_in_study``).  Decoding chooses, besides, a voxel :math:`V` of the
+image, independently of the study, the more likely the more probably
+active: of the probability :math:`p_v` that the voxel :math:`v` is active,
 
 .. math::
 
-    P(V = v) = \frac{w_v}{\sum_u w_u}.
+    P(V = v) = \frac{p_v}{\sum_u p_u}.
 
-The activated voxels are those of a condition on the value: all those of
-a mask, :math:`w > 0`; those of a z-map from 3.1, :math:`w \geq 3.1`, the
-threshold of a one-sided p < 0.001 (``image.threshold`` in
-``viewer.yaml``), a voxel of z = 6 being chosen twice as often as one of
-z = 3.  Its negative values, the deactivations, are never chosen.
+Every voxel of a mask is active, :math:`p_v = 1`, and equally likely.  A
+voxel of a map of z-scores is active, or of the null, its z-score drawn
+from the one or the other distribution; the probability that it is active
+is 1 minus its *local false discovery rate* (Efron 2004),
+
+.. math::
+
+    p_v = 1 - \frac{\pi_0 \, f_0(z_v)}{f(z_v)},
+
+:math:`f` the density of the z-scores of the map, a Gaussian kernel
+estimate, :math:`f_0` that of the null, the normal of the median and the
+median absolute deviation of the map (its *empirical* null, which the
+smoothness of a map makes wider or narrower than :math:`N(0, 1)`), and
+:math:`\pi_0 = 1`, the share of null voxels at its most.  A z-score below
+the median, a deactivation, is never active, nor are the voxels of a
+probability below 0.01 kept (``image.min_probability`` in
+``viewer.yaml``).  On the motor map below, z = 2 gives p = 0.16, z = 3 gives
+0.92 and z = 4 or more 1: no threshold is chosen, the map says where its
+activations start.
 
 The event :math:`A_V`, that the chosen study activates the chosen voxel,
 has the probability
@@ -96,11 +118,11 @@ activates the chosen voxel with the probability
 
     P(A_V \mid s) = \frac{\sum_{v \,:\, A_v(s)} w_v}{\sum_u w_u},
 
-the weight of the voxels of the image it activates over the weight of
-them all, and the probabilities above are this one averaged over the
-studies.  That is the decoding query of the engines (``image_decoding_query``
-in ``engines.yaml``), ``{image}`` being the relation of the image and
-``{condition}`` that of its activated voxels:
+with :math:`w_v = p_v`, the weight of the voxels of the image it activates
+over the weight of them all, and the probabilities above are this one
+averaged over the studies.  That is the decoding query of the engines
+(``image_decoding_query`` in ``engines.yaml``), ``{image}`` being the name
+of the image:
 
 .. literalinclude:: ../packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml
    :language: text
@@ -109,8 +131,8 @@ in ``engines.yaml``), ``{image}`` being the relation of the image and
    :dedent: 6
 
 - ``image_score(s, x)`` is the weight of the voxels of the image that the
-  study ``s`` activates, a conjunction of the image with ``activated``,
-  and ``image_total(y)`` the weight of them all;
+  study ``s`` activates, a conjunction of the probabilities of the image
+  with ``activated``, and ``image_total(y)`` the weight of them all;
 - ``image_hit(s)`` is a probabilistic fact of each study, of the
   probability :math:`P(A_V \mid s) = x / y`;
 - ``p_image_given_term(t, p)`` conditions it on the studies of each term,
@@ -122,10 +144,9 @@ in ``engines.yaml``), ``{image}`` being the relation of the image and
   (:doc:`tutorial_cognitive_atlas`) rather than every word of the
   abstracts.  Drop ``cogat_term`` to rank every term of the engine.
 
-The query reads the image as any relation of voxels and values: a map of
-yours loaded with ``.load``, or one of the engine through a rule of yours,
-``pain_map(i, j, k, w) :- uniformity('pain', i, j, k, w)``, is decoded by
-the same query with its name in place of ``image``.  A term none of whose studies activates the image has
+The query reads the image as any relation of voxels and probabilities: a
+map of yours loaded with ``.load``, ``my_map_probability(i, j, k, p)``, is
+decoded by the same query with ``my_map`` in place of ``image``.  A term none of whose studies activates the image has
 a probability of 0, and is no answer.
 
 The same lift is :math:`\sum_v w_v P(A_v \mid T) / \sum_v w_v P(A_v)`,
@@ -133,6 +154,31 @@ the image joined with the engine's ``p_a_given_t(t, i, j, k, p)`` and
 ``p_a(i, j, k, p)``; but the engine computes those for every term at every
 voxel before the join, more than 40 GB for the amygdala below, where the
 query above reads only the studies.
+
+The overlap: the voxels as probabilistic facts
+----------------------------------------------
+
+The probabilities of the voxels may be taken as independent facts too:
+each voxel is active with its probability, and a study hits the image if
+it activates an active voxel of it,
+
+.. math::
+
+    P(\mathrm{hit} \mid s) = 1 - \prod_{v \,:\, A_v(s)} (1 - p_v),
+
+which NeuroLang writes as it is said:
+
+.. code-block:: text
+
+    image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+    image_hit(s) :- activated(i, j, k, s), image_active(i, j, k)
+
+the rest of the query as above.  For a mask or a small region, it is how
+much more often the studies of a term report a peak in it: fear 2.92,
+valence 2.50, emotion 2.32 for the amygdala below.  On a whole map, nearly
+every study activates some active voxel of it, 98% of them for the motor
+map, and the lifts of all the terms are near 1: the weighted choice above
+tells them apart.
 
 A mask: the amygdala
 --------------------
@@ -149,8 +195,10 @@ right amygdala, at (24, -2, -20) mm in MNI space, on the grid of 2 mm:
     nl(neurosynth:datalog)> .image doc/_static/decoding/amygdala_mask.nii.gz
     loaded image(i, j, k, value): 257 voxels from
     doc/_static/decoding/amygdala_mask.nii.gz, a mask
+    loaded image_probability(i, j, k, p): 257 voxels, the probability that
+    each is active: 1 for each voxel of the mask
     Decode it with this query:
-    image_score(s, sum(w)) :- image(i, j, k, w), (w > 0), activated(i, j, k, s)
+    % The probability that each voxel of the image is
     ...
 
 The 118 concepts of the Cognitive Atlas among the terms of Neurosynth with
@@ -176,21 +224,26 @@ values from -7.9 to 7.9; in Python,
 ``nilearn.datasets.load_sample_motor_activation_image()`` downloads it and
 returns its path.  Its positive values are the right motor cortex, which
 moves the left hand.  ``.image`` resamples it to the grid of 2 mm of the
-engine, and its query takes the voxels of 3.1 or more, as of a z-map:
+engine and, with ``--zscore``, gives each voxel the probability that it is
+active: 38,141 voxels of 0.01 or more, the null of the map N(-0.04, 0.90).
+Shown from 3.1 (``image.threshold``):
 
 .. image:: _static/decoding/motor_image.png
-   :alt: The motor map, thresholded at 3.1, on the MNI template
+   :alt: The motor map, from 3.1, on the MNI template
 
 .. code-block:: text
 
-    nl(neurosynth:datalog)> .image image_10426.nii.gz --name image
+    nl(neurosynth:datalog)> .image image_10426.nii.gz --name image --zscore
     loaded image(i, j, k, value): 179612 voxels from image_10426.nii.gz, a map
-    of values
+    of z-scores
+    loaded image_probability(i, j, k, p): 38141 voxels, the probability that
+    each is active: 1 - its local false discovery rate, the null of the map
+    N(-0.04, 0.90)
     Decode it with this query:
-    image_score(s, sum(w)) :- image(i, j, k, w), (w >= 3.1), activated(i, j, k, s)
     ...
 
-The same query, with its threshold, decodes it towards movement:
+Without ``--zscore``, ``.image`` says that a map of values needs it to be
+decoded.  The same query decodes it towards movement:
 *coordination*, *movement*, *imagery* (motor imagery activates the premotor
 cortex) and *motor control*.  *Pain* is among them because the map also
 covers the somatosensory cortex behind the motor one, and the parietal
@@ -223,14 +276,15 @@ the lift of *fear* for the amygdala is
         decoding('fear', lift), lift_replicate(r, x)
     ans(lift, ci_low, ci_high) :- interval(lift, ci_low, ci_high)
 
-4.10 within [3.47, 4.64], in about 8 s: the replicates of the studies
+4.10 within [3.47, 4.64], in about 10 s: the replicates of the studies
 never bring it near 1.  Two terms are compared on the same replicate ``r``, as in
 :doc:`tutorial_neurosynth_tests`.
 
-On the neurosynth engine at 2 mm, each image is decoded in about 7 s, the
-257 voxels of the amygdala as the 8,219 of the motor map; on the
-neurostore engine, of twice as many studies, in 30 to 40 s, with 3 GB of
-memory beyond that of the engine.
+On the neurosynth engine at 2 mm, each image is decoded in 6 to 11 s, the
+257 voxels of the amygdala as the 38,141 of the motor map; on the
+neurostore engine, of twice as many studies, in 35 to 40 s, with 2 GB of
+memory beyond that of the engine.  The overlap query takes three to four
+times as long.
 
 The figures of this page are made by ``doc/tools/make_decoding_figures.py``
 on the neurosynth engine at 2 mm, which loads both images with ``.image``

@@ -120,6 +120,7 @@ def test_bank_queries_are_valid_on_the_engine(engine):
     voxels = pd.DataFrame(list(nl.symbols["brain_mask"].value)[:10],
                           columns=["i", "j", "k"])
     nl.add_tuple_set(voxels.assign(value=4.0), name="image")
+    nl.add_tuple_set(voxels.assign(p=0.9), name="image_probability")
     failures = []
     for example in load_examples(engine):
         for language, query in example.queries.items():

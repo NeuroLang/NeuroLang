@@ -133,19 +133,22 @@ assistant_guidance: >
   PROB[active(l, s) // cond(s)] = p with cond(s) :- recent(s),
   mentions(s, 'pain'), selected_study(s) for the studies mentioning
   pain.
-  An image loaded with .image (a binary mask or a z-map) is the
-  relation image(i, j, k, value); decode it, or any relation of voxels
-  and values, as the examples do: the weight of the voxels each study
-  activates, sum(w) over activated(i, j, k, s), divided by the total
+  An image loaded with .image (a binary mask, or a map of z-scores with
+  --zscore) is the relation image(i, j, k, value), and
+  image_probability(i, j, k, p) the probability that each voxel is
+  active: decode it, or any such relation of probabilities, as the
+  examples do: the probability weight of the voxels each study
+  activates, sum(p) over activated(i, j, k, s), divided by the total
   weight, is the probability of a probabilistic fact of the study
-  (hit(s) :: p :- ...), conditioned on the studies of each term and
+  (hit(s) :: q :- ...), conditioned on the studies of each term and
   divided by its probability over all the studies: the lift of the
-  term.  Its activated voxels are those of (w > 0) for a binary mask
-  and of (w >= 3.1) for a z-map: when the question does not say which
-  the image is, ask min(v) and max(v) over image(i, j, k, v) first (a
-  mask has one value).  Decode towards the concepts with
-  cogat_term(concept, term) and answer with the term, not the IRI of the
-  concept.  Compare the lifts of two terms on the same
-  bootstrap replicate, as the Bayes factors are.  Never join the image
-  with p_a_given_t over its voxels: it computes every term at every
-  voxel.
+  term.  A map of values without image_probability is decoded once
+  loaded again with .image NAME --zscore, if its values are z-scores:
+  say so rather than guess.  For a mask or a small region, the overlap
+  example (each voxel a probabilistic fact, a hit if a study activates
+  one) says how often the studies of a term report a peak in it.
+  Decode towards the concepts with cogat_term(concept, term) and answer
+  with the term, not the IRI of the concept.  Compare the lifts of two
+  terms on the same bootstrap replicate, as the Bayes factors are.
+  Never join the image with p_a_given_t over its voxels: it computes
+  every term at every voxel.

@@ -1113,7 +1113,7 @@ $("upload-file").addEventListener("change", async (event) => {
   run(answer.statement, { remember: true });
   // An image comes with the query decoding it: the visitor is asked
   // whether it goes in the box, where it replaces what they wrote.
-  if (answer.query) offerDecoding(answer.name, answer.query);
+  if (answer.query) offerDecoding(answer.name, answer.query, answer.kind);
   $("uploaded").open = true; // the file is listed, with its buttons
 });
 
@@ -1121,19 +1121,26 @@ $("upload-file").addEventListener("change", async (event) => {
 // once taken, to bring back the query it replaced, until the next run.
 let decodingQuery = "";
 let replacedQuery = "";
-function offerDecoding(name, query) {
+let zscoresOf = ""; // the map of values to load again as of z-scores, if taken
+function offerDecoding(name, query, kind) {
   decodingQuery = query;
-  $("decode-offer-text").textContent = `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`
-    + (editor.value.trim() ? " It replaces the query in the box." : "");
+  zscoresOf = kind === "map" ? name : "";
+  const what = kind === "map"
+    ? `${name} is uploaded, a map of values. If they are z-scores, a query can decode it: each voxel weighs the probability that it is active, from its z-score, and the query ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`
+    : `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`;
+  $("decode-offer-text").textContent = what + (editor.value.trim() ? " It replaces the query in the box." : "");
+  $("decode-offer-yes").textContent = kind === "map" ? "They are z-scores: insert the decoding query" : "Insert the decoding query";
   $("decode-offer-yes").hidden = $("decode-offer-no").hidden = false;
   $("decode-offer-back").hidden = true;
   $("decode-offer").hidden = false;
 }
 function closeDecodingOffer() {
   $("decode-offer").hidden = true;
-  decodingQuery = replacedQuery = "";
+  decodingQuery = replacedQuery = zscoresOf = "";
 }
 $("decode-offer-yes").addEventListener("click", () => {
+  // A map of z-scores is loaded again, with the probabilities of its voxels.
+  if (zscoresOf) run(`.image '${zscoresOf}' --name image --zscore`, { remember: true });
   replacedQuery = editor.value;
   putQuery(decodingQuery);
   if (!replacedQuery.trim()) {

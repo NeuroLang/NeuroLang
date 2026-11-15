@@ -857,29 +857,28 @@ engines:
         n: 500
         scheme: bayesian
         seed: 0
-    # The query decoding an image of activations, any relation of voxels
-    # and values {image}(i, j, k, w) (.image loads a NIfTI image as one),
-    # its voxels of {condition} activated (.image: w > 0 for a mask, w at
-    # least the threshold of viewer.yaml for a z-map).  A voxel is chosen in
-    # the image, the more likely the larger its value, independently of the
-    # study: image_hit(s), that the study s activates it, has the probability
-    # of the weight of the voxels it activates.  The lift of a term is the
-    # probability of it for the studies of the term over the same for all
-    # the studies (doc/tutorial_decoding.rst); the query keeps the concepts
-    # of the Cognitive Atlas with 30 studies or more, the lift of fewer
-    # being noisy.
+    # The query decoding an image (.image loads a NIfTI image as one), from
+    # the probability that each of its voxels is active,
+    # {image}_probability(i, j, k, p): 1 for those of a mask, 1 - the local
+    # false discovery rate of a z-score (.image --zscore).  A voxel is chosen
+    # in the image, the more likely the more probably active, independently
+    # of the study: image_hit(s), that the study s activates it, has the
+    # probability of the weight of the voxels it activates.  The lift of a
+    # term is the probability of it for the studies of the term over the
+    # same for all the studies (doc/tutorial_decoding.rst); the query keeps
+    # the concepts of the Cognitive Atlas with 30 studies or more, the lift
+    # of fewer being noisy.
     image_decoding_query: |-
-      % The weight of the voxels of the image each study s
+      % The probability that each voxel of the image is
+      % active, as its weight: of the voxels each study s
       % activates (a peak within the kernel of the voxel).
-      % {condition} keeps its activated voxels: all those
-      % of a mask, those of a z-map from its threshold.
-      image_score(s, sum(w)) :- {image}(i, j, k, w), {condition}, activated(i, j, k, s)
-      % The weight of all the activated voxels of the image.
-      image_total(sum(w)) :- {image}(i, j, k, w), {condition}
+      image_score(s, sum(p)) :- {image}_probability(i, j, k, p), activated(i, j, k, s)
+      % The weight of all the voxels of the image.
+      image_total(sum(p)) :- {image}_probability(i, j, k, p)
       % A study hits the image with the probability that a
-      % voxel chosen in it, the more likely the larger its
-      % value, is one the study activates.
-      image_hit(s) :: p :- image_score(s, x), image_total(y), (p == x / y)
+      % voxel chosen in it, the more likely the more probably
+      % active, is one the study activates.
+      image_hit(s) :: q :- image_score(s, x), image_total(y), (q == x / y)
       % For each term t, the probability that a study of t,
       % chosen at random, hits the image.
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))

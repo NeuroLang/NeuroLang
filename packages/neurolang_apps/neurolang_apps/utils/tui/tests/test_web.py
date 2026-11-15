@@ -872,8 +872,23 @@ def test_the_page_uploads_an_image_that_image_loads(repl):
     assert answer == {
         "name": "my map.nii.gz",
         "statement": ".image 'my map.nii.gz' --name image",
-        "query": "",
+        "query": "", "kind": "",
     }
+
+
+def test_the_page_is_told_if_an_uploaded_image_is_a_mask(repl):
+    """A mask is decoded as it is; a map of values once said of
+    z-scores (.image --zscore): the page asks."""
+    import gzip
+
+    import nibabel as nib
+    import numpy as np
+
+    for values, kind in (([1, 1], "mask"), ([1.5, 4.0], "map")):
+        data = np.zeros((4, 4, 4), dtype=np.float32)
+        data[1, 1, 1], data[2, 2, 2] = values
+        image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+        assert repl.upload("i.nii.gz", image)["kind"] == kind
 
 
 @pytest.mark.parametrize("name", ["my roi.nii.gz", "my roi.nii"])
