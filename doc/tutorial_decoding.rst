@@ -32,8 +32,9 @@ image`` replaces the image loaded first.
 In the browser, and on a server, *Upload data* (in the toolbar) takes the
 ``.nii`` or ``.nii.gz`` file: the page keeps it with the session, runs
 ``.image`` on it, and asks whether the decoding query, a comment explaining
-each of its lines, goes in the box (*Put the decoding query in the box*, or
-*Not now*): it replaces what is there.  A
+each of its lines, goes in the box (*Insert the decoding query*, or
+*Not now*): it replaces what is there, which *Bring back the query before*
+puts back until the next run.  A
 server reads none of its own files for its users, so an image must be
 uploaded there.  The engine of the page in the browser leaves out the peaks
 of the studies' activations (``activated``) to fit in a tab: it loads and

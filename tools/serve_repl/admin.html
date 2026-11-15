@@ -24,6 +24,9 @@
   input, select, button { font: inherit; padding: .25rem .5rem; }
   .own { color: var(--ok); } .none { color: var(--bad); }
   #message { min-height: 1.2rem; } #message.error { color: var(--bad); }
+  button.danger { color: light-dark(#b42318, #ff7b72); border: 1px solid currentColor; }
+  tr.session-row th { text-align: left; font-weight: 600; padding-top: .6rem; }
+  .actions-line { margin-top: .4rem; text-align: right; }
 </style>
 </head>
 <body>
@@ -248,23 +251,43 @@ function showUploads(uploads) {
     return $("uploads").replaceChildren();
   }
   const files = uploads.folders.reduce((n, f) => n + f.files.length, 0);
-  const erase = (body, what) => () => confirm(`Erase ${what}?`)
-    && change("/admin/api/erase-uploads", body, `Erased ${what}.`);
-  $("uploads-note").replaceChildren(
-    `${uploads.directory}: ${bytes(uploads.size)} in ${files} files of ${uploads.folders.length} sessions, ${bytes(uploads.free)} free on its disk. `
-    + `A file takes at most ${bytes(uploads.most_file)}, the files of a session ${bytes(uploads.most_all)}. `,
-    ...(uploads.folders.length ? [button("Erase all", erase({}, "every uploaded file"))] : []));
+  const erase = (body, question, done) => () => confirm(question)
+    && change("/admin/api/erase-uploads", body, done);
+  const danger = (text, action) => Object.assign(button(text, action), { className: "danger" });
+  const note = document.createElement("span");
+  note.textContent = `${uploads.directory}: ${bytes(uploads.size)} in ${files} files of ${uploads.folders.length} sessions, ${bytes(uploads.free)} free on its disk. `
+    + `A file takes at most ${bytes(uploads.most_file)}, the files of a session ${bytes(uploads.most_all)}.`;
+  const all = document.createElement("div");
+  all.className = "actions-line";
+  if (files) {
+    all.append(danger("Erase all", erase({}, `Erase all ${files} uploaded files of ${uploads.folders.length} sessions (${bytes(uploads.size)})?`,
+      "Erased every uploaded file.")));
+  }
+  $("uploads-note").replaceChildren(note, all);
   const rows = [];
   for (const folder of uploads.folders) {
     const user = folder.user ?? "(session ended)";
     const tab = (folder.tab ?? "").slice(0, 8);
-    for (const file of folder.files) {
-      rows.push(row([user, tab, folder.start, file.name, bytes(file.size), ago(file.age),
-        button("Erase", erase({ start: folder.start, name: file.name }, `${file.name} of ${user}`))]));
+    // The session, then its files.
+    const header = document.createElement("tr");
+    header.className = "session-row";
+    const title = document.createElement("th");
+    title.colSpan = 4;
+    title.textContent = `${user}${tab ? `, tab ${tab}` : ""}, session ${folder.start}: ${folder.files.length} file${folder.files.length === 1 ? "" : "s"}`;
+    const size = Object.assign(document.createElement("th"), { textContent: bytes(folder.size) });
+    const actions = document.createElement("th");
+    if (folder.files.length > 1) {
+      actions.append(danger("Erase all its files", erase({ start: folder.start },
+        `Erase the ${folder.files.length} files (${bytes(folder.size)}) of ${user}, session ${folder.start}?`,
+        `Erased the files of ${user}, session ${folder.start}.`)));
     }
-    if (folder.files.length !== 1) {
-      rows.push(row([user, tab, folder.start, `${folder.files.length} files`, bytes(folder.size), "",
-        button("Erase all its files", erase({ start: folder.start }, `the files of the session ${folder.start} of ${user}`))]));
+    header.append(title, size, Object.assign(document.createElement("th")), actions);
+    rows.push(header);
+    for (const file of folder.files) {
+      rows.push(row(["", "", "", file.name, bytes(file.size), ago(file.age),
+        danger("Erase", erase({ start: folder.start, name: file.name },
+          `Erase ${file.name} (${bytes(file.size)}) of ${user}, session ${folder.start}? Their page uploads it again only after a Stop.`,
+          `Erased ${file.name} of ${user}.`))]));
     }
   }
   $("uploads").replaceChildren(...(rows.length ? rows : [row(["No uploads."])]));

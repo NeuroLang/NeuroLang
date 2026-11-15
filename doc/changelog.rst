@@ -40,7 +40,9 @@ Unreleased
   after *Stop* or in a saved session.  ``.uploads remove NAME``, the
   *Remove* of the page's list, deletes an uploaded file from the session
   (from its folder on a server), and the page forgets it: the relations
-  loaded from it stay until ``.drop``.  ``.image PATH|UPLOADED [--name
+  loaded from it stay until ``.drop``.  The list has a *Download* and a *Remove* button for each file;
+  *Remove* leaves the output as it was and offers an *Undo*
+  (``.uploads restore NAME``, the file removed last).  ``.image PATH|UPLOADED [--name
   NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
   (resampled, a mask to the nearest voxel; at most ``image.max_mb``
   uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells

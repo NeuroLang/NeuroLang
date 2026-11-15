@@ -103,7 +103,7 @@ def test_a_file_is_removed_from_the_uploads(tmp_path):
         assert uploads.get("a.csv") is None and "a.csv" not in uploads
         assert uploads.listing() == [] and uploads.used() == 0
         assert uploads.remove("a.csv") is False
-    assert list((tmp_path / "5").iterdir()) == []
+    assert [p for p in (tmp_path / "5").iterdir() if p.is_file()] == []
 
 
 def test_the_user_removes_an_uploaded_file(tmp_path):
@@ -134,4 +134,50 @@ def test_the_user_removes_an_uploaded_file(tmp_path):
     app._handle_dot_command(".uploads remove other.csv")
     assert "No file other.csv was uploaded" in console.file.getvalue()
     app._handle_dot_command(".uploads drop x")
-    assert "Usage: .uploads [remove NAME]" in console.file.getvalue()
+    assert "Usage: .uploads [remove NAME | restore NAME]" in \
+        console.file.getvalue()
+
+
+def test_the_last_removed_file_is_restored(tmp_path):
+    """The page's Undo after Remove: the session keeps the last file
+    removed, which .uploads restore NAME brings back with what it was
+    loaded as, until another file is removed or uploaded."""
+    for directory in (None, tmp_path / "6"):
+        uploads = Uploads(directory=directory)
+        uploads.put("a.csv", b"x\n1\n")
+        uploads.loaded("a.csv", "a")
+        uploads.remove("a.csv")
+        assert uploads.listing() == [] and uploads.used() == 0
+        assert uploads.restore("b.csv") is False
+        assert uploads.restore("a.csv") is True
+        assert [(f["name"], f["loaded"]) for f in uploads.listing()] == [
+            ("a.csv", ["a"])]
+        assert uploads.get("a.csv") == b"x\n1\n"
+        assert uploads.restore("a.csv") is False  # once
+        uploads.remove("a.csv")
+        uploads.put("c.csv", b"y\n")  # another change: no undo of a.csv
+        assert uploads.restore("a.csv") is False
+    assert sorted(p.name for p in (tmp_path / "6").iterdir()
+                  if p.is_file()) == ["c.csv"]
+
+
+def test_the_user_restores_a_removed_file(tmp_path):
+    import io
+
+    from rich.console import Console
+
+    from neurolang.frontend import NeurolangPDL
+    from neurolang_apps.utils.tui import InteractiveTuiApp, TuiSettings
+    from neurolang_apps.utils.tui.session import store_upload
+
+    console = Console(file=io.StringIO(), width=200)
+    app = InteractiveTuiApp(NeurolangPDL(), TuiSettings(), console=console,
+                            err_console=console)
+    store_upload(app, "s.csv", b"study,score\ns1,0.5\n")
+    app._handle_dot_command(".load s.csv scores")
+    app._handle_dot_command(".uploads remove s.csv")
+    app._handle_dot_command(".uploads restore s.csv")
+    assert "restored s.csv" in console.file.getvalue()
+    assert app.uploads.listing()[0]["loaded"] == ["scores"]
+    app._handle_dot_command(".uploads restore s.csv")
+    assert "s.csv cannot be restored" in console.file.getvalue()

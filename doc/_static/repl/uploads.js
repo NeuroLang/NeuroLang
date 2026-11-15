@@ -14,7 +14,7 @@ export function bytes(size) {
 export function uploadsSummary(uploads) {
   const files = uploads?.files ?? [];
   if (!files.length) return "";
-  return `Uploaded files: ${files.length}, ${bytes(uploads.used)} of ${bytes(uploads.most)}`;
+  return `Uploaded files (${files.length}): ${bytes(uploads.used)} of ${bytes(uploads.most)} used`;
 }
 
 // A row of the list for each file: its name, kind, size, and the relations

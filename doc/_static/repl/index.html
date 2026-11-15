@@ -202,10 +202,26 @@
   #decode-offer { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .6rem; padding: .6rem .8rem; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); }
   #decode-offer[hidden] { display: none; }
   #decode-offer p { margin: 0; flex-basis: 100%; }
+  #decode-offer button[hidden] { display: none; }
+  @media (pointer: coarse) { #decode-offer button { min-height: 44px; } }
   #uploaded { margin-top: .6rem; }
   #uploaded table { border-collapse: collapse; font-size: .85rem; margin-top: .4rem; }
-  #uploaded th, #uploaded td { text-align: left; padding: .2rem 1rem .2rem 0; }
+  #uploaded th, #uploaded td { text-align: left; padding: .2rem 1rem .2rem 0; white-space: nowrap; }
   #uploaded th { color: var(--muted); font-weight: 500; }
+  #uploaded td.upload-actions { display: flex; gap: .4rem; padding-right: 0; }
+  #uploaded td.upload-actions button { min-height: 1.75rem; padding: .2rem .6rem; font-size: .78rem; }
+  #uploaded button.upload-remove { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 70%, transparent); }
+  #uploaded { max-width: 100%; overflow-x: auto; }
+  #uploaded td:first-child { white-space: normal; overflow-wrap: anywhere; max-width: 14rem; }
+  #uploads-status { margin: .4rem 0 0; }
+  #uploads-status button { min-height: 1.75rem; padding: .2rem .6rem; }
+  @media (max-width: 40rem) {
+    #uploaded th:nth-child(2), #uploaded td:nth-child(2) { display: none; }
+    #uploaded td.upload-actions button { font-size: 0; gap: 0; padding: .35rem; }
+    #uploaded td.upload-actions button svg { width: 1.1rem; height: 1.1rem; }
+  }
+  @media (pointer: coarse) { #uploaded td.upload-actions button, #uploads-status button { min-height: 44px; min-width: 44px; } }
+  #uploaded button.upload-remove:hover:not(:disabled) { background: var(--bad-soft); border-color: var(--bad); }
   #run-help { white-space: nowrap; }
   .menu { position: relative; }
   .menu > summary { display: inline-flex; align-items: center; gap: .35rem; min-height: 2rem; padding: .3rem .7rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--raised); font-size: .8125rem; font-weight: 500; color: var(--text); }
@@ -502,7 +518,7 @@
           <button id="view" type="button" class="ghost" disabled title="Show the last result in the brain viewer">Brain</button>
           <button id="explain" type="button" class="ghost" hidden title="Read the last query in English, with the assistant">Explain</button>
           <button id="share" type="button" class="ghost" title="Copy a link to this query: it is in the address after the #, which the server never gets">Copy link</button>
-          <button id="upload" type="button" class="ghost" title="Upload a CSV or TSV file of yours (.csv, .tsv, gzipped or not): it is loaded as a relation, and .load NAME loads it again; or a NIfTI image of activations, a mask or a z-map (.nii, .nii.gz): .image loads it as image(i, j, k, value) and shows it">Upload data</button>
+          <button id="upload" type="button" class="ghost" title="Upload a table (.csv, .tsv) or a NIfTI image (.nii, .nii.gz)">Upload data</button>
           <details class="menu"><summary>More</summary>
             <div class="menu-items">
               <button id="format" type="button" title="Break the long rules of the box at the commas of their bodies (Alt+Shift+F)">Format the query</button>
@@ -514,14 +530,15 @@
             </div>
           </details>
           <input id="session-file" type="file" accept=".json,application/json" hidden>
-          <input id="upload-file" type="file" accept=".csv,.tsv,.gz,.nii,.nii.gz,text/csv,text/tab-separated-values" hidden>
+          <input id="upload-file" type="file" accept=".csv,.tsv,.csv.gz,.tsv.gz,.nii,.nii.gz,text/csv,text/tab-separated-values" hidden>
           <span class="spacer"></span>
           <span id="run-help" class="note"><kbd>Ctrl</kbd> <kbd>Enter</kbd> runs</span>
         </div>
-        <section id="decode-offer" role="group" aria-labelledby="decode-offer-text" hidden>
+        <section id="decode-offer" role="group" aria-labelledby="decode-offer-text" aria-live="polite" hidden>
           <p id="decode-offer-text"></p>
-          <button id="decode-offer-yes" type="button" class="primary">Put the decoding query in the box</button>
-          <button id="decode-offer-no" type="button" class="quiet">Not now</button>
+          <button id="decode-offer-yes" type="button" class="primary">Insert the decoding query</button>
+          <button id="decode-offer-no" type="button">Not now</button>
+          <button id="decode-offer-back" type="button" hidden>Bring back the query before</button>
         </section>
         <details id="uploaded" class="disclosure" hidden>
           <summary id="uploaded-summary"></summary>
@@ -529,7 +546,8 @@
             <thead><tr><th>File</th><th>Kind</th><th>Size</th><th>Loaded as</th><th></th></tr></thead>
             <tbody id="uploaded-list"></tbody>
           </table>
-          <p class="note">The files you uploaded in this session, which go with it: <code>.load NAME</code> loads a table again, under another name if given, and <code>.image NAME</code> an image; <em>Remove</em> (<code>.uploads remove NAME</code>) deletes one.</p>
+          <p id="uploads-status" class="note" role="status" hidden></p>
+          <p id="uploaded-note" class="note">These files go with the session: Download saves one, Remove deletes it, and the relations loaded from it stay until <code>.drop</code>. <code>.load NAME</code> loads a table again, <code>.image NAME</code> an image.</p>
         </details>
       </form>
     </section>

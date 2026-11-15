@@ -616,6 +616,16 @@ const workerMessages = {
   },
   reply: (data) => {
     rerun = null;
+    if (quietRun) {
+      const { before, after } = quietRun;
+      quietRun = null;
+      before?.(data);
+      applyReply(data);
+      setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
+      setBusy(false);
+      after?.(data);
+      return;
+    }
     setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
     if (!data.failed) session.add(lastRun, $("mode").value);
     showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
@@ -635,23 +645,91 @@ const workerMessages = {
   },
 };
 
+// The buttons of a row of the uploads: an icon and a word each.
+const UPLOAD_ICONS = {
+  download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+};
+function iconButton(kind, text, label, action) {
+  const button = Object.assign(document.createElement("button"), {
+    type: "button", className: `upload-${kind}`, title: label,
+  });
+  button.setAttribute("aria-label", label);
+  button.setAttribute("aria-describedby", "uploaded-note");
+  button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${UPLOAD_ICONS[kind]}</svg>`;
+  button.append(text);
+  button.addEventListener("click", action);
+  return button;
+}
+// Remove the uploaded file *name* from the session, quietly: its panel
+// says so, with an Undo, and the focus goes to the next file's Remove.
+function removeUpload(name) {
+  const bytes = uploads.get(name);
+  const entries = session.entries.map((entry) => ({ ...entry }));
+  const rows = [...$("uploaded-list").rows];
+  const at = rows.findIndex((row) => row.cells[0].textContent === name);
+  run(`.uploads remove '${name}'`, { quiet: { after: (data) => {
+    if (data.failed) return setUploadsStatus(plainText(data.html), null, true);
+    setUploadsStatus(plainText(data.html), bytes && (() => restoreUpload(name, bytes, entries)));
+    const removes = $("uploaded-list").querySelectorAll("button.upload-remove");
+    (removes[Math.min(at, removes.length - 1)] ?? $("uploaded-summary")).focus();
+  } } });
+}
+// Undo a removal: the session brings the file back, and the page its bytes
+// and the statements loading it.
+function restoreUpload(name, bytes, entries) {
+  run(`.uploads restore '${name}'`, { quiet: {
+    before: (data) => {
+      if (data.failed) return;
+      uploads.set(name, bytes);
+      session.replace(entries);
+    },
+    after: (data) => {
+      setUploadsStatus(plainText(data.html), null, data.failed);
+      $("uploaded-summary").focus();
+    },
+  } });
+}
+// The line of the uploads panel telling what was done, with an Undo.
+function setUploadsStatus(text, undo = null, failed = false) {
+  const line = $("uploads-status");
+  line.replaceChildren(text);
+  line.classList.toggle("agent-bad", failed);
+  if (undo) {
+    const button = Object.assign(document.createElement("button"), { type: "button", textContent: "Undo" });
+    button.addEventListener("click", undo);
+    line.append(" ", button);
+  }
+  line.hidden = !text;
+}
+const plainText = (markup) => Object.assign(document.createElement("div"), { innerHTML: markup }).textContent.trim();
+
+// The type of an uploaded file, for its download.
+function uploadMime(name) {
+  if (/\.gz$/i.test(name)) return "application/gzip";
+  if (/\.csv$/i.test(name)) return "text/csv";
+  if (/\.tsv$/i.test(name)) return "text/tab-separated-values";
+  return "application/octet-stream";
+}
+
 // The files uploaded in the session, as the latest reply tells them: hidden
 // without any.
-function showUploads(uploads) {
-  const summary = uploadsSummary(uploads);
+function showUploads(listed) {
+  const summary = uploadsSummary(listed);
   $("uploaded").hidden = !summary;
   $("uploaded-summary").textContent = summary;
-  $("uploaded-list").replaceChildren(...uploadRows(uploads).map((cells) => {
+  $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells) => {
     const row = document.createElement("tr");
     for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text }));
-    const remove = Object.assign(document.createElement("button"), {
-      type: "button", className: "quiet", textContent: "Remove",
-      title: `Delete ${cells[0]} from this session: the relations loaded from it stay until .drop`,
-    });
-    remove.addEventListener("click", () => run(`.uploads remove '${cells[0]}'`));
-    const cell = document.createElement("td");
-    cell.append(remove);
-    row.append(cell);
+    const name = cells[0];
+    const actions = document.createElement("td");
+    actions.className = "upload-actions";
+    if (uploads.has(name)) { // the page has its bytes (it uploaded it)
+      actions.append(iconButton("download", "Download", `Download ${name}`,
+        () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) })));
+    }
+    actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
+    row.append(actions);
     return row;
   }));
 }
@@ -833,9 +911,22 @@ function replayStep(data) {
   replayNext();
 }
 
-function run(text, { remember = false } = {}) {
+// A run of the page's own (Remove, Undo), *quiet*: its reply changes the
+// uploads and says what it did in their panel, not the output nor the
+// results being read; ``before`` and ``after`` take the reply.
+let quietRun = null;
+function run(text, { remember = false, quiet = null } = {}) {
   text = text.trim();
   if (!text) return;
+  if (quiet) {
+    quietRun = quiet;
+    setBusy(true);
+    setStatus("Running…", "busy");
+    worker.postMessage({ text });
+    return;
+  }
+  setUploadsStatus(""); // what was undoable is so no longer
+  if ($("decode-offer-back") && !$("decode-offer-back").hidden) closeDecodingOffer();
   if (remember) {
     history.add(text);
     showHistory();
@@ -1023,26 +1114,43 @@ $("upload-file").addEventListener("change", async (event) => {
   // An image comes with the query decoding it: the visitor is asked
   // whether it goes in the box, where it replaces what they wrote.
   if (answer.query) offerDecoding(answer.name, answer.query);
+  $("uploaded").open = true; // the file is listed, with its buttons
 });
 
-// The offer to put the query decoding an uploaded image in the box.
+// The offer to put the query decoding an uploaded image in the box, and,
+// once taken, to bring back the query it replaced, until the next run.
 let decodingQuery = "";
+let replacedQuery = "";
 function offerDecoding(name, query) {
   decodingQuery = query;
-  $("decode-offer-text").textContent = `Decode ${name}? The query decoding it towards the concepts of the Cognitive Atlas, each line explained by a comment, can go in the query box`
-    + (editor.value.trim() ? ", in place of what is there." : ".");
+  $("decode-offer-text").textContent = `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`
+    + (editor.value.trim() ? " It replaces the query in the box." : "");
+  $("decode-offer-yes").hidden = $("decode-offer-no").hidden = false;
+  $("decode-offer-back").hidden = true;
   $("decode-offer").hidden = false;
 }
 function closeDecodingOffer() {
   $("decode-offer").hidden = true;
-  decodingQuery = "";
+  decodingQuery = replacedQuery = "";
 }
 $("decode-offer-yes").addEventListener("click", () => {
+  replacedQuery = editor.value;
   putQuery(decodingQuery);
-  closeDecodingOffer();
+  if (!replacedQuery.trim()) {
+    closeDecodingOffer();
+  } else {
+    $("decode-offer-text").textContent = "The decoding query is in the box, in place of the query that was there.";
+    $("decode-offer-yes").hidden = $("decode-offer-no").hidden = true;
+    $("decode-offer-back").hidden = false;
+  }
   input.focus();
 });
 $("decode-offer-no").addEventListener("click", closeDecodingOffer);
+$("decode-offer-back").addEventListener("click", () => {
+  editor.value = replacedQuery;
+  closeDecodingOffer();
+  input.focus();
+});
 $("session-open").addEventListener("click", () => $("session-file").click());
 $("session-file").addEventListener("change", async (event) => {
   const [file] = event.target.files;

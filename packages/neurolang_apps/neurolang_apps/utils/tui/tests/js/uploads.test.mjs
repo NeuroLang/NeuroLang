@@ -14,7 +14,7 @@ const uploads = {
 };
 
 test("the uploads are summed up, with the room taken", () => {
-  assert.equal(uploadsSummary(uploads), "Uploaded files: 2, 4.8 MB of 200 MB");
+  assert.equal(uploadsSummary(uploads), "Uploaded files (2): 4.8 MB of 200 MB used");
   assert.equal(uploadsSummary({ files: [], used: 0, most: 1 }), "");
   assert.equal(uploadsSummary(undefined), "");
 });

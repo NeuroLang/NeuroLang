@@ -312,6 +312,11 @@ def test_the_admins_see_and_erase_the_uploads(tmp_path):
                             (str(ann.starts), "../x"), ("x", None)):
             with pytest.raises(ValueError):
                 sessions.erase_uploads(start, name)
+        ann.upload(name="gone.csv", data=b"g\n")
+        ann.submit(".uploads remove gone.csv")  # kept for an undo, hidden
+        info = sessions.uploads_info()
+        mine = {f["start"]: f for f in info["folders"]}[str(ann.starts)]
+        assert [f["name"] for f in mine["files"]] == ["pets.csv", "toys.csv"]
         assert sessions.erase_uploads(str(ann.starts), "toys.csv") == 1
         assert not (directory / str(ann.starts) / "toys.csv").exists()
         assert ann.submit(".load toys.csv")["failed"]

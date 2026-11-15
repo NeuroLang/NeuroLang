@@ -878,6 +878,8 @@ class Sessions:
                 continue
             files = []
             for path in sorted(folder.iterdir(), key=lambda p: p.name):
+                if not path.is_file():  # the file removed last, kept aside
+                    continue
                 try:
                     stat = path.stat()
                 except OSError:  # erased meanwhile
