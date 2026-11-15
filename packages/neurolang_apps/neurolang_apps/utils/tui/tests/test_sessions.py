@@ -301,6 +301,27 @@ def test_a_start_of_a_session_ended_does_not_wait(sessions):
     assert isinstance(done[0], SessionEnded)
 
 
+def test_a_start_stopped_while_its_engine_builds_has_ended(sessions):
+    """The page stops a session before it starts one (a new engine, a
+    restart): a start it cuts short ended, which the server tells without
+    a traceback, not an error of the server."""
+    session = sessions.session("ann", "t")
+    done = []
+
+    def run():
+        try:
+            done.append(session.start("neurosynth"))
+        except Exception as error:
+            done.append(error)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    time.sleep(0.5)  # building
+    session.stop()
+    thread.join(30)
+    assert isinstance(done[0], SessionEnded), done
+
+
 def test_a_new_session_does_not_take_the_process_of_the_one_it_replaces(
         sessions):
     """The session ended while its engine builds, a new one of its key

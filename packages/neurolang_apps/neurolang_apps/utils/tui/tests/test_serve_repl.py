@@ -410,8 +410,13 @@ def test_the_local_site_has_the_page_answered_by_this_machine(
     bundle = json.loads((page.parent / "bundle.json").read_text())
     assert bundle == {
         "backend": "local", "default": "neurosynth",
-        "engines": {"neurosynth": {"label": "Neurosynth"}},
+        "engines": {"neurosynth": {
+            "label": "Neurosynth", "acknowledgements":
+            serve.bundle_script().acknowledgements("neurosynth")}},
     }
+    # the page's credits (credits.html) read them
+    assert any("Neurosynth: Yarkoni" in text for text in
+               bundle["engines"]["neurosynth"]["acknowledgements"])
     assert (page.parent / "local_worker.js").is_file()
     page = serve.prepare_local_site(tmp_path, ["neurosynth", "neurosynth_iit"])
     bundle = json.loads((page.parent / "bundle.json").read_text())

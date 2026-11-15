@@ -2,9 +2,9 @@
 Build what the in-browser REPL downloads, in OUTPUT_DIR:
 
 - the wheels of NeuroLang's packages,
-- for each engine of the page (``neurosynth``, ``neurosynth_iit``, the
-  page's default, ``neurostore`` and ``neurostore_iit``), the data it
-  needs, as a zip in the layout of its data directory, and
+- for each engine of the page, those of engines.yaml with a ``label``
+  (``neurosynth_iit`` the page's default), the data it needs, as a zip in
+  the layout of its data directory, and
 - ``bundle.json``, which names them for ``doc/_static/repl/worker.js``,
   with the acknowledgements of each engine's data, which
   ``doc/_static/repl/credits.html`` lists,
@@ -71,21 +71,27 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-# The engines the page offers, in the order they are built: an engine
-# sharing the text embeddings of another (EMBEDDINGS_FROM) after it.
-ENGINES = ("neurosynth", "neurosynth_iit", "neurostore", "neurostore_iit")
+ENGINES_YAML = (Path(__file__).resolve().parents[1] / "packages" /
+                "neurolang_apps" / "neurolang_apps" / "utils" / "engines" /
+                "engines.yaml")
+
+
+def page_engines() -> dict:
+    """The engines the page offers, by name, with their name on the page:
+    those of engines.yaml with a ``label``, in its order (an engine that
+    extends another after it)."""
+    import yaml
+
+    engines = yaml.safe_load(ENGINES_YAML.read_text())["engines"]
+    return {name: entry["label"] for name, entry in engines.items()
+            if (entry or {}).get("label")}
+
+
+LABELS = page_engines()
+ENGINES = tuple(LABELS)
 ENGINE = ENGINES[0]
 # The engine the page starts with, when the bundle has it.
 DEFAULT_ENGINE = "neurosynth_iit"
-LABELS = {
-    "neurosynth": "Neurosynth", "neurostore": "NeuroStore",
-    "neurosynth_iit": "Neurosynth + tracts",
-    "neurostore_iit": "NeuroStore + tracts",
-}
-# The engines that have the studies of another and so its text embeddings.
-EMBEDDINGS_FROM = {
-    "neurosynth_iit": "neurosynth", "neurostore_iit": "neurostore",
-}
 RESOLUTION = 2.0
 HIGHLIGHT_WORDS = "highlight.json"
 
@@ -314,6 +320,15 @@ def acknowledgements(engine: str) -> list:
     return engine_registry.get_acknowledgements(engine)
 
 
+def embeddings_from(engine: str):
+    """The engine whose studies, and so text embeddings, *engine* has
+    (``neurosynth`` for ``neurosynth_iit``), or None."""
+    from neurolang_apps.utils import engine_registry
+
+    owner = engine_registry.embeddings_owner(engine, "study_abstracts")
+    return None if owner == engine else owner
+
+
 def tractogram_entry(engine: str):
     """The ``tractogram`` entry of *engine* in engines.yaml, or None."""
     from neurolang_apps.utils import engine_registry
@@ -431,7 +446,7 @@ def bundle_engine(
     ``bundle.json``: its label, its data (the name of the zip, or those of its
     parts, which the page joins) and the files of its text embeddings, none
     if *shared*, its embeddings being those of the engine of the same
-    studies (:data:`EMBEDDINGS_FROM`) in the bundle.
+    studies (:func:`embeddings_from`) in the bundle.
     """
     # What an engine downloads is kept apart from that of the others, so that
     # the zip of an engine holds its data only.
@@ -461,7 +476,7 @@ def bundle_engine(
         # an engine with the studies of another has its embeddings: those
         # of the bundle, or else those kept for it
         files = {} if shared else export_embeddings(
-            data_dir, output, embedded, engine, EMBEDDINGS_FROM.get(engine)
+            data_dir, output, embedded, engine, embeddings_from(engine)
         )
         archive = Path(tmp) / data_zip(engine)
         zip_directory(data_dir, archive)
@@ -497,13 +512,13 @@ def main(
     default = DEFAULT_ENGINE if DEFAULT_ENGINE in engines else engines[0]
     for engine in engines:
         try:
-            shared = EMBEDDINGS_FROM.get(engine) in built
+            shared = embeddings_from(engine) in built
             built[engine] = bundle_engine(
                 engine, output, embedded, downloads, shared
             )
             if shared:
                 share_embeddings(
-                    built[engine], built[EMBEDDINGS_FROM[engine]]
+                    built[engine], built[embeddings_from(engine)]
                 )
         except Exception as error:
             if engine == default:
