@@ -1448,20 +1448,38 @@ class TestImage:
             (1, 2, 3, 5.0), (0, 0, 0, 3.0), (3, 3, 3, -2.0)
         }
 
-    def test_the_assistant_is_told_what_the_image_is(self, tiny, zmap):
-        """The query assistant sees the image among the relations, with
-        what it is (its agent's schema of the engine)."""
+    def test_the_assistant_is_told_what_the_image_is(
+        self, tiny, zmap, tmp_path
+    ):
+        """
+        The query assistant finds the image among the relations of its
+        schema, and with describe_predicate: the file it comes from, a mask
+        or a map of values, its voxels and values; loaded again from another
+        file, the description is the new file's only.
+        """
         from neurolang_apps.utils.llm.context import EngineContext
 
+        def line():
+            schema = EngineContext(
+                tiny._nl, "tiny", tiny.loaded_relations
+            ).schema_summary()
+            return next(row for row in schema.splitlines()
+                        if row.startswith("- image(i, j, k, value)"))
+
         tiny._handle_dot_command(f".image {zmap}")
-        tiny._handle_dot_command(f".image {zmap} --name image")
-        schema = EngineContext(
-            tiny._nl, "tiny", tiny.loaded_relations
-        ).schema_summary()
-        line = next(row for row in schema.splitlines()
-                    if row.startswith("- image(i, j, k, value)"))
-        assert "brain image" in line and "z-map" in line
-        assert line.count("brain image") == 1  # loaded again, told once
+        first = line()
+        assert "brain image" in first and "z.nii.gz" in first
+        assert "a map of values of 3 voxels, from -2 to 5" in first
+        assert "1 voxels of 3.1 or more" in first
+        tiny._handle_dot_command(
+            f".image {self._mask(tmp_path, [(1, 2, 3), (0, 0, 0)])} "
+            "--name image"
+        )
+        second = line()
+        assert "mask.nii" in second and "a binary mask of 2 voxels" in second
+        assert "z.nii.gz" not in second and second.count("brain image") == 1
+        context = EngineContext(tiny._nl, "tiny", tiny.loaded_relations)
+        assert "a binary mask of 2 voxels" in context.describe("image")
 
     def test_the_name(self, tiny, zmap):
         tiny._handle_dot_command(f".image {zmap} --name z")

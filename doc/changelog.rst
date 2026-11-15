@@ -29,7 +29,13 @@ Unreleased
   sizes are its ``--max-upload-mb`` (50) and ``--max-uploads-mb`` (200).
   The admin console shows them by session, with their sizes, ages and the
   free disk space, and erases a file, a session's or all.  ``.uploads`` lists, in a session, the files its page uploaded, their
-  kind, size and age, the relations loaded from them and the room left.  ``.image PATH|UPLOADED [--name
+  kind, size and age, the relations loaded from them and the room left.
+  The page has *Upload data* in its toolbar, and lists the files uploaded
+  in the session (each reply carries them).  ``.image`` describes the image
+  to the query assistant (its file, a mask or a map of values, its voxels),
+  replacing the description of an image loaded before under the same name
+  (``document_predicate(..., replace=True)``, ``.document(p, "...",
+  replace=True)``).  ``.image PATH|UPLOADED [--name
   NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
   (resampled, a mask to the nearest voxel; at most ``image.max_mb``
   uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells

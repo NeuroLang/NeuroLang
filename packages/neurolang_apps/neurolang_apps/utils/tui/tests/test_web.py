@@ -875,8 +875,9 @@ def test_the_page_uploads_an_image_that_image_loads(repl):
     }
 
 
+@pytest.mark.parametrize("name", ["my roi.nii.gz", "my roi.nii"])
 def test_a_server_loads_shows_and_tells_an_uploaded_image(
-    repl, monkeypatch, tmp_path
+    repl, monkeypatch, tmp_path, name
 ):
     """The whole path of an image on a server (neurolang.confine): the
     page uploads it, runs the statement the upload returns, and gets the
@@ -897,12 +898,30 @@ def test_a_server_loads_shows_and_tells_an_uploaded_image(
     )
     data = np.zeros((4, 4, 4), dtype=np.uint8)
     data[1, 1, 1] = data[2, 2, 2] = 1
-    image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
-    answer = repl.upload("my roi.nii.gz", image)
+    image = nib.Nifti1Image(data, np.eye(4)).to_bytes()  # .nii
+    if name.endswith(".gz"):
+        image = gzip.compress(image)
+    answer = repl.upload(name, image)
     reply = repl.submit(answer["statement"])
     text = " ".join(re.sub(r"<[^>]+>", "", reply.html).split())
     assert not reply.failed, text
-    assert "loaded image(i, j, k, value): 2 voxels from my roi.nii.gz, " \
+    assert f"loaded image(i, j, k, value): 2 voxels from {name}, " \
         "a mask" in text
     assert reply.viewers == ["<html>page</html>"]
     assert not (tmp_path / "data").exists()  # nothing written there
+
+
+def test_a_reply_tells_the_uploads_of_the_session(repl):
+    """Each reply carries the files the page uploaded, what they were
+    loaded as and the room taken, for the page to list them."""
+    from neurolang_apps.utils.tui.local_backend import reply_payload
+
+    assert repl.submit("ans(x, n) :- person(x, n)").uploads["files"] == []
+    repl.upload("my scores.csv", b"study,score\ns1,0.5\n")
+    reply = repl.submit(".load 'my scores.csv' scores")
+    (upload,) = reply.uploads["files"]
+    assert (upload["name"], upload["size"], upload["loaded"]) == (
+        "my scores.csv", 19, ["scores"])
+    assert reply.uploads["used"] == 19
+    assert reply.uploads["most"] == repl.app.uploads.most_all
+    assert reply_payload(reply)["uploads"] == reply.uploads

@@ -2045,13 +2045,25 @@ Load it again with --name and the same NAME to replace it."""
 
 HELP_TOPICS["image"] = IMAGE_HELP
 
-# What the query assistant is told of an image .image loaded (.document).
-IMAGE_DESCRIPTION = (
-    "A brain image loaded with .image or uploaded: its voxels (i, j, k) "
-    "on the grid of the engine, with their value. A binary mask has a "
-    "single value; a z-map, its activations from "
-    f"{IMAGE_DEFAULTS['threshold']}."
-)
+def image_description(source: str, values: np.ndarray, mask: bool) -> str:
+    """
+    Return what the query assistant is told of the image loaded from
+    *source* (``.document``), of the *values* of its voxels, a *mask* or
+    not: its file, its kind and voxels, which its schema of the engine and
+    describe_predicate show.
+    """
+    threshold = IMAGE_DEFAULTS["threshold"]
+    if mask:
+        kind = (f"a binary mask of {len(values)} voxels (value "
+                f"{values[0]:.3g})")
+    else:
+        kind = (f"a map of values of {len(values)} voxels, from "
+                f"{values.min():.3g} to {values.max():.3g}; as a z-map, its "
+                f"activations are its {int((values >= threshold).sum())} "
+                f"voxels of {threshold} or more")
+    return (f"A brain image uploaded or loaded with .image, from {source}: "
+            f"{kind}. Its voxels (i, j, k) are on the grid of the engine, "
+            "value their value.")
 
 
 def nifti_from_bytes(data: bytes, most: Optional[int] = None):
@@ -2161,8 +2173,9 @@ def cmd_image(app, arg: str) -> None:
     app.loaded_relations[name] = ["i", "j", "k", "value"]
     if source in app.uploads:
         app.uploads.loaded(source, name)
-    app._nl.execute_datalog_program(
-        f'.document({name}, "{IMAGE_DESCRIPTION}")'
+    app._nl.document_predicate(
+        name, image_description(source, rows["value"].to_numpy(), mask),
+        replace=True,
     )
     kind = "a mask" if mask else "a map of values"
     app.console.print(

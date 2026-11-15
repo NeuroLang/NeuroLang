@@ -1513,11 +1513,12 @@ def _doc_signature(lines, name, arity, line):
     return tuple(arguments)
 
 
-def documentation_command(name, description, arguments=()):
+def documentation_command(name, description, arguments=(), replace=False):
     """
     Return the command documenting the predicate *name*: its
     *description* and its *arguments*, ``(name, sort)`` pairs, the sort
-    ``""`` when not given.
+    ``""`` when not given; with *replace*, in place of the description it
+    had.
     """
     return Command(DOCUMENT_COMMAND, (
         Symbol(name), Constant[str](description),
@@ -1525,7 +1526,7 @@ def documentation_command(name, description, arguments=()):
             tuple(tuple(a) for a in arguments),
             auto_infer_type=False, verify_type=False,
         ),
-    ), ())
+    ), ((Symbol("replace"), Constant[bool](True)),) if replace else ())
 
 
 def _documentation(expression, lines, line):
