@@ -51,3 +51,44 @@ def test_a_file_erased_by_an_admin_is_gone_for_the_session(tmp_path):
     (folder / "a.csv").unlink()
     assert uploads.get("a.csv") is None
     uploads.put("b.csv", b"1234")  # a.csv no longer counts
+
+
+def test_the_uploads_tell_what_they_hold(tmp_path):
+    """Each file: its size, when it was uploaded, and the relations loaded
+    from it; in the memory of the session or in its folder."""
+    for directory in (None, tmp_path / "9"):
+        uploads = Uploads(directory=directory)
+        uploads.put("pets.csv", b"pet\ncat\n")
+        uploads.put("roi.nii.gz", b"x" * 10)
+        uploads.loaded("pets.csv", "pets")
+        uploads.loaded("pets.csv", "animals")
+        uploads.loaded("pets.csv", "pets")
+        listing = uploads.listing()
+        assert [(f["name"], f["size"], f["loaded"]) for f in listing] == [
+            ("pets.csv", 8, ["animals", "pets"]), ("roi.nii.gz", 10, [])]
+        assert all(f["age"] >= 0 for f in listing)
+        assert uploads.used() == 18
+
+
+def test_the_session_lists_its_uploads(tmp_path):
+    """.uploads lists the files the page uploaded in this session, what
+    each was loaded as, and the room left."""
+    import io
+
+    from rich.console import Console
+
+    from neurolang.frontend import NeurolangPDL
+    from neurolang_apps.utils.tui import InteractiveTuiApp, TuiSettings
+    from neurolang_apps.utils.tui.session import store_upload
+
+    console = Console(file=io.StringIO(), width=200)
+    app = InteractiveTuiApp(NeurolangPDL(), TuiSettings(), console=console,
+                            err_console=console)
+    app._handle_dot_command(".uploads")
+    assert "No file was uploaded in this session" in console.file.getvalue()
+    store_upload(app, "my scores.csv", b"study,score\ns1,0.5\n")
+    app._handle_dot_command(".load 'my scores.csv' scores")
+    app._handle_dot_command(".uploads")
+    out = " ".join(console.file.getvalue().split())
+    assert "my scores.csv" in out and "table" in out and "scores" in out
+    assert "of 200 MB" in out

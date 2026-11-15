@@ -18,6 +18,7 @@ Datalog, and the Datalog rules of a predicate (``.datalog``).
 import re
 import shlex
 import shutil
+import time
 import traceback
 import warnings
 from contextlib import contextmanager
@@ -483,6 +484,8 @@ class Uploads:
         self.most_file = int(most_file)
         self.most_all = int(most_all)
         self._memory = {}  # name -> data, without a directory
+        self._times = {}  # name -> when it was uploaded, without one
+        self._loaded = {}  # name -> the relations loaded from it
         if self.directory is not None and self.directory.exists():
             shutil.rmtree(self.directory, ignore_errors=True)
 
@@ -516,11 +519,45 @@ class Uploads:
                              f"{self.most_all >> 20} MB")
         if self.directory is None:
             self._memory[name] = bytes(data)
+            self._times[name] = time.time()
         else:
             self.directory.mkdir(parents=True, exist_ok=True)
             (self.directory / name).write_bytes(data)
+        self._loaded.pop(name, None)  # new bytes, nothing loaded of them
 
     __setitem__ = put
+
+    def __contains__(self, name) -> bool:
+        return name in self._sizes()
+
+    def loaded(self, name: str, relation: str) -> None:
+        """Tell that the relation *relation* was loaded from the file
+        *name* (.load NAME, .image NAME)."""
+        self._loaded.setdefault(name, set()).add(relation)
+
+    def used(self) -> int:
+        """Return the bytes the files take."""
+        return sum(self._sizes().values())
+
+    def listing(self) -> list:
+        """Return the files, by name: each one's ``name``, ``size``, ``age``
+        in seconds since it was uploaded, and the relations ``loaded`` from
+        it, by name."""
+        now = time.time()
+        listing = []
+        for name, size in sorted(self._sizes().items()):
+            when = self._times.get(name) if self.directory is None else None
+            if when is None and self.directory is not None:
+                try:
+                    when = (self.directory / name).stat().st_mtime
+                except OSError:  # erased meanwhile
+                    continue
+            listing.append({
+                "name": name, "size": size,
+                "age": max(0, round(now - (when or now))),
+                "loaded": sorted(self._loaded.get(name, ())),
+            })
+        return listing
 
 
 def store_upload(app, name: str, data: bytes) -> None:
@@ -575,6 +612,60 @@ def cmd_load(app, arg: str) -> None:
         _add_relation(app, name, df, path)
     except Exception as exc:
         _load_failed(app, _load_error_message(path, exc), exc)
+        return
+    if data is not None:
+        app.uploads.loaded(words[0], name)
+
+
+@command(
+    ".uploads", "List the files the page uploaded in this session (Upload "
+    "data): their kind, size, age and the relations loaded from them",
+    ".uploads",
+)
+def cmd_uploads(app, arg: str) -> None:
+    """Print the files of the session's uploads (session.Uploads)."""
+    listing = app.uploads.listing()
+    if not listing:
+        app.console.print(
+            "No file was uploaded in this session: Upload data, on the "
+            "page, uploads one; .load NAME or .image NAME loads it.",
+            markup=False,
+        )
+        return
+    table = Table(box=box.ROUNDED, header_style="bold cyan")
+    for column in ("File", "Kind", "Size", "Uploaded", "Loaded as"):
+        table.add_column(column)
+    for upload in listing:
+        table.add_row(
+            upload["name"], "image" if is_image(upload["name"]) else "table",
+            _megabytes(upload["size"]), _ago(upload["age"]),
+            ", ".join(upload["loaded"]) or "-",
+        )
+    app.console.print(table)
+    app.console.print(
+        f"{_megabytes(app.uploads.used())} of "
+        f"{app.uploads.most_all >> 20} MB used; a file takes at most "
+        f"{app.uploads.most_file >> 20} MB.", markup=False,
+    )
+
+
+def _megabytes(size: int) -> str:
+    """Return the *size* in bytes as a text: bytes below a kilobyte, kB
+    below a megabyte."""
+    if size < 1024:
+        return f"{size} B"
+    if size < 1 << 20:
+        return f"{size / 1024:.1f} kB"
+    return f"{size / (1 << 20):.1f} MB"
+
+
+def _ago(seconds: int) -> str:
+    """Return how long ago *seconds* was, as a text."""
+    if seconds < 120:
+        return f"{seconds} s ago"
+    if seconds < 7200:
+        return f"{seconds // 60} min ago"
+    return f"{seconds // 3600} h ago"
 
 
 @command(".sets", "List the engine's sets (EDB relations) and the loaded ones")

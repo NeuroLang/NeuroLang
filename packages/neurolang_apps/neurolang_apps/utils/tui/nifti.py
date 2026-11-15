@@ -2195,6 +2195,8 @@ def cmd_image(app, arg: str) -> None:
         del app._nl.program_ir.symbol_table[Symbol(name)]
     app._nl.add_tuple_set(rows, name=name)
     app.loaded_relations[name] = ["i", "j", "k", "value"]
+    if source in app.uploads:
+        app.uploads.loaded(source, name)
     app._nl.execute_datalog_program(
         f'.document({name}, "{IMAGE_DESCRIPTION}")'
     )
