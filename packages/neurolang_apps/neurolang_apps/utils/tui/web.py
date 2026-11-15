@@ -754,6 +754,8 @@ class WebRepl:
             "name": name,
             "statement": f".image {shlex.quote(name)} --name image",
             "query": "" if missing else query, "kind": kind,
+            # a map, decoded as a mask, keeps its voxels from it (--mask)
+            "threshold": nifti.IMAGE_DEFAULTS["threshold"],
         }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:

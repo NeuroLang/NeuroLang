@@ -1113,45 +1113,51 @@ $("upload-file").addEventListener("change", async (event) => {
   run(answer.statement, { remember: true });
   // An image comes with the query decoding it: the visitor is asked
   // whether it goes in the box, where it replaces what they wrote.
-  if (answer.query) offerDecoding(answer.name, answer.query, answer.kind);
+  if (answer.query) offerDecoding(answer.name, answer.query, answer.kind, answer.threshold);
   $("uploaded").open = true; // the file is listed, with its buttons
 });
 
 // The offer to put the query decoding an uploaded image in the box, and,
-// once taken, to bring back the query it replaced, until the next run.
+// once taken, to bring back the query it replaced, until the next run. A
+// map of values is decoded as z-scores or as a mask from its threshold:
+// it is loaded again so (.image --zscore or --mask).
 let decodingQuery = "";
 let replacedQuery = "";
-let zscoresOf = ""; // the map of values to load again as of z-scores, if taken
-function offerDecoding(name, query, kind) {
+let decodedMap = ""; // the map of values to load again, decoded so
+function offerDecoding(name, query, kind, threshold = 3.1) {
   decodingQuery = query;
-  zscoresOf = kind === "map" ? name : "";
+  decodedMap = kind === "map" ? name : "";
   const what = kind === "map"
-    ? `${name} is uploaded, a map of values. If they are z-scores, a query can decode it: each voxel weighs the probability that it is active, from its z-score, and the query ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`
+    ? `${name} is uploaded, a map of values. A query can decode it, ranking the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line. As z-scores, each voxel weighs the probability that it is active; as a mask, its voxels from ${threshold} weigh the same.`
     : `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`;
   $("decode-offer-text").textContent = what + (editor.value.trim() ? " It replaces the query in the box." : "");
-  $("decode-offer-yes").textContent = kind === "map" ? "They are z-scores: insert the decoding query" : "Insert the decoding query";
+  $("decode-offer-yes").textContent = kind === "map" ? "Decode as z-scores" : "Insert the decoding query";
+  $("decode-offer-mask").textContent = `Decode as a mask (from ${threshold})`;
+  $("decode-offer-mask").hidden = kind !== "map";
   $("decode-offer-yes").hidden = $("decode-offer-no").hidden = false;
   $("decode-offer-back").hidden = true;
   $("decode-offer").hidden = false;
 }
 function closeDecodingOffer() {
   $("decode-offer").hidden = true;
-  decodingQuery = replacedQuery = zscoresOf = "";
+  decodingQuery = replacedQuery = decodedMap = "";
 }
-$("decode-offer-yes").addEventListener("click", () => {
-  // A map of z-scores is loaded again, with the probabilities of its voxels.
-  if (zscoresOf) run(`.image '${zscoresOf}' --name image --zscore`, { remember: true });
+// Put the decoding query in the box, a map loaded again as *flag* says.
+function insertDecoding(flag) {
+  if (decodedMap) run(`.image '${decodedMap}' --name image ${flag}`, { remember: true });
   replacedQuery = editor.value;
   putQuery(decodingQuery);
   if (!replacedQuery.trim()) {
     closeDecodingOffer();
   } else {
     $("decode-offer-text").textContent = "The decoding query is in the box, in place of the query that was there.";
-    $("decode-offer-yes").hidden = $("decode-offer-no").hidden = true;
+    $("decode-offer-yes").hidden = $("decode-offer-mask").hidden = $("decode-offer-no").hidden = true;
     $("decode-offer-back").hidden = false;
   }
   input.focus();
-});
+}
+$("decode-offer-yes").addEventListener("click", () => insertDecoding("--zscore"));
+$("decode-offer-mask").addEventListener("click", () => insertDecoding("--mask"));
 $("decode-offer-no").addEventListener("click", closeDecodingOffer);
 $("decode-offer-back").addEventListener("click", () => {
   editor.value = replacedQuery;

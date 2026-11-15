@@ -27,9 +27,18 @@ other than 0) to the nearest voxel so that it stays a mask, and its first
 volume is kept if it has several.  It loads, too,
 ``image_probability(i, j, k, p)``, the probability that each voxel is
 active, which the decoding weighs the voxels by (see `The score: the lift
-of a term`_): 1 for each voxel of a mask; for a map of z-scores, which
-``--zscore`` says it is, the probability that its z-score is that of an
-active voxel.  A map of other values has none, and is not decoded.
+of a term`_).  Two decodings are offered:
+
+``--mask``, masked decoding
+    1 for each voxel of a binary mask, which needs no flag, or of a map of
+    values from 3.1 (``image.threshold``): its voxels weigh the same.
+
+``--zscore``, from z-scores
+    for a map of z-scores, the probability that the z-score of each voxel
+    is that of an active voxel: its voxels weigh their probability.
+
+A map loaded without either has none, and is not decoded until it is
+loaded again with one.
 ``.image`` shows the image in the brain viewer, and prints the query
 decoding it.  ``--name NAME`` names the relations ``NAME`` and
 ``NAME_probability`` instead, to load several images; ``.image PATH --name
@@ -40,9 +49,9 @@ In the browser, and on a server, *Upload data* (in the toolbar) takes the
 ``.image`` on it, and asks whether the decoding query, a comment explaining
 each of its lines, goes in the box (*Insert the decoding query*, or
 *Not now*): it replaces what is there, which *Bring back the query before*
-puts back until the next run.  For a map of values, the page asks whether
-they are z-scores (*They are z-scores: insert the decoding query*), and
-loads it again with ``--zscore``.  A
+puts back until the next run.  For a map of values, the page offers the
+two decodings, *Decode as z-scores* and *Decode as a mask (from 3.1)*, and
+loads it again with ``--zscore`` or ``--mask``.  A
 server reads none of its own files for its users, so an image must be
 uploaded there.  The engine of the page in the browser leaves out the peaks
 of the studies' activations (``activated``) to fit in a tab: it loads and
@@ -242,8 +251,9 @@ Shown from 3.1 (``image.threshold``):
     Decode it with this query:
     ...
 
-Without ``--zscore``, ``.image`` says that a map of values needs it to be
-decoded.  The same query decodes it towards movement:
+Without ``--zscore`` or ``--mask``, ``.image`` says that a map of values
+needs one to be decoded; with ``--mask``, its 8,219 voxels from 3.1 weigh
+the same.  The same query decodes it towards movement:
 *coordination*, *movement*, *imagery* (motor imagery activates the premotor
 cortex) and *motor control*.  *Pain* is among them because the map also
 covers the somatosensory cortex behind the motor one, and the parietal

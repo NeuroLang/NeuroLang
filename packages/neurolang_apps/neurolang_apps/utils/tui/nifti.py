@@ -2026,7 +2026,7 @@ def _view_title(request: ViewRequest, path: Path, titles) -> str:
     return f"Last result: {titles[0]}" if titles else "Last result"
 
 
-IMAGE_USAGE = ".image PATH|UPLOADED [--name NAME] [--zscore]"
+IMAGE_USAGE = ".image PATH|UPLOADED [--name NAME] [--mask | --zscore]"
 
 # The defaults of .image (viewer.yaml): the value from which the voxels of
 # a z-map are activated, and the most bytes an image may take uncompressed.
@@ -2041,11 +2041,14 @@ its voxels of the brain with a value other than 0, on the grid of the engine
 voxel), and shows it in the brain viewer. UPLOADED is the name of an image
 the page uploaded (Upload data).
 
-It loads, too, [bold]NAME_probability(i, j, k, p)[/bold]: the probability
-that each voxel is active, 1 for the voxels of a mask; for a map of
-z-scores, which [bold]--zscore[/bold] says it is, 1 - the local false
-discovery rate of its z-score (Efron), the voxels of less than
-{IMAGE_DEFAULTS["min_probability"]} left out. A map of other values has none.
+It loads, too, [bold]NAME_probability(i, j, k, p)[/bold], the probability
+that each voxel is active, which the decoding weighs the voxels by:
+  [bold]--mask[/bold]   1 for the voxels of a binary mask (its default), or
+           of a map from {IMAGE_DEFAULTS["threshold"]}: masked decoding;
+  [bold]--zscore[/bold] for a map of z-scores, 1 - the local false discovery
+           rate of each z-score (Efron), the voxels of less than
+           {IMAGE_DEFAULTS["min_probability"]} left out.
+A map without either has none, and is not decoded.
 
 On an engine of studies and their peaks (neurosynth, neurostore), it prints
 the query decoding the image towards the concepts of the Cognitive Atlas:
@@ -2075,15 +2078,16 @@ def image_description(source: str, values: np.ndarray, mask: bool) -> str:
             f"{kind}. Its voxels (i, j, k) are on the grid of the engine, "
             "value their value. Decode it as the examples decoding an image "
             "do, from the probabilities of its voxels (its relation of the "
-            "same name and _probability); a map of z-scores has them once "
-            "loaded with .image --zscore.")
+            "same name and _probability); a map has them once loaded again "
+            "with .image --zscore (z-scores) or --mask (its voxels from the "
+            "threshold).")
 
 
 def probability_description(source: str, mask: bool, null=None) -> str:
     """Return what the query assistant is told of the probabilities of
     the image loaded from *source*: those of a *mask*, or of z-scores of
     the *null* (its mean and deviation)."""
-    how = ("1 for each of its voxels, a mask" if mask else
+    how = ("1 for each of its voxels in the mask" if mask else
            "1 - the local false discovery rate of its z-score (Efron), the "
            f"null of the map N({null[0]:.2f}, {null[1]:.2f})")
     return (f"The probability p that each voxel (i, j, k) of the image from "
@@ -2209,13 +2213,16 @@ def cmd_image(app, arg: str) -> None:
 
     try:
         words, options = split_args(
-            arg, {"--name": 1, "--zscore": 0}, IMAGE_USAGE
+            arg, {"--name": 1, "--zscore": 0, "--mask": 0}, IMAGE_USAGE
         )
         if len(words) != 1:
             raise SaveError(f"Usage: {IMAGE_USAGE}")
         source = words[0]
         name = options.get("--name", ["image"])[0]
-        zscore = "--zscore" in options
+        zscore, as_mask = "--zscore" in options, "--mask" in options
+        if zscore and as_mask:
+            raise SaveError("Give --mask or --zscore, not both: the image "
+                            "is decoded as a mask or from z-scores.")
         for relation in (name, f"{name}_probability"):
             problem = _name_problem(app, relation, "--name" in options)
             if problem:
@@ -2225,6 +2232,9 @@ def cmd_image(app, arg: str) -> None:
         template = engine_template(app._nl)
         image = read_image(_image_bytes(app, source))
         mask = is_mask(image)
+        if mask and zscore:
+            raise SaveError(f"{source} is a binary mask: a binary mask has "
+                            "no z-scores (decode it without --zscore).")
         data = _image_values(image, template, mask)
     except (SaveError, ConfinedError) as exc:
         _load_failed(app, str(exc))
@@ -2259,12 +2269,16 @@ def cmd_image(app, arg: str) -> None:
         replace=True,
     )
     kind = ("a mask" if mask else "a map of z-scores" if zscore
+            else "a map taken as a mask from "
+            f"{IMAGE_DEFAULTS['threshold']}" if as_mask
             else "a map of values")
     app.console.print(
         f"loaded {name}(i, j, k, value): {len(rows)} voxels from {source}, "
         f"{kind}", style="green", markup=False,
     )
-    probable = _load_probabilities(app, name, source, rows, mask, zscore)
+    probable = _load_probabilities(
+        app, name, source, rows, mask or as_mask, zscore
+    )
     _tell_decoding(app, name, probable)
     shown = np.zeros(template.shape[:3], dtype=np.float32)
     shown[index[0][keep], index[1][keep], index[2][keep]] = values[keep]
@@ -2288,8 +2302,10 @@ def _load_probabilities(app, name, source, rows, mask, zscore) -> bool:
     whether they were."""
     if not (mask or zscore):
         return False
-    if mask:
-        probabilities = rows[["i", "j", "k"]].assign(p=1.0)
+    if mask:  # a binary mask, or a map from its threshold (--mask)
+        kept = rows if len(rows["value"].unique()) <= 1 else rows[
+            rows["value"] >= float(IMAGE_DEFAULTS["threshold"])]
+        probabilities = kept[["i", "j", "k"]].assign(p=1.0)
         how, null = "1 for each voxel of the mask", None
     else:
         p, null = activation_probability(rows["value"].to_numpy())
@@ -2329,7 +2345,9 @@ def _tell_decoding(app, name: str, probable: bool) -> None:
     if not probable:
         app.console.print(
             "To decode it, its voxels need the probability to be active: "
-            "load it with --zscore if it is a map of z-scores.",
+            "load it again with --zscore if it is a map of z-scores, or "
+            f"with --mask to take its voxels from "
+            f"{IMAGE_DEFAULTS['threshold']} as a mask.",
             style="yellow", markup=False,
         )
         return

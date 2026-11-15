@@ -51,7 +51,8 @@ Unreleased
 
 * Decoding a brain image (:doc:`tutorial_decoding`): ``.image`` loads, with
   the image, ``image_probability(i, j, k, p)``, the probability that each
-  voxel is active: 1 for a mask; for a map of z-scores, which
+  voxel is active: 1 for a mask, or a map of values from 3.1 taken as one
+  (``.image --mask``, masked decoding); for a map of z-scores, which
   ``.image --zscore`` says it is, 1 - the local false discovery rate of its
   z-score (Efron 2004: an empirical null of the map's median and MAD, a
   kernel density; ``image.min_probability`` and ``image.kde_sample`` in
@@ -59,7 +60,8 @@ Unreleased
   engines, the query decoding the image (``image_decoding_query`` in
   ``engines.yaml``, a comment explaining each line), and the page asks,
   after an upload, whether it goes in the box, and, for a map of values,
-  whether they are z-scores: a plain Datalog query over the
+  how to decode it (*Decode as z-scores*, *Decode as a mask*): a plain
+  Datalog query over the
   probabilities, so any relation of voxels and probabilities is decoded
   the same way.  Its score is the lift of each term: the probability that
   a study of the term activates a voxel chosen in the image, the more

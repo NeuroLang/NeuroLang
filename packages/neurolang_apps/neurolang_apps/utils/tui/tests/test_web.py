@@ -873,6 +873,7 @@ def test_the_page_uploads_an_image_that_image_loads(repl):
         "name": "my map.nii.gz",
         "statement": ".image 'my map.nii.gz' --name image",
         "query": "", "kind": "",
+        "threshold": nifti.IMAGE_DEFAULTS["threshold"],
     }
 
 

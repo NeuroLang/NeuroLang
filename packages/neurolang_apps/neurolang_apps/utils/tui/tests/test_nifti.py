@@ -1671,15 +1671,39 @@ class TestImage:
             "vision": round((2 / 3) / (4 / 9), 6),
         }
 
-    def test_a_map_of_values_is_decoded_once_said_of_zscores(
+    def test_a_map_of_values_is_decoded_once_said_how(
         self, decoding, zmap
     ):
-        """A map of values but no mask: its probabilities need z-scores,
-        which --zscore says it holds."""
+        """A map of values but no mask: decoded once said of z-scores
+        (--zscore) or taken as a mask (--mask)."""
         decoding._handle_dot_command(f".image {zmap}")
         out = " ".join(_output(decoding).split())
-        assert "--zscore" in out and "Decode it" not in out
+        assert "--zscore" in out and "--mask" in out
+        assert "Decode it" not in out
         assert "image_probability" not in decoding._nl.symbols
+
+    def test_a_map_taken_as_a_mask_from_its_threshold(self, decoding, zmap):
+        """--mask: the voxels of a map from image.threshold, equally; the
+        map of 5, 3 and -2 keeps the voxel of 5."""
+        decoding._handle_dot_command(f".image {zmap} --mask")
+        out = " ".join(_output(decoding).split())
+        threshold = nifti.IMAGE_DEFAULTS["threshold"]
+        assert f"a map taken as a mask from {threshold}" in out
+        assert self._probabilities(decoding) == {(1, 2, 3): 1.0}
+        assert self._lifts(decoding) == {"pain": 1.5}
+
+    def test_the_kinds_of_decoding_are_one_of_them(
+        self, decoding, zmap, tmp_path
+    ):
+        """--mask and --zscore exclude each other, and a binary mask has
+        no z-scores."""
+        decoding._handle_dot_command(f".image {zmap} --mask --zscore")
+        decoding._handle_dot_command(
+            f".image {self._mask(tmp_path, [(1, 2, 3)])} --zscore")
+        out = " ".join(_output(decoding).split())
+        assert "--mask or --zscore, not both" in out
+        assert "a binary mask has no z-scores" in out
+        assert "image" not in decoding.loaded_relations
 
     def test_another_image_is_decoded_in_its_place(self, decoding, tmp_path):
         first = self._mask(tmp_path, [(1, 2, 3)], "first.nii")
@@ -1713,7 +1737,7 @@ class TestImage:
 
     def test_the_help_quotes_the_defaults(self, tiny):
         help_text = " ".join(nifti.IMAGE_HELP.split())
-        assert "--zscore" in help_text
+        assert "--zscore" in help_text and "--mask" in help_text
         assert f"{nifti.IMAGE_DEFAULTS['min_probability']}" in help_text
         tiny._handle_dot_command(".help image")
         assert "--name" in _output(tiny)

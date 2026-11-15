@@ -143,8 +143,8 @@ assistant_guidance: >
   (hit(s) :: q :- ...), conditioned on the studies of each term and
   divided by its probability over all the studies: the lift of the
   term.  A map of values without image_probability is decoded once
-  loaded again with .image NAME --zscore, if its values are z-scores:
-  say so rather than guess.  For a mask or a small region, the overlap
+  loaded again with .image NAME --zscore, if its values are z-scores,
+  or --mask, its voxels from 3.1 as a mask: say so rather than guess.  For a mask or a small region, the overlap
   example (each voxel a probabilistic fact, a hit if a study activates
   one) says how often the studies of a term report a peak in it.
   Decode towards the concepts with cogat_term(concept, term) and answer
