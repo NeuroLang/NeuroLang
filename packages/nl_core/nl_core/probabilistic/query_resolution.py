@@ -29,6 +29,7 @@ from ..relational_algebra import (
     ExtendedProjection,
     FunctionApplicationListMember,
     Materialise,
+    NaturalJoin,
     Projection,
     PushInSelections,
     RelationalAlgebraOperation,
@@ -42,6 +43,9 @@ from ..relational_algebra.optimisers import (
     GreedyJoinOrdering,
     PushUnnamedSelectionsUp,
 )
+from ..relational_algebra.optimisers.columns import _ra_columns
+from ..relational_algebra.optimisers.projections import _project_if_narrower
+from nl_expr.utils.orderedset import OrderedSet
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet
@@ -486,6 +490,50 @@ class RAQueryOptimiser(
     pass
 
 
+class PushSumsThroughJoins(ExpressionWalker):
+    """
+    Push the projections of a provenance query through its joins, once
+    they are ordered (:class:`RAQueryGOOOptimiser`): sum out, on each side
+    of a join, the columns of that side the projection drops.
+
+    Of the provenance sets of the probabilities of a safe plan of choices
+    and facts, a projection sums the probabilities of the tuples it
+    merges, and a join multiplies those of the tuples it pairs; the sum
+    distributes over the product, so that, A the columns of L that R has
+    not, X those projected on,
+
+        π_X(L ⋈ R) = π_X(π_{(X ∪ R) ∩ L}(L) ⋈ π_{(X ∪ L) ∩ R}(R))
+
+    gives each tuple of the result the same probability, and pairs the
+    tuples of the two sides once summed over A rather than before. Only a
+    plain :class:`NaturalJoin` is a product: not the
+    :class:`~..relational_algebra_provenance.NaturalJoinInverse`, which
+    divides.
+    """
+
+    @add_match(
+        Projection(NaturalJoin, ...),
+        lambda expression: type(expression.relation) is NaturalJoin,
+    )
+    def push_sum_through_join(self, expression):
+        join = expression.relation
+        left, right = join.relation_left, join.relation_right
+        columns = OrderedSet(expression.attributes)
+        left_columns, right_columns = _ra_columns(left), _ra_columns(right)
+        shared = left_columns & right_columns
+        new_left = self.walk(_project_if_narrower(
+            left, left_columns, (columns & left_columns) | shared
+        ))
+        new_right = self.walk(_project_if_narrower(
+            right, right_columns, (columns & right_columns) | shared
+        ))
+        if new_left is left and new_right is right:
+            return expression
+        return Projection(
+            NaturalJoin(new_left, new_right), expression.attributes
+        )
+
+
 class AddNeededProjections(PatternWalker):
     def __init__(self, needed_projections):
         self.needed_projections = needed_projections
@@ -525,7 +573,8 @@ class FilterZeroProbability(ExpressionWalker):
 def generate_provenance_query_solver(
     symbol_table, run_relational_algebra_solver,
     needed_projections=None,
-    solver_class=ProbSemiringToRelationalAlgebraSolver
+    solver_class=ProbSemiringToRelationalAlgebraSolver,
+    push_sums=False,
 ):
     """
     Generate a walker that solves a RAP query.
@@ -560,6 +609,7 @@ def generate_provenance_query_solver(
 
     steps = [
         RAQueryGOOOptimiser(symbol_table=symbol_table),
+        *((PushSumsThroughJoins(),) if push_sums else ()),
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),

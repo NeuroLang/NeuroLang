@@ -250,7 +250,7 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
 
     query_solver = generate_provenance_query_solver(
         symbol_table, run_relational_algebra_solver,
-        needed_projections=needed_projections
+        needed_projections=needed_projections, push_sums=True,
     )
 
     with log_performance(LOG, "Run RAP query %s", init_args=(ra_query,)):

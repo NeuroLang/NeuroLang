@@ -170,6 +170,31 @@ facts, for instance, is declined, as :math:`y` occurs in no choice, and
 is lifted by the next solver. Queries with negations or disjunctions are
 declined too.
 
+Once the join is ordered (``RAQueryGOOOptimiser``), the projection is
+pushed through it (``PushSumsThroughJoins``): at each join, each side is
+summed over the columns of its own that the projection drops, before the
+two are joined, rather than the join of all the atoms summed at the end,
+
+.. math::
+
+   \pi_X(L \bowtie R) = \pi_X\bigl(\pi_{(X \cup C(R)) \cap C(L)}(L)
+   \bowtie \pi_{(X \cup C(L)) \cap C(R)}(R)\bigr),
+
+:math:`C(\cdot)` being the columns of a plan (see `Correctness of the
+plans`_). The decoding of an image, a voxel :math:`v` chosen in it, each voxel active with its probability, and a
+study :math:`s` hitting it if it activates the voxel chosen,
+
+.. code-block:: text
+
+   image_hit(s) :- image_voxel(v), image_active(v), activated(v, s)
+   p(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+
+is so summed over the voxels for each study, a sum of the joined image's
+size, before the join with the terms of the studies, when the join order
+puts the voxels' relations together; the order of the greedy join ordering,
+which starts from the smallest relation, may not, and a whole map of
+z-scores still joins the terms first (the pushing does not order).
+
 The small dichotomy theorem
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1540,6 +1565,45 @@ Conjunctive queries summed on probabilistic choices
    of a choice, and are mutually exclusive by Lemma 2. Their probabilities
    add up, which the projection of the provenance solver computes. The
    hierarchy of the probabilistic atoms is not used.
+
+Sums pushed through joins
+   In the plan above, a projection is computed as the sum of the
+   probabilities of the rows it merges and a join as the product of those
+   of the rows it pairs (``RelationalAlgebraProvenanceCountingSolverMixin``):
+   each row carries a number, and the plan is a sum of products, in the
+   semiring of the reals. For the join :math:`L \bowtie R` of two plans
+   whose columns are :math:`C(L)` and :math:`C(R)`, and the projection on
+   :math:`X`, let :math:`A = C(L) \setminus (X \cup C(R))` and
+   :math:`B = C(R) \setminus (X \cup C(L))` be the columns each side
+   alone has that the projection drops. A row of the result, of values
+   :math:`x` on :math:`X`, merges the pairs of rows agreeing on the shared
+   columns :math:`c`, of every value of :math:`A` on the left and of
+   :math:`B` on the right, so that its number is
+
+   .. math::
+
+      \sum_{c} \sum_{a} \sum_{b} \ell(x, c, a)\, r(x, c, b)
+      = \sum_{c} \Bigl(\sum_{a} \ell(x, c, a)\Bigr)
+                 \Bigl(\sum_{b} r(x, c, b)\Bigr),
+
+   by the distributivity of the product over the sum, :math:`\ell` and
+   :math:`r` being the numbers of the rows of each side (0 for no row):
+   the projection of each side on :math:`X \cup c`, then their join and
+   the projection on :math:`X`, as the rewriting computes. The equality
+   holds in every commutative semiring, so the probabilities are those
+   of the plan before. A side whose projection drops no column is left as
+   it is, and the rewriting recurses into the joins of each side. It
+   applies to the join of the provenance solver only: the
+   ``NaturalJoinInverse`` of the conditional queries divides, and a sum
+   does not distribute over a division; and to the plans of this solver
+   only (``push_sums`` of ``generate_provenance_query_solver``), as the
+   plans of the other solvers have projections which are not sums
+   (``IndependentProjection``). A deterministic relation has the number 1
+   on each of its rows, and a projection dropping its columns sums them
+   as the projection at the top would. The sums of each side are no
+   larger than the rows of that side, and the join of the summed sides no
+   larger than that of the sides, so the rewriting keeps the plan
+   polynomial.
 
 Non-repeating queries
    :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
