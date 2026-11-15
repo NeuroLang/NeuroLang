@@ -239,10 +239,10 @@ engines:
     relations:
       schaefer400_tian_structural_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.3/tsv/schaefer400_17_tian_structural_connectivity.tsv.gz
-        md5: STRUCTURAL_SCHAEFER_MD5
+        md5: 9aa288691b6dd15938bc72d6ab6e5e61
       destrieux_tian_structural_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.3/tsv/destrieux_tian_structural_connectivity.tsv.gz
-        md5: STRUCTURAL_DESTRIEUX_MD5
+        md5: c79ec34d5790d2e87da8bc2dbbee94c4
     acknowledgements:
       - >-
         Structural connectivity (schaefer400_tian_structural_connectivity,
