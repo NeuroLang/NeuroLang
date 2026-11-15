@@ -26,8 +26,9 @@ function svg(tag, attributes = {}, ...children) {
 const text = (x, y, content, attributes = {}) => svg("text", { x, y, ...attributes }, content);
 const format = new Intl.NumberFormat("en", { maximumSignificantDigits: 4 });
 const number = (value) => format.format(value);
-const compact = new Intl.NumberFormat("en", { notation: "compact", maximumSignificantDigits: 3 });
-// A tick of an axis: in full under 10,000, compact (20K, 3M) from there.
+const compact = new Intl.NumberFormat("en", { notation: "compact", maximumSignificantDigits: 6 });
+// A tick of an axis: in full under 10,000, compact (20K, 3M) from there; a round tick has few digits,
+// and more are kept so that 18.05M and 18.1M are not both said 18.1M.
 const tickText = (value) => (Math.abs(value) >= 1e4 ? compact.format(value) : number(value));
 const linear = ([d0, d1], [r0, r1]) => (value) => r0 + ((value - d0) / (d1 - d0 || 1)) * (r1 - r0);
 // A label cut to about *width* pixels of 12px text.

@@ -134,7 +134,7 @@
   #live > summary { font-size: .8125rem; }
   #live.running > summary::after { content: "working…"; margin-left: .25rem; color: var(--teal); font-weight: 500; }
   #live[open] > summary { margin-bottom: .5rem; }
-  .agent-log { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; font: 12.5px/1.5 var(--mono); max-height: 26rem; overflow: auto; }
+  .agent-log { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; font: 12.5px/1.5 var(--mono); max-height: 26rem; overflow: auto; }
   .agent-head, .agent-thought, .agent-obs { color: var(--muted); }
   .agent-thought { font-style: italic; font-family: var(--sans); font-size: 13px; }
   .agent-call { color: var(--text); }
@@ -312,10 +312,11 @@
   #rate-disclosure { flex-basis: 100%; font-size: .75rem; }
   /* A finger needs 44px (WCAG asks 24px at least): the buttons, menus, links and fields. */
   @media (pointer: coarse) {
-    button:not(.guide-item):not(.guide-info):not(.rt-table button), select, .disclosure > summary, .menu > summary, .rt-menu > summary, .nav-menu > summary, .topbar nav a,
-    #key, #run, #ask-run, #tabs button, #theme button, #rate input { min-height: 44px; }
+    button:not(.guide-item):not(.guide-info):not(.rt-table button), select, .disclosure > summary, .menu > summary, .rt-bar .rt-menu > summary, .nav-menu > summary, .topbar nav a,
+    #out.quiet > details > summary, .agent-obs > summary, input:not([type=checkbox]),
+    #key, #run, #ask-run, #tabs button, #theme button { min-height: 44px; }
     .topbar nav a { display: inline-flex; align-items: center; }
-    #theme button { min-width: 44px; }
+    #theme button, .rt-bar button { min-width: 44px; }
   }
 
   /* The table of a result, and the probability of each row drawn as a track,
@@ -378,8 +379,10 @@
   .rt-table tbody tr:hover { background: var(--row-hover); }
   .rt-num { text-align: right; }
   .rt-number { color: var(--faint); text-align: right; user-select: none; }
+  .rt-table th.rt-number { padding: .45rem .7rem; font: 600 12px var(--sans); }
   .rt-study a { color: var(--accent); }
-  .rt-study .rt-ref { margin-left: .45rem; font: 500 10.5px var(--sans); padding: 0 .3rem; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); }
+  .rt-study .rt-ref { position: relative; margin-left: .45rem; font: 500 10.5px var(--sans); padding: 0 .3rem; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); }
+  .rt-study .rt-ref::after { content: ""; position: absolute; inset: -.4rem -.2rem; } /* a target of 24px, as the look is */
   .rt-study .rt-ref:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
   .rt-table td.rt-prob { white-space: nowrap; text-align: left; }
   .rt-track { position: relative; display: inline-block; vertical-align: middle; width: 4.5rem; height: .45rem; margin: -.1rem .65rem 0 0; border-radius: 999px; background: var(--track); overflow: hidden; }
@@ -394,6 +397,7 @@
   }
   @media (max-width: 40rem) {
     .rt-track { display: none; } /* the value first; the plot draws them */
+    .nav-menu-items, .menu-items, .rt-menu-items { position: static; } /* open in the flow: from the left of a narrow screen an absolute one would leave it */
     .topbar-in { gap: .5rem .75rem; }
     .topbar { position: static; }
     .topbar nav { margin-left: 0; width: 100%; gap: 1rem; }
