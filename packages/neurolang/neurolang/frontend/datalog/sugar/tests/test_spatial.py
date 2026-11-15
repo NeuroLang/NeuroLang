@@ -437,6 +437,7 @@ SQUALL_CLOSE = (
 )
 
 
+@pytest.mark.squall
 @pytest.mark.parametrize(
     "condition,op",
     [

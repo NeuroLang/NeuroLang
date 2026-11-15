@@ -310,6 +310,7 @@ class TestSaveOnTheTemplate:
         )
         assert np.asanyarray(img.dataobj)[1, 2, 3] == 1
 
+    @pytest.mark.squall
     def test_squall_voxels_in_3d(self, tiny, tmp_path):
         tiny.settings.squall = True
         img = _saved(
@@ -318,6 +319,7 @@ class TestSaveOnTheTemplate:
         data = np.asanyarray(img.dataobj)
         assert data[1, 2, 3] == 1 and data[0, 0, 0] == 1
 
+    @pytest.mark.squall
     def test_squall_probability(self, tiny, tmp_path):
         tiny._nl.add_uniform_probabilistic_choice_over_set(
             [(10,), (11,), (12,)], name="selected_study"

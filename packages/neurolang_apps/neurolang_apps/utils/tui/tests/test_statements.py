@@ -48,6 +48,7 @@ def test_split_statements_blank_line_ends_incomplete_statement():
     ]
 
 
+@pytest.mark.squall
 def test_split_statements_squall_until_period():
     lines = ["define as Active every person\n", "that plays.\n",
              "obtain every Active.\n"]
