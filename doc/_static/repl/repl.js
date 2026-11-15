@@ -921,19 +921,6 @@ $("format").addEventListener("click", () => {
   $("format").closest("details").open = false;
 });
 $("explain").addEventListener("click", () => run(".explain"));
-// A menu (Docs, More, the Download of a table) closes with Escape, which gives the focus back to its
-// button, and with a click anywhere else.
-const openMenus = () => document.querySelectorAll("details.nav-menu[open], details.menu[open], details.rt-menu[open]");
-document.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape") return;
-  for (const menu of openMenus()) {
-    if (menu.contains(document.activeElement)) menu.querySelector("summary").focus();
-    menu.open = false;
-  }
-});
-document.addEventListener("click", (event) => {
-  for (const menu of openMenus()) if (!menu.contains(event.target)) menu.open = false;
-});
 history_.addEventListener("change", () => {
   if (history_.value) {
     editor.value = history_.value;
