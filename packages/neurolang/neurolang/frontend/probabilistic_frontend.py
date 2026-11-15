@@ -429,39 +429,60 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def _type_bridges(self):
         """
-        The rules ``C(x) :- rdf:type(x, <C>)`` for the classes of the
-        ontologies of which ``rdf:type`` has an instance: RDF's meaning of
-        ``rdf:type``, for the types the files state and those the rules
-        of the program state, as ``rdf:type(e, t) :- experiment(e, n),
-        cogat_term(t, n)``.  Only these classes then have values, and the
-        rewriting drops the rewritings over the others.
+        The rules that make the instances of the classes of the
+        ontologies from ``rdf:type``, RDF's meaning of it: ``C(x) :-
+        rdf:type@files(x, <C>)`` for the types the files state, and, for a
+        rule ``rdf:type(x, t) :- body`` of the program, ``C(x) :- body``
+        with ``t`` the IRI of ``C``.  Only for the classes of which they
+        give an instance: the rewriting drops the rewritings over the
+        others.  Each class takes its instances from the data that type
+        them, of whatever type their values are.
         """
         if (
             self._type_predicate is None
             or "__constraints__" not in self.symbol_table
         ):
             return ()
-        x, c = Symbol.fresh(), Symbol.fresh()
-        rdf_type = Symbol(self._type_predicate)
-        rules = self.program_ir.symbol_table.get(rdf_type)
-        if len(getattr(rules, "formulas", ())) <= 1:
-            # no rule of the program states types: those of the files
-            rows = self._stated_types
-        else:
-            rows = self._closed_world_rows(rdf_type(x, c), (x, c))
-        if rows is None:
-            raise NeuroLangException(
-                f"{self._type_predicate} is defined from a predicate the "
-                "ontology constrains: the types of the program must come "
-                "from its data"
-            )
-        return tuple(
+        x = Symbol.fresh()
+        stated = Symbol(f"{self._type_predicate}@files")
+        bridges = [
             Implication(
                 Symbol(self._class_names[iri])(x),
-                rdf_type(x, Constant[str](iri)),
+                stated(x, Constant[str](iri)),
             )
-            for iri in sorted({c for _, c in rows if c in self._class_names})
+            for iri in sorted({c for _, c in self._stated_types})
+        ]
+        rules = self.program_ir.symbol_table.get(
+            Symbol(self._type_predicate)
         )
+        for rule in getattr(rules, "formulas", ()):
+            if stated in rule.antecedent._symbols:
+                continue
+            instance, iri_term = rule.consequent.args
+            rows = self._closed_world_rows(
+                rule.antecedent, tuple(
+                    a for a in (instance, iri_term) if isinstance(a, Symbol)
+                ),
+            )
+            if rows is None:
+                raise NeuroLangException(
+                    f"{self._type_predicate} is defined from a predicate the "
+                    "ontology constrains: the types of the program must "
+                    "come from its data"
+                )
+            if isinstance(iri_term, Symbol):
+                iris = {row[-1] for row in rows}
+            else:
+                iris = {iri_term.value} if rows else set()
+            for iri in sorted(i for i in iris if i in self._class_names):
+                bridges.append(Implication(
+                    Symbol(self._class_names[iri])(instance),
+                    ReplaceExpressionWalker(
+                        {iri_term: Constant[str](iri)}
+                    ).walk(rule.antecedent) if isinstance(iri_term, Symbol)
+                    else rule.antecedent,
+                ))
+        return tuple(bridges)
 
     def _typed_rules(self, rules):
         """The ``rules`` of a program, those with an ``rdf:type`` atom in
