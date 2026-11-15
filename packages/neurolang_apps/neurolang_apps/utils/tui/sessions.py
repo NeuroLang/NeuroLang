@@ -219,6 +219,7 @@ class Session:
         self._lock = threading.Lock()  # a process attaches, or it ends
         self._forked = threading.Event()
         self._failure: Optional[str] = None
+        self._failure_type = RuntimeError
         self._replies = {}
         self._requests = itertools.count()
         self._listeners = []
@@ -262,7 +263,7 @@ class Session:
                     if self.sessions.dead or not self.sessions._owns(self):
                         self.end("ended while it started")
                 if self._failure:
-                    raise RuntimeError(self._failure)
+                    raise self._failure_type(self._failure)
                 identity = self.sessions.identity(self.key[0])
                 if identity != self.identity:  # changed while it was forked
                     self._call("use_identity", env=identity[0],
@@ -405,7 +406,9 @@ class Session:
                 conn.close()
                 self._fail_replies(conn)
             if not self._forked.is_set():  # a start waiting for its process
-                self._failed("The session ended")
+                # by a stop or a restart, as the page asks before a start:
+                # the page that waited is gone, or starts it again
+                self._failed("The session ended", SessionEnded)
         if pid is not None:
             usage = self.usage if self.usage and self.usage["pid"] == pid \
                 else {}
@@ -473,8 +476,8 @@ class Session:
             if of is conn:
                 done.set()
 
-    def _failed(self, message: str) -> None:
-        self._failure = message
+    def _failed(self, message: str, error=RuntimeError) -> None:
+        self._failure, self._failure_type = message, error
         self._forked.set()
 
 
