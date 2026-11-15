@@ -162,7 +162,7 @@ export function renderTable(payload, { download = null, followUps = null, use = 
       const th = element("th", {
         className: NUMERIC.has(model.kinds[column]) ? "rt-num" : "",
         title: extent ? `${name}: from ${extent.low} to ${extent.high}` : name,
-      }, element("button", { type: "button", textContent: name + (arrows[sorted] ?? "") }));
+      }, element("button", { type: "button" }, name, ...(sorted ? [element("span", { textContent: arrows[sorted], ariaHidden: "true" })] : []))); // aria-sort says it
       if (sorted) th.setAttribute("aria-sort", sorted === "asc" ? "ascending" : "descending");
       th.firstChild.addEventListener("click", () => {
         model.toggleSort(column);
