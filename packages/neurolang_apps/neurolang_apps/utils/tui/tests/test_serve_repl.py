@@ -3282,3 +3282,22 @@ def test_without_an_activity_log_the_page_says_how(serve, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+@pytest.mark.parametrize("target, page", [
+    ("/", "/"), ("/repl/?engine=x", "/repl/?engine=x"), ("/a#b", "/a"),
+    ("//evil.com", "/"), ("/\\evil.com", "/"), ("/\t/evil.com", "/"),
+    ("https://evil.com/", "/"), ("evil.com", "/"),
+    ("/\r\nSet-Cookie: a=b", "/"),
+])
+def test_the_page_after_login_is_of_this_site(serve, target, page):
+    assert serve.local_page(target) == page
+
+
+def test_a_header_with_a_line_break_is_refused(serve):
+    handler = serve.Handler.__new__(serve.Handler)
+    handler.request_version = "HTTP/1.1"
+    handler._headers_buffer = []
+    handler.send_header("Location", "/repl/")
+    with pytest.raises(ValueError, match="line break"):
+        handler.send_header("Location", "/\r\nSet-Cookie: a=b")

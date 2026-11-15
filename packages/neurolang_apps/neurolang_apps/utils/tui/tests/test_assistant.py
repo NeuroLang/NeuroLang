@@ -730,3 +730,16 @@ def test_llm_refines_too_and_the_next_question_starts_afresh(app):
 def test_refine_needs_a_question(app):
     app._run_line(".ask --refine")
     assert app.failed and "Usage: .ask" in output(app)
+
+
+def test_on_a_server_llm_keeps_the_users_assistant(app, monkeypatch):
+    """A confined session (neurolang-repl-serve) does not change to a
+    provider of the server's configuration, which may run a command."""
+    from neurolang.confine import CONFINE_ENV
+
+    monkeypatch.setenv(CONFINE_ENV, "/nonexistent")
+    for line in (".llm provider second", ".llm reload"):
+        app.failed = False
+        app._run_line(line)
+        assert app.failed and "assistant settings" in output(app)
+    assert app.assistant.provider != "second"

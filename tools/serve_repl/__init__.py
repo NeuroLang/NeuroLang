@@ -429,6 +429,18 @@ def engines_path(users_path: Path) -> Path:
     return users_path.with_name(users_path.name + ".engines.json")
 
 
+def local_page(target: str) -> str:
+    """The page of this site *target* names (``next=``), read as a browser
+    reads an address (``/\\host`` is ``//host``, tabs and line breaks are
+    dropped), else ``/``: never another site's, never a header's end."""
+    if re.search(r"[\x00-\x1f\x7f\\]", target):
+        return "/"
+    parts = urllib.parse.urlsplit(urllib.parse.urljoin("https://x/", target))
+    if parts.netloc != "x" or not target.startswith("/"):
+        return "/"
+    return urllib.parse.urlunsplit(("", "", parts.path, parts.query, ""))
+
+
 def write_json(path: Path, data) -> None:
     """Write *data* in the JSON file *path* at once: a reader finds it
     whole, before or after."""
@@ -655,6 +667,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     users = None
     #: The user of the request, once authorised ("" without users).
     user = ""
+
+    def send_header(self, keyword, value):
+        """Send the header, refusing a line break in it: one of a request
+        (a ``Location``) would otherwise end it and add headers."""
+        if re.search(r"[\r\n]", f"{keyword}{value}"):
+            raise ValueError(f"a line break in the header {keyword!r}")
+        super().send_header(keyword, value)
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -1274,9 +1293,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """``/login/orcid?next=PAGE``: off to ORCID's page, with a state
         that only this browser has, to come back to PAGE."""
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
-        target = query.get("next", ["/"])[0]
-        if not target.startswith("/") or target.startswith("//"):
-            target = "/"  # a page of this site only
+        target = local_page(query.get("next", ["/"])[0])
         started = {"s": secrets.token_urlsafe(24), "n": target}
         if query.get("link"):  # a user's own iD, for them to sign in with
             if not self._authorised() or self.user.startswith(GUEST_PREFIX):

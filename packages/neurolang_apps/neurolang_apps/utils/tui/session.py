@@ -514,6 +514,8 @@ class Uploads:
         """Return the bytes of the file *name*, or None."""
         if self.directory is None:
             return self._memory.get(name)
+        if name not in self:  # a file of the folder, never a path
+            return None
         try:
             return (self.directory / name).read_bytes()
         except OSError:  # never uploaded, or erased

@@ -17,7 +17,20 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
-Nothing yet.
+**Security fixes (neurolang-repl-serve):**
+
+* ``.load NAME`` and ``.image NAME`` read only a file the session
+  uploaded, by its name: a path (``.image /etc/passwd``,
+  ``.load ../8/theirs.csv``) read the server's files, and other sessions'
+  uploads, with the server's rights.
+* On a server, ``.llm provider`` and ``.llm reload`` are refused: they
+  replaced the user's assistant with one of the server's configuration,
+  at the server's cost (its keys, or a command it runs).
+* The page after an ORCID sign-in (``next=``) is one of the site, read as
+  a browser reads it, and a header with a line break is refused: one
+  could redirect to another site, or set a cookie of the attacker's.
+* A string constant ending in a backslash (``x != 'z\'``) stays a string
+  in the expression the backend evaluates, its backslashes escaped.
 
 
 v0.1a23 (2026-11-15)
