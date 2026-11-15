@@ -60,11 +60,13 @@ Unreleased
   engines, the query decoding the image (``image_decoding_query`` in
   ``engines.yaml``, a comment explaining each line), and the page asks,
   after an upload, whether it goes in the box, and, for a map of values,
-  how to decode it (*Decode as z-scores*, *Decode as a mask*): a plain
+  how to decode it (*Decode as z-scores*, *Decode as a mask*), in the
+  brain or, *Only the cortex* (``.image --cortex``), in its cortex: a plain
   Datalog query over the
   probabilities, so any relation of voxels and probabilities is decoded
   the same way.  Each voxel is a probabilistic fact of its probability and
-  one is chosen at random; its score is the lift of each term: the
+  a voxel of the brain is chosen at random (``selected_voxel``); its score
+  is the lift of each term: the
   probability that a study of the term activates the chosen voxel, which
   is active, over the same for all the studies.
   The query assistant's bank and guidance decode an uploaded image, and

@@ -738,9 +738,9 @@ class WebRepl:
         memory of the session, and return the statement that loads it
         (``.load NAME``, or ``.image NAME`` replacing the image of the
         session) and for an image the ``query`` decoding it, if the engine
-        can, and its ``kind``: ``mask``, or ``map`` (of values: decoded
-        once loaded with ``--zscore``). A ValueError tells why it is
-        refused.
+        can, the ``cortex_query`` decoding its cortex only (``--cortex``),
+        and its ``kind``: ``mask``, or ``map`` (of values: decoded once
+        loaded with ``--zscore``). A ValueError tells why it is refused.
         """
         session.store_upload(self.app, name, data)
         if not session.is_image(name):
@@ -748,12 +748,16 @@ class WebRepl:
         try:  # a mask is decoded as it is, a map once said of z-scores
             kind = "mask" if nifti.is_mask(nifti.read_image(data)) else "map"
             query, missing = nifti.decoding_query(self.app, "image")
+            cortex, missing_cortex = nifti.decoding_query(
+                self.app, "image", "cortex"
+            )
         except Exception:  # .image tells what is wrong with the file
-            kind, query, missing = "", "", []
+            kind, query, missing, cortex, missing_cortex = "", "", [], "", []
         return {
             "name": name,
             "statement": f".image {shlex.quote(name)} --name image",
             "query": "" if missing else query, "kind": kind,
+            "cortex_query": "" if missing or missing_cortex else cortex,
             # a map, decoded as a mask, keeps its voxels from it (--mask)
             "threshold": nifti.IMAGE_DEFAULTS["threshold"],
         }

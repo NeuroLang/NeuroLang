@@ -1138,24 +1138,30 @@ $("upload-file").addEventListener("change", async (event) => {
   run(answer.statement, { remember: true });
   // An image comes with the query decoding it: the visitor is asked
   // whether it goes in the box, where it replaces what they wrote.
-  if (answer.query) offerDecoding(answer.name, answer.query, answer.kind, answer.threshold);
+  if (answer.query) offerDecoding(answer.name, answer.query, answer.kind, answer.threshold, answer.cortex_query);
   $("uploaded").open = true; // the file is listed, with its buttons
 });
 
 // The offer to put the query decoding an uploaded image in the box, and,
 // once taken, to bring back the query it replaced, until the next run. A
 // map of values is decoded as z-scores or as a mask from its threshold:
-// it is loaded again so (.image --zscore or --mask).
+// it is loaded again so (.image --zscore or --mask). Only the cortex
+// takes the query choosing the voxel in the cortex (--cortex).
 let decodingQuery = "";
+let cortexQuery = "";
 let replacedQuery = "";
 let decodedMap = ""; // the map of values to load again, decoded so
-function offerDecoding(name, query, kind, threshold = 3.1) {
+function offerDecoding(name, query, kind, threshold = 3.1, cortex = "") {
   decodingQuery = query;
+  cortexQuery = cortex;
+  $("decode-offer-cortex").checked = false;
+  $("decode-offer-cortex-label").hidden = !cortex;
   decodedMap = kind === "map" ? name : "";
   const what = kind === "map"
     ? `${name} is uploaded, a map of values. A query can decode it, ranking the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line. As z-scores, each voxel weighs the probability that it is active; as a mask, its voxels from ${threshold} weigh the same.`
     : `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`;
-  $("decode-offer-text").textContent = what + (editor.value.trim() ? " It replaces the query in the box." : "");
+  const where = cortex ? " Only the cortex decodes the voxels of the image in the cortex alone." : "";
+  $("decode-offer-text").textContent = what + where + (editor.value.trim() ? " It replaces the query in the box." : "");
   $("decode-offer-yes").textContent = kind === "map" ? "Decode as z-scores" : "Insert the decoding query";
   $("decode-offer-mask").textContent = `Decode as a mask (from ${threshold})`;
   $("decode-offer-mask").hidden = kind !== "map";
@@ -1165,18 +1171,20 @@ function offerDecoding(name, query, kind, threshold = 3.1) {
 }
 function closeDecodingOffer() {
   $("decode-offer").hidden = true;
-  decodingQuery = replacedQuery = decodedMap = "";
+  decodingQuery = cortexQuery = replacedQuery = decodedMap = "";
 }
 // Put the decoding query in the box, a map loaded again as *flag* says.
 function insertDecoding(flag) {
-  if (decodedMap) run(`.image '${decodedMap}' --name image ${flag}`, { remember: true });
+  const cortex = cortexQuery && $("decode-offer-cortex").checked;
+  if (decodedMap) run(`.image '${decodedMap}' --name image ${flag}${cortex ? " --cortex" : ""}`, { remember: true });
   replacedQuery = editor.value;
-  putQuery(decodingQuery);
+  putQuery(cortex ? cortexQuery : decodingQuery);
   if (!replacedQuery.trim()) {
     closeDecodingOffer();
   } else {
     $("decode-offer-text").textContent = "The decoding query is in the box, in place of the query that was there.";
     $("decode-offer-yes").hidden = $("decode-offer-mask").hidden = $("decode-offer-no").hidden = true;
+    $("decode-offer-cortex-label").hidden = true;
     $("decode-offer-back").hidden = false;
   }
   input.focus();

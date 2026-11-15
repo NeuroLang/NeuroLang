@@ -51,7 +51,8 @@ each of its lines, goes in the box (*Insert the decoding query*, or
 *Not now*): it replaces what is there, which *Bring back the query before*
 puts back until the next run.  For a map of values, the page offers the
 two decodings, *Decode as z-scores* and *Decode as a mask (from 3.1)*, and
-loads it again with ``--zscore`` or ``--mask``.  A
+loads it again with ``--zscore`` or ``--mask``.  *Only the cortex*, checked,
+decodes the cortex of the image alone (``--cortex``, below).  A
 server reads none of its own files for its users, so an image must be
 uploaded there.  The engine of the page in the browser leaves out the peaks
 of the studies' activations (``activated``) to fit in a tab: it loads and
@@ -121,7 +122,9 @@ The query: the voxels as facts, one of them chosen
 --------------------------------------------------
 
 The decoding query of the engines (``image_decoding_query`` in
-``engines.yaml``, ``{image}`` being the name of the image) says this as a
+``engines.yaml``, ``{image}`` being the name of the image and ``{voxel}``
+the voxels chosen, ``selected_voxel(i, j, k)`` of its
+``image_decoding_voxels``) says this as a
 probabilistic program: each voxel of the image is a fact, active with its
 probability, a voxel of the brain is chosen uniformly, the engine's
 ``selected_voxel`` (that of ``uniformity``, :doc:`tutorial_neurosynth_tests`),
@@ -166,7 +169,9 @@ the voxel chosen in the image alone, uniformly
 image_size(n), (q == 1.0 / n)``), gives the same lifts.
 
 Choosing the voxel in the cortex instead decodes the cortical part of the
-image only, its subcortical and cerebellar voxels left out:
+image only, its subcortical and cerebellar voxels left out (``.image
+--cortex``, the page's *Only the cortex*, ``{voxel}`` being then
+``selected_voxel(i, j, k), cortical_mask(i, j, k)``):
 
 .. code-block:: text
 

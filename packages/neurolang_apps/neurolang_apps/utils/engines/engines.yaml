@@ -869,14 +869,21 @@ engines:
     # same for all the studies (doc/tutorial_decoding.rst); the query keeps
     # the concepts of the Cognitive Atlas with 30 studies or more, the lift
     # of fewer being noisy.
+    # The voxels the decoding chooses one of, the {voxel} of the query: of
+    # the brain (selected_voxel), or of its cortex only (.image --cortex,
+    # the page's Only the cortex), the Harvard–Oxford cortical atlas's.
+    image_decoding_voxels:
+      brain: selected_voxel(i, j, k)
+      cortex: selected_voxel(i, j, k), cortical_mask(i, j, k)
     image_decoding_query: |-
       % Each voxel of the image is active with its
       % probability, independently: a probabilistic fact.
       image_active(i, j, k) :: p :- {image}_probability(i, j, k, p)
-      % A study s hits the image when a voxel of the brain
-      % chosen at random (selected_voxel) is active and s
-      % activates it (a peak within the kernel of the voxel).
-      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      % A study s hits the image when a voxel chosen at
+      % random in the brain (selected_voxel), or in its
+      % cortex (cortical_mask), is active and s activates
+      % it (a peak within the kernel of the voxel).
+      image_hit(s) :- {voxel}, image_active(i, j, k), activated(i, j, k, s)
       % For each term t, the probability that a study of t,
       % chosen at random, hits the image.
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))

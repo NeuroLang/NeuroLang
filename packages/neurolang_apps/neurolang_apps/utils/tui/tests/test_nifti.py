@@ -1569,19 +1569,22 @@ class TestImage:
         """The tiny engine with what the query of the meta-analysis
         engines decodes an image with: studies 10 and 11, of pain, activate
         the voxel (1, 2, 3), and 12, of vision, (0, 0, 0); a voxel of the
-        brain, of three, is chosen at random."""
+        brain, of three, is chosen at random; (1, 2, 3) is in the cortex."""
         import yaml
 
         from neurolang_apps.utils import engine_registry
 
         engines = Path(engine_registry.__file__).parent / "engines"
-        query = yaml.safe_load((engines / "engines.yaml").read_text())[
-            "engines"]["coordinate_meta_analysis"]["image_decoding_query"]
+        meta_analysis = yaml.safe_load(
+            (engines / "engines.yaml").read_text()
+        )["engines"]["coordinate_meta_analysis"]
+        decoding = {key: meta_analysis[key] for key in (
+            "image_decoding_query", "image_decoding_voxels"
+        )}
         config = engine_registry.get_engine_config
         monkeypatch.setattr(
             engine_registry, "get_engine_config",
-            lambda name, *a: {**config(name, *a),
-                              "image_decoding_query": query},
+            lambda name, *a: {**config(name, *a), **decoding},
         )
         nl = tiny._nl
         nl.add_tuple_set(
@@ -1596,14 +1599,16 @@ class TestImage:
         nl.add_uniform_probabilistic_choice_over_set(
             [(0, 0, 0), (1, 2, 3), (4, 5, 6)], name="selected_voxel"
         )
+        nl.add_tuple_set([(1, 2, 3)], name="cortical_mask")
         nl.add_tuple_set([("c1", "pain"), ("c2", "vision")], name="cogat_term")
         return tiny
 
     @staticmethod
-    def _lifts(app, name="image"):
-        """The lifts of the query decoding *name*, without its keeping
-        the terms of 30 studies or more, which the tiny engine has not."""
-        query, missing = nifti.decoding_query(app, name)
+    def _lifts(app, name="image", voxels="brain"):
+        """The lifts of the query decoding *name*, a voxel chosen among the
+        *voxels*, without its keeping the terms of 30 studies or more,
+        which the tiny engine has not."""
+        query, missing = nifti.decoding_query(app, name, voxels)
         assert not missing
         rules = [rule for rule in query.splitlines()
                  if not rule.startswith("ans(")]
@@ -1646,6 +1651,19 @@ class TestImage:
         # P(hit | pain) = 1 over P(hit) = 2/3; vision, of probability 0, is
         # no answer
         assert self._lifts(decoding) == {"pain": 1.5}
+
+    def test_the_cortex_of_an_image_is_decoded_alone(self, decoding, tmp_path):
+        """--cortex chooses the voxel in the cortex: of the mask of (1, 2,
+        3) and (0, 0, 0), only (1, 2, 3), that the studies of pain activate,
+        is decoded; in the brain, each study activates a voxel of it."""
+        mask = self._mask(tmp_path, [(1, 2, 3), (0, 0, 0)])
+        decoding._handle_dot_command(f".image {mask} --cortex")
+        out = " ".join(_output(decoding).split())
+        assert "image_hit(s) :- selected_voxel(i, j, k), " \
+            "cortical_mask(i, j, k), image_active(i, j, k)" in out
+        assert self._lifts(decoding) == {"pain": 1.0, "vision": 1.0}
+        # P(hit | pain) = 1/3 over P(hit) = 2/9
+        assert self._lifts(decoding, voxels="cortex") == {"pain": 1.5}
 
     def test_a_zscore_map_is_decoded_by_the_probabilities_of_its_voxels(
         self, decoding, tmp_path

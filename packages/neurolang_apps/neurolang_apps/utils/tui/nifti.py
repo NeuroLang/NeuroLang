@@ -2026,7 +2026,9 @@ def _view_title(request: ViewRequest, path: Path, titles) -> str:
     return f"Last result: {titles[0]}" if titles else "Last result"
 
 
-IMAGE_USAGE = ".image PATH|UPLOADED [--name NAME] [--mask | --zscore]"
+IMAGE_USAGE = (
+    ".image PATH|UPLOADED [--name NAME] [--mask | --zscore] [--cortex]"
+)
 
 # The defaults of .image (viewer.yaml): the value from which the voxels of
 # a z-map are activated, and the most bytes an image may take uncompressed.
@@ -2052,10 +2054,11 @@ A map without either has none, and is not decoded.
 
 On an engine of studies and their peaks (neurosynth, neurostore), it prints
 the query decoding the image towards the concepts of the Cognitive Atlas:
-the probability that a study of a term activates a voxel chosen in the
-image, the more likely the more probably active, over the same for all the
-studies. Any relation NAME_probability(i, j, k, p) is decoded by the same
-query with its NAME.
+each voxel active with its probability, the probability that a study of a
+term activates an active voxel chosen in the brain, over the same for all
+the studies. [bold]--cortex[/bold] chooses the voxel in the cortex: the
+cortex of the image only is decoded. Any relation
+NAME_probability(i, j, k, p) is decoded by the same query with its NAME.
 
 Load it again with --name and the same NAME to replace it."""
 
@@ -2177,16 +2180,23 @@ def _image_values(image, template: nib.Nifti1Image, mask: bool):
     return np.nan_to_num(np.asanyarray(image.dataobj, dtype=float))
 
 
-def decoding_query(app, name: str) -> Tuple[str, List[str]]:
+def decoding_query(
+    app, name: str, voxels: str = "brain"
+) -> Tuple[str, List[str]]:
     """
     Return the query decoding the image *name* on the engine of *app* (its
     ``image_decoding_query``), from the probabilities of its voxels,
-    ``NAME_probability(i, j, k, p)``, and the predicates it reads, but
-    those, that the engine lacks; an empty query on an engine without one.
+    ``NAME_probability(i, j, k, p)``, a voxel chosen among the *voxels*
+    (``brain`` or ``cortex``, its ``image_decoding_voxels``), and the
+    predicates it reads, but those, that the engine lacks; an empty query
+    on an engine without one.
     """
     config = engine_registry.get_engine_config(app.settings.engine_name) \
         if app.settings.engine_name else {}
-    query = (config.get("image_decoding_query") or "").replace("{image}", name)
+    chosen = config.get("image_decoding_voxels", {}).get(voxels, "")
+    query = (config.get("image_decoding_query") or "").replace(
+        "{image}", name
+    ).replace("{voxel}", chosen)
     rules = [line for line in query.splitlines()
              if not line.lstrip().startswith("%")]  # its comments
     heads = {rule.split("(")[0].strip() for rule in rules}
@@ -2213,7 +2223,8 @@ def cmd_image(app, arg: str) -> None:
 
     try:
         words, options = split_args(
-            arg, {"--name": 1, "--zscore": 0, "--mask": 0}, IMAGE_USAGE
+            arg, {"--name": 1, "--zscore": 0, "--mask": 0, "--cortex": 0},
+            IMAGE_USAGE,
         )
         if len(words) != 1:
             raise SaveError(f"Usage: {IMAGE_USAGE}")
@@ -2279,7 +2290,9 @@ def cmd_image(app, arg: str) -> None:
     probable = _load_probabilities(
         app, name, source, rows, mask or as_mask, zscore
     )
-    _tell_decoding(app, name, probable)
+    _tell_decoding(
+        app, name, probable, "cortex" if "--cortex" in options else "brain"
+    )
     shown = np.zeros(template.shape[:3], dtype=np.float32)
     shown[index[0][keep], index[1][keep], index[2][keep]] = values[keep]
     fd, shown_path = tempfile.mkstemp(
@@ -2329,10 +2342,11 @@ def _load_probabilities(app, name, source, rows, mask, zscore) -> bool:
     return True
 
 
-def _tell_decoding(app, name: str, probable: bool) -> None:
-    """Print the query decoding the image *name*, or why the engine
-    cannot, or what the image needs: the *probable*-ities of its voxels."""
-    query, missing = decoding_query(app, name)
+def _tell_decoding(app, name: str, probable: bool, voxels: str) -> None:
+    """Print the query decoding the image *name*, a voxel chosen among the
+    *voxels*, or why the engine cannot, or what the image needs: the
+    *probable*-ities of its voxels."""
+    query, missing = decoding_query(app, name, voxels)
     if not query:
         return
     if missing:
