@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NeuroLang REPL: activity</title>
 <script>
-  // The theme chosen (Light, Dark), before the first paint; Computer: none.
+  // The theme chosen (Light, Dark), before the first paint; Computer: none. The key and its
+  // values are those of the REPL and its other pages, so that one choice serves them all.
   try {
-    const theme = localStorage.getItem("theme");
+    const theme = localStorage.getItem("neurolang-repl-theme");
     if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
   } catch (error) { /* storage blocked: the computer's */ }
 </script>
@@ -631,14 +632,16 @@ $("more").addEventListener("click", () => loadInputs(false));
 function theme(choice) {
   if (choice) document.documentElement.dataset.theme = choice;
   else delete document.documentElement.dataset.theme;
-  try { if (choice) localStorage.setItem("theme", choice); else localStorage.removeItem("theme"); } catch (error) { /* this page only */ }
+  try { localStorage.setItem("neurolang-repl-theme", choice || "system"); } catch (error) { /* this page only */ }
   pressed("theme", "theme", choice);
   if (report) renderCharts();
 }
 $("theme").addEventListener("click", (event) => { const b = event.target.closest("button"); if (b) theme(b.dataset.theme); });
 pressed("theme", "theme", document.documentElement.dataset.theme || "");
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (report && !document.documentElement.dataset.theme) renderCharts(); });
-addEventListener("storage", (event) => { if (event.key === "theme") theme(event.newValue || ""); });
+addEventListener("storage", (event) => {
+  if (event.key === "neurolang-repl-theme") theme(event.newValue === "light" || event.newValue === "dark" ? event.newValue : "");
+});
 
 // Raw data: the Datasette of the server, if it has one (--dashboard).
 fetch("/admin/api/state").then((r) => r.ok && r.json()).then((s) => { if (s && s.dashboard) $("raw").hidden = false; }).catch(() => {});

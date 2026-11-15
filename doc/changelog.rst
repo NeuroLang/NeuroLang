@@ -626,6 +626,16 @@ Unreleased
   text; and, on a phone, the legend of the empty result still draws the
   probability bars it explains.
 
+* The account and admin pages of the REPL server (``neurolang-repl-serve
+  --users``) look like its login and activity pages: the tokens of the
+  REPL's page, light and dark with the REPL's choice of theme, its logo and
+  heading, cards and fields with a border read at 3:1, a focus ring on
+  every control, a mark with the colour of an error or a success, 44 px
+  controls on a touch screen, and tables that scroll by themselves on a
+  narrow one, with their column heads scoped and the empty ones named.  The
+  activity page keeps its theme under the same key as the others, so that one
+  choice serves the REPL and all its pages.
+  
 * The slider of the streamlines in the brain viewer sets their number, from
   one to all of those the page has, on a logarithmic scale (a linear one
   would put the counts worth seeing in its first notch), where it set their

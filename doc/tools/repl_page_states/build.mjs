@@ -20,7 +20,7 @@ writeFileSync(join(out, "wrapper.html"), `<!doctype html><meta charset=utf-8><bo
 <script>
 const q = new URLSearchParams(location.search);
 const f = document.getElementById("f");
-f.src = q.has("page") ? q.get("page") + ".html" : "index.html?state=" + q.get("state");
+f.src = q.has("page") ? q.get("page") + ".html" + (q.has("v") ? "?v=" + q.get("v") : "") : "index.html?state=" + q.get("state");
 // After the page is ready: horizontal overflow of the page, and the small controls.
 f.onload = () => setTimeout(() => {
   const d = f.contentDocument, w = f.contentWindow, out = [];

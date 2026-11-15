@@ -84,8 +84,8 @@ test("the log of the assistant is one column the width of its box, so that its l
   assert.match(page, /\.agent-log \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
 });
 
-// The pages of tools/serve_repl: the login page has the tokens of the REPL's own, and
-// the account and admin pages the colours of their status and notes read at 4.5:1.
+// The pages of tools/serve_repl: the login page has the tokens of the REPL's own (the
+// others are in server_pages_style.test.mjs).
 const serve = new URL("../../../../../../../tools/serve_repl/", import.meta.url);
 const login = readFileSync(new URL("login.html", serve), "utf8");
 const loginTheme = (selector) => {
@@ -106,18 +106,6 @@ for (const [name, selector] of [["dark", ":root"], ["light", ":root[data-theme=l
 test("the fields of the login page draw their border with --control", () => {
   assert.match(login, /input, textarea \{[^}]*border: 1px solid var\(--control\)/);
 });
-
-for (const file of ["account.html", "admin.html"]) {
-  test(`${file}: its notes and states are read at 4.5:1 in both colour schemes`, () => {
-    const html = readFileSync(new URL(file, serve), "utf8");
-    for (const token of ["dim", "bad", "ok"]) {
-      const [, light, dark] = html.match(new RegExp(`--${token}: light-dark\\((#[0-9a-f]{6}), (#[0-9a-f]{6})\\)`, "i"));
-      assert.ok(contrast(light, "#ffffff") >= 4.5, `--${token} on white`);
-      assert.ok(contrast(dark, "#121212") >= 4.5, `--${token} on the dark canvas`);
-    }
-    assert.match(html, /@media \(pointer: coarse\) \{[^}]*min-height: 44px/);
-  });
-}
 
 // The behaviour of the page's script, read as text (its modules need a browser).
 const script = readFileSync(new URL("repl.js", dir), "utf8");
