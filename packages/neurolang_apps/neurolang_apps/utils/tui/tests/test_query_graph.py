@@ -1,6 +1,7 @@
 """Tests for the graph of a query: its data, rules and probabilities."""
 
 import io
+import json
 import re
 
 import pandas as pd
@@ -17,7 +18,7 @@ from neurolang_apps.utils.tui.app import (  # noqa: E402
     InteractiveTuiApp, TuiSettings
 )
 from neurolang_apps.utils.tui.query_graph import (  # noqa: E402
-    _height, _relation_svg, _width,
+    _BAND, _height, _relation_svg, _subtitle, _width,
     graph_page, query_graph
 )
 from neurolang_apps.utils.tui.web import WebRepl  # noqa: E402
@@ -144,20 +145,35 @@ def test_a_probability_tells_how_it_is_computed(nl):
     notes = _prob(query_graph(nl, CO_ACTIVATION)).notes
     assert "joined on s" in notes
     assert "p = P(A, C) / P(C): A above given, C below" in notes
-    assert (
-        "selected_study chooses one of its 2 rows, each with probability 1/2"
-        in notes
-    )
-    assert (
-        "so p is the share of those choices where A and C hold, among "
-        "those where C holds" in notes
-    )
     assert "a probability p for each (r1, r2), summing over s" in notes
+    # One line of the formula; what the choice is, is said by its node.
+    assert not [n for n in notes if "chooses" in n or "so p is" in n]
     plain = _prob(query_graph(
         nl, "ans(r, p) :- PROB[activated(r, s), selected_study(s)] = p"
     )).notes
-    assert "p = P(A)" in plain
-    assert "so p is the share of those choices where A holds" in plain
+    assert "p = P(A), the share of the choices where A holds" in plain
+    assert not [n for n in plain if "chooses" in n or "so p is" in n]
+
+
+def test_a_random_choice_says_its_probabilities_once(nl):
+    graph = query_graph(nl, CO_ACTIVATION)
+    [choice] = [n for n in graph.nodes if n.kind == "choice"]
+    assert (
+        "chooses one of its rows, each with probability 1/2"
+        in choice.detail.splitlines()
+    )
+    assert _subtitle(choice) == "random choice · 2 rows, 1/2 each"
+    # Said by the choice only, not by the probability that uses it.
+    page = graph_page(graph, "q")
+    data = json.loads(
+        page.split('id="nodes">')[1].split("</script>")[0]
+    )
+    said = [
+        k for k, v in data.items()
+        if "each with probability" in v["detail"]
+    ]
+    assert said == [choice.id]
+    assert "random choice · 2 rows, 1/2 each" in page
 
 
 def test_no_share_is_claimed_with_probabilistic_facts_upstream(nl):
@@ -324,13 +340,50 @@ def test_the_page_follows_the_theme_of_the_repl_and_says_its_height(nl):
 
 def test_the_graph_starts_fitted_to_the_page_and_can_be_zoomed(nl):
     page = graph_page(query_graph(nl, CO_ACTIVATION), "Last query")
-    assert '<div class="graph fit">' in page
+    assert 'class="graph fit"' in page
     style = page.split("<style>")[1].split("</style>")[0]
     # Fitted: never wider than the page, never larger than drawn.
     assert ".graph.fit svg { max-width: 100%; height: auto; }" in style
     for control in ("zoom-out", "zoom-fit", "zoom-in", "zoom"):
         assert f'id="{control}"' in page
     assert "Actual size" in page and "ctrlKey" in page  # and Ctrl+wheel
+
+
+def test_the_graph_is_read_at_a_size_its_text_can_be_read_at_and_pans(nl):
+    page = graph_page(query_graph(nl, CO_ACTIVATION), "Last query")
+    script = page.split("<script>")[-1]
+    style = page.split("<style>")[1].split("</style>")[0]
+    # Fitted when that shows it at 90% or more, else at its size, from its
+    # left (the data) and the middle of its height; not the middle of its
+    # width, where zooming around the centre leaves it.
+    assert "zoomTo(fitted() >= 0.9 ? null : 1, 0, graphBox.clientHeight / 2)" \
+        in script
+    # The box is as high as a frame can show, so that its scrollbars are
+    # within it; it is a region a keyboard can reach and scroll.
+    assert ".graph { overflow: auto; max-height: 34rem;" in style
+    assert 'tabindex="0" role="region"' in page
+    # Dragged by a mouse; a finger scrolls the box by itself.
+    for event in ("pointerdown", "pointermove", "pointerup"):
+        assert f'"{event}"' in script
+    assert 'event.pointerType !== "mouse"' in script
+    # Zoom keeps the point under the pointer (or the centre of the box).
+    assert "zoomTo((scale ?? fitted()) * (event.deltaY < 0" in script
+    assert 'id="hint"' in page and "Drag to pan" in page
+    assert "aria-pressed" in script
+    # A finger needs 44px.
+    assert "@media (pointer: coarse)" in style and "min-height: 44px" in style
+
+
+def test_the_page_is_short_and_the_long_text_is_folded_away(nl):
+    page = graph_page(query_graph(nl, CO_ACTIVATION), "Last query")
+    assert '<p class="lead">' in page
+    folded = page.split('<details class="how">')[1].split("</details>")[0]
+    assert "Read from left to right" in folded and "<ul>" in folded
+    assert "Read from left to right" not in page.split("<details")[0]
+    # One chip a kind, with its meaning as a tooltip, beside the graph.
+    chips = page.split('<ul class="chips"')[1].split("</ul>")[0]
+    assert 'title="' in chips and "<b>" not in chips
+    assert "Rows" in chips and "Data" in chips
 
 
 def test_the_name_of_a_table_is_below_the_rim_of_its_cylinder(nl):
@@ -342,13 +395,26 @@ def test_the_name_of_a_table_is_below_the_rim_of_its_cylinder(nl):
     assert first - 11 >= rim  # a label's capitals are about 11 px high
 
 
-def test_an_ontology_is_drawn_as_a_node_of_a_knowledge_graph():
+def test_an_ontology_is_drawn_as_a_card_with_the_glyph_of_a_knowledge_graph():
     page = graph_page(query_graph(_ontology_engine(), ONTOLOGY_QUERY), "q")
     group = page.split('class="node ontology')[1].split("</g>")[0]
-    # A node with its links to neighbours, not a box nor a hexagon.
-    assert "<ellipse" in group and group.count('class="kg-link"') >= 3
-    assert group.count('class="kg-neighbour"') >= 3
-    assert "<polygon" not in group and "<rect" not in group
+    # A rounded card with a band at its left, and in it three linked dots:
+    # not an ellipse, and no dot or link outside the band.
+    assert group.count("<rect") == 1 and 'class="kg-band"' in group
+    assert group.count('class="kg-link"') == 3
+    assert group.count('class="kg-neighbour"') == 3
+    assert "<ellipse" not in group and "<polygon" not in group
+
+
+def test_the_text_of_an_ontology_is_beside_its_band(nl):
+    node = next(
+        n for n in query_graph(_ontology_engine(), ONTOLOGY_QUERY).nodes
+        if n.kind == "ontology"
+    )
+    box = (0, 0, _width(node), _height(node, False))
+    first = float(re.search(r'x="([0-9.]+)"', _relation_svg(node, box))[1])
+    assert first == _BAND + (box[2] - _BAND) / 2  # centred right of the band
+    assert _width(node) > _BAND  # and it has room for it
 
 
 def test_the_page_draws_the_distribution_of_the_probabilities(nl):

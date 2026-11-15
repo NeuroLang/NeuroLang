@@ -1434,6 +1434,155 @@ def test_the_users_keep_an_admin(serve, tmp_path):
     assert users.is_admin("bob") and not users.check("ann", b"a")
 
 
+def _commit(repo, name):
+    (repo / name).write_text(name)
+    for command in (["add", name], ["commit", "-qm", name]):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t",
+                        *command], cwd=repo, check=True)
+
+
+@pytest.fixture
+def checkout(serve, tmp_path, monkeypatch):
+    """A checkout on master, of an origin, the server's. Of the update, the
+    syncs of uv and the checks of the server's start do not run: *steps*
+    tells them, and whether the checkout had the commit two; the step in
+    *fail* fails once the checkout has it."""
+    origin, clone = tmp_path / "origin", tmp_path / "clone"
+    subprocess.run(["git", "init", "-q", origin], check=True)
+    subprocess.run(["git", "symbolic-ref", "HEAD", "refs/heads/master"],
+                   cwd=origin, check=True)
+    _commit(origin, "one")
+    subprocess.run(["git", "clone", "-q", origin, clone], check=True)
+    monkeypatch.setattr(serve, "CHECKOUT", clone)
+    monkeypatch.setattr(serve.shutil, "which", lambda name: "/bin/" + name)
+    monkeypatch.setattr(serve, "installed_extras", lambda: ["apps", "llm"])
+    state = SimpleNamespace(origin=origin, clone=clone, steps=[],
+                            commands=[], fail=None)
+    run = serve._run
+
+    def _run(command, env=None, label=None):
+        if command[0] not in ("/bin/uv", sys.executable):
+            return run(command, env, label)
+        step = "sync" if command[0] == "/bin/uv" else "start"
+        two = (clone / "two").exists()
+        state.steps.append((step, two))
+        state.commands.append(command)
+        if step == state.fail and two:
+            raise ValueError(f"{step} failed")
+        return ""
+
+    monkeypatch.setattr(serve, "_run", _run)
+    return state
+
+
+def test_the_update_brings_the_checkout_to_master_if_it_moved(
+    serve, checkout
+):
+    assert serve.update_check()["new"] == []
+    assert serve.update()["new"] == [] and checkout.steps == []
+    _commit(checkout.origin, "two")
+    check = serve.update_check()
+    assert check["upstream"] == "origin/master"
+    assert [c.split(" ", 1)[1] for c in check["new"]] == ["two"]
+    assert check["head"].endswith(" one") and not check["changed"]
+    assert serve.update()["new"] == check["new"]
+    assert (checkout.clone / "two").is_file()
+    assert checkout.steps == [("sync", True), ("start", True)]
+    assert checkout.commands[0] == ["/bin/uv", "sync", "--frozen",
+                                    "--inexact", "--extra=apps",
+                                    "--extra=llm"]
+    assert serve.STARTS in checkout.commands[1]
+    assert serve.update_check()["new"] == []
+
+
+@pytest.mark.parametrize("step", ["sync", "start"])
+def test_a_failed_update_brings_the_checkout_back(serve, checkout, step):
+    _commit(checkout.origin, "two")
+    checkout.fail = step
+    with pytest.raises(ValueError, match=f"{step} failed(.|\\n)*back at"):
+        serve.update()
+    assert not (checkout.clone / "two").exists()
+    assert checkout.steps[-1] == ("sync", False)  # the environment back
+    assert len(serve.update_check()["new"]) == 1  # asked again: it moved
+
+
+def test_one_update_runs_at_a_time(serve, checkout):
+    with serve.UPDATING:
+        with pytest.raises(ValueError, match="An update is running"):
+            serve.update()
+    assert serve.update()["new"] == []
+
+
+def test_the_update_keeps_the_checkouts_own_changes(serve, checkout):
+    _commit(checkout.origin, "two")
+    (checkout.clone / "one").write_text("changed")
+    assert serve.update_check()["changed"]
+    with pytest.raises(ValueError, match="changes of its own"):
+        serve.update()
+    assert not (checkout.clone / "two").exists() and checkout.steps == []
+
+
+def test_the_extras_installed_are_those_whose_packages_are(
+    serve, monkeypatch
+):
+    from importlib import metadata
+
+    requires = {
+        "ws": ['app; extra == "apps"', 'app[big]; extra == "big"',
+               'tool; extra == "dev"'],
+        "app": ['small', 'torch>=2; extra == "big"'],
+        "small": [],
+    }
+
+    def _requires(name):
+        if name not in requires:
+            raise metadata.PackageNotFoundError(name)
+        return requires[name]
+
+    provided = SimpleNamespace(get_all=lambda key: ["apps", "big", "dev"])
+    monkeypatch.setattr(metadata, "requires", _requires)
+    monkeypatch.setattr(metadata, "metadata", lambda name: provided)
+    assert serve.installed_extras("ws") == ["apps"]
+    requires["torch"] = []
+    assert serve.installed_extras("ws") == ["apps", "big"]
+
+
+def test_the_console_updates_and_restarts_if_master_moved(
+    serve, tmp_path, monkeypatch
+):
+    (tmp_path / "bundle.json").write_text("{}")
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    new = []
+    check = {"head": "a1 one", "upstream": "origin/master", "new": new,
+             "changed": False}
+    monkeypatch.setattr(serve, "update_check", lambda: check)
+    monkeypatch.setattr(serve, "update", lambda: check)
+    executed = []
+    monkeypatch.setattr(serve.os, "execv",
+                        lambda *args: executed.append(args))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, users=users)
+    serving = threading.Thread(target=serve.serve, args=(server,),
+                               daemon=True)
+    serving.start()
+    port = server.server_address[1]
+    try:
+        assert _status(port, "/admin/api/update", _basic("bob-pw", "bob"),
+                       "POST", {}) == 403
+        assert _json_of(port, "/admin/api/update", "ann", "ann-pw") == check
+        answer = _json_of(port, "/admin/api/update", "ann", "ann-pw", {})
+        assert not answer["restarting"] and serving.is_alive()
+        new.append("b2 two")
+        answer = _json_of(port, "/admin/api/update", "ann", "ann-pw", {})
+        assert answer["restarting"] and answer["new"] == ["b2 two"]
+        serving.join(10)
+        assert not serving.is_alive() and server.restarting
+        assert executed == [(sys.executable,
+                             [sys.executable, *sys.orig_argv[1:]])]
+    finally:
+        server.server_close()
+
+
 def test_an_edit_by_hand_is_read_again(serve, tmp_path):
     users = _users(serve, tmp_path, ann=("a", ["admin"]))
     assert not users.check("bob", b"b")

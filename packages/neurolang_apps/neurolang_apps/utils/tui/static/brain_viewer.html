@@ -199,8 +199,10 @@
 <div id="streamlines" style="display: none">
   <label><input id="streamlines-visible" type="checkbox" checked>
     <span id="streamline-count"></span></label>
-  <label>Opacity <input id="streamline-opacity" type="range" min="0"
-    max="1" step="0.05" value="1"></label>
+  <label>Number <input id="streamline-number" type="range" min="0"
+    max="1000" step="10" value="1000"
+    aria-label="Number of streamlines shown"
+    title="How many streamlines are drawn, on a logarithmic scale"></label>
 </div>
 <p id="message"></p>
 <script id="viewer-data" type="application/json">__DATA__</script>
