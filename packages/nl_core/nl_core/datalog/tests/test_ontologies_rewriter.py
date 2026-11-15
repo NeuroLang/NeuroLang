@@ -636,3 +636,53 @@ def test_a_dead_rewriting_is_not_built(monkeypatch):
     unchecked, more = rewrite()
     assert checked == unchecked
     assert fewer < more
+
+
+def test_a_step_surely_dead_is_not_tested_for_applicability(monkeypatch):
+    """With ``K_i ⊑ ∃m.W_i`` and ``W_i ⊑ CC``, rewriting ``m(s, c)`` of
+    ``m(s, c), CC(c)`` with ``aux_j(x, y) → m(x, y)`` puts the shared
+    ``c`` in the position of ``aux_j`` with no values: told from the
+    constraint alone, before unifying anything.  Fewer steps reach the
+    test of applicability, and the rewritings are the same."""
+    ttl = """
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix owl: <http://www.w3.org/2002/07/owl#> .
+    @prefix : <http://ex.org/> .
+    :CC a owl:Class .
+    """ + "".join(
+        f"""
+    :K{i} a owl:Class ; rdfs:subClassOf [
+        a owl:Restriction ; owl:onProperty :m ; owl:someValuesFrom :W{i}
+    ] .
+    :W{i} a owl:Class ; rdfs:subClassOf :CC .
+    """ for i in range(4)
+    )
+    onto = OntologyParser(io.StringIO(ttl), load_format="turtle")
+    constraints, _, _ = onto.parse_ontology()
+    s, c, q = Symbol("s"), Symbol("c"), Symbol("q")
+    query = Union((I_(q(s), Conjunction((Symbol("m")(s, c), Symbol("CC")(c)))),))
+    holds = frozenset(Symbol(f"K{i}") for i in range(4))
+    constraints = constraints_that_can_hold(constraints, holds)
+    tested = []
+    applicable = OntologyRewriter._get_applicable
+
+    def counted(self, *args):
+        tested.append(args)
+        return applicable(self, *args)
+
+    monkeypatch.setattr(OntologyRewriter, "_get_applicable", counted)
+
+    def rewrite():
+        tested.clear()
+        rewritings = OntologyRewriter(
+            query, constraints, chased=True, holds=holds
+        ).Xrewrite()
+        return rewritings, len(tested)
+
+    checked, fewer = rewrite()
+    monkeypatch.setattr(
+        OntologyRewriter, "_surely_dead", lambda self, q, S, sigma: False
+    )
+    unchecked, more = rewrite()
+    assert checked == unchecked
+    assert fewer < more
