@@ -446,7 +446,9 @@
 
   // The streamlines, a .trk file NiiVue reads as a mesh of fibres,
   // coloured by the direction of each segment, and the controls of their
-  // visibility and opacity.
+  // visibility and number. The file ranks them (their dps, from n down to
+  // 1) so that the k highest are an even sample: NiiVue hides those under
+  // a threshold, so the page draws k of them with n - k + 1.
   async function loadStreamlines(nv, streamlines) {
     var mesh = await niivue.NVMesh.loadFromUrl({
       url: 'streamlines.trk', buffer: await inflate(streamlines.trk),
@@ -456,13 +458,26 @@
     nv.setMeshProperty(mesh.id, 'fiberColor', 'Local');
     viewer.streamlines = mesh;
     $('streamlines').style.display = '';
-    $('streamline-count').textContent = streamlines.shown + ' of ' +
-      streamlines.total + ' streamlines shown';
+    var slider = $('streamline-number');
+    function drawFirst(count) {
+      nv.setMeshProperty(mesh.id, 'dpsThreshold', streamlines.shown - count + 1);
+      $('streamline-count').textContent = count + ' of ' +
+        streamlines.total + ' streamlines shown';
+      slider.setAttribute('aria-valuetext', count + ' streamlines');
+    }
+    // The slider is on a logarithmic scale, from 1 to all of those sent:
+    // a linear one would put the counts worth seeing in its first notch.
+    function countAt(position) {
+      return Math.max(1, Math.round(Math.pow(
+        streamlines.shown, position / parseFloat(slider.max))));
+    }
+    slider.disabled = streamlines.shown < 2;
+    drawFirst(streamlines.shown);
     $('streamlines-visible').addEventListener('change', function (e) {
       nv.setMeshProperty(mesh.id, 'visible', e.target.checked);
     });
-    $('streamline-opacity').addEventListener('input', function (e) {
-      nv.setMeshProperty(mesh.id, 'opacity', parseFloat(e.target.value));
+    slider.addEventListener('input', function (e) {
+      drawFirst(countAt(parseFloat(e.target.value)));
     });
   }
 

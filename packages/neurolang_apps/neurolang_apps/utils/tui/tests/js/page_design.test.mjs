@@ -119,6 +119,7 @@ test("a menu closes with Escape, the focus back on its button, and with a click 
 
 test("the result card says Running while a query runs, and the empty text otherwise", () => {
   assert.match(page, /<div class="empty-busy"><h3>Running…<\/h3>/);
+  assert.match(page, /<div class="empty-busy">.*as a table\. If it has regions or studies, the Brain tab then shows it on the brain\./);
   assert.match(page, /body\[data-busy\] \.empty-ready > :not\(\.empty-busy\) \{ display: none; \}/);
   assert.match(page, /\.empty-busy \{ display: none; \}/);
 });
