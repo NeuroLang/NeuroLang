@@ -87,6 +87,8 @@ def main(argv=None) -> None:
                   "(WORK: its atlases; needs the internet)", "work", "out")
     sub.add_argument("tractograms", nargs="+", type=Path)
     sub.add_argument("--radius", type=float, default=3.0)
+    command("engine-tables", "the engines' connectivity tables, of the "
+            "matrices of DATASET", "dataset")
     command("gradients", "the gradients again, of the matrices of DATASET",
             "work", "dataset")
     args = parser.parse_args(argv)
@@ -141,6 +143,9 @@ def main(argv=None) -> None:
     elif args.command == "population":
         from .population import run
         run(args.work, args.out, args.tractograms, args.radius)
+    elif args.command == "engine-tables":
+        from .combine import engine_tables
+        engine_tables(args.dataset)
     elif args.command == "gradients":
         from .combine import regradient
         regradient(args.work, args.dataset)

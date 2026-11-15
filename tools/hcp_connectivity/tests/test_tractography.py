@@ -105,6 +105,7 @@ def test_subjects_with_diffusion(tmp_path):
                                                    exist_ok=True)
                 (home / "T1w" / "Diffusion" / f).write_text("")
         (home / "T1w" / "aparc+aseg.nii.gz").write_text("")
+        (home / "T1w" / "aparc.a2009s+aseg.nii.gz").write_text("")
         (home / "MNINonLinear" / "xfms").mkdir(parents=True, exist_ok=True)
         (home / "MNINonLinear" / "xfms" /
          "standard2acpc_dc.nii.gz").write_text("")
@@ -117,3 +118,42 @@ def test_read_weights_either_separator(tmp_path):
     (tmp_path / "b").write_text("0.5 1.5 0\n")
     assert t.read_weights(tmp_path / "a").tolist() == [0.5, 1.5, 0.0]
     assert t.read_weights(tmp_path / "b").tolist() == [0.5, 1.5, 0.0]
+
+
+def test_destrieux_labels_number_the_parcels_then_tians_regions():
+    from hcp_connectivity.tractography import (
+        DESTRIEUX, N_CORTEX, N_DESTRIEUX, destrieux_labels)
+
+    assert DESTRIEUX == "destrieux_tian"
+    parcels = ["Unknown", "G_and_S_frontomargin", "G_and_S_occipital_inf"]
+    names = ["L G and S frontomargin", "L G and S occipital inf",
+             "R G and S frontomargin", "R G and S occipital inf"]
+    aparc = np.array([0, 11101, 11102, 12101, 12102, 10, 11100])
+    warped = np.array([0, 5, 0, 0, N_CORTEX + 3, N_CORTEX + 1, 0])
+    out = destrieux_labels(aparc, warped, parcels, names)
+    # a Tian region wins over a parcel; aseg's labels and Unknown are none
+    assert out.tolist() == [0, 1, 2, 3, N_DESTRIEUX + 3, N_DESTRIEUX + 1, 0]
+
+
+def test_engine_tables_are_every_pair_both_ways(tmp_path):
+    import pandas as pd
+
+    from hcp_connectivity.combine import engine_tables
+    from hcp_connectivity.tables import matrix, write_matrix
+
+    (tmp_path / "parquet").mkdir()
+    (tmp_path / "tsv").mkdir()
+    names = ["L a", "R a", "THA lh"]
+    values = np.array([[0, 2.0, 0.0001], [2.0, 0, 3.0], [0.0001, 3.0, 0]])
+    write_matrix(matrix(values, names),
+                 tmp_path / "parquet" / "destrieux_tian_count_mean.parquet")
+    engine_tables(tmp_path)
+    table = pd.read_csv(
+        tmp_path / "tsv" / "destrieux_tian_structural_connectivity.tsv.gz",
+        sep="\t")
+    assert list(table.columns) == ["region1", "region2", "streamlines"]
+    pairs = set(zip(table.region1, table.region2))
+    assert pairs == {("L a", "R a"), ("R a", "L a"), ("R a", "THA lh"),
+                     ("THA lh", "R a")}
+    assert not (tmp_path / "tsv" /
+                "schaefer400_17_tian_structural_connectivity.tsv.gz").exists()

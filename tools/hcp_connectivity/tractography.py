@@ -21,7 +21,10 @@ T1w space of the subject, and its FreeSurfer segmentation):
    to the subject through the HCP's warp (:func:`warp_labels`, nearest
    neighbour), and checked against the subject's segmentation
    (:func:`dice`);
-5. ``tck2connectome`` (symmetric, zero diagonal, the end points searched
+5. Destrieux's parcels of the subject's own segmentation
+   (``aparc.a2009s+aseg``) with the same Tian regions
+   (:func:`destrieux_labels`), a second atlas of 180 regions;
+6. ``tck2connectome`` (symmetric, zero diagonal, the end points searched
    within 2 mm of a parcel): the SIFT2 weights summed between two parcels,
    times the SIFT2 proportionality coefficient (so that the subjects are
    comparable), and the number of streamlines.
@@ -58,6 +61,12 @@ ATLAS = "schaefer400_17"
 NAME = f"{ATLAS}_tian"  # the atlas of the matrices of the parts
 N_CORTEX = 400
 N_TIAN = 32
+# the second atlas: Destrieux's 148 parcels, of the subject's own
+# FreeSurfer segmentation (aparc.a2009s+aseg: 11100 + the index of a
+# parcel on the left, 12100 on the right), then Tian's 32 regions
+DESTRIEUX = "destrieux_tian"
+N_DESTRIEUX = 148
+A2009S = {"L": 11100, "R": 12100}
 FILES = ("data.nii.gz", "bvals", "bvecs", "nodif_brain_mask.nii.gz")
 
 
@@ -184,6 +193,30 @@ def tian_region_numbers(names: list, structure: str, side: str) -> list:
                 TIAN_STRUCTURE[structure]):
             found.append(N_CORTEX + i + 1)
     return found
+
+
+def destrieux_labels(aparc: np.ndarray, labels: np.ndarray,
+                     parcels: list, names: list) -> np.ndarray:
+    """The Destrieux parcels of the subject's *aparc* (aparc.a2009s+aseg),
+    numbered 1 to 148 in the order of *names* (``L G and S frontomargin``),
+    and Tian's regions of *labels* (the warped atlas, 401 to 432),
+    numbered 149 to 180; Tian's where both. *parcels* are the names of
+    the Destrieux parcels by their index in FreeSurfer's colour table
+    (nilearn's labels)."""
+    from .cifti import engine_name
+
+    number = {name: i + 1 for i, name in enumerate(names)}
+    table = np.zeros(max(A2009S.values()) + len(parcels), dtype=np.uint16)
+    for side, base in A2009S.items():
+        for index, parcel in enumerate(parcels):
+            table[base + index] = number.get(f"{side} {engine_name(parcel)}",
+                                             0)
+    inside = (aparc >= 0) & (aparc < len(table))
+    out = np.zeros(aparc.shape, dtype=np.uint16)
+    out[inside] = table[aparc[inside]]
+    tian = labels > N_CORTEX
+    out[tian] = labels[tian] - N_CORTEX + N_DESTRIEUX
+    return out
 
 
 def atlas_check(labels: np.ndarray, segmentation: np.ndarray,
@@ -325,6 +358,7 @@ def subjects_with_diffusion(hcp: Path, limit: int = None) -> list:
         return (all((path / "T1w" / "Diffusion" / f).exists()
                     for f in FILES) and
                 (path / "T1w" / "aparc+aseg.nii.gz").exists() and
+                (path / "T1w" / "aparc.a2009s+aseg.nii.gz").exists() and
                 (path / "MNINonLinear" / "xfms" /
                  "standard2acpc_dc.nii.gz").exists())
     found = sorted(p.name for p in hcp.iterdir()
@@ -399,14 +433,32 @@ def subject_matrix(subject: str, hcp: Path, work: Path, scratch: Path,
         nib.save(nib.Nifti1Image(labels, aseg.affine), t("labels.nii.gz"))
     step("atlas", atlas)
 
+    def destrieux():
+        from nilearn.datasets import fetch_atlas_surf_destrieux
+
+        parcels = fetch_atlas_surf_destrieux(
+            data_dir=str(work / "atlases"))["labels"]
+        aparc = nib.load(home / "T1w" / "aparc.a2009s+aseg.nii.gz")
+        labels = destrieux_labels(
+            np.asarray(aparc.dataobj, dtype=int),
+            np.asarray(nib.load(t("labels.nii.gz")).dataobj, dtype=int),
+            parcels, cortical(work)["destrieux"][1])
+        nib.save(nib.Nifti1Image(labels, aparc.affine),
+                 t("labels_destrieux.nii.gz"))
+    step("destrieux", destrieux)
+
     def connectome():
-        for weighted, name in ((True, "weighted"), (False, "count")):
-            run("tck2connectome", t("tracks.tck"), t("labels.nii.gz"),
-                t(f"{name}.csv"), "-symmetric", "-zero_diagonal",
-                "-assignment_radial_search", 2,
-                *(["-tck_weights_in", t("weights.csv"),
-                   "-out_assignments", t("assignments.txt")]
-                  if weighted else []), "-force")
+        for atlas_file, suffix in (("labels", ""),
+                                   ("labels_destrieux", "_destrieux")):
+            for weighted, name in ((True, "weighted"), (False, "count")):
+                run("tck2connectome", t("tracks.tck"),
+                    t(f"{atlas_file}.nii.gz"), t(f"{name}{suffix}.csv"),
+                    "-symmetric", "-zero_diagonal",
+                    "-assignment_radial_search", 2,
+                    *(["-tck_weights_in", t("weights.csv")]
+                      if weighted else []),
+                    *(["-out_assignments", t("assignments.txt")]
+                      if weighted and not suffix else []), "-force")
     step("connectome", connectome)
 
     mu = float(t("mu.txt").read_text())
@@ -419,7 +471,11 @@ def subject_matrix(subject: str, hcp: Path, work: Path, scratch: Path,
           **assigned_fraction(t("assignments.txt"), weights),
           **atlas_check(labels, np.asarray(aseg.dataobj), names),
           **matrix_check(weighted, names), "seconds": steps}
-    return {NAME: weighted, f"{NAME}_count": counts}, qc
+    n = N_DESTRIEUX + N_TIAN
+    return {NAME: weighted, f"{NAME}_count": counts,
+            DESTRIEUX: read_matrix(t("weighted_destrieux.csv"), n) * mu,
+            f"{DESTRIEUX}_count": read_matrix(t("count_destrieux.csv"), n)
+            }, qc
 
 
 def run(work: Path, hcp: Path, out: Path, task: int, tasks: int,
