@@ -1608,6 +1608,14 @@ Sums pushed through joins
    larger than that of the sides, so the rewriting keeps the plan
    polynomial.
 
+Join order
+   ``RAQueryGOOOptimiser`` only reorders the operands of a chain of
+   natural joins. The product of the semiring being commutative and
+   associative, so is the natural join of provenance sets: every order
+   gives each row the same number, and the bound of the number of rows
+   which picks the order (``_join_size_bound``) only decides the cost of
+   the plan, never its probabilities.
+
 Non-repeating queries
    :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
    applies only if no probabilistic relation, fact or choice, occurs
