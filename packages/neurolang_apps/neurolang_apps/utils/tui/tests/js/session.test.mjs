@@ -23,6 +23,8 @@ test("the session keeps what was run, not the commands, and is bounded", () => {
   assert.deepEqual(replayTexts(session.entries, "datalog"), [".mode datalog", "a(x) :- b(x)", ".load scores.csv s"]);
   session.add(".image 'my z.nii.gz' --name image", "datalog"); // an uploaded image, shown and decoded again
   assert.deepEqual(replayTexts(session.entries, "datalog").at(-1), ".image 'my z.nii.gz' --name image");
+  session.add('.document(scores, "The scores of my lab.")', "datalog"); // its description, for the assistant
+  assert.deepEqual(replayTexts(session.entries, "datalog").at(-1), '.document(scores, "The scores of my lab.")');
   for (let i = 0; i < 600; i += 1) session.add(`r${i}(x) :- b(x)`, "datalog");
   assert.equal(session.entries.length, 500);
   assert.equal(session.entries.at(-1).text, "r599(x) :- b(x)");
