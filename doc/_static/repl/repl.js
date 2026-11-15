@@ -649,7 +649,8 @@ const workerMessages = {
 // The buttons of a row of the uploads: an icon and a word each.
 const UPLOAD_ICONS = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
-  decode: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
+  // a brain with a spark: the image is decoded into the concepts it resembles
+  decode: '<path d="M9.5 5a3 3 0 0 0-5.3 1.9A3.6 3.6 0 0 0 2.7 12a3.6 3.6 0 0 0 1.4 5.2A3.2 3.2 0 0 0 9.5 19.3V5"/><path d="M9.5 5a3 3 0 0 1 4.2-1.5M16.3 9a3.6 3.6 0 0 1 .5 5.5 3.6 3.6 0 0 1-1.7 2.7 3.2 3.2 0 0 1-5.6 2.1"/><path d="M5.2 11.5h2.3M9.5 14c1.5 0 2.6-.8 3.2-2.2"/><path fill="currentColor" stroke-width="1" d="M19.6 1.2c.4 2.2 1.1 2.9 3.2 3.3-2.1.4-2.8 1.1-3.2 3.3-.4-2.2-1.1-2.9-3.3-3.3 2.2-.4 2.9-1.1 3.3-3.3z"/>',
   remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
 };
 function iconButton(kind, text, label, action) {
