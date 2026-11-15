@@ -574,6 +574,14 @@ Unreleased
   text; and, on a phone, the legend of the empty result still draws the
   probability bars it explains.
 
+* The graph of a query says what a random choice is once, on its node
+  ("random choice · 3 rows, 1/3 each", and "chooses one of its rows, each
+  with probability 1/3" when it is clicked), where each probability that
+  used it repeated it, and "so p is the share of those choices where A
+  holds", in a paragraph of its own.  A probability keeps one line on how it
+  is computed, ``p = P(A), the share of the choices where A holds`` (``p =
+  P(A, C) / P(C)`` given a condition), so that its card is shorter.
+
 
 v0.1a22 (2026-11-13)
 --------------------

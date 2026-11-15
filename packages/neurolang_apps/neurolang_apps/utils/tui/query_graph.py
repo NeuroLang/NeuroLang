@@ -289,6 +289,12 @@ class _Builder:
         rows = _size(value)
         if rows is not None:
             lines.append(f"{rows:,} rows")
+        uniform = _uniform(value) if kind == "choice" else None
+        if uniform is not None:  # said here once, not by each probability
+            lines.append(
+                "chooses one of its rows, each with probability "
+                f"1/{uniform:,}"
+            )
         return Node(
             name, name, kind, "\n".join(filter(None, lines)),
             columns=_names(self.columns.get(name, ())),
@@ -473,14 +479,9 @@ class _Builder:
             len(sources) == 1 and choices
         ) else None
         if uniform is not None:
-            notes.append(
-                f"{choices[0]} chooses one of its {uniform:,} rows, each "
-                f"with probability 1/{uniform:,}"
-            )
-            among = ", among those where C holds" if conditional else ""
-            notes.append(
-                f"so p is the share of those choices where {holds}{among}"
-            )
+            # What the choice is is said once, on its node.
+            if not conditional:
+                notes[0] = "p = P(A), the share of the choices where A holds"
         elif sources:
             over = (
                 ", over those where C holds" if conditional else ""
@@ -727,6 +728,12 @@ def _subtitle(node: Node) -> str:
         (line for line in node.detail.splitlines() if line.endswith(" rows")),
         "",
     )
+    each = next((
+        line.rsplit("/", 1)[1] for line in node.detail.splitlines()
+        if line.startswith("chooses one of its rows")
+    ), "")
+    if rows and each:  # a choice of rows as likely: 1/3 each
+        rows = f"{rows}, 1/{each} each"
     name = KINDS[node.kind][0].lower()
     return f"{name} · {rows}" if rows else name
 
