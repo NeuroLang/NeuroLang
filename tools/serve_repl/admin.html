@@ -7,7 +7,7 @@
 <style>
   /* The admin console of neurolang-repl-serve --users, for the group admin.
      What users wrote (names, questions, comments) is shown as text only. */
-  :root { color-scheme: light dark; --line: #8884; --dim: #888; --bad: #cf222e; --ok: #1a7f37; }
+  :root { color-scheme: light dark; --line: #8884; --dim: light-dark(#595959, #a6a6a6); --bad: light-dark(#cf222e, #ff7b72); --ok: light-dark(#1a7f37, #3fb950); }
   body { margin: 0 auto; max-width: 70rem; padding: 1rem; font: 14px/1.45 system-ui, sans-serif; }
   h1 { font-size: 1.3rem; margin: 0 0 .25rem; }
   h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
@@ -27,6 +27,8 @@
   button.danger { color: light-dark(#b42318, #ff7b72); border: 1px solid currentColor; }
   tr.session-row th { text-align: left; font-weight: 600; padding-top: .6rem; }
   .actions-line { margin-top: .4rem; text-align: right; }
+  /* A finger needs 44px. */
+  @media (pointer: coarse) { input:not([type=checkbox]), select, button { min-height: 44px; } }
 </style>
 </head>
 <body>
@@ -108,6 +110,11 @@
   <tbody id="uploads"></tbody>
 </table></div>
 <p class="note">The files the pages uploaded (Upload data: tables, images), a folder per session in --uploads-dir, which the server removes when the session ends (stopped, or unused for --idle-minutes). Erasing a file of a running session: its page uploads it again after a Stop, or .load says it is not there.</p>
+<section id="update-box" hidden>
+<h2>Server</h2>
+<p><button type="button" id="update">Update and restart</button></p>
+<p class="note">Asks whether the upstream of the server's checkout (origin/master) moved; if it did, brings the checkout there, its environment to the lock, and restarts the server: the sessions end, and the server prepares its engines again (a few minutes).</p>
+</section>
 
 <h2>Usage by user</h2>
 <p class="note" id="usage-note"></p>
@@ -337,6 +344,8 @@ async function show() {
     ])) : [row(["No sessions."])]));
   showUploads(state.uploads);
   $("activity-link").hidden = !state.activity;
+  $("update-box").hidden = !state.update;
+  sessionCount = sessions ? sessions.length : 0;
   $("dashboard-link").hidden = !state.dashboard;
   const builder = state.builder;
   const limits = state.limits;
@@ -418,6 +427,37 @@ $("group").addEventListener("submit", (event) => {
   if (own) body.own_key = own === "yes";
   change("/admin/api/group", body, `The group ${name} is changed.`)
     .then(() => { event.target.key.value = ""; });
+});
+
+// Update and restart, if master moved; then wait for the server to be back.
+let sessionCount = 0;
+$("update").addEventListener("click", async () => {
+  const node = $("update");
+  node.disabled = true;
+  try {
+    say("Asking whether master moved…");
+    const check = await call("/admin/api/update");
+    if (!check.new.length) return say(`${check.upstream} has not moved: the server runs ${check.head}.`);
+    if (check.changed) return say("The checkout has changes of its own: update it by hand.", true);
+    const commits = check.new.slice(0, 15).join("\n") + (check.new.length > 15 ? "\n…" : "");
+    if (!confirm(`${check.upstream} has ${check.new.length} new commit(s):\n\n${commits}\n\n`
+      + `Update and restart? The ${sessionCount} session(s) end.`)) return say("");
+    say("Updating: the checkout, then the environment…");
+    const done = await call("/admin/api/update", {});
+    if (!done.restarting) return say(`${done.upstream} has not moved: the server runs ${done.head}.`);
+    const asked = Date.now();
+    say(`Updated to ${done.new[0]}. The server restarts and prepares its engines; this page reloads once it is back.`);
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const health = await fetch("/health", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+      // the new server: it started after the update was asked
+      if (health?.ok && health.uptime_seconds * 1000 < Date.now() - asked) return location.reload();
+    }
+  } catch (error) {
+    say(error.message, true);
+  } finally {
+    node.disabled = false;
+  }
 });
 
 show().catch((error) => say(error.message, true));

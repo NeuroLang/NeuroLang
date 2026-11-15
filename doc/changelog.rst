@@ -49,6 +49,13 @@ Unreleased
   the query assistant what it is; the page gives it back after *Stop* or
   *Open session*.
 
+* The admin console of ``neurolang-repl-serve`` has *Update and restart*:
+  it asks whether origin/master (the upstream of the server's checkout)
+  moved, lists its new commits, and, confirmed, fast-forwards the checkout,
+  syncs the environment to the lock with the extras installed (``uv sync
+  --frozen --inexact``) and restarts the server in place; the page reloads
+  once the server is back. A checkout with changes of its own is not
+  updated.
 * A dense whole-brain tractogram for tract_querier's bundles, the engines
   ``neurosynth_disconnectome7t`` and ``neurostore_disconnectome7t``:
   Disconnectome7T's tractography of the Human Connectome Project's 7 T
@@ -381,6 +388,13 @@ Unreleased
 
 **Performance:**
 
+* The pattern matching of the walkers, which every compilation of a
+  program goes through, tries for an expression only the patterns its class
+  does not rule out, from a list made once per walker class, and builds its
+  log messages only when logging is on.  The matches are the same; an
+  open-world query on the Cognitive Atlas that the rewriting by its
+  constraints dominates takes 215 s instead of 330 s.
+
 * The query assistant caches its prompts on the Anthropic API, and on
   OpenRouter for Claude: the steps of
   an answer repeat the system prompt and the conversation so far, which are
@@ -559,6 +573,66 @@ Unreleased
   SQUALL syntax: the ``squall`` pytest marker is on the tests of its
   parser, grammar, translation, completion and command-line flags, and
   ``pytest --run-squall`` runs them.
+
+* The page of the REPL, after a design review: the border of a field (the
+  boxes, the selects, the query) is seen at 3:1 on its card, ``--control``
+  in ``tokens.css``, where it was at 1.3:1, and the placeholder of the
+  light theme at 4.5:1; a focused field keeps an outline in forced-colours
+  mode; the page has its ``h1`` and the examples their heading; on a touch
+  screen the buttons, menus, links and selects are 44 px high; the API key
+  is the page's main button while the assistant has none; the shortcuts say
+  ⌘ on Apple's systems; and the third theme is called Computer. A second
+  look, at the page as it is with a result, the assistant at work and its
+  menus, which is kept as a way to render these states without the engine
+  (``doc/tools/repl_page_states``), found and fixed that on a phone the
+  menus (More, Docs, a table's Download) opened off the left of the screen,
+  out of reach, and now open in the flow, or rightwards; that the log of the
+  assistant was wider than its box, its first line cut; that the faint text
+  (the row numbers) was at 4.3:1 where a row is hovered; that the chips DOI
+  and PMC were 14 px high targets; that the previous and next page buttons,
+  the filter, the Download menu and the folds of the logs were short of
+  44 px on a touch screen; that a sorted column's arrow was read aloud; that the ticks of a
+  plot of 18 million and some said 18.1M twice; and that the "#" of a
+  table's head touched its border. The login page has the field border and
+  the faint text of the REPL's tokens, and the account and admin pages
+  read their notes and states at 4.5:1 in a dark system and have 44 px
+  controls on a touch screen, as the activity page, which had them only on
+  narrow ones. The menus close with Escape and with a click elsewhere; the
+  result card says "Running…" while a query runs, telling that the answer
+  comes as a table that the Brain tab can then show on the brain, and shows a failed
+  statement as one line with an icon above its log, which wraps; the steps
+  of the assistant are open while it works; a disabled menu item says why in
+  text; and, on a phone, the legend of the empty result still draws the
+  probability bars it explains.
+
+* The slider of the streamlines in the brain viewer sets their number, from
+  one to all of those the page has, on a logarithmic scale (a linear one
+  would put the counts worth seeing in its first notch), where it set their
+  opacity.  The file ranks the streamlines (``rank``, which NiiVue reads as
+  a value of each, ``dps``) so that the ``k`` drawn are an even sample of
+  them, spread over all, not the first ``k`` of the file, and the page asks
+  NiiVue to hide those under the rank of the ``k``-th: the count is exact,
+  not a multiple of a stride, and the label says it.
+  
+* The graph of a query (the Graph tab of the REPL, ``.graph``) opens at a
+  size its text can be read at, where it was shrunk to fit its frame (about
+  4 px text in the REPL's result column, 3 px on a phone): from the data on
+  its left, in a box as high as a frame can show, which pans by dragging the
+  mouse, with a finger or with the arrow keys and zooms around the point
+  under the pointer, ``+`` and ``-`` too; ``Fit`` and ``Actual size`` say
+  which is on, and a hint says when there is more to pan to.  Its intro is a
+  line, with the long text and the descriptions of the legend folded under
+  "How to read this", and its legend a row of short chips.  A node of an
+  ontology is a card with the three linked dots of a knowledge graph in a
+  band at its left, where it was an ellipse with four whiskers.
+
+* The graph of a query says what a random choice is once, on its node
+  ("random choice · 3 rows, 1/3 each", and "chooses one of its rows, each
+  with probability 1/3" when it is clicked), where each probability that
+  used it repeated it, and "so p is the share of those choices where A
+  holds", in a paragraph of its own.  A probability keeps one line on how it
+  is computed, ``p = P(A), the share of the choices where A holds`` (``p =
+  P(A, C) / P(C)`` given a condition), so that its card is shorter.
 
 
 v0.1a22 (2026-11-13)

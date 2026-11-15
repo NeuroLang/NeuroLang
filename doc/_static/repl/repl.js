@@ -499,7 +499,7 @@ function start({ restore = null } = {}) {
   $("brain").replaceChildren();
   $("tab-brain").hidden = true;
   selectTab("table");
-  $("fatal").hidden = true;
+  $("fatal").hidden = $("failed").hidden = true;
   $("boot").hidden = false;
   agentLog.reset();
   live.hidden = true;
@@ -579,6 +579,7 @@ const workerMessages = {
     agentLog.apply(data);
     showAgent();
     if (data.event === "ask") {
+      live.open = true; // the steps are seen while they come; closed by the user, they stay closed
       showNoAnswer(null);
       asking = { question: data.question ?? "", language: data.language ?? $("mode").value };
       hideSummary();
@@ -628,7 +629,7 @@ const workerMessages = {
     }
     setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
     if (!data.failed) session.add(lastRun, $("mode").value);
-    showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
+    showLog(html(data.html), !data.failed && Boolean(data.tables?.length), Boolean(data.failed));
     if (data.ratable) showRating();
     applyReply(data);
     // A failure without a table hides the last result, not to be taken for its own.
@@ -838,8 +839,13 @@ function showGraph({ graph, tables }) {
 
 // The log of a query, under its last line, which folds it: folded when the
 // query gave a table, open otherwise.
-function showLog(log, fold) {
+function showLog(log, fold, failed = false) {
   const last = logSummary(log.textContent);
+  $("failed").hidden = !failed; // a failure says so above its log, which wraps
+  // the message: the first line of the error, the last of a traceback
+  const lines = log.textContent.split("\n").map((line) => line.trim()).filter(Boolean);
+  $("failed-text").textContent = failed ? `Failed: ${/^Traceback/.test(lines[0]) ? last : lines[0] ?? ""}` : "";
+  out.classList.toggle("failed", failed);
   out.classList.toggle("quiet", Boolean(last));
   if (!last) return out.replaceChildren(log);
   const details = Object.assign(document.createElement("details"), { open: !fold });
@@ -932,6 +938,7 @@ function run(text, { remember = false, quiet = null } = {}) {
   }
   setBusy(true);
   $("stop").hidden = false;
+  $("failed").hidden = true;
   lastRun = text;
   if (guideForStart) guideForStart = $("guide").open = false;
   setStatus("Running…", "busy");
@@ -941,6 +948,11 @@ function run(text, { remember = false, quiet = null } = {}) {
   }
   hideRating();
   worker.postMessage({ text });
+}
+
+// The shortcuts say ⌘ on Apple's systems, where it is the key that asks and runs.
+if (/mac|iphone|ipad/i.test(navigator.userAgentData?.platform ?? navigator.platform)) {
+  for (const key of document.querySelectorAll("kbd.mod")) key.textContent = "⌘";
 }
 
 // The theme: light, dark or the computer's, which the page's head applied.
@@ -1036,6 +1048,19 @@ $("format").addEventListener("click", () => {
   $("format").closest("details").open = false;
 });
 $("explain").addEventListener("click", () => run(".explain"));
+// A menu (Docs, More, the Download of a table) closes with Escape, which gives the focus back to its
+// button, and with a click anywhere else.
+const openMenus = () => document.querySelectorAll("details.nav-menu[open], details.menu[open], details.rt-menu[open]");
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  for (const menu of openMenus()) {
+    if (menu.contains(document.activeElement)) menu.querySelector("summary").focus();
+    menu.open = false;
+  }
+});
+document.addEventListener("click", (event) => {
+  for (const menu of openMenus()) if (!menu.contains(event.target)) menu.open = false;
+});
 history_.addEventListener("change", () => {
   if (history_.value) {
     editor.value = history_.value;

@@ -838,6 +838,23 @@ class TestStreamlines:
         assert len(trk.streamlines) == 3
         for read, line in zip(trk.streamlines, _LINES):
             assert np.allclose(read, line)
+        # each with its rank, for the page to draw as many as asked
+        ranks = trk.tractogram.data_per_streamline["rank"]
+        assert ranks.ravel().tolist() == [3.0, 1.0, 2.0]
+
+    def test_the_k_highest_ranks_are_an_even_sample(self):
+        for n in (1, 3, 10, 16, 100):
+            ranks = brain_viewer.streamline_ranks(n)
+            assert sorted(ranks.tolist()) == list(range(1, n + 1))
+        ranks = brain_viewer.streamline_ranks(16)
+        # the 4 highest of 16 are every fourth; the 2 highest, 0 and 8
+        assert np.flatnonzero(ranks >= 16 - 4 + 1).tolist() == [0, 4, 8, 12]
+        assert np.flatnonzero(ranks >= 16 - 2 + 1).tolist() == [0, 8]
+        # not the first k of the file, whatever n is
+        ranks = brain_viewer.streamline_ranks(100)
+        shown = np.flatnonzero(ranks >= 100 - 10 + 1)
+        assert shown.max() > 80 and np.diff(shown).max() < 25
+        assert len(brain_viewer.streamline_ranks(0)) == 0
 
     def test_the_page_holds_the_streamlines(self):
         html = brain_viewer.viewer_html(
@@ -853,7 +870,8 @@ class TestStreamlines:
         assert state["initial"]["display"] == {
             "renderTile": True, "layout": "grid",
         }
-        assert 'id="streamline-opacity"' in html
+        assert 'id="streamline-number"' in html
+        assert 'id="streamline-opacity"' not in html
         assert state["space"] == "MNI"
 
 
@@ -877,7 +895,14 @@ brainViewer.ready.then(function () {
   set('streamlines-visible', false, 'change');
   out.hidden = mesh.visible === false && changed(before, pixels());
   set('streamlines-visible', true, 'change');
-  set('streamline-opacity', '0.3');
+  // The number: all of them at first; at the foot of the slider, one, the
+  // first of the ranks; the label tells it. Back to the top, all again.
+  var label = document.getElementById('streamline-count');
+  out.all = {drawn: mesh.indexCount, label: label.textContent};
+  set('streamline-number', '0');
+  out.one = {drawn: mesh.indexCount, label: label.textContent};
+  set('streamline-number', '1000');
+  out.again = {drawn: mesh.indexCount, label: label.textContent};
   out.opacity = mesh.opacity;
   report(out);
 }).catch(function (e) { report({failed: String(e)}); });
@@ -889,7 +914,7 @@ brainViewer.ready.then(function () {
 def test_the_streamlines_in_a_headless_browser(tmp_path):
     """Check NiiVue reads every streamline of the page, at its points,
     coloured by direction, and the controls hide them and set their
-    opacity."""
+    number."""
     html = brain_viewer.viewer_html(
         _image(np.ones((4, 4, 4), dtype=np.float32)), None,
         title="streamlines", threshold=0, cmap=None, symmetric=False,
@@ -908,7 +933,16 @@ def test_the_streamlines_in_a_headless_browser(tmp_path):
     assert result["space"] == "RAS"
     assert result["count"] == "3 of 7 streamlines shown"
     assert result["shown"] == "" and result["hidden"]
-    assert result["opacity"] == 0.3
+    # 3 + 2 + 3 points, and an end of line each: 11 indices for all of them,
+    # 4 for the first, the highest rank
+    assert result["all"] == {
+        "drawn": 11, "label": "3 of 7 streamlines shown",
+    }
+    assert result["one"] == {
+        "drawn": 4, "label": "1 of 7 streamlines shown",
+    }
+    assert result["again"] == result["all"]
+    assert result["opacity"] == 1
 
 
 _REGIONS_CHECK = _CHECK_HELPERS + """
