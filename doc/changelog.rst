@@ -580,7 +580,9 @@ Unreleased
   heading, cards and fields with a border read at 3:1, a focus ring on
   every control, a mark with the colour of an error or a success, 44 px
   controls on a touch screen, and tables that scroll by themselves on a
-  narrow one, with their column heads scoped and the empty ones named.
+  narrow one, with their column heads scoped and the empty ones named.  The
+  activity page keeps its theme under the same key as the others, so that one
+  choice serves the REPL and all its pages.
 
 
 v0.1a22 (2026-11-13)

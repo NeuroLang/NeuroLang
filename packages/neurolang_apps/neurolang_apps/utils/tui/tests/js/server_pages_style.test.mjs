@@ -106,6 +106,14 @@ test("the account and admin pages take the theme of the REPL before the first pa
   }
 });
 
+test("the activity page keeps its theme under the REPL's key, with the REPL's values", () => {
+  const html = pages.activity;
+  assert.match(html, /localStorage\.getItem\("neurolang-repl-theme"\)/);
+  assert.match(html, /localStorage\.setItem\("neurolang-repl-theme", choice \|\| "system"\)/);
+  assert.match(html, /event\.key === "neurolang-repl-theme"/);
+  assert.doesNotMatch(html, /(get|set|remove)Item\("theme"/);
+});
+
 test("the focus of the account and admin pages is a ring in the accent colour, visible in forced colours", () => {
   for (const name of ["account", "admin"]) {
     assert.match(pages[name], /:focus-visible \{\s*outline: 2px solid transparent; box-shadow: [^;]*var\(--accent\)/, name);
