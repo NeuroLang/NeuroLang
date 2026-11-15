@@ -405,6 +405,12 @@ def _in_child(function, timeout, memory_mb):
     """
     if sys.platform == "emscripten" or not hasattr(os, "fork"):
         return _with_timeout(function, timeout)
+    import neurolang_apps
+
+    if not neurolang_apps.BLAS_FORK_SAFE and _accelerate():
+        # numpy loaded before neurolang_apps could keep Accelerate to one
+        # thread: a matrix product would crash the child.
+        return _with_timeout(function, timeout)
     embeddings = sys.modules.get("neurolang_apps.utils.text_embeddings")
     if embeddings is not None:
         # Load the text encoders here: a child process may not (macOS).
@@ -470,6 +476,17 @@ def _in_child(function, timeout, memory_mb):
     if kind == "error":
         raise value
     return value
+
+
+def _accelerate() -> bool:
+    """Whether numpy's BLAS is Apple's Accelerate, which a forked child
+    cannot run after its parent ran it with several threads."""
+    numpy = sys.modules.get("numpy")
+    try:
+        config = numpy.show_config(mode="dicts")
+        return config["Build Dependencies"]["blas"]["name"] == "accelerate"
+    except Exception:  # an older numpy, or none loaded
+        return False
 
 
 def run_preview(
