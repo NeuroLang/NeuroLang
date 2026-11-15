@@ -211,7 +211,9 @@
   #uploaded th, #uploaded td { text-align: left; padding: .2rem 1rem .2rem 0; white-space: nowrap; }
   #uploaded th { color: var(--muted); font-weight: 500; }
   #uploaded td.upload-actions { display: flex; gap: .4rem; padding-right: 0; }
-  #uploaded td.upload-actions button { min-height: 1.75rem; padding: .2rem .6rem; font-size: .78rem; }
+  /* Icons only (the name is each button's tooltip and label): three buttons with words do not fit the card. */
+  #uploaded td.upload-actions button { min-height: 1.75rem; min-width: 1.75rem; padding: .35rem; font-size: 0; gap: 0; }
+  #uploaded td.upload-actions button svg { width: 1.1rem; height: 1.1rem; }
   #uploaded button.upload-remove { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 70%, transparent); }
   #uploaded { max-width: 100%; overflow-x: auto; }
   /* A long name is cut with an ellipsis (the full name is its tooltip) so the
@@ -428,9 +430,8 @@
   @media (max-width: 40rem) {
     .rt-table .rt-track { display: none; } /* the value first; the plot draws them */
     .nav-menu-items { right: auto; left: 0; } /* Docs is at the left of a narrow screen: its menu opens rightwards, not off the screen */
-    #uploaded th:nth-child(2), #uploaded td:nth-child(2) { display: none; } /* the uploaded files: no size, icons only */
-    #uploaded td.upload-actions button { font-size: 0; gap: 0; padding: .35rem; }
-    #uploaded td.upload-actions button svg { width: 1.1rem; height: 1.1rem; }
+    #uploaded th:nth-child(2), #uploaded td:nth-child(2), #uploaded th:nth-child(3), #uploaded td:nth-child(3) { display: none; } /* the uploaded files: name, what it was loaded as, and icons only (the size is in the summary) */
+    #uploaded td.upload-actions { gap: .25rem; }
     .menu-items, .rt-menu-items { position: static; } /* the others open in the flow, which has the room */
     .topbar-in { gap: .5rem .75rem; }
     .topbar { position: static; }

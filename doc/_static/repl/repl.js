@@ -649,6 +649,7 @@ const workerMessages = {
 // The buttons of a row of the uploads: an icon and a word each.
 const UPLOAD_ICONS = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  decode: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
   remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
 };
 function iconButton(kind, text, label, action) {
@@ -729,6 +730,13 @@ function showUploads(listed) {
       actions.append(iconButton("download", "Download", `Download ${name}`,
         () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) })));
     }
+    const decoding = decodings.get(name); // an image: its decoding query may be offered again
+    if (decoding) {
+      actions.append(iconButton("decode", "Decode", `Decode ${name}`, () => {
+        offerDecoding(name, decoding.query, decoding.kind, decoding.threshold, decoding.cortex_query, decoding.relation);
+        $("decode-offer").scrollIntoView({ block: "nearest" });
+      }));
+    }
     actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
     row.append(actions);
     return row;
@@ -741,7 +749,7 @@ function applyReply(data) {
     // A file the session no longer has (.uploads remove) is not uploaded,
     // nor loaded, again when the session is given back.
     const removed = removedUploads([...uploads.keys()], data.uploads);
-    for (const name of removed) uploads.delete(name);
+    for (const name of removed) { uploads.delete(name); decodings.delete(name); }
     if (removed.length) session.replace(withoutUploads(session.entries, removed));
     showUploads(data.uploads);
   }
@@ -875,11 +883,15 @@ function goOn(text) {
 // The files uploaded in this tab (.load NAME), by name: a session started
 // anew has none, so they are sent again before its statements are restored.
 const uploads = new Map();
+const decodings = new Map(); // the answer of the upload of each image that can be decoded
 let uploaded = null; // resolves on the worker's answer to an upload
 
 function sendUpload(name, bytes) {
   return new Promise((resolve) => {
-    uploaded = resolve;
+    uploaded = (answer) => { // an image that can be decoded keeps what its Decode button offers
+      if (answer.query) decodings.set(name, answer); else decodings.delete(name);
+      resolve(answer);
+    };
     worker.postMessage({ type: "upload", name, bytes: bytes.slice() });
   });
 }
@@ -1105,7 +1117,7 @@ $("llm-forget").addEventListener("click", () => {
   $("refine-run").hidden = true;
 });
 $("restart").addEventListener("click", () => {
-  uploads.clear(); // a fresh session: without the rules, nor the files uploaded
+  uploads.clear(); decodings.clear(); // a fresh session: without the rules, nor the files uploaded
   closeDecodingOffer();
   showUploads(null);
   start();
