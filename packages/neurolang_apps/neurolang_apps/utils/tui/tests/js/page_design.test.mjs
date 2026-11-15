@@ -34,6 +34,12 @@ for (const [name, colours] of Object.entries(themes)) {
     }
   });
 
+  test(`${name}: the faint text, row numbers and times, is read at 4.5:1 on the hovered and striped grounds too`, () => {
+    for (const ground of ["ground", "hover", "row-hover", "zebra"]) {
+      assert.ok(contrast(colours.faint, colours[ground]) >= 4.5, `--faint on --${ground}`);
+    }
+  });
+
   test(`${name}: the border of a field is seen at 3:1, on the card and on its own fill`, () => {
     for (const ground of ["panel", "sunken"]) {
       assert.ok(contrast(colours.control, colours[ground]) >= 3, `--control on --${ground}`);
@@ -54,7 +60,7 @@ test("the page has one h1, and the examples a heading", () => {
 
 test("the controls are 44px high on a touch screen", () => {
   const coarse = page.match(/@media \(pointer: coarse\) \{([\s\S]*?)\n  \}/)[1];
-  for (const control of ["button:not(", "select", ".nav-menu > summary", ".topbar nav a", "#key", "#run", "#theme button"]) {
+  for (const control of ["button:not(", "select", ".nav-menu > summary", ".rt-bar .rt-menu > summary", ".agent-obs > summary", "input:not([type=checkbox])", ".topbar nav a", "#key", "#run", "#theme button"]) {
     assert.ok(coarse.includes(control), control);
   }
   assert.match(coarse, /min-height: 44px/);
@@ -67,3 +73,47 @@ test("the shortcuts that change with the system are marked for the script", () =
 test("the third theme is the computer's", () => {
   assert.match(page, /data-theme="system" title="Computer" aria-label="Computer"/);
 });
+
+test("a menu, open in a narrow screen, is in the flow: an absolute one from the left of the screen leaves it", () => {
+  const narrow = page.match(/@media \(max-width: 40rem\) \{([\s\S]*?)\n  \}/)[1];
+  assert.match(narrow, /\.nav-menu-items, \.menu-items, \.rt-menu-items \{ position: static; \}/);
+});
+
+test("the log of the assistant is one column the width of its box, so that its lines wrap in it", () => {
+  assert.match(page, /\.agent-log \{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+});
+
+// The pages of tools/serve_repl: the login page has the tokens of the REPL's own, and
+// the account and admin pages the colours of their status and notes read at 4.5:1.
+const serve = new URL("../../../../../../../tools/serve_repl/", import.meta.url);
+const login = readFileSync(new URL("login.html", serve), "utf8");
+const loginTheme = (selector) => {
+  const block = login.match(new RegExp(`${selector.replace(/[[\]]/g, "\\$&")} \\{([^}]*)\\}`))[1];
+  return Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})/gi)].map(([, name, hex]) => [name, hex]));
+};
+
+for (const [name, selector] of [["dark", ":root"], ["light", ":root[data-theme=light]"]]) {
+  test(`the login page's ${name} colours are those of the REPL's tokens`, () => {
+    const own = loginTheme(selector);
+    for (const [token, value] of Object.entries(own)) {
+      if (token in themes[name]) assert.equal(value, themes[name][token], `--${token}`);
+    }
+    for (const token of ["control", "faint"]) assert.ok(token in own, `--${token}`);
+  });
+}
+
+test("the fields of the login page draw their border with --control", () => {
+  assert.match(login, /input, textarea \{[^}]*border: 1px solid var\(--control\)/);
+});
+
+for (const file of ["account.html", "admin.html"]) {
+  test(`${file}: its notes and states are read at 4.5:1 in both colour schemes`, () => {
+    const html = readFileSync(new URL(file, serve), "utf8");
+    for (const token of ["dim", "bad", "ok"]) {
+      const [, light, dark] = html.match(new RegExp(`--${token}: light-dark\\((#[0-9a-f]{6}), (#[0-9a-f]{6})\\)`, "i"));
+      assert.ok(contrast(light, "#ffffff") >= 4.5, `--${token} on white`);
+      assert.ok(contrast(dark, "#121212") >= 4.5, `--${token} on the dark canvas`);
+    }
+    assert.match(html, /@media \(pointer: coarse\) \{[^}]*min-height: 44px/);
+  });
+}
