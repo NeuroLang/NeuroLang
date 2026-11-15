@@ -2027,7 +2027,8 @@ def _view_title(request: ViewRequest, path: Path, titles) -> str:
 
 
 IMAGE_USAGE = (
-    ".image PATH|UPLOADED [--name NAME] [--mask | --zscore] [--cortex]"
+    ".image PATH|UPLOADED [--name NAME] [--mask | --zscore] [--cortex] "
+    "[--radius MM]"
 )
 
 # The defaults of .image (viewer.yaml): the value from which the voxels of
@@ -2052,6 +2053,11 @@ that each voxel is active, which the decoding weighs the voxels by:
            rate of each z-score (Efron), the voxels of less than
            {IMAGE_DEFAULTS["min_probability"]} left out.
 A map without either has none, and is not decoded.
+
+A tractogram (.trk, .tck, in mm in the engine's space) is loaded as the
+voxels of the brain whose centre is within {IMAGE_DEFAULTS["endpoint_radius"]} mm
+of an end of one of its streamlines ([bold]--radius MM[/bold] changes it),
+value the number of ends near each, and decoded as a mask: p = 1 for each.
 
 On an engine of studies and their peaks (neurosynth, neurostore), it prints
 the query decoding the image towards the concepts of the Cognitive Atlas:
@@ -2087,11 +2093,30 @@ def image_description(source: str, values: np.ndarray, mask: bool) -> str:
             "threshold).")
 
 
-def probability_description(source: str, mask: bool, null=None) -> str:
+def tractogram_description(
+    source: str, streamlines: int, voxels: int, radius: float
+) -> str:
+    """Return what the query assistant is told of the tractogram loaded
+    from *source*: its number of *streamlines*, and of the *voxels* within
+    *radius* mm of their ends."""
+    return (f"A tractogram uploaded or loaded with .image, from {source}: "
+            f"the {voxels} voxels (i, j, k) of the brain, on the grid of the "
+            f"engine, within {radius:g} mm of an end of one of its "
+            f"{streamlines} streamlines, value the number of ends near each. "
+            "Decode it as the examples decoding an image do, from its "
+            "relation of the same name and _probability.")
+
+
+def probability_description(
+    source: str, mask: bool, null=None, radius=None
+) -> str:
     """Return what the query assistant is told of the probabilities of
-    the image loaded from *source*: those of a *mask*, or of z-scores of
-    the *null* (its mean and deviation)."""
-    how = ("1 for each of its voxels in the mask" if mask else
+    the image loaded from *source*: those of a *mask*, of the voxels
+    within *radius* mm of the ends of a tractogram's streamlines, or of
+    z-scores of the *null* (its mean and deviation)."""
+    how = (f"1 for each voxel within {radius:g} mm of an end of one of its "
+           "streamlines" if radius is not None else
+           "1 for each of its voxels in the mask" if mask else
            "1 - the local false discovery rate of its z-score (Efron), the "
            f"null of the map N({null[0]:.2f}, {null[1]:.2f})")
     return (f"The probability p that each voxel (i, j, k) of the image from "
@@ -2151,6 +2176,51 @@ def is_mask(image) -> bool:
     """Whether *image* is a mask: of one value other than 0."""
     values = np.asanyarray(image.dataobj)
     return np.unique(values[np.isfinite(values) & (values != 0)]).size <= 1
+
+
+def tractogram_endpoints(data: bytes) -> Tuple[np.ndarray, int]:
+    """
+    Return the ends of the streamlines of the tractogram of the bytes
+    *data* (``.trk``, ``.tck``), in mm (RAS+, nibabel's ``to_world``), the
+    first and the last point of each, and the number of streamlines.
+    """
+    streamlines = nib.streamlines.load(
+        io.BytesIO(data)).tractogram.to_world().streamlines
+    lengths = np.asarray(streamlines._lengths)
+    lengths = lengths[lengths > 0]
+    points = streamlines.get_data()  # the points of one after the other
+    last = np.cumsum(lengths) - 1
+    return np.concatenate([points[last - lengths + 1], points[last]]), \
+        len(lengths)
+
+
+def endpoint_counts(
+    endpoints: np.ndarray, affine: np.ndarray, voxels: np.ndarray,
+    radius: float,
+) -> np.ndarray:
+    """
+    Return, for each of the *voxels* (their indices on the grid of
+    *affine*), the number of *endpoints* (in mm) within *radius* mm of its
+    centre.
+    """
+    from scipy.spatial import cKDTree
+
+    centres = nib.affines.apply_affine(affine, voxels)
+    return cKDTree(endpoints).query_ball_point(
+        centres, radius, return_length=True)
+
+
+def share_in_brain(
+    endpoints: np.ndarray, affine: np.ndarray, voxels: np.ndarray, shape
+) -> float:
+    """Return the share of *endpoints* (mm) in one of the *voxels* of the
+    brain (their indices on the grid of *affine*, of *shape*)."""
+    brain = np.zeros(shape[:3], dtype=bool)
+    brain[tuple(voxels.T)] = True
+    ijk = np.rint(nib.affines.apply_affine(
+        np.linalg.inv(affine), endpoints)).astype(int)
+    inside = ((ijk >= 0) & (ijk < np.array(shape[:3]))).all(axis=1)
+    return float(brain[tuple(ijk[inside].T)].sum()) / max(len(endpoints), 1)
 
 
 def _image_bytes(app, word: str) -> bytes:
@@ -2234,18 +2304,41 @@ def image_relation_name(app, source: str, replaced=()) -> str:
     return name
 
 
+def _radius(options: dict, tracts: bool) -> float:
+    """Return the distance in mm to the ends of a tractogram's streamlines
+    that its voxels are within: ``--radius``, of a tractogram only, or
+    ``endpoint_radius``."""
+    if "--radius" not in options:
+        return float(IMAGE_DEFAULTS["endpoint_radius"])
+    if not tracts:
+        raise SaveError("--radius is for a tractogram (.trk, .tck): the "
+                        "distance to the ends of its streamlines.")
+    try:
+        radius = float(options["--radius"][0])
+    except ValueError:
+        radius = 0.0
+    if not radius > 0:
+        raise SaveError(f"--radius is a distance in mm, more than 0, not "
+                        f"{options['--radius'][0]}.")
+    return radius
+
+
 @command(
-    ".image", "Load a NIfTI image of activations (a mask, a z-map) as a "
-    "relation NAME(i, j, k, value), show it and tell how to decode it "
-    "(.help image)", IMAGE_USAGE,
+    ".image", "Load a NIfTI image of activations (a mask, a z-map), or the "
+    "ends of a tractogram's streamlines, as a relation NAME(i, j, k, value), "
+    "show it and tell how to decode it (.help image)", IMAGE_USAGE,
 )
 def cmd_image(app, arg: str) -> None:
-    """Load the NIfTI image of *arg* as a relation of the session."""
-    from .session import _load_failed, _name_problem, default_relation_name
+    """Load the NIfTI image, or the tractogram, of *arg* as a relation of
+    the session."""
+    from .session import (
+        _load_failed, _name_problem, default_relation_name, is_tractogram,
+    )
 
     try:
         words, options = split_args(
-            arg, {"--name": 1, "--zscore": 0, "--mask": 0, "--cortex": 0},
+            arg, {"--name": 1, "--zscore": 0, "--mask": 0, "--cortex": 0,
+                  "--radius": 1},
             IMAGE_USAGE,
         )
         if len(words) != 1:
@@ -2256,6 +2349,12 @@ def cmd_image(app, arg: str) -> None:
         if zscore and as_mask:
             raise SaveError("Give --mask or --zscore, not both: the image "
                             "is decoded as a mask or from z-scores.")
+        tracts = is_tractogram(source)
+        radius = _radius(options, tracts)
+        if tracts and zscore:
+            raise SaveError(f"{source} is a tractogram: it has no z-scores; "
+                            f"the voxels within {radius:g} mm of the ends of "
+                            "its streamlines are decoded as a mask.")
         for relation in (name, f"{name}_probability"):
             problem = _name_problem(app, relation, "--name" in options)
             if problem:
@@ -2263,12 +2362,18 @@ def cmd_image(app, arg: str) -> None:
                     problem.replace(".load PATH", ".image PATH --name")
                 )
         template = engine_template(app._nl)
-        image = read_image(_image_bytes(app, source))
-        mask = is_mask(image)
-        if mask and zscore:
-            raise SaveError(f"{source} is a binary mask: a binary mask has "
-                            "no z-scores (decode it without --zscore).")
-        data = _image_values(image, template, mask)
+        if tracts:
+            endpoints, streamlines = tractogram_endpoints(
+                _image_bytes(app, source))
+            mask = True
+        else:
+            image = read_image(_image_bytes(app, source))
+            mask = is_mask(image)
+            if mask and zscore:
+                raise SaveError(f"{source} is a binary mask: a binary mask "
+                                "has no z-scores (decode it without "
+                                "--zscore).")
+            data = _image_values(image, template, mask)
     except (SaveError, ConfinedError) as exc:
         _load_failed(app, str(exc))
         return
@@ -2280,14 +2385,29 @@ def cmd_image(app, arg: str) -> None:
     else:
         brain = np.argwhere(np.asanyarray(template.dataobj) != 0)
     index = tuple(brain.T)
-    values = data[index]
+    if tracts:
+        values = endpoint_counts(endpoints, template.affine, brain, radius)
+        share = share_in_brain(endpoints, template.affine, brain,
+                               template.shape)
+        if values.any() and share < float(IMAGE_DEFAULTS["endpoint_share"]):
+            app.console.print(
+                f"Only {share:.0%} of the ends of the streamlines of "
+                f"{source} are in the brain: is the tractogram in mm in the "
+                "engine's space (MNI152)?", style="yellow", markup=False,
+            )
+    else:
+        values = data[index]
     keep = values != 0
     rows = pd.DataFrame(
         {"i": brain[keep, 0], "j": brain[keep, 1], "k": brain[keep, 2],
          "value": values[keep]}
     )
     if rows.empty:
-        _load_failed(app, f"{source} has no value other than 0 in the brain.")
+        _load_failed(app, (
+            f"No end of the streamlines of {source} is within {radius:g} mm "
+            "of the brain: is the tractogram in mm in the engine's space "
+            "(MNI152)?") if tracts else
+            f"{source} has no value other than 0 in the brain.")
         return
     for relation in (name, f"{name}_probability"):
         if relation in app.loaded_relations:  # the image's, loaded before
@@ -2298,10 +2418,14 @@ def cmd_image(app, arg: str) -> None:
     if source in app.uploads:
         app.uploads.loaded(source, name)
     app._nl.document_predicate(
-        name, image_description(source, rows["value"].to_numpy(), mask),
+        name, tractogram_description(source, streamlines, len(rows), radius)
+        if tracts else
+        image_description(source, rows["value"].to_numpy(), mask),
         replace=True,
     )
-    kind = ("a mask" if mask else "a map of z-scores" if zscore
+    kind = (f"the voxels within {radius:g} mm of the ends of its "
+            f"{streamlines} streamlines, value the number of ends near each"
+            if tracts else "a mask" if mask else "a map of z-scores" if zscore
             else "a map taken as a mask from "
             f"{IMAGE_DEFAULTS['threshold']}" if as_mask
             else "a map of values")
@@ -2310,7 +2434,8 @@ def cmd_image(app, arg: str) -> None:
         f"{kind}", style="green", markup=False,
     )
     probable = _load_probabilities(
-        app, name, source, rows, mask or as_mask, zscore
+        app, name, source, rows, mask or as_mask, zscore,
+        radius if tracts else None,
     )
     _tell_decoding(
         app, name, probable, "cortex" if "--cortex" in options else "brain"
@@ -2331,17 +2456,25 @@ def cmd_image(app, arg: str) -> None:
     _view_nifti(app, [(name, Path(shown_path))], request, name)
 
 
-def _load_probabilities(app, name, source, rows, mask, zscore) -> bool:
+def _load_probabilities(
+    app, name, source, rows, mask, zscore, radius=None
+) -> bool:
     """Load the probabilities that the voxels *rows* of the image *name*
-    are active, ``NAME_probability``, if a *mask* or *zscore*s; return
+    are active, ``NAME_probability``, if a *mask* or *zscore*s, or those
+    within *radius* mm of the ends of a tractogram's streamlines; return
     whether they were."""
     if not (mask or zscore):
         return False
-    if mask:  # a binary mask, or a map from its threshold (--mask)
+    null = None
+    if radius is not None:  # a tractogram: all of its voxels
+        probabilities = rows[["i", "j", "k"]].assign(p=1.0)
+        how = (f"1 for each voxel within {radius:g} mm of an end of a "
+               "streamline")
+    elif mask:  # a binary mask, or a map from its threshold (--mask)
         kept = rows if len(rows["value"].unique()) <= 1 else rows[
             rows["value"] >= float(IMAGE_DEFAULTS["threshold"])]
         probabilities = kept[["i", "j", "k"]].assign(p=1.0)
-        how, null = "1 for each voxel of the mask", None
+        how = "1 for each voxel of the mask"
     else:
         p, null = activation_probability(rows["value"].to_numpy())
         probabilities = rows[["i", "j", "k"]].assign(p=p)
@@ -2354,7 +2487,8 @@ def _load_probabilities(app, name, source, rows, mask, zscore) -> bool:
     app._nl.add_tuple_set(probabilities, name=relation)
     app.loaded_relations[relation] = ["i", "j", "k", "p"]
     app._nl.document_predicate(
-        relation, probability_description(source, mask, null), replace=True,
+        relation, probability_description(source, mask, null, radius),
+        replace=True,
     )
     app.console.print(
         f"loaded {relation}(i, j, k, p): {len(probabilities)} voxels, the "

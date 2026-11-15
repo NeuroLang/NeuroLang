@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+* A tractogram is decoded as an image is, where its streamlines end:
+  ``.image`` and **Upload data** take a ``.trk`` or ``.tck`` in MNI mm and
+  load the voxels of the brain within 3 mm (``image.endpoint_radius``,
+  ``--radius MM``) of the ends of its streamlines, each of probability 1;
+  the page offers the decoding query, and the query assistant has an
+  example.  The left arcuate fasciculus of HCP842 decodes to sentence
+  comprehension, reading and language (:doc:`tutorial_decoding`).
+
 * ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF
   says, for the types a program states with rules as for those of the
   files: ``rdf:type(e, t) :- our_experiment(e, n), cogat_term(t, n)``

@@ -204,8 +204,9 @@ The page keeps the descriptions with the rules of the session, after
 **Stop** or in a saved session.
 
 **Upload data** also takes a NIfTI image of activations (``.nii`` or
-``.nii.gz``), a binary mask or a z-map: the page loads it with ``.image``,
-shows it, and asks whether the query decoding it towards the terms of the
+``.nii.gz``), a binary mask or a z-map, and a tractogram (``.trk`` or
+``.tck``), decoded where its streamlines end: the page loads it with
+``.image``, shows it, and asks whether the query decoding it towards the terms of the
 studies, a comment explaining each line, goes in the box
 (:doc:`tutorial_decoding`).
 
@@ -305,10 +306,12 @@ Every command
      - a CSV or TSV file as a relation: a path in a terminal, a file
        uploaded (**Upload data**) on the page
      - both
-   * - ``.image PATH|UPLOADED [--mask | --zscore] [--cortex]``
+   * - ``.image PATH|UPLOADED [--mask | --zscore] [--cortex] [--radius MM]``
      - a NIfTI image of activations, shown and decoded as a mask
        (``--mask``) or from z-scores (``--zscore``), in the brain or in
-       the cortex only (``--cortex``) (see :doc:`tutorial_decoding`)
+       the cortex only (``--cortex``); a tractogram (``.trk``, ``.tck``),
+       as the voxels within 3 mm (``--radius``) of the ends of its
+       streamlines (see :doc:`tutorial_decoding`)
      - both
    * - ``.uploads [remove NAME | restore NAME]``
      - the files the page uploaded in the session: their kind, size, age,

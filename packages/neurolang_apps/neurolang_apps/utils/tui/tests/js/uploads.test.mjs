@@ -24,6 +24,8 @@ test("each upload is a row: name, kind, size, what it was loaded as", () => {
     ["my scores.csv", "table", "4.8 MB", "scores"],
     ["roi.nii.gz", "image", "820 B", "not loaded"],
   ]);
+  const tracts = { files: [{ name: "AF_L.trk", size: 820, age: 3, loaded: ["af_l"] }] };
+  assert.deepEqual(uploadRows(tracts), [["AF_L.trk", "tractogram", "820 B", "af_l"]]);
 });
 
 test("the files a reply no longer lists are those removed", () => {

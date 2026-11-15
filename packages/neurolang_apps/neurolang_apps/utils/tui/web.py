@@ -740,8 +740,10 @@ class WebRepl:
         ``relation`` of the file's name, which an upload of the same file
         replaces) and for an image the ``query`` decoding it, if the engine
         can, the ``cortex_query`` decoding its cortex only (``--cortex``),
-        and its ``kind``: ``mask``, or ``map`` (of values: decoded once
-        loaded with ``--zscore``). A ValueError tells why it is refused.
+        and its ``kind``: ``mask``, ``map`` (of values: decoded once
+        loaded with ``--zscore``), or ``tractogram`` (decoded on the voxels
+        within ``radius`` mm of the ends of its streamlines). A ValueError
+        tells why it is refused.
         """
         replaced = next((upload["loaded"] for upload in
                          self.app.uploads.listing()
@@ -751,7 +753,8 @@ class WebRepl:
             return {"name": name, "statement": f".load {shlex.quote(name)}"}
         relation = nifti.image_relation_name(self.app, name, replaced)
         try:  # a mask is decoded as it is, a map once said of z-scores
-            kind = "mask" if nifti.is_mask(nifti.read_image(data)) else "map"
+            kind = "tractogram" if session.is_tractogram(name) else \
+                "mask" if nifti.is_mask(nifti.read_image(data)) else "map"
             query, missing = nifti.decoding_query(self.app, relation)
             cortex, missing_cortex = nifti.decoding_query(
                 self.app, relation, "cortex"
@@ -765,6 +768,7 @@ class WebRepl:
             "cortex_query": "" if missing or missing_cortex else cortex,
             # a map, decoded as a mask, keeps its voxels from it (--mask)
             "threshold": nifti.IMAGE_DEFAULTS["threshold"],
+            "radius": nifti.IMAGE_DEFAULTS["endpoint_radius"],
         }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:
