@@ -703,7 +703,12 @@ def test_the_activity_of_the_users_is_logged(tmp_path):
     assert (totals["user"], totals["inputs"], totals["failed"]) == \
         ("ann", 2, 1)
     if os.path.exists("/proc/self/smaps_rollup"):  # the inputs' CPU only
-        assert totals["cpu"] == round(good["cpu"] + bad["cpu"], 1)
+        # SQL's ROUND goes away from zero on a half (0.25 is 0.3), Python's
+        # round to even (0.2): the total is that of the inputs, to the 0.05
+        # that rounding to a tenth moves it.
+        assert totals["cpu"] == pytest.approx(
+            good["cpu"] + bad["cpu"], abs=0.051
+        )
 
 
 def test_the_own_memory_of_a_fork_is_apart_from_the_shared():

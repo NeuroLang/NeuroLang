@@ -211,11 +211,6 @@
   #uploaded td:first-child { white-space: normal; overflow-wrap: anywhere; max-width: 14rem; }
   #uploads-status { margin: .4rem 0 0; }
   #uploads-status button { min-height: 1.75rem; padding: .2rem .6rem; }
-  @media (max-width: 40rem) {
-    #uploaded th:nth-child(2), #uploaded td:nth-child(2) { display: none; }
-    #uploaded td.upload-actions button { font-size: 0; gap: 0; padding: .35rem; }
-    #uploaded td.upload-actions button svg { width: 1.1rem; height: 1.1rem; }
-  }
   @media (pointer: coarse) { #uploaded td.upload-actions button, #uploads-status button { min-height: 44px; min-width: 44px; } }
   #uploaded button.upload-remove:hover:not(:disabled) { background: var(--bad-soft); border-color: var(--bad); }
   #run-help { white-space: nowrap; }
@@ -423,6 +418,9 @@
   @media (max-width: 40rem) {
     .rt-table .rt-track { display: none; } /* the value first; the plot draws them */
     .nav-menu-items { right: auto; left: 0; } /* Docs is at the left of a narrow screen: its menu opens rightwards, not off the screen */
+    #uploaded th:nth-child(2), #uploaded td:nth-child(2) { display: none; } /* the uploaded files: no size, icons only */
+    #uploaded td.upload-actions button { font-size: 0; gap: 0; padding: .35rem; }
+    #uploaded td.upload-actions button svg { width: 1.1rem; height: 1.1rem; }
     .menu-items, .rt-menu-items { position: static; } /* the others open in the flow, which has the room */
     .topbar-in { gap: .5rem .75rem; }
     .topbar { position: static; }
