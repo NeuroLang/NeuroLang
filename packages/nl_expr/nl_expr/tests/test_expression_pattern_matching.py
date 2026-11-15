@@ -211,3 +211,73 @@ def test_pattern_matching_wrong_args():
             )
             def __(self, expression):
                 return expression
+
+
+class _Dispatch(PatternMatcher):
+    @add_match(S_)
+    def symbol(self, expression):
+        return 'symbol'
+
+    @add_match(C_[str])
+    def string(self, expression):
+        return 'string'
+
+    @add_match(C_, lambda expression: expression.value == 1)
+    def one(self, expression):
+        return 'one'
+
+    @add_match((..., ...))
+    def pair(self, expression):
+        return 'pair'
+
+    @add_match(...)
+    def anything(self, expression):
+        return 'anything'
+
+
+def _dispatched(pm):
+    return [
+        pm.match(e)
+        for e in (S_('a'), C_[str]('a'), C_[int](1), C_[int](2), (1, 2))
+    ]
+
+
+def test_match_tries_only_the_patterns_the_class_does_not_rule_out():
+    """The patterns tried for an expression are those its class does not
+    rule out, in their order: the first that matches is the one it was
+    when every pattern was tried."""
+    pm = _Dispatch()
+    assert _dispatched(pm) == ['symbol', 'string', 'one', 'anything', 'pair']
+    assert [
+        p.action.__name__ for p in pm._candidate_patterns(C_[int](2))
+    ] == ['string', 'one', 'anything']
+    assert [
+        p.action.__name__ for p in pm._candidate_patterns((1, 2))
+    ] == ['pair', 'anything']
+    assert [p.action.__name__ for p in pm.patterns] == [
+        'symbol', 'string', 'one', 'pair', 'anything'
+    ]
+
+
+def test_a_subclass_made_after_its_base_matched_has_its_own_patterns():
+    _dispatched(_Dispatch())
+
+    class Integers(_Dispatch):
+        @add_match(C_[int])
+        def integer(self, expression):
+            return 'integer'
+
+    assert _dispatched(Integers()) == [
+        'symbol', 'string', 'integer', 'integer', 'pair'
+    ]
+    assert _dispatched(_Dispatch())[2:4] == ['one', 'anything']
+
+
+def test_match_logs_what_it_matched_and_matches_the_same(caplog):
+    with caplog.at_level(
+        'DEBUG', logger='nl_expr.expression_pattern_matching'
+    ):
+        assert _dispatched(_Dispatch()) == [
+            'symbol', 'string', 'one', 'anything', 'pair'
+        ]
+    assert 'MATCH' in caplog.text and 'NOMATCH' in caplog.text

@@ -351,6 +351,13 @@ Unreleased
 
 **Performance:**
 
+* The pattern matching of the walkers, which every compilation of a
+  program goes through, tries for an expression only the patterns its class
+  does not rule out, from a list made once per walker class, and builds its
+  log messages only when logging is on.  The matches are the same; the
+  rewriting of a query by an ontology's constraints, made of walks, takes
+  half the time or less.
+
 * The query assistant caches its prompts on the Anthropic API, and on
   OpenRouter for Claude: the steps of
   an answer repeat the system prompt and the conversation so far, which are
