@@ -537,6 +537,15 @@ Unreleased
   parser, grammar, translation, completion and command-line flags, and
   ``pytest --run-squall`` runs them.
 
+* The page of the REPL, after a design review: the border of a field (the
+  boxes, the selects, the query) is seen at 3:1 on its card, ``--control``
+  in ``tokens.css``, where it was at 1.3:1, and the placeholder of the
+  light theme at 4.5:1; a focused field keeps an outline in forced-colours
+  mode; the page has its ``h1`` and the examples their heading; on a touch
+  screen the buttons, menus, links and selects are 44 px high; the API key
+  is the page's main button while the assistant has none; the shortcuts say
+  ⌘ on Apple's systems; and the third theme is called Computer.
+
 
 v0.1a22 (2026-11-13)
 --------------------

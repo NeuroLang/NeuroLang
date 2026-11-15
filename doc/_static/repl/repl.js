@@ -823,6 +823,11 @@ function run(text, { remember = false } = {}) {
   worker.postMessage({ text });
 }
 
+// The shortcuts say ⌘ on Apple's systems, where it is the key that asks and runs.
+if (/mac|iphone|ipad/i.test(navigator.userAgentData?.platform ?? navigator.platform)) {
+  for (const key of document.querySelectorAll("kbd.mod")) key.textContent = "⌘";
+}
+
 // The theme: light, dark or the computer's, which the page's head applied.
 const THEME = "neurolang-repl-theme";
 const system = matchMedia("(prefers-color-scheme: light)");
