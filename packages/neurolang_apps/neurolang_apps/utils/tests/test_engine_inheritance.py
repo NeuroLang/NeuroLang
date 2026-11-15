@@ -359,7 +359,7 @@ def test_the_schaefer_400_atlas_is_its_own_atlas_of_the_connectivity():
     assert "schaefer400" not in get_engine_config("destrieux")["atlases"]
 
 
-def test_the_subcortical_connectivity_is_a_stop_gap_of_one_tractogram():
+def test_the_subcortical_connectivity_is_the_subjects_tractography():
     from neurolang_apps.utils.engine_registry import (
         get_acknowledgements, get_predicates)
 
@@ -367,27 +367,27 @@ def test_the_subcortical_connectivity_is_a_stop_gap_of_one_tractogram():
     predicates = get_predicates("neurosynth")
     sorts = {
         "tian_structural_connectivity":
-            ["tian_label", "tian_label", "population_streamlines"],
+            ["tian_label", "tian_label", "streamlines"],
         "schaefer400_tian_structural_connectivity":
-            ["schaefer400_label", "tian_label", "population_streamlines"]}
+            ["schaefer400_label", "tian_label", "streamlines"]}
     for name, arguments in sorts.items():
         assert [a["sort"] for a in predicates[name]["arguments"]] == \
             arguments
         entry = cfg["relations"][name]
-        assert "/-/raw/v2.0/tsv/" in entry["file"] and entry["md5"]
+        assert "/-/raw/v2.2/tsv/" in entry["file"] and entry["md5"]
         text = " ".join(predicates[name]["description"].split())
-        for words in ("ONE population-average tractogram", "1,065",
-                      "not means over subjects",
-                      "not comparable in scale", "not functional",
-                      "stop-gap", "subject-level tractography"):
+        for words in ("100 HCP subjects' own tractography", "MRtrix3",
+                      "Not the tractography of "
+                      "schaefer400_structural_connectivity",
+                      "not functional"):
             assert words in text, (name, words)
-    assert "population_streamlines" in cfg["sorts"]
+    assert "population_streamlines" not in cfg["sorts"]
     guidance = " ".join(cfg["assistant_guidance"].split())
     assert "schaefer400_tian_structural_connectivity" in guidance
-    assert "ONE population-average tractogram" in guidance
+    assert "100 HCP subjects' own tractography" in guidance
     texts = get_acknowledgements("neurosynth")
-    assert any("Yeh" in t and "10.1038/s41467-022-32595-4" in t
-               and "CC BY-SA 4.0" in t for t in texts)
+    assert any("MRtrix3" in t and "10.1016/j.neuroimage.2015.06.092" in t
+               and "Tian" in t for t in texts)
 
 
 @pytest.mark.network
@@ -401,12 +401,12 @@ def test_the_subcortical_connectivity_files_are_pairs_of_engine_regions(
     table = _fetched(relation, tmp_path)
     assert list(table.columns) == columns
     first, second = columns[:2]
-    # a population tractogram's bundles reach some of the subcortex only:
-    # 18 of Tian's 32 regions have a Tian partner, 31 a Schaefer 400
-    # parcel, and 306 of the 400 parcels a Tian region
+    # the subjects' tractography reaches every region: the 32 of Tian's
+    # atlas have a Tian partner and a Schaefer 400 parcel, and the 400
+    # parcels a Tian region
     assert all(r.endswith((" lh", " rh")) for r in set(table[second]))
-    assert table[second].nunique() == (18 if first == "region1" else 31)
-    assert table[first].nunique() == (18 if first == "region1" else 306)
+    assert table[second].nunique() == 32
+    assert table[first].nunique() == (32 if first == "region1" else 400)
     assert not any("-" in r or "_" in r for r in set(table[first]))
     assert (table.streamlines > 0).all()
     if first == "region1":

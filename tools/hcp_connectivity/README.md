@@ -80,7 +80,10 @@ done; wait
    the engines' tables (two parcels, a parcel and a Tian region, two Tian
    regions) and the gradients.
 
-## Population tractogram (the subcortex, a stop-gap)
+## Population tractogram (the subcortex, a stop-gap, superseded)
+
+Superseded in the engines by the subjects' own tractography (below,
+`Tractography`; the dataset's tag v2.2); kept to remake the tables of v2.0.
 
 The connectomes above end on the cortical surface: no subcortex. A
 stop-gap with it is the streamline counts of ONE population-average
@@ -108,8 +111,7 @@ matrix, the diagonal the streamlines within a region) and the engine tables
 Caveats: they are streamline counts of that atlas (a bundle atlas: the
 bundles' sampling, not the connection strengths), not means over subjects,
 not of the scale of the connectomes' counts; the atlas is in ICBM 2009a
-space, used as FSL MNI152 without a warp (a few millimetres at most). To be
-replaced by subject-level tractography.
+space, used as FSL MNI152 without a warp (a few millimetres at most).
 
 ## A dense tractogram (Disconnectome7T)
 

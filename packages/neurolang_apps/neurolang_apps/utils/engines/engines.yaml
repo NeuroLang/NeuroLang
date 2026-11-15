@@ -239,12 +239,13 @@ engines:
       (schaefer_structural_gradient, schaefer400_structural_gradient,
       destrieux_structural_gradient), with the atlases of the MNI brain
       and the Schaefer atlas of 400 parcels (schaefer400), of 17 networks
-      as the 100 parcels. Those connectivities are of the cortex only; a
-      stop-gap with the subcortex (Tian's regions, scale 2) is the
-      streamline counts of one population-average tractogram, the HCP1065
-      atlas of Yeh (2022) (tian_structural_connectivity,
-      schaefer400_tian_structural_connectivity). No structural
-      connectivity of the cerebellum.
+      as the 100 parcels. Those connectivities are of the cortex only; the
+      subcortex (Tian's regions, scale 2) is that of 100 HCP subjects' own
+      tractography (MRtrix3), the mean number of streamlines joining a
+      Schaefer 400 parcel or a Tian region to a Tian region
+      (schaefer400_tian_structural_connectivity,
+      tian_structural_connectivity). No structural connectivity of the
+      cerebellum.
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith]
@@ -269,14 +270,15 @@ engines:
       destrieux_structural_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/destrieux.tsv.gz
         md5: 2c68298ab7444215e0b0816d5400dde6
-      # The subcortex: streamline counts of one population-average
-      # tractogram (tools/hcp_connectivity/population.py), at the tag v2.0.
+      # The subcortex: the mean streamlines of 100 HCP subjects' own
+      # tractography (tools/hcp_connectivity/tractography.py), at the tag
+      # v2.2.
       tian_structural_connectivity:
-        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.0/tsv/tian_population.tsv.gz
-        md5: fba57922fd288ff4f00a70526e7ccd64
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.2/tsv/schaefer400_17_tian_count_tian_tian.tsv.gz
+        md5: eb774e84e023d097238dac8a138952f0
       schaefer400_tian_structural_connectivity:
-        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.0/tsv/schaefer400_17_tian_population.tsv.gz
-        md5: 25c16f9673f233c89354e48772cb3b9d
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.2/tsv/schaefer400_17_tian_count_tian.tsv.gz
+        md5: 5ae96c1b806cbf41d9504beddbf79020
       schaefer_structural_gradient:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v1.1/tsv/schaefer100_17_gradients.tsv.gz
         md5: 9e84ae695f907ea2622893e483de2609
@@ -324,31 +326,29 @@ engines:
       - >-
         Structural connectivity of the subcortex
         (tian_structural_connectivity,
-        schaefer400_tian_structural_connectivity): the streamlines of the
-        HCP1065 population-averaged tractography atlas (1,065 HCP Young
-        Adult subjects, ICBM 2009a nonlinear asymmetric space, licence CC
-        BY-SA 4.0, https://brain.labsolver.org/hcp_trk_atlas.html), Yeh
-        F-C. Population-based tract-to-region connectome of the human brain
-        and its hierarchical topology. Nature Communications 13:4933
-        (2022). doi:10.1038/s41467-022-32595-4; DSI Studio: Yeh F-C. Nature
-        Methods (2025). doi:10.1038/s41592-025-02762-8; counted between the
-        regions of the Schaefer 400 and Tian S2 atlases by NeuroLang
-        (tools/hcp_connectivity/population.py). Data were provided [in
-        part] by the Human Connectome Project, WU-Minn Consortium
-        (Principal Investigators: David Van Essen and Kamil Ugurbil;
-        1U54MH091657) funded by the 16 NIH Institutes and Centers that
-        support the NIH Blueprint for Neuroscience Research; and by the
-        McDonnell Center for Systems Neuroscience at Washington
+        schaefer400_tian_structural_connectivity): the mean over 100 HCP
+        Young Adult subjects of their own tractography (5 million
+        streamlines each) between the regions of the Schaefer 400 and Tian
+        S2 atlases, by NeuroLang (tools/hcp_connectivity/tractography.py;
+        the dataset: https://gitlab.inria.fr/dwasserm/
+        neurolang-hcp-connectivity) with MRtrix3: Tournier J-D, Smith R,
+        Raffelt D, et al. MRtrix3: a fast, flexible and open software
+        framework for medical image processing and visualisation.
+        NeuroImage 202:116137 (2019). doi:10.1016/j.neuroimage.2019.116137;
+        anatomically constrained: Smith RE, Tournier J-D, Calamante F,
+        Connelly A. NeuroImage 62:1924-1938 (2012).
+        doi:10.1016/j.neuroimage.2012.06.005; SIFT2: Smith RE, Tournier
+        J-D, Calamante F, Connelly A. NeuroImage 119:338-351 (2015).
+        doi:10.1016/j.neuroimage.2015.06.092. Tian's atlas: Tian Y,
+        Margulies DS, Breakspear M, Zalesky A. Nature Neuroscience
+        23:1421-1432 (2020). doi:10.1038/s41593-020-00711-6. Data were
+        provided [in part] by the Human Connectome Project, WU-Minn
+        Consortium (Principal Investigators: David Van Essen and Kamil
+        Ugurbil; 1U54MH091657) funded by the 16 NIH Institutes and Centers
+        that support the NIH Blueprint for Neuroscience Research; and by
+        the McDonnell Center for Systems Neuroscience at Washington
         University.
     sorts:
-      population_streamlines:
-        columns: [streamlines]
-        type: float
-        description: >-
-          a number of streamlines of one population-average tractogram
-          (the HCP1065 atlas of Yeh 2022), not a mean over subjects, nor
-          of the scale of the streamlines of the structural connectivity of
-          the cortex
       streamlines:
         columns: [streamlines]
         type: float
@@ -377,9 +377,8 @@ engines:
           joining them over 1,064 HCP subjects, both ways round. Cortex
           only: the subcortical structures (thalamus, basal ganglia,
           hippocampus, amygdala, the tian regions) and the cerebellum are
-          not in it (schaefer400_tian_structural_connectivity is a
-          stop-gap with the subcortex). Structural (tractography), not
-          functional
+          not in it (schaefer400_tian_structural_connectivity has the
+          subcortex). Structural (tractography), not functional
         arguments:
           - schaefer400_label
           - schaefer400_label
@@ -388,36 +387,36 @@ engines:
         description: >-
           Structural connectivity between two regions of Tian's subcortex
           atlas (scale 2: thalamus, caudate, putamen, pallidum, nucleus
-          accumbens, hippocampus, amygdala; both hemispheres): the number
-          of streamlines joining them in ONE population-average
-          tractogram, the HCP1065 atlas of Yeh (2022, 1,065 HCP subjects;
-          .credits), both ways round, no pair of a region with itself.
-          Streamline counts of that tractogram (the bundles of the atlas),
-          not means over subjects, and not comparable in scale to
-          schaefer400_structural_connectivity. Structural (tractography),
-          not functional. A stop-gap, to be replaced by subject-level
-          tractography
+          accumbens, hippocampus, amygdala; both hemispheres): the mean
+          number of streamlines joining them over 100 HCP subjects' own
+          tractography (MRtrix3, 5 million streamlines each, anatomically
+          constrained; .credits), both ways round, no pair of a region with
+          itself. Not the tractography of
+          schaefer400_structural_connectivity (Mansour et al.), so not to
+          be added to or compared in scale with it. FreeSurfer's labels,
+          which constrain where streamlines end, call part of the left
+          pallidum white matter in some subjects: fewer streamlines end in
+          the left anterior pallidum than in the right. Structural
+          (tractography), not functional
         arguments:
           - tian_label
           - tian_label
-          - population_streamlines
+          - streamlines
       schaefer400_tian_structural_connectivity:
         description: >-
           Structural connectivity between a Schaefer parcel (400 parcels,
           17 networks) and a region of Tian's subcortex atlas (scale 2),
-          the subcortex of the structural connectivity: the number of
-          streamlines joining them in ONE population-average tractogram,
-          the HCP1065 atlas of Yeh (2022, 1,065 HCP subjects; .credits),
-          the pairs no streamline joins left out. Streamline counts of that
-          tractogram (the bundles of the atlas), not means over subjects,
-          and not comparable in scale to
-          schaefer400_structural_connectivity. Structural (tractography),
-          not functional. A stop-gap, to be replaced by subject-level
-          tractography
+          the subcortex of the structural connectivity: the mean number of
+          streamlines joining them over 100 HCP subjects' own tractography
+          (MRtrix3, 5 million streamlines each; .credits), the pairs no
+          streamline joins left out. Not the tractography of
+          schaefer400_structural_connectivity (Mansour et al.), so not to
+          be added to or compared in scale with it. Structural
+          (tractography), not functional
         arguments:
           - schaefer400_label
           - tian_label
-          - population_streamlines
+          - streamlines
       destrieux_structural_connectivity:
         description: >-
           Structural connectivity between two Destrieux regions: the mean

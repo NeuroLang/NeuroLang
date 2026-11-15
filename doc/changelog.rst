@@ -73,16 +73,20 @@ Unreleased
   400 Schaefer parcels and the gradient sorts the connectivity engines
   share.
 
-* Structural connectivity of the subcortex, a stop-gap, in
-  ``structural_connectivity``: ``schaefer400_tian_structural_connectivity(l,
-  t, n)`` (a Schaefer 400 parcel and a Tian region) and
-  ``tian_structural_connectivity(t1, t2, n)`` (two Tian regions), the
-  streamlines of ONE population-average tractogram, Yeh's HCP1065 atlas
-  (1,065 HCP subjects; CC BY-SA 4.0), counted between the regions by
-  ``python -m hcp_connectivity population`` (``tools/hcp_connectivity``).
-  They are counts of that tractogram, not means over subjects, and not of
-  the scale of ``schaefer400_structural_connectivity``; structural, not
-  functional; to be replaced by subject-level tractography. With examples
+* Structural connectivity of the subcortex in ``structural_connectivity``:
+  ``schaefer400_tian_structural_connectivity(l, t, n)`` (a Schaefer 400
+  parcel and a Tian region) and ``tian_structural_connectivity(t1, t2,
+  n)`` (two Tian regions), the mean number of streamlines over 100 HCP
+  subjects' own tractography (MRtrix3: multi-shell CSD, anatomically
+  constrained iFOD2, 5 million streamlines, SIFT2; the atlas brought to
+  each subject through the HCP's warp), made by ``python -m
+  hcp_connectivity tractography`` and ``combine tractography``
+  (``tools/hcp_connectivity``) and published with their standard
+  deviations and SIFT2 weights in the dataset's tag v2.2.  It replaces a
+  stop-gap of the counts of one population-average tractogram (Yeh's
+  HCP1065).  The cortex of these matrices agrees with the connectomes of
+  Mansour et al. (Pearson 0.92 of the logarithms); another tractography,
+  so not added to ``schaefer400_structural_connectivity``.  With examples
   and a guidance line for the query assistant.
 * Ontologies: the property axioms ``subPropertyOf``, ``equivalentProperty``,
   ``inverseOf``, ``domain``, ``range``, ``SymmetricProperty`` and

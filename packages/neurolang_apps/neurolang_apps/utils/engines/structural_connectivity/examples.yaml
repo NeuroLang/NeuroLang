@@ -167,19 +167,19 @@ assistant_examples:
     datalog: |-
       ans(dimension, hemisphere, explained) :- schaefer400_structural_gradient_variance(dimension, hemisphere, explained)
 
-  # The subcortex (Tian's regions, scale 2), a stop-gap: the streamlines
-  # of ONE population-average tractogram (the HCP1065 atlas of Yeh 2022),
-  # not means over subjects, nor of the scale of the cortical counts.
-  - question: Which parcels of the Schaefer atlas of 400 are structurally connected to the thalamus, and by how many streamlines of the population tractogram?
+  # The subcortex (Tian's regions, scale 2): the mean streamlines of 100
+  # HCP subjects' own tractography, not the tractography of the cortical
+  # counts, so never added to them.
+  - question: Which parcels of the Schaefer atlas of 400 are structurally connected to the thalamus, and by how many streamlines?
     datalog: |-
       thalamus(t) :- tian(t, r), startswith('THA', t)
       ans(region, sum(n)) :- schaefer400_tian_structural_connectivity(region, t, n), thalamus(t)
 
-  - question: What is the structural network among the subcortical regions, its pairs of more than 10 streamlines?
+  - question: What is the structural network among the subcortical regions, its pairs of more than 100 streamlines?
     datalog: |-
-      ans(t1, t2, streamlines) :- tian_structural_connectivity(t1, t2, streamlines), (t1 < t2), (streamlines > 10)
+      ans(t1, t2, streamlines) :- tian_structural_connectivity(t1, t2, streamlines), (t1 < t2), (streamlines > 100)
 
-  - question: Which subcortical regions are the parcels of the left default mode network structurally connected to, and by how many streamlines of the population tractogram?
+  - question: Which subcortical regions are the parcels of the left default mode network structurally connected to, and by how many streamlines?
     datalog: |-
       default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
       ans(structure, sum(n)) :- schaefer400_tian_structural_connectivity(l, structure, n), default_left(l)
