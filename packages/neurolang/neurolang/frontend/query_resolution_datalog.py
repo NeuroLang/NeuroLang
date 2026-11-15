@@ -75,6 +75,7 @@ from nl_core.datalog.wrapped_collections import (
 )
 from nl_core.datalog.horn_clauses import Fol2DatalogTranslationException
 from . import query_resolution_expressions as fe
+from .datalog.syntax_preprocessing import rule_to_datalog
 from .show_ra import (
     generated_query_symbol,
     print_deterministic_ra_plan,
@@ -422,17 +423,23 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self._walk_program(intermediate_representation.formulas)
             return
         elif len(queries) == 1:
+            # The query in Datalog, as the other rules: an exists(...) of
+            # its body becomes rules, which the program gets.
+            rule, helpers = rule_to_datalog(logic.Implication(
+                queries[0].head, queries[0].body
+            ), self.symbol_table)
+            query = ir.Query(rule.consequent, rule.antecedent)
             counts = self._rule_counts()
             self._walk_program(
                 [
                     rule
                     for rule in intermediate_representation.formulas
                     if not isinstance(rule, ir.Query)
-                ]
+                ] + helpers
             )
             self._warn_added_rules(counts)
             query = self.frontend_translator.walk(
-                self._expand_resamplings(queries[0])
+                self._expand_resamplings(query)
             )
             return self.query(
                 query.head.arguments, query.body,
@@ -1465,15 +1472,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def document_predicate(
         self, name: str, description: str,
-        arguments: Iterable[Tuple[str, str]] = (),
+        arguments: Iterable[Tuple[str, str]] = (), replace: bool = False,
     ) -> None:
         """
         Document the predicate *name* with its *description* and its
         *arguments*, ``(name, sort)`` pairs, as a ``%%`` block before its
-        rule does (see :meth:`predicate_documentation`).
+        rule does (see :meth:`predicate_documentation`); with *replace*,
+        in place of the description it had.
         """
         self.program_ir.walk(
-            documentation_command(name, description, arguments)
+            documentation_command(name, description, arguments, replace)
         )
 
     def predicate_parameter_names(

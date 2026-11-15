@@ -501,6 +501,12 @@ def test_query_a_property_the_ontology_only_constrains():
     # b is distinguished by the head's term: the constraint does not apply.
     res = nl.execute_datalog_program("ans(count(b)) :- headOf(a, b)")
     assert set(res) == set()
+    # the same projection written with exists, in the query's own rule
+    res = nl.execute_datalog_program("ans(a) :- exists(b; headOf(a, b))")
+    assert set(res) == {('Juan',)}
+    res = nl.execute_datalog_program(
+        "ans(a) :- Dean(a), exists(b; headOf(a, b))")
+    assert set(res) == {('Juan',)}
 
 
 DEAN_DEPT_UNIT = """

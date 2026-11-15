@@ -98,6 +98,21 @@ def test_python_api_documents_a_predicate():
     }
 
 
+def test_a_documentation_is_replaced_when_asked():
+    """A predicate documented again has both descriptions; with replace,
+    the new one only (a relation loaded again from another file)."""
+    nl = NeurolangDL()
+    nl.add_tuple_set([(1,)], name="r")
+    nl.document_predicate("r", "From a.csv.")
+    nl.document_predicate("r", "From b.csv.")
+    assert nl.predicate_documentation()["r"].description == (
+        "From a.csv.\n\nFrom b.csv.")
+    nl.document_predicate("r", "From c.csv.", replace=True)
+    assert nl.predicate_documentation()["r"].description == "From c.csv."
+    nl.execute_datalog_program('.document(r, "From d.csv.", replace=True)')
+    assert nl.predicate_documentation()["r"].description == "From d.csv."
+
+
 def test_document_command_in_a_program():
     nl = NeurolangDL()
     nl.execute_datalog_program('r(1)\n.document(r, "Some numbers.")')

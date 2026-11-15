@@ -6,6 +6,7 @@ import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { answerTabs, imageButtons, renderTable } from "./table_view.js";
+import { uploadRows, uploadsSummary } from "./uploads.js";
 import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
@@ -634,8 +635,22 @@ const workerMessages = {
   },
 };
 
+// The files uploaded in the session, as the latest reply tells them: hidden
+// without any.
+function showUploads(uploads) {
+  const summary = uploadsSummary(uploads);
+  $("uploaded").hidden = !summary;
+  $("uploaded-summary").textContent = summary;
+  $("uploaded-list").replaceChildren(...uploadRows(uploads).map((cells) => {
+    const row = document.createElement("tr");
+    for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text }));
+    return row;
+  }));
+}
+
 // What a reply changes in the page besides its output: the predicates, the language, and the box.
 function applyReply(data) {
+  if (data.uploads) showUploads(data.uploads);
   if (data.predicates) guide.predicates = data.predicates;
   if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
   showGuide();
@@ -960,6 +975,7 @@ $("llm-forget").addEventListener("click", () => {
 });
 $("restart").addEventListener("click", () => {
   uploads.clear(); // a fresh session: without the rules, nor the files uploaded
+  showUploads(null);
   start();
 });
 // The next user of this browser does not have this one's key.

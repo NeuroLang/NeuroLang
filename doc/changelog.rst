@@ -29,7 +29,13 @@ Unreleased
   sizes are its ``--max-upload-mb`` (50) and ``--max-uploads-mb`` (200).
   The admin console shows them by session, with their sizes, ages and the
   free disk space, and erases a file, a session's or all.  ``.uploads`` lists, in a session, the files its page uploaded, their
-  kind, size and age, the relations loaded from them and the room left.  ``.image PATH|UPLOADED [--name
+  kind, size and age, the relations loaded from them and the room left.
+  The page has *Upload data* in its toolbar, and lists the files uploaded
+  in the session (each reply carries them).  ``.image`` describes the image
+  to the query assistant (its file, a mask or a map of values, its voxels),
+  replacing the description of an image loaded before under the same name
+  (``document_predicate(..., replace=True)``, ``.document(p, "...",
+  replace=True)``).  ``.image PATH|UPLOADED [--name
   NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
   (resampled, a mask to the nearest voxel; at most ``image.max_mb``
   uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells
@@ -398,6 +404,13 @@ Unreleased
 
 **Bug fixes:**
 
+* ``exists(t; ...)`` in the rule of a query, ``ans(s) :- study(s),
+  exists(t; mentions(s, t))``, failed in the probabilistic frontend, which
+  the engines use ("Not a Datalog function application", or no
+  ``functor``), and so did ``~exists(...)`` there; in a rule of the program
+  it worked.  The rule of a query now goes through the translation to
+  Datalog, as the other rules do: its ``exists`` and ``~exists`` become
+  rules, and a Datalog query is left as it is.
 * macOS: the query assistant's checks of a query no longer crash (SIGSEGV)
   on a matrix product, such as a bootstrap interval or a similarity of
   texts. Apple's Accelerate, the BLAS of numpy there, cannot run in a

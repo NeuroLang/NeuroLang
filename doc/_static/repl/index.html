@@ -199,6 +199,10 @@
   .toolbar { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
   #run { min-height: 2.25rem; padding-inline: 1rem 1.15rem; }
   .toolbar .spacer { flex: 1; }
+  #uploaded { margin-top: .6rem; }
+  #uploaded table { border-collapse: collapse; font-size: .85rem; margin-top: .4rem; }
+  #uploaded th, #uploaded td { text-align: left; padding: .2rem 1rem .2rem 0; }
+  #uploaded th { color: var(--muted); font-weight: 500; }
   #run-help { white-space: nowrap; }
   .menu { position: relative; }
   .menu > summary { display: inline-flex; align-items: center; gap: .35rem; min-height: 2rem; padding: .3rem .7rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--raised); font-size: .8125rem; font-weight: 500; color: var(--text); }
@@ -495,22 +499,30 @@
           <button id="view" type="button" class="ghost" disabled title="Show the last result in the brain viewer">Brain</button>
           <button id="explain" type="button" class="ghost" hidden title="Read the last query in English, with the assistant">Explain</button>
           <button id="share" type="button" class="ghost" title="Copy a link to this query: it is in the address after the #, which the server never gets">Copy link</button>
+          <button id="upload" type="button" class="ghost" title="Upload a CSV or TSV file of yours (.csv, .tsv, gzipped or not): it is loaded as a relation, and .load NAME loads it again; or a NIfTI image of activations, a mask or a z-map (.nii, .nii.gz): .image loads it as image(i, j, k, value) and shows it">Upload data</button>
           <details class="menu"><summary>More</summary>
             <div class="menu-items">
               <button id="format" type="button" title="Break the long rules of the box at the commas of their bodies (Alt+Shift+F)">Format the query</button>
               <hr>
               <button id="session-save" type="button" title="Save the statements of this session in a file">Save session</button>
               <button id="session-open" type="button" title="Open a saved session: its rules replace those of this one">Open session</button>
-              <button id="upload" type="button" title="Upload a CSV or TSV file of yours (.csv, .tsv, gzipped or not): it is loaded as a relation, and .load NAME loads it again; or a NIfTI image of activations, a mask or a z-map (.nii, .nii.gz): .image loads it, shows it and decodes it">Upload data</button>
               <hr>
               <button id="restart" type="button" title="Start the engine again, without the rules of this session">Restart</button>
             </div>
           </details>
           <input id="session-file" type="file" accept=".json,application/json" hidden>
-          <input id="upload-file" type="file" accept=".csv,.tsv,.gz,.nii,text/csv,text/tab-separated-values" hidden>
+          <input id="upload-file" type="file" accept=".csv,.tsv,.gz,.nii,.nii.gz,text/csv,text/tab-separated-values" hidden>
           <span class="spacer"></span>
           <span id="run-help" class="note"><kbd>Ctrl</kbd> <kbd>Enter</kbd> runs</span>
         </div>
+        <details id="uploaded" class="disclosure" hidden>
+          <summary id="uploaded-summary"></summary>
+          <table>
+            <thead><tr><th>File</th><th>Kind</th><th>Size</th><th>Loaded as</th></tr></thead>
+            <tbody id="uploaded-list"></tbody>
+          </table>
+          <p class="note">The files you uploaded in this session, which go with it: <code>.load NAME</code> loads a table again, under another name if given, and <code>.image NAME</code> an image.</p>
+        </details>
       </form>
     </section>
 
