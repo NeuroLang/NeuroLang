@@ -226,6 +226,10 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
                 variables |= self.walk(a)
             elif isinstance(a, Constant):
                 pass
+            elif is_logic_function_application(expression):
+                # a formula under the frontend's &, | or ~, as the
+                # ∃t mentions(s, t) of study(s) & exists(t; mentions(s, t))
+                variables |= self.walk(a)
             else:
                 raise NeuroLangException("Not a Datalog function application")
         return variables

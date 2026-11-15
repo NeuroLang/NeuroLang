@@ -370,6 +370,14 @@ Unreleased
 
 **Bug fixes:**
 
+* ``exists(t; ...)`` in the rule of a query, ``ans(s) :- study(s),
+  exists(t; mentions(s, t))``, failed in the probabilistic frontend, which
+  the engines use ("Not a Datalog function application", or no
+  ``functor``), and so did ``~exists(...)`` there; in a rule of the program
+  it worked.  The free variables of the frontend's ``&``, ``|`` and ``~``
+  now include those of a quantified formula, and a query whose body is one
+  is queried as a conjunction is.
+
 * ``.view`` drew nothing of a region, a result of voxels without a value,
   or of an overlay of one value: its default threshold, the 95th
   percentile, is that value, and NiiVue draws nothing of a colour range of

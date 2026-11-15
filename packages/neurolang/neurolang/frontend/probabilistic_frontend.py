@@ -491,8 +491,10 @@ class NeurolangPDL(QueryBuilderDatalog):
                 head, predicate, show_rewritten=show_rewritten,
                 dry_run=dry_run, show_ra=show_ra,
             )
-        query_pred_symb = predicate.expression.functor
-        query_pred_args = predicate.expression.args
+        # A body that is one quantified formula, exists(t; mentions(s, t)),
+        # has no functor: it is queried as a conjunction is (case 2 below).
+        query_pred_symb = getattr(predicate.expression, "functor", None)
+        query_pred_args = getattr(predicate.expression, "args", ())
         if is_probabilistic_predicate_symbol(query_pred_symb, self.program_ir):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
