@@ -44,7 +44,7 @@ from .editing import session_options
 from .interrupt import call_interruptibly
 from .provenance import column_sorts
 from .results import DEFAULT_PAGE_SIZE, ResultBlock, print_next_page
-from .session import open_session_scope, record_squall_rules
+from .session import Uploads, open_session_scope, record_squall_rules
 from .submission import Submission, submission_outline
 from .statements import (
     is_comment,
@@ -192,8 +192,8 @@ class InteractiveTuiApp:
         )
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
-        # The files the page uploaded, by name: their bytes (.load NAME).
-        self.uploads: dict = {}
+        # The files the page uploaded, by name (.load NAME, .image NAME).
+        self.uploads = Uploads()
         self.squall_rules: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:

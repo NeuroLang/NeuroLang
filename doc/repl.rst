@@ -172,12 +172,14 @@ gzipped) into a relation whose columns are the file's header:
 
 On the page, **Upload data** sends a CSV or TSV file of yours (at most
 50 MB) to the session and loads it, with ``.load NAME``; ``.load NAME``
-loads it again later, under another relation name if given.  The file is
-kept in the memory of the session only, never written on a disk; the page
-sends it again when it gives the session's rules back (after **Stop**, or
-when a saved session is opened), and forgets it on **Restart**.  A server
-(``neurolang-repl-serve``) loads the files you upload, and no path of its
-own.
+loads it again later, under another relation name if given.  The page in
+the browser keeps the file in the memory of the session; a server
+(``neurolang-repl-serve``) keeps it in a folder of the session, removed
+when the session ends, stopped or unused for a while (its limits and its
+folder are its options, see :doc:`repl_server`).  The page sends the file
+again when it gives the session's rules back (after **Stop**, or when a
+saved session is opened), and forgets it on **Restart**.  A server loads
+the files you upload, and no path of its own.
 
 **Upload data** also takes a NIfTI image of activations (``.nii`` or
 ``.nii.gz``), a binary mask or a z-map: the page loads it with ``.image``,

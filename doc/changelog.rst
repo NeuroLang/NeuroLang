@@ -21,8 +21,12 @@ Unreleased
 
 * Upload a brain image to the REPL: the page's *Upload data* takes a NIfTI
   image of activations (``.nii``/``.nii.gz``), a binary mask or a z-map,
-  kept in the memory of the session as the CSV files are, so a server
-  reading none of its files loads it.  ``.image PATH|UPLOADED [--name
+  kept with the session as the CSV files are, so a server reading none of
+  its files loads it.  On a server (``--users --local``), the files a
+  session's page uploads go to a folder of its own in ``--uploads-dir``
+  (``uploads_dir`` of ``server.yaml``), removed when the session ends,
+  stopped or unused for ``--idle-minutes``, or when its process died; their
+  sizes are its ``--max-upload-mb`` (50) and ``--max-uploads-mb`` (200).  ``.image PATH|UPLOADED [--name
   NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
   (resampled, a mask to the nearest voxel; at most ``image.max_mb``
   uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells

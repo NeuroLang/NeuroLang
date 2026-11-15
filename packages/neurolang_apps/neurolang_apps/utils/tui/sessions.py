@@ -21,12 +21,14 @@ import itertools
 import json
 import multiprocessing
 import os
+import shutil
 import signal
 import sys
 import threading
 import time
 import traceback
 from multiprocessing.connection import Client, Listener
+from pathlib import Path
 from typing import Callable, Optional
 
 from neurolang.confine import lifted
@@ -123,7 +125,9 @@ def _builder(conn, address, authkey, options: dict, build,
             try:
                 _session(address, authkey, key, start, env,
                          {**options, "feedback": feedback or
-                          options["feedback"]}, engines[engine])
+                          options["feedback"],
+                          "uploads": _session_uploads(options, start)},
+                         engines[engine])
                 code = 0
             except BaseException:
                 traceback.print_exc()
@@ -132,6 +136,16 @@ def _builder(conn, address, authkey, options: dict, build,
                 sys.stderr.flush()
                 os._exit(code)
         conn.send(("forked", key, start, pid))
+
+
+def _session_uploads(options: dict, start: int) -> dict:
+    """Return where the uploads of the session started *start* go: the
+    folder of that number of the uploads directory, if the server has one
+    (see :class:`Sessions`), and how large they may be."""
+    uploads = dict(options.get("uploads") or {})
+    if uploads.get("directory"):
+        uploads["directory"] = os.path.join(uploads["directory"], str(start))
+    return uploads
 
 
 def _warn_of_threads(engine: str) -> None:
@@ -402,6 +416,7 @@ class Session:
             pid, conn, self.pid, self._conn = self.pid, self._conn, None, None
             if pid is not None:
                 _kill(pid)
+            self.sessions._remove_uploads(self.starts)
             if conn is not None:
                 conn.close()
                 self._fail_replies(conn)
@@ -513,9 +528,18 @@ class Sessions:
         identity: Optional[Callable] = None, feedback_db=None,
         withhold=(), activity_db=None, running: Optional[int] = None,
         query_seconds: Optional[float] = None,
-        preload_embeddings: bool = True,
+        preload_embeddings: bool = True, uploads: Optional[dict] = None,
     ):
         env = env or {}
+        #: Where the sessions' uploads go, a folder each in its directory,
+        #: and how large they may be (session.Uploads).
+        self.uploads = dict(uploads or {})
+        if self.uploads.get("directory"):
+            # No session outlives the server: what an earlier run left goes.
+            directory = Path(self.uploads["directory"]).expanduser()
+            shutil.rmtree(directory, ignore_errors=True)
+            directory.mkdir(parents=True, exist_ok=True)
+            self.uploads["directory"] = str(directory)
         self.identity = identity or (lambda user: (env.get(user, {}), ""))
         self.feedback_db = feedback_db
         self.activity = None
@@ -542,7 +566,8 @@ class Sessions:
         context = multiprocessing.get_context("spawn")
         self._builder_conn, theirs = context.Pipe()
         options = {"data_dir": str(data_dir), "resolution": resolution,
-                   "light": light, "feedback": feedback}
+                   "light": light, "feedback": feedback,
+                   "uploads": self.uploads}
         self._builder = context.Process(
             target=_builder, daemon=True, name="neurolang-repl-builder",
             args=(theirs, self._listener.address, authkey, options, build,
@@ -821,3 +846,23 @@ class Sessions:
                     del self._sessions[session.key]
             for session in idle:
                 session.end("idle")
+            self._sweep_uploads()
+
+    def _remove_uploads(self, start) -> None:
+        """Remove the folder of the uploads of the session started
+        *start*, if any."""
+        directory = self.uploads.get("directory")
+        if directory and start is not None:
+            shutil.rmtree(Path(directory) / str(start), ignore_errors=True)
+
+    def _sweep_uploads(self) -> None:
+        """Remove the folders of uploads of no session the server has, such
+        as those of a session whose process died."""
+        directory = self.uploads.get("directory")
+        if not directory:
+            return
+        with self._lock:
+            kept = {str(s.starts) for s in self._sessions.values()}
+        for folder in Path(directory).iterdir():
+            if folder.name not in kept:
+                shutil.rmtree(folder, ignore_errors=True)
