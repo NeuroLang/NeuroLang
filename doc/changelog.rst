@@ -50,44 +50,37 @@ Unreleased
   Oranges, Greens...), and the colours of the atlas start off, which would
   hide them.
   
-* The resting-state functional connectivity, a small engine of its own,
-  ``functional_connectivity``, which ``coordinate_meta_analysis`` extends
-  with ``structural_connectivity``: the correlation of the spontaneous
-  fMRI activity of two regions at rest over 964 HCP subjects (four runs,
-  ICA-FIX, MSMAll; the tanh of the mean Fisher z), between the parcels of
-  Schaefer (100 or 400, 17 networks) or Destrieux
-  (``schaefer_functional_connectivity``...), the subcortical regions of
-  Tian (``tian_functional_connectivity``), and the cortex and the
-  subcortex (``schaefer_tian_functional_connectivity``...), and its linear
-  gradients (``schaefer_functional_gradient``...; the first is the
-  principal gradient, from sensory to default cortex). It is dataset
-  ``v2.0`` (``tools/hcp_connectivity``; against the ENIGMA toolbox's HCP
-  functional connectivity, Pearson 0.992). Its examples teach the query
-  assistant seeds, networks, anticorrelations, the subcortex, shared
-  variance (r²), the correlations as probabilistic facts and choices, the
-  gradients, and with the structural connectivity and the meta-analytic
-  co-activation on the meta-analysis engines; the guidance of the engines
-  tells the three connectivities apart (the examples that called the
-  co-activation the functional connectivity call it the meta-analytic
-  co-activation). ``connectivity_atlases`` (abstract) holds the atlas of
-  400 Schaefer parcels and the gradient sorts the connectivity engines
-  share.
+* The connectivity of the brain from the Human Connectome Project, two
+  small engines that ``coordinate_meta_analysis`` (``neurosynth``,
+  ``neurostore``) extends, each of two relations over the cortex and the
+  subcortex of an atlas, Schaefer 400 + Tian and Destrieux + Tian:
 
-* Structural connectivity of the subcortex in ``structural_connectivity``:
-  ``schaefer400_tian_structural_connectivity(l, t, n)`` (a Schaefer 400
-  parcel and a Tian region) and ``tian_structural_connectivity(t1, t2,
-  n)`` (two Tian regions), the mean number of streamlines over 100 HCP
-  subjects' own tractography (MRtrix3: multi-shell CSD, anatomically
-  constrained iFOD2, 5 million streamlines, SIFT2; the atlas brought to
-  each subject through the HCP's warp), made by ``python -m
-  hcp_connectivity tractography`` and ``combine tractography``
-  (``tools/hcp_connectivity``) and published with their standard
-  deviations and SIFT2 weights in the dataset's tag v2.2.  It replaces a
-  stop-gap of the counts of one population-average tractogram (Yeh's
-  HCP1065).  The cortex of these matrices agrees with the connectomes of
-  Mansour et al. (Pearson 0.92 of the logarithms); another tractography,
-  so not added to ``schaefer400_structural_connectivity``.  With examples
-  and a guidance line for the query assistant.
+  - ``structural_connectivity``:
+    ``schaefer400_tian_structural_connectivity(l1, l2, n)`` and
+    ``destrieux_tian_structural_connectivity(l1, l2, n)``, the mean number
+    of streamlines joining two regions over 100 HCP subjects' own
+    tractography (MRtrix3: multi-shell CSD, anatomically constrained
+    iFOD2, 5 million streamlines, SIFT2; Schaefer's and Tian's atlases
+    brought to each subject through the HCP's warp, Destrieux's parcels
+    of the subject's own FreeSurfer segmentation);
+  - ``functional_connectivity``:
+    ``schaefer400_tian_functional_connectivity(l1, l2, r)`` and
+    ``destrieux_tian_functional_connectivity(l1, l2, r)``, the correlation
+    of two regions' resting-state fMRI over 964 HCP subjects (ICA-FIX,
+    MSMAll; the tanh of the mean Fisher z).
+
+  Made by ``tools/hcp_connectivity`` (``tractography``, ``functional``,
+  ``combine``, ``engine-tables``; ``--task``/``--tasks`` or a Slurm array)
+  and published, with their standard deviations, the SIFT2 weights and a
+  per-subject QC, at https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity
+  (tag v2.3), which the engines download, checked by md5. The cortex of
+  the structural connectivity agrees with the connectomes of Mansour et
+  al. (2021; Pearson 0.92 of the logarithms).  The guidance and the
+  examples of the query assistant tell the three connectivities apart
+  (structural, resting-state functional and the meta-analytic
+  co-activation of regions by the same studies), turn counts and
+  correlations into probabilities (computed, probabilistic facts,
+  choices), and join them with the activations of a term.
 * Ontologies: the property axioms ``subPropertyOf``, ``equivalentProperty``,
   ``inverseOf``, ``domain``, ``range``, ``SymmetricProperty`` and
   ``TransitiveProperty`` are read as constraints without existential
@@ -191,55 +184,6 @@ Unreleased
   repl-downloads``), so that a rebuild does not need its sources (OSF,
   GitHub) to be up.
 
-* The structural connectivity of the cortex, a small engine of its own,
-  ``structural_connectivity`` (the MNI atlases and their connectivity),
-  which ``coordinate_meta_analysis`` extends, so ``neurosynth`` and
-  ``neurostore`` have it: ``schaefer_structural_connectivity(l1, l2, n)`` and
-  ``destrieux_structural_connectivity(l1, l2, n)``, the mean number of
-  streamlines joining two parcels over 1,064 subjects of the Human
-  Connectome Project, from the high-resolution connectomes of Mansour et
-  al. (2021), parcellated by ``tools/hcp_connectivity``. The
-  engines download them, at a tag, checked by their md5 (a relation's
-  ``md5``), from the public dataset
-  https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity, which has
-  those of 22 atlases (Schaefer 100 to 1000, Glasser, Destrieux) and their
-  standard deviations, in parquet; ``.view`` draws a result of them as a
-  network. The Schaefer atlas of 400 parcels (17 networks) is also there,
-  as ``schaefer400(label, region)`` (a second atlas of the engine, with
-  its own ``kind: schaefer`` option and label sort) and
-  ``schaefer400_structural_connectivity``,
-  ``schaefer400_structural_gradient`` and
-  ``schaefer400_structural_gradient_variance``, finer than the 100 parcels. There is no subcortex in them, so no Tian. Its questions and
-  their queries teach the query assistant to tell the structural
-  connectivity (white-matter streamlines) from the functional one (the
-  meta-analytic co-activation of regions by the same studies): the
-  structural connectivity of a region, a network, the strength of a
-  parcel; its counts turned into probabilities, computed (the fraction
-  of a region's streamlines) or as a probabilistic program (a choice of
-  where a random streamline ends; probabilistic facts, each connection
-  present with probability 1 - exp(-n / 5000), for the probability of a
-  path or of reaching a network); and, on the meta-analysis engines, the
-  two connectivities of a region side by side, the structural
-  connectivity of the regions a term activates or co-activates, and the
-  probability that a random streamline of a region ends in one a term
-  activates. ``assistant_guidance`` is inherited, the base's first.
-* The linear gradients of the structural connectivity,
-  ``schaefer_structural_gradient(l, d, v)`` and
-  ``destrieux_structural_gradient(l, d, v)``, with the variance each
-  explains (``*_structural_gradient_variance``): a principal component
-  analysis of the regions' connectivity profiles (log streamlines) within
-  each hemisphere, the right hemisphere's rotated onto the left's
-  (orthogonal Procrustes over the regions of the same name), 10
-  dimensions; over the whole brain the first component would only split
-  the hemispheres (|r| = 0.92). On Schaefer's parcels the first runs from
-  somatomotor to visual cortex, the second from lateral to medial cortex;
-  ``.view --threshold 0`` paints them on the cortex, one overlay per
-  gradient. ``tools/hcp_connectivity/gradients.py`` makes them,
-  for the 22 atlases of the dataset (its ``v1.1``), with examples for the
-  query assistant (the ends of a gradient, a network's position, the
-  regions near a region, a term's activations along a gradient). The help
-  of ``.view`` tells the default threshold of a result of regions with
-  values, the highest values only.
 * An engine names the sources of its data, with their citations and the
   acknowledgements their terms ask for (``acknowledgements``, inherited
   from the engines it extends), and the REPL's ``.credits`` prints them:
