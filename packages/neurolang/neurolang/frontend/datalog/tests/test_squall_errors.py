@@ -4,6 +4,8 @@ from nl_expr.config import config
 from nl_expr.exceptions import SquallSemanticError, UnexpectedCharactersError
 from ..squall_syntax_lark import parser
 
+pytestmark = pytest.mark.squall
+
 config.disable_expression_type_printing()
 
 

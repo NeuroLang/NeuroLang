@@ -246,23 +246,39 @@ def _background_state(background, shape, affine) -> dict:
 
 def _layers(img) -> list:
     """
-    Return the overlays *img* stands for, as (name, image) pairs.
+    Return the overlays *img* stands for, as (name, image) pairs on one
+    grid.
 
     *img* is an image, an overlay without a name, or a sequence of
-    (name, image) pairs on one grid.
+    (name, image) pairs. Those on several grids, such as the regions of
+    an answer on the grid of their atlas and the streamlines of another
+    on that of the background, are drawn on the finest of them (the first
+    of the finest): the others are resampled to it, each voxel taking the
+    value of the nearest one, so that a mask stays a mask and a count
+    keeps its values.
     """
     if isinstance(img, nib.spatialimages.SpatialImage):
         return [("", img)]
     layers = list(img)
-    first = layers[0][1]
-    for name, other in layers[1:]:
-        if other.shape[:3] != first.shape[:3] or not np.allclose(
-            other.affine, first.affine
-        ):
-            raise ValueError(
-                f"The overlay {name!r} is not on the grid of the first one."
-            )
-    return layers
+    grid = min(
+        (image for _, image in layers),
+        key=lambda image: abs(np.linalg.det(image.affine[:3, :3])),
+    )
+    return [(name, _on_grid(image, grid)) for name, image in layers]
+
+
+def _on_grid(image, grid):
+    """Return *image* on the grid of the image *grid*, by the nearest
+    voxel."""
+    if image.shape[:3] == grid.shape[:3] and np.allclose(
+        image.affine, grid.affine
+    ):
+        return image
+    from nibabel.processing import resample_from_to
+
+    return resample_from_to(
+        image, (grid.shape[:3], grid.affine), order=0, cval=0.0
+    )
 
 
 def _overlay_cmaps(cmap, names) -> list:

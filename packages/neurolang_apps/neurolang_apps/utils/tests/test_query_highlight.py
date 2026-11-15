@@ -1,6 +1,7 @@
 """Tests of the syntax highlighting of queries."""
 
 import io
+import pytest
 
 from neurolang_apps.utils import query_highlight
 from neurolang_apps.utils.query_highlight import ansi, highlight, tokens
@@ -28,6 +29,7 @@ def test_comments():
     ]
 
 
+@pytest.mark.squall
 def test_squall_tokens():
     assert kinds("obtain every Study that mentions 'pain'.", True) == [
         ("keyword", "obtain"), ("keyword", "every"), ("keyword", "that"),

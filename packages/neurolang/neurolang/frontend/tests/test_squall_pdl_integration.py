@@ -12,6 +12,8 @@ from nl_expr.exceptions import (
     WrongArgumentsInPredicateError,
 )
 
+pytestmark = pytest.mark.squall
+
 
 @pytest.fixture
 def nl():

@@ -124,6 +124,7 @@ def test_rewritten_without_query(capsys):
     assert "No query has been run yet." in _output(app)
 
 
+@pytest.mark.squall
 def test_datalog_shows_squall_translation(app, capsys):
     app._handle_dot_command(".mode squall")
     app._execute_and_display("obtain every person that plays.")
@@ -215,6 +216,7 @@ def test_drop_removes_the_helpers_of_a_conditional(conditional):
     assert "not an IDB predicate" in _command(conditional, ".datalog marg")
 
 
+@pytest.mark.squall
 def test_datalog_of_a_squall_predicate(conditional):
     output = _command(conditional, ".datalog marg")
     assert "marg(s₀, PROB(s₀)) :-" in output
@@ -671,6 +673,7 @@ def test_query_says_nothing_about_definitions(app):
     assert "defined" not in out
 
 
+@pytest.mark.squall
 def test_squall_definitions_say_what_they_defined(app):
     app.settings.squall = True
     out = _submit(app, "define as Bar every person that plays.")
@@ -679,6 +682,7 @@ def test_squall_definitions_say_what_they_defined(app):
     assert _messages(out) == ["defined bar/1 (now 2 rules)"]
 
 
+@pytest.mark.squall
 def test_squall_conditional_is_defined_once(conditional):
     out = _output(conditional)
     assert "defined marg/2" in out
@@ -913,6 +917,7 @@ def test_results_have_no_generated_column_names(
     assert "fresh_" not in _output(studies)
 
 
+@pytest.mark.squall
 def test_rewritten_shows_a_squall_query_on_a_rule(studies, capsys):
     """Check ``.rewritten`` prints the magic-sets rewriting of SQUALL."""
     studies.settings.squall = False

@@ -108,6 +108,7 @@ def test_catalog_leaves_out_generated_symbols(session):
     assert "PROB" not in catalog
 
 
+@pytest.mark.squall
 def test_squall_rule_has_no_generated_column_names(session):
     session.execute_squall_program(
         "define as Fan every person that is named."

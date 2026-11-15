@@ -9,6 +9,9 @@ from ..squall_syntax_lark import (
     GRAMMAR_PATH,
     SquallTransformer
 )
+import pytest
+
+pytestmark = pytest.mark.squall
 
 
 def _metadata():

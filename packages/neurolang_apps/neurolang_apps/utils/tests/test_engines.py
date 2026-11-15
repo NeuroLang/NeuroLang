@@ -422,6 +422,7 @@ class TestNeurosynthEngineVocabulary:
             "neurosynth"
         )
 
+    @pytest.mark.squall
     def test_weighted_mention_reads_in_squall(self):
         """Check a SQUALL sentence on ``weighted_mention`` gets its rows."""
         from neurolang.frontend import NeurolangPDL
