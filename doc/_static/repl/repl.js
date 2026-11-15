@@ -721,7 +721,7 @@ function showUploads(listed) {
   $("uploaded-summary").textContent = summary;
   $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells) => {
     const row = document.createElement("tr");
-    for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text }));
+    for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text, title: text }));
     const name = cells[0];
     const actions = document.createElement("td");
     actions.className = "upload-actions";

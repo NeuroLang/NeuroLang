@@ -140,3 +140,10 @@ test("a disabled menu item says why in text, and the legend's tracks stay on a p
   assert.match(tableView, /element\("p", \{ className: "note", textContent: payload\.nifti_reason/);
   assert.match(page, /\.rt-table \.rt-track \{ display: none; \}/);
 });
+
+test("a long file name in the uploaded files is cut, not squeezed or scrolled", () => {
+  // The name columns share the room that is left, and show an ellipsis; the full name is the cell's tooltip.
+  assert.match(page, /#uploaded td:first-child, #uploaded td:nth-child\(4\) \{ width: 50%; max-width: 0; overflow: hidden; text-overflow: ellipsis; \}/);
+  assert.doesNotMatch(page, /#uploaded td:first-child \{[^}]*overflow-wrap: anywhere/);
+  assert.match(readFileSync(new URL("repl.js", dir), "utf8"), /textContent: text, title: text/);
+});
