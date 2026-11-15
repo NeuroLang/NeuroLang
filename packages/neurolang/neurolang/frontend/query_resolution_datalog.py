@@ -73,12 +73,9 @@ from nl_core.datalog import DatalogProgram
 from nl_core.datalog.wrapped_collections import (
     WrappedRelationalAlgebraFrozenSet,
 )
-from nl_core.probabilistic.expressions import Condition
-from nl_core.datalog.horn_clauses import (
-    Fol2DatalogTranslationException,
-    fol_query_to_datalog_program,
-)
+from nl_core.datalog.horn_clauses import Fol2DatalogTranslationException
 from . import query_resolution_expressions as fe
+from .datalog.syntax_preprocessing import rule_to_datalog
 from .show_ra import (
     generated_query_symbol,
     print_deterministic_ra_plan,
@@ -426,15 +423,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self._walk_program(intermediate_representation.formulas)
             return
         elif len(queries) == 1:
-            # The query in Datalog: an exists(...) or ~exists(...) of its
-            # body becomes rules, a Datalog query is left as it is, and a
-            # conditional one, a // b, to the probabilistic frontend.
-            query, helpers = queries[0], []
-            if not isinstance(query.body, Condition):
-                *helpers, rule = fol_query_to_datalog_program(
-                    query.head, query.body, self.symbol_table
-                ).expressions
-                query = ir.Query(rule.consequent, rule.antecedent)
+            # The query in Datalog, as the other rules: an exists(...) of
+            # its body becomes rules, which the program gets.
+            rule, helpers = rule_to_datalog(logic.Implication(
+                queries[0].head, queries[0].body
+            ), self.symbol_table)
+            query = ir.Query(rule.consequent, rule.antecedent)
             counts = self._rule_counts()
             self._walk_program(
                 [
