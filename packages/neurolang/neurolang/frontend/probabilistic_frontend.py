@@ -491,17 +491,6 @@ class NeurolangPDL(QueryBuilderDatalog):
                 head, predicate, show_rewritten=show_rewritten,
                 dry_run=dry_run, show_ra=show_ra,
             )
-        if not isinstance(predicate.expression, ir.FunctionApplication):
-            # A formula, as exists(t; mentions(s, t), (t == 'x')): the
-            # program translates the rule fresh(head) :- formula to Datalog,
-            # as any rule, and fresh is queried.
-            if _computes_terms(head):
-                return self._execute_query_computing_terms(
-                    head, predicate, show_rewritten, dry_run, show_ra
-                )
-            return self._execute_query_through_rule(
-                head, predicate, show_rewritten, dry_run, show_ra
-            )
         query_pred_symb = predicate.expression.functor
         query_pred_args = predicate.expression.args
         if is_probabilistic_predicate_symbol(query_pred_symb, self.program_ir):
@@ -818,16 +807,14 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def _declare_fresh_rule(self, predicate, head=None):
         """Declare, in the current scope, the rule ``fresh(x, ...) :-
-        predicate`` over the variables of the query's ``head``, none if not
-        given, and return it as stored in the program.  The program
-        translates its body to Datalog, as it does a rule's: an
-        ``exists(t; ...)`` in it included."""
-        variables = () if head is None else tuple(sorted(
-            set().union(*(
+        predicate`` over the free variables of ``predicate``, those in the
+        query's ``head`` if given, and return it as stored in the program."""
+        variables = extract_logic_free_variables(predicate.expression)
+        if head is not None:
+            variables &= set().union(*(
                 h._symbols for h in self._query_head_symbols(head)[0]
-            )),
-            key=lambda symbol: symbol.name,
-        ))
+            ))
+        variables = tuple(sorted(variables, key=lambda symbol: symbol.name))
         fresh = ir.Symbol.fresh()
         self.program_ir.walk(Union((
             Implication(fresh(*variables), predicate.expression),
