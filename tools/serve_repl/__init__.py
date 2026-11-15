@@ -2344,14 +2344,17 @@ def _since(days: str):
     return datetime.now(timezone.utc) - timedelta(days=days)
 
 
-def _run(command: list, env=None) -> str:
+def _run(command: list, env=None, label=None) -> str:
     """Return the output of *command*, run in the checkout; a failure is a
-    ValueError telling its errors."""
+    ValueError telling its errors, as those of *label* (else the program's
+    and its first word)."""
     done = subprocess.run(command, cwd=CHECKOUT, capture_output=True,
                           text=True, env=env)
     if done.returncode:
+        label = label or " ".join([Path(command[0]).name, next(
+            (w for w in command[1:] if w[:1] != "-" and "=" not in w), "")])
         errors = (done.stderr or done.stdout).strip()[-2000:]
-        raise ValueError(f"{shlex.join(command[:2])} failed: {errors}")
+        raise ValueError(f"{label.strip()} failed: {errors}")
     return done.stdout.strip()
 
 
@@ -2370,7 +2373,10 @@ def update_check() -> dict:
     upstream = _git("rev-parse", "--abbrev-ref", "--symbolic-full-name",
                     "@{u}")
     remote, _, branch = upstream.partition("/")
-    _git("fetch", "--quiet", remote, branch)
+    try:
+        _git("fetch", "--quiet", remote, branch)
+    finally:
+        _give_back(CHECKOUT / _git("rev-parse", "--git-common-dir"))
     return {
         "head": _git("log", "-1", "--format=%h %s"), "upstream": upstream,
         "new": _git("log", "--format=%h %s", "HEAD..@{u}").splitlines(),
@@ -2379,29 +2385,55 @@ def update_check() -> dict:
     }
 
 
+# Whether an update runs (one at a time), and what checks that the server,
+# updated, starts: its options as now, its sessions' module.
+UPDATING = threading.Lock()
+STARTS = ("import sys, serve_repl, neurolang_apps.utils.tui.sessions; "
+          "serve_repl.parse_args(sys.argv[1:])")
+
+
 def update() -> dict:
     """Bring the checkout to its upstream, if it moved, by a fast-forward,
     and the server's environment to the lock, with the extras it has;
-    return what :func:`update_check` told before."""
-    check = update_check()
-    if not check["new"]:
+    then check that the server starts, else bring both back. Return what
+    :func:`update_check` told before."""
+    if not UPDATING.acquire(blocking=False):
+        raise ValueError("An update is running")
+    try:
+        check = update_check()
+        if not check["new"]:
+            return check
+        if check["changed"]:
+            raise ValueError("The checkout has changes of its own: update "
+                             "it by hand")
+        uv = shutil.which("uv")
+        if uv is None:
+            raise ValueError("The update needs uv, which the server's PATH "
+                             "lacks")
+        env = dict(os.environ)
+        if sys.prefix != sys.base_prefix:  # the server's, wherever it is
+            env["UV_PROJECT_ENVIRONMENT"] = sys.prefix
+        # --inexact: what the lock does not name stays (installed by hand)
+        sync = [uv, "sync", "--frozen", "--inexact",
+                *(f"--extra={extra}" for extra in installed_extras())]
+        before = _git("rev-parse", "HEAD")
+        try:
+            _git("merge", "--ff-only", "--quiet", "@{u}")
+            _run(sync, env)
+            path = os.pathsep.join(filter(None, [
+                str(CHECKOUT / "tools"), env.get("PYTHONPATH")]))
+            _run([sys.executable, "-c", STARTS, *sys.argv[1:]],
+                 {**env, "PYTHONPATH": path}, "the updated server's start")
+        except ValueError as error:
+            _git("reset", "--hard", "--quiet", before)
+            _run(sync, env)
+            raise ValueError(f"{error}\nThe checkout and its environment "
+                             f"are back at {before[:8]}") from error
+        finally:
+            _give_back(CHECKOUT)
         return check
-    if check["changed"]:
-        raise ValueError("The checkout has changes of its own: update it "
-                         "by hand")
-    uv = shutil.which("uv")
-    if uv is None:
-        raise ValueError("The update needs uv, which the server's PATH "
-                         "lacks")
-    _git("merge", "--ff-only", "--quiet", "@{u}")
-    env = dict(os.environ)
-    if sys.prefix != sys.base_prefix:  # the server's, wherever it is
-        env["UV_PROJECT_ENVIRONMENT"] = sys.prefix
-    # --inexact: what the lock does not name stays (installed by hand)
-    _run([uv, "sync", "--frozen", "--inexact",
-          *(f"--extra={extra}" for extra in installed_extras())], env)
-    _give_back(CHECKOUT)
-    return check
+    finally:
+        UPDATING.release()
 
 
 def installed_extras(project: str = WORKSPACE) -> list:
@@ -2433,9 +2465,10 @@ def installed_extras(project: str = WORKSPACE) -> list:
 
 
 def _give_back(directory: Path) -> None:
-    """Give the files of *directory* back to its owner, if the server runs
-    as root and wrote some: its owner's git and uv change them again."""
-    owner = directory.stat()
+    """Give the files of *directory* back to the checkout's owner, if the
+    server runs as root and wrote some: its owner's git and uv change them
+    again."""
+    owner = CHECKOUT.stat()
     if os.geteuid() != 0 or owner.st_uid == 0:
         return
     for path in [directory, *directory.rglob("*")]:
@@ -3479,6 +3512,12 @@ def main(argv=None) -> None:
     # The service manager stops the server with SIGTERM: as Ctrl+C, it
     # ends the sessions and logs its stop.
     signal.signal(signal.SIGTERM, _interrupt)
+    serve(server, backend, board)
+
+
+def serve(server, backend=None, board=None) -> None:
+    """Serve until stopped, then end the sessions of *backend* and the
+    dashboard *board*; restart, as started, if the console updated it."""
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -3489,7 +3528,7 @@ def main(argv=None) -> None:
             backend.close()
         if board is not None:
             board.close()
-    if getattr(server, "restarting", False):  # updated: by the console
+    if getattr(server, "restarting", False):
         print("The server restarts, updated", flush=True)
         os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])
 
