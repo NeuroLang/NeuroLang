@@ -3007,3 +3007,28 @@ def test_probabilistic_facts_of_values_of_several_types():
     assert result.as_pandas_dataframe().iloc[0, 0] == pytest.approx(
         1 - 0.168 - 0.394
     )
+
+
+@pytest.mark.parametrize("query, without", [
+    ("ans(s) :- study(s), exists(t; mentions(s, t))",
+     "ans(s) :- study(s), mentions(s, t)"),
+    ("ans(s) :- exists(t; mentions(s, t))", "ans(s) :- mentions(s, t)"),
+    ("ans(s) :- exists(t; mentions(s, t), (t == 'x'))",
+     "ans(s) :- mentions(s, 'x')"),
+    ("ans(s) :- study(s), exists(t, u; mentions(s, t), mentions(u, t))",
+     "ans(s) :- study(s), mentions(s, t), mentions(u, t)"),
+    ("ans(s) :- study(s), ~exists(t; mentions(s, t))",
+     "m(s) :- mentions(s, t)\nans(s) :- study(s), ~m(s)"),
+    ("ans(count(s)) :- exists(t; mentions(s, t))",
+     "ans(count(s)) :- mentions(s, t)"),
+])
+def test_exists_in_the_rule_of_the_query(query, without):
+    """``exists(t; ...)`` in the query's own rule: the variables of its
+    body out of the head, as in the same rule written without it."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("a",), ("b",)], name="study")
+    nl.add_tuple_set([("a", "x"), ("c", "y")], name="mentions")
+    with nl.scope:
+        expected = set(nl.execute_datalog_program(without))
+    assert expected
+    assert set(nl.execute_datalog_program(query)) == expected

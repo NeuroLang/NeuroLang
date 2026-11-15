@@ -370,6 +370,13 @@ Unreleased
 
 **Bug fixes:**
 
+* ``exists(t; ...)`` in the rule of a query, ``ans(s) :- study(s),
+  exists(t; mentions(s, t))``, failed in the probabilistic frontend, which
+  the engines use ("Not a Datalog function application", or no
+  ``functor``), and so did ``~exists(...)`` there; in a rule of the program
+  it worked.  The rule of a query now goes through the translation to
+  Datalog, as the other rules do: its ``exists`` and ``~exists`` become
+  rules, and a Datalog query is left as it is.
 * macOS: the query assistant's checks of a query no longer crash (SIGSEGV)
   on a matrix product, such as a bootstrap interval or a similarity of
   texts. Apple's Accelerate, the BLAS of numpy there, cannot run in a
