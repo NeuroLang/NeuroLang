@@ -583,6 +583,18 @@ Unreleased
   them, spread over all, not the first ``k`` of the file, and the page asks
   NiiVue to hide those under the rank of the ``k``-th: the count is exact,
   not a multiple of a stride, and the label says it.
+  
+* The graph of a query (the Graph tab of the REPL, ``.graph``) opens at a
+  size its text can be read at, where it was shrunk to fit its frame (about
+  4 px text in the REPL's result column, 3 px on a phone): from the data on
+  its left, in a box as high as a frame can show, which pans by dragging the
+  mouse, with a finger or with the arrow keys and zooms around the point
+  under the pointer, ``+`` and ``-`` too; ``Fit`` and ``Actual size`` say
+  which is on, and a hint says when there is more to pan to.  Its intro is a
+  line, with the long text and the descriptions of the legend folded under
+  "How to read this", and its legend a row of short chips.  A node of an
+  ontology is a card with the three linked dots of a knowledge graph in a
+  band at its left, where it was an ellipse with four whiskers.
 
 
 v0.1a22 (2026-11-13)
