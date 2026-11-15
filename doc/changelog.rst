@@ -370,6 +370,14 @@ Unreleased
 
 **Bug fixes:**
 
+* ``.view`` of a program with several answers on several grids, such as the
+  parcels of an atlas (on its 2 mm grid) and the streamlines of a tract
+  (counted on the 1 mm grid of the background), failed: "The overlay
+  'tract: streamlines' is not on the grid of the first one". The overlays
+  are drawn on the finest of the grids, the others resampled to it, each
+  voxel taking the value of the nearest, so a mask stays a mask and a
+  count keeps its values.
+
 * ``.view`` drew nothing of a region, a result of voxels without a value,
   or of an overlay of one value: its default threshold, the 95th
   percentile, is that value, and NiiVue draws nothing of a colour range of

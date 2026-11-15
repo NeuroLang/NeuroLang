@@ -509,13 +509,34 @@ class TestLayers:
     def test_the_cursor_starts_on_the_peak_of_the_first(self, state):
         assert state["initial"]["cursor"] == [1, 2, 3]
 
-    def test_the_images_must_share_a_grid(self):
-        with pytest.raises(ValueError, match="grid"):
-            brain_viewer.viewer_html(
-                [("a", _image(np.ones((2, 2, 2), np.float32))),
-                 ("b", _image(np.ones((3, 2, 2), np.float32)))],
-                None, title="t", threshold=0, cmap=None, symmetric=False,
-            )
+    def test_images_of_several_grids_are_drawn_on_the_finest(self):
+        """
+        The regions of an answer, on the 2 mm grid of their atlas, beside
+        the streamlines of another, counted on the 1 mm grid of the
+        background, failed ("not on the grid of the first one"). The
+        coarser image is resampled to the finer grid, each voxel taking the
+        value of the nearest: a mask stays a mask and a count keeps its
+        value.
+        """
+        coarse = np.zeros((4, 4, 4), dtype=np.float32)
+        coarse[1, 1, 1] = 1.0
+        fine_affine = AFFINE.copy()
+        fine_affine[:3, :3] /= 2
+        fine = np.zeros((8, 8, 8), dtype=np.float32)
+        fine[6, 6, 6] = 7.0
+        state = _state(brain_viewer.viewer_html(
+            [("regions: mask", _image(coarse)),
+             ("tract: streamlines", _image(fine, fine_affine))],
+            None, title="t", threshold="95%", cmap=None, symmetric=False,
+        ))
+        assert state["shape"] == [8, 8, 8]
+        assert np.allclose(state["affine"], fine_affine)
+        mask = _overlay_volume(state["overlays"][0], (8, 8, 8))
+        assert set(np.unique(mask)) == {0.0, 1.0}
+        # the 2 mm voxel (1, 1, 1), at (-1, -3, -5) mm, is the 1 mm voxel
+        # (2, 2, 2) and some of its neighbours, no more than the 8 it covers
+        assert mask[2, 2, 2] == 1 and 1 <= mask.sum() <= 8
+        assert _overlay_volume(state["overlays"][1])[6, 6, 6] == 7.0
 
 
 _LAYERS_CHECK = _CHECK_HELPERS + """
