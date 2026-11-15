@@ -1623,7 +1623,7 @@ class TestImage:
         lines = query.splitlines()
         rules = [n for n, line in enumerate(lines)
                  if not line.startswith("%")]
-        assert len(rules) == 7
+        assert len(rules) == 8
         for n in rules:
             assert n > 0 and lines[n - 1].startswith("% "), lines[n]
         assert not any(line.startswith("%%") for line in lines)
@@ -1636,8 +1636,8 @@ class TestImage:
         out = " ".join(_output(decoding).split())
         assert "loaded image_probability(i, j, k, p): 1 voxels" in out
         assert "Decode it with this query: % " in out
-        assert "image_score(s, sum(p)) :- image_probability(i, j, k, p), " \
-            "activated(i, j, k, s)" in out
+        assert "image_active(i, j, k) :: p :- " \
+            "image_probability(i, j, k, p)" in out
         assert self._probabilities(decoding) == {(1, 2, 3): 1.0}
         # P(hit | pain) = 1 over P(hit) = 2/3; vision, of probability 0, is
         # no answer

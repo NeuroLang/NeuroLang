@@ -860,25 +860,27 @@ engines:
     # The query decoding an image (.image loads a NIfTI image as one), from
     # the probability that each of its voxels is active,
     # {image}_probability(i, j, k, p): 1 for those of a mask, 1 - the local
-    # false discovery rate of a z-score (.image --zscore).  A voxel is chosen
-    # in the image, the more likely the more probably active, independently
-    # of the study: image_hit(s), that the study s activates it, has the
-    # probability of the weight of the voxels it activates.  The lift of a
+    # false discovery rate of a z-score (.image --zscore).  Each voxel is a
+    # probabilistic fact, active with its probability, and one is chosen at
+    # random, independently of the study: image_hit(s), that the study s
+    # activates the chosen voxel and that it is active.  The lift of a
     # term is the probability of it for the studies of the term over the
     # same for all the studies (doc/tutorial_decoding.rst); the query keeps
     # the concepts of the Cognitive Atlas with 30 studies or more, the lift
     # of fewer being noisy.
     image_decoding_query: |-
-      % The probability that each voxel of the image is
-      % active, as its weight: of the voxels each study s
-      % activates (a peak within the kernel of the voxel).
-      image_score(s, sum(p)) :- {image}_probability(i, j, k, p), activated(i, j, k, s)
-      % The weight of all the voxels of the image.
-      image_total(sum(p)) :- {image}_probability(i, j, k, p)
-      % A study hits the image with the probability that a
-      % voxel chosen in it, the more likely the more probably
-      % active, is one the study activates.
-      image_hit(s) :: q :- image_score(s, x), image_total(y), (q == x / y)
+      % Each voxel of the image is active with its
+      % probability, independently: a probabilistic fact.
+      image_active(i, j, k) :: p :- {image}_probability(i, j, k, p)
+      % The number of voxels of the image.
+      image_size(sum(o)) :- {image}_probability(i, j, k, p), (o == 1.0)
+      % One voxel of the image, chosen at random, each
+      % as likely.
+      image_voxel(i, j, k) ^ q :- {image}_probability(i, j, k, p), image_size(n), (q == 1.0 / n)
+      % A study s hits the image when the chosen voxel is
+      % active and s activates it (a peak within the
+      % kernel of the voxel).
+      image_hit(s) :- image_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
       % For each term t, the probability that a study of t,
       % chosen at random, hits the image.
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))

@@ -63,9 +63,10 @@ Unreleased
   how to decode it (*Decode as z-scores*, *Decode as a mask*): a plain
   Datalog query over the
   probabilities, so any relation of voxels and probabilities is decoded
-  the same way.  Its score is the lift of each term: the probability that
-  a study of the term activates a voxel chosen in the image, the more
-  likely the more probably active, over the same for all the studies.
+  the same way.  Each voxel is a probabilistic fact of its probability and
+  one is chosen at random; its score is the lift of each term: the
+  probability that a study of the term activates the chosen voxel, which
+  is active, over the same for all the studies.
   The query assistant's bank and guidance decode an uploaded image, and
   have the overlap query too (each voxel a probabilistic fact, a study
   hitting the image if it activates one), for a mask or a small region.

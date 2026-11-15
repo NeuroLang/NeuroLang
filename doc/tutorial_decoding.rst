@@ -117,52 +117,14 @@ terms of the largest lifts decode it.  It is the ``uniformity`` of
 :doc:`tutorial_neurosynth_tests` with the voxels of the image, weighted,
 in place of those of the whole brain.
 
-The model: the voxels as facts, one of them chosen
+The query: the voxels as facts, one of them chosen
 --------------------------------------------------
 
-The probabilistic program of this decoding takes each voxel of the image
-as a fact, active with its probability, chooses one voxel uniformly, and
-says a study hits the image when it activates the chosen voxel and that
-voxel is active:
-
-.. code-block:: text
-
-    image_active(i, j, k) :: p :- image_probability(i, j, k, p)
-    image_size(sum(o)) :- image_probability(i, j, k, p), (o == 1.0)
-    image_voxel(i, j, k) ^ q :- image_probability(i, j, k, p), image_size(n), (q == 1.0 / n)
-    image_hit(s) :- image_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
-    p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
-
-Of :math:`n` voxels, :math:`P(\mathrm{hit} \mid s) = \frac{1}{n}
-\sum_{v \,:\, A_v(s)} p_v`, and averaged over the studies of :math:`T`,
-or over all of them, :math:`\frac{1}{n} \sum_v p_v P(A_v \mid T)` and
-:math:`\frac{1}{n} \sum_v p_v P(A_v)`.  These are :math:`P(A_V \mid T)` and
-:math:`P(A_V)` above times the same constant :math:`\sum_u p_u / n`, so
-their ratio is the lift.  This program is the decoding, as it is said.
-
-The engine solves it exactly (:doc:`probabilistic_lifting`): the choice
-of the voxel makes the probability a sum over the voxels.  But the
-engine's join order joins the studies, their terms and ``activated``, all
-the peaks of the engine, before the image: seconds for the amygdala below,
-more than 30 GB for a whole statistical map.  The
-query of the engines, below, computes the same lift from the studies
-alone.
-
-The query
----------
-
-The voxel is chosen independently of the study, so a study :math:`s`
-activates the chosen voxel with the probability
-
-.. math::
-
-    P(A_V \mid s) = \frac{\sum_{v \,:\, A_v(s)} w_v}{\sum_u w_u},
-
-with :math:`w_v = p_v`, the weight of the voxels of the image it activates
-over the weight of them all, and the probabilities above are this one
-averaged over the studies.  That is the decoding query of the engines
-(``image_decoding_query`` in ``engines.yaml``), ``{image}`` being the name
-of the image:
+The decoding query of the engines (``image_decoding_query`` in
+``engines.yaml``, ``{image}`` being the name of the image) says this as a
+probabilistic program: each voxel of the image is a fact, active with its
+probability, one voxel is chosen uniformly, and a study hits the image
+when it activates the chosen voxel and that voxel is active:
 
 .. literalinclude:: ../packages/neurolang_apps/neurolang_apps/utils/engines/engines.yaml
    :language: text
@@ -170,26 +132,55 @@ of the image:
    :end-before: # The Cognitive Atlas ontology
    :dedent: 6
 
-- ``image_score(s, x)`` is the weight of the voxels of the image that the
-  study ``s`` activates, a conjunction of the probabilities of the image
-  with ``activated``, and ``image_total(y)`` the weight of them all;
-- ``image_hit(s)`` is a probabilistic fact of each study, of the
-  probability :math:`P(A_V \mid s) = x / y`;
+- ``image_active(i, j, k)`` is a probabilistic fact of each voxel, of its
+  probability :math:`p_v`; ``image_voxel(i, j, k)`` a choice of one of the
+  :math:`n` voxels, ``image_size(n)``, each of probability :math:`1/n`;
+- ``image_hit(s)`` holds when the study ``s`` activates the chosen voxel,
+  which is active;
 - ``p_image_given_term(t, p)`` conditions it on the studies of each term,
-  :math:`P(A_V \mid T)` for every term at once, and ``p_image(q)`` is
-  :math:`P(A_V)`;
+  for every term at once, and ``p_image(q)`` is its probability over all
+  the studies;
 - the answer keeps the terms of 30 studies or more, ``term_studies``,
   since one study of a rare term activating the image makes its lift
   large, and the concepts of the Cognitive Atlas
   (:doc:`tutorial_cognitive_atlas`) rather than every word of the
   abstracts.  Drop ``cogat_term`` to rank every term of the engine.
 
+The voxel is chosen independently of the study, and the facts of the
+voxels are independent of it too, so that
+
+.. math::
+
+    P(\mathrm{hit} \mid s) = \frac{1}{n} \sum_{v \,:\, A_v(s)} p_v,
+
+and averaged over the studies of :math:`T`, or over all of them,
+:math:`\frac{1}{n} \sum_v p_v P(A_v \mid T)` and :math:`\frac{1}{n}
+\sum_v p_v P(A_v)`.  These are :math:`P(A_V \mid T)` and :math:`P(A_V)`
+above times the same constant :math:`\sum_u p_u / n`, so their ratio,
+``lift``, is the lift of the term.
+
+The engine solves the program exactly (:doc:`probabilistic_lifting`): the
+choice of the voxel makes the probability a sum over the voxels, which it
+computes for each study, the image joined with ``activated`` first, before
+the terms of the studies.  It is the weighted query one would write by
+hand,
+
+.. code-block:: text
+
+    image_score(s, sum(p)) :- image_probability(i, j, k, p), activated(i, j, k, s)
+    image_total(sum(p)) :- image_probability(i, j, k, p)
+    image_hit(s) :: q :- image_score(s, x), image_total(y), (q == x / y)
+
+of the same lifts, for the motor map below 13 s and 6 GB where this one
+takes 7 s and 5 GB.
+
 The query reads the image as any relation of voxels and probabilities: a
 map of yours loaded with ``.load``, ``my_map_probability(i, j, k, p)``, is
-decoded by the same query with ``my_map`` in place of ``image``.  A term none of whose studies activates the image has
-a probability of 0, and is no answer.
+decoded by the same query with ``my_map`` in place of ``image``.  A term
+none of whose studies activates the image has a probability of 0, and is
+no answer.
 
-The same lift is :math:`\sum_v w_v P(A_v \mid T) / \sum_v w_v P(A_v)`,
+The same lift is :math:`\sum_v p_v P(A_v \mid T) / \sum_v p_v P(A_v)`,
 the image joined with the engine's ``p_a_given_t(t, i, j, k, p)`` and
 ``p_a(i, j, k, p)``; but the engine computes those for every term at every
 voxel before the join, more than 40 GB for the amygdala below, where the
@@ -216,8 +207,8 @@ the rest of the program as above.  For a mask or a small region, it is how
 much more often the studies of a term report a peak in it: fear 2.92,
 valence 2.50, emotion 2.32 for the amygdala below.  On a whole map, nearly
 every study activates some active voxel of it, 98% of them for the motor
-map, and the lifts of all the terms are near 1: the weighted choice above
-tells them apart.
+map, and the lifts of all the terms are near 1: the choice of a voxel
+above tells them apart.
 
 A mask: the amygdala
 --------------------
