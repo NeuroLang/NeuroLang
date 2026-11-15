@@ -863,3 +863,141 @@ def test_the_page_uploads_a_file_that_load_loads(repl, monkeypatch, tmp_path):
                        ("big.csv", b"a" * (session.MOST_UPLOAD_BYTES + 1))):
         with pytest.raises(ValueError):
             repl.upload(name, data)
+
+
+def test_the_page_uploads_an_image_that_image_loads(repl):
+    """A NIfTI image the page uploads is loaded by .image, replacing the
+    image of the session; an engine that cannot decode it gives no query."""
+    answer = repl.upload("my map.nii.gz", b"\x1f\x8b")
+    assert answer == {
+        "name": "my map.nii.gz", "relation": "my_map",
+        "statement": ".image 'my map.nii.gz' --name my_map",
+        "query": "", "kind": "", "cortex_query": "",
+        "threshold": nifti.IMAGE_DEFAULTS["threshold"],
+        "radius": nifti.IMAGE_DEFAULTS["endpoint_radius"],
+    }
+
+
+def test_the_page_uploads_a_tractogram_that_image_loads(repl, monkeypatch):
+    """A tractogram the page uploads is loaded by .image, named after its
+    file, and comes with the queries decoding it: of kind tractogram, the
+    voxels within radius mm of the ends of its streamlines."""
+    monkeypatch.setattr(nifti, "decoding_query",
+                        lambda app, name, voxels="brain": (f"{voxels}", []))
+    answer = repl.upload("my uf.tck", b"mrtrix tracks")
+    assert answer["statement"] == ".image 'my uf.tck' --name my_uf"
+    assert answer["kind"] == "tractogram"
+    assert (answer["query"], answer["cortex_query"]) == ("brain", "cortex")
+    assert answer["radius"] == nifti.IMAGE_DEFAULTS["endpoint_radius"]
+
+
+def test_the_page_is_told_if_an_uploaded_image_is_a_mask(repl):
+    """A mask is decoded as it is; a map of values once said of
+    z-scores (.image --zscore): the page asks."""
+    import gzip
+
+    import nibabel as nib
+    import numpy as np
+
+    for values, kind in (([1, 1], "mask"), ([1.5, 4.0], "map")):
+        data = np.zeros((4, 4, 4), dtype=np.float32)
+        data[1, 1, 1], data[2, 2, 2] = values
+        image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+        assert repl.upload("i.nii.gz", image)["kind"] == kind
+
+
+def test_each_uploaded_image_is_a_relation_of_its_own(repl):
+    """Two images uploaded are loaded as two relations, each of its file's
+    name; the same file uploaded again replaces its own."""
+    import gzip
+
+    import nibabel as nib
+    import numpy as np
+
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[1, 1, 1] = 1
+    image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+    relations = []
+    for name in ("first.nii.gz", "second.nii.gz", "first.nii.gz"):
+        answer = repl.upload(name, image)
+        relations.append(answer["relation"])
+        assert answer["statement"].endswith(f"--name {answer['relation']}")
+        repl.app.uploads.loaded(name, answer["relation"])
+        repl.app._nl.add_tuple_set([(1, 1, 1, 1.0)], name=answer["relation"])
+    assert relations == ["first", "second", "first"]
+
+
+def test_the_page_gets_the_queries_decoding_the_brain_and_the_cortex(
+    repl, monkeypatch
+):
+    """An uploaded image comes with the query decoding it, a voxel chosen
+    in the brain, and the one choosing it in the cortex (Only the cortex,
+    .image --cortex)."""
+    import gzip
+
+    import nibabel as nib
+    import numpy as np
+
+    monkeypatch.setattr(nifti, "decoding_query",
+                        lambda app, name, voxels="brain": (f"{voxels}", []))
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[1, 1, 1] = 1
+    image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+    answer = repl.upload("i.nii.gz", image)
+    assert (answer["query"], answer["cortex_query"]) == ("brain", "cortex")
+
+
+@pytest.mark.parametrize("name", ["my roi.nii.gz", "my roi.nii"])
+def test_a_server_loads_shows_and_tells_an_uploaded_image(
+    repl, monkeypatch, tmp_path, name
+):
+    """The whole path of an image on a server (neurolang.confine): the
+    page uploads it, runs the statement the upload returns, and gets the
+    viewer back; an engine without the peaks of studies says it does not
+    decode it."""
+    import gzip
+    import re
+
+    import nibabel as nib
+    import numpy as np
+    from neurolang.confine import CONFINE_ENV
+
+    monkeypatch.setenv(CONFINE_ENV, str(tmp_path / "data"))
+    monkeypatch.setattr(
+        nifti, "_viewer_page", lambda *args, **kwargs: "<html>page</html>"
+    )
+    repl.app._nl.template = nib.Nifti1Image(
+        np.ones((4, 4, 4), dtype=np.uint8), np.eye(4)
+    )
+    data = np.zeros((4, 4, 4), dtype=np.uint8)
+    data[1, 1, 1] = data[2, 2, 2] = 1
+    image = nib.Nifti1Image(data, np.eye(4)).to_bytes()  # .nii
+    if name.endswith(".gz"):
+        image = gzip.compress(image)
+    answer = repl.upload(name, image)
+    reply = repl.submit(answer["statement"])
+    text = " ".join(re.sub(r"<[^>]+>", "", reply.html).split())
+    assert not reply.failed, text
+    assert f"loaded my_roi(i, j, k, value): 2 voxels from {name}, " \
+        "a mask" in text
+    assert "cannot decode the image: it has no activated" in text
+    assert answer["query"] == answer["cortex_query"] == ""  # nor does the
+    # page offer the query
+    assert reply.viewers == ["<html>page</html>"]
+    assert not (tmp_path / "data").exists()  # nothing written there
+
+
+def test_a_reply_tells_the_uploads_of_the_session(repl):
+    """Each reply carries the files the page uploaded, what they were
+    loaded as and the room taken, for the page to list them."""
+    from neurolang_apps.utils.tui.local_backend import reply_payload
+
+    assert repl.submit("ans(x, n) :- person(x, n)").uploads["files"] == []
+    repl.upload("my scores.csv", b"study,score\ns1,0.5\n")
+    reply = repl.submit(".load 'my scores.csv' scores")
+    (upload,) = reply.uploads["files"]
+    assert (upload["name"], upload["size"], upload["loaded"]) == (
+        "my scores.csv", 19, ["scores"])
+    assert reply.uploads["used"] == 19
+    assert reply.uploads["most"] == repl.app.uploads.most_all
+    assert reply_payload(reply)["uploads"] == reply.uploads

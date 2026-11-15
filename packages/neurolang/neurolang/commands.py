@@ -286,13 +286,18 @@ class CommandsMixin(PatternWalker):
         a third argument, a tuple of ``(name, sort)`` pairs, names its
         arguments. A predicate documented several times has its
         descriptions one after the other, each once, and the arguments
-        given last. The documentation follows the scopes of the program,
-        as its rules do (see :meth:`predicate_documentation`).
+        given last; ``replace=True`` replaces its description instead (a
+        relation loaded again, from another file). The documentation
+        follows the scopes of the program, as its rules do (see
+        :meth:`predicate_documentation`).
         """
-        if not 2 <= len(command.args) <= 3 or command.kwargs:
+        options = {_unwrap_expr(k): _unwrap_expr(v)
+                   for k, v in command.kwargs}
+        if not 2 <= len(command.args) <= 3 or set(options) - {"replace"}:
             raise InvalidCommandExpression(
                 'The .document command takes the name of a predicate and '
-                'its description, as in .document(p, "description").'
+                'its description, as in .document(p, "description"), and '
+                'replace=True to replace the description it had.'
             )
         name = _unwrap_expr(command.args[0])
         description = str(_unwrap_expr(command.args[1])).strip()
@@ -302,6 +307,8 @@ class CommandsMixin(PatternWalker):
         )
         documentation = self._documentation()
         old = documentation.get(name, PredicateDocumentation(""))
+        if options.get("replace"):
+            old = PredicateDocumentation("", old.arguments)
         if description and description not in old.description:
             description = "\n\n".join(
                 d for d in (old.description, description) if d

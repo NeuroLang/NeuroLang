@@ -67,3 +67,16 @@ def test_the_links_of_the_page_point_at_headings_of_the_tutorial():
     anchors = re.findall(r"\$\{DATALOG\}#([\w-]+)", docs)
     assert len(anchors) >= 8
     assert set(anchors) <= ids, sorted(set(anchors) - ids)
+
+
+def test_the_file_picker_of_upload_data_offers_gzipped_images():
+    """
+    Safari's and macOS's pickers (some GTK ones too) match the last
+    extension of a file only: ``.nii.gz`` alone in ``accept`` greys out
+    ``mask.nii.gz``, so the plain ``.gz`` stays (the server refuses a
+    ``.gz`` that is neither a table nor an image, saying so).
+    """
+    page = (ROOT / "doc" / "_static" / "repl" / "index.html").read_text()
+    picker = re.search(r'<input id="upload-file"[^>]*accept="([^"]*)"', page)
+    accepted = set(picker.group(1).split(","))
+    assert {".csv", ".tsv", ".gz", ".nii", ".nii.gz"} <= accepted, accepted

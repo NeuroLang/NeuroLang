@@ -1440,3 +1440,492 @@ class TestViewSeveralQueries:
     def test_the_threshold_is_the_default_with_voxels(self, tiny, viewed):
         self._view(tiny, SEVERAL_QUERIES)
         assert viewed[0][1]["threshold"] == "95%"
+
+
+class TestImage:
+    """Check .image loads a NIfTI image of activations, a mask or a z-map,
+    as a relation of the session, and the query decoding it."""
+
+    @pytest.fixture
+    def zmap(self, tmp_path):
+        data = np.zeros((4, 4, 4), dtype=np.float32)
+        data[1, 2, 3], data[0, 0, 0], data[3, 3, 3] = 5.0, 3.0, -2.0
+        path = tmp_path / "z.nii.gz"
+        nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
+        return path
+
+    @staticmethod
+    def _mask(tmp_path, voxels, name="mask.nii"):
+        data = np.zeros((4, 4, 4), dtype=np.uint8)
+        for voxel in voxels:
+            data[voxel] = 1
+        path = tmp_path / name
+        nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
+        return path
+
+    def test_loads_the_voxels_and_their_values(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap} --name image")
+        out = " ".join(_output(tiny).split())
+        assert "loaded image(i, j, k, value): 3 voxels" in out
+        assert "a map of values" in out
+        assert {tuple(row) for row in tiny._nl.symbols["image"].value} == {
+            (1, 2, 3, 5.0), (0, 0, 0, 3.0), (3, 3, 3, -2.0)
+        }
+
+    def test_the_assistant_is_told_what_the_image_is(
+        self, tiny, zmap, tmp_path
+    ):
+        """
+        The query assistant finds the image among the relations of its
+        schema, and with describe_predicate: the file it comes from, a mask
+        or a map of values, its voxels and values; loaded again from another
+        file, the description is the new file's only.
+        """
+        from neurolang_apps.utils.llm.context import EngineContext
+
+        def line():
+            schema = EngineContext(
+                tiny._nl, "tiny", tiny.loaded_relations
+            ).schema_summary()
+            return next(row for row in schema.splitlines()
+                        if row.startswith("- image(i, j, k, value)"))
+
+        tiny._handle_dot_command(f".image {zmap} --name image")
+        first = line()
+        assert "brain image" in first and "z.nii.gz" in first
+        assert "a map of values of 3 voxels, from -2 to 5" in first
+        assert "examples decoding an image" in first
+        assert "--zscore" in first  # how its probabilities are had
+        tiny._handle_dot_command(
+            f".image {self._mask(tmp_path, [(1, 2, 3), (0, 0, 0)])} "
+            "--name image"
+        )
+        second = line()
+        assert "mask.nii" in second and "a binary mask of 2 voxels" in second
+        assert "z.nii.gz" not in second and second.count("brain image") == 1
+        context = EngineContext(tiny._nl, "tiny", tiny.loaded_relations)
+        assert "a binary mask of 2 voxels" in context.describe("image")
+
+    def test_the_name(self, tiny, zmap):
+        tiny._handle_dot_command(f".image {zmap} --name z")
+        assert "loaded z(i, j, k, value)" in _output(tiny)
+
+    def test_loading_again_replaces_it_when_named(self, tiny, zmap):
+        """The image is named after its file, z.nii.gz z, as .load names a
+        table; loaded again, it replaces the relation of that name only
+        when given."""
+        tiny._handle_dot_command(f".image {zmap}")
+        tiny._handle_dot_command(f".image {zmap}")
+        assert "already loaded" in " ".join(_output(tiny).split())
+        tiny._handle_dot_command(f".image {zmap} --name z")
+        assert _output(tiny).count("loaded z(i, j, k, value)") == 2
+
+    def test_errors(self, tiny, zmap, tmp_path):
+        tiny._handle_dot_command(f".image {tmp_path / 'none.nii'}")
+        tiny._handle_dot_command(".image")
+        tiny._handle_dot_command(
+            f".image {self._mask(tmp_path, [])} --name image"
+        )
+        out = " ".join(_output(tiny).split())
+        assert "Cannot load" in out
+        assert "Usage: .image PATH" in out
+        assert "has no value other than 0 in the brain" in out
+
+    def test_an_image_too_large_uncompressed_is_refused(
+        self, tiny, zmap, monkeypatch
+    ):
+        monkeypatch.setitem(nifti.IMAGE_DEFAULTS, "max_mb", 0)
+        tiny._handle_dot_command(f".image {zmap} --name image")
+        assert "more than 0 MB uncompressed" in _output(tiny)
+        assert "image" not in tiny.loaded_relations
+
+    def test_a_mask_on_another_grid_stays_a_mask(self, tiny, tmp_path):
+        """Resampled to the nearest voxel: a mask of 2 mm voxels resampled
+        from 1 mm ones is no fraction of a voxel."""
+        data = np.zeros((8, 8, 8), dtype=np.float32)
+        data[2:6, 2:6, 2:6] = 4.0
+        affine = TINY_AFFINE.copy()
+        affine[:3, :3] *= 0.5
+        path = tmp_path / "fine.nii.gz"
+        nib.save(nib.Nifti1Image(data, affine), path)
+        tiny._handle_dot_command(f".image {path} --name image")
+        assert "a mask" in _output(tiny)
+        values = {row[-1] for row in tiny._nl.symbols["image"].value}
+        assert values == {4.0}
+
+    def test_an_uploaded_image_on_a_server(
+        self, tiny, zmap, tmp_path, monkeypatch
+    ):
+        """On a server (neurolang.confine), .image reads the images the
+        page uploaded, by their name, not its files."""
+        from neurolang.confine import CONFINE_ENV
+
+        monkeypatch.setenv(CONFINE_ENV, str(tmp_path / "data"))
+        tiny.uploads["my z.nii.gz"] = zmap.read_bytes()
+        tiny._handle_dot_command(f".image {zmap} --name image")
+        assert "No image" in _output(tiny) and "was uploaded" in _output(tiny)
+        tiny._handle_dot_command(".image 'my z.nii.gz'")
+        assert "loaded my_z(i, j, k, value): 3 voxels from my z.nii.gz" in \
+            " ".join(_output(tiny).split())
+        assert tiny.uploads.listing()[0]["loaded"] == ["my_z"]
+
+    @pytest.fixture
+    def decoding(self, tiny, monkeypatch):
+        """The tiny engine with what the query of the meta-analysis
+        engines decodes an image with: studies 10 and 11, of pain, activate
+        the voxel (1, 2, 3), and 12, of vision, (0, 0, 0); a voxel of the
+        brain, of three, is chosen at random; (1, 2, 3) is in the cortex."""
+        import yaml
+
+        from neurolang_apps.utils import engine_registry
+
+        engines = Path(engine_registry.__file__).parent / "engines"
+        meta_analysis = yaml.safe_load(
+            (engines / "engines.yaml").read_text()
+        )["engines"]["coordinate_meta_analysis"]
+        decoding = {key: meta_analysis[key] for key in (
+            "image_decoding_query", "image_decoding_voxels"
+        )}
+        config = engine_registry.get_engine_config
+        monkeypatch.setattr(
+            engine_registry, "get_engine_config",
+            lambda name, *a: {**config(name, *a), **decoding},
+        )
+        nl = tiny._nl
+        nl.add_tuple_set(
+            [(1, 2, 3, 10), (1, 2, 3, 11), (0, 0, 0, 12)], name="activated"
+        )
+        nl.add_tuple_set(
+            [(10, "pain"), (11, "pain"), (12, "vision")], name="term_in_study"
+        )
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(10,), (11,), (12,)], name="selected_study"
+        )
+        nl.add_uniform_probabilistic_choice_over_set(
+            [(0, 0, 0), (1, 2, 3), (4, 5, 6)], name="selected_voxel"
+        )
+        nl.add_tuple_set([(1, 2, 3)], name="cortical_mask")
+        nl.add_tuple_set([("c1", "pain"), ("c2", "vision")], name="cogat_term")
+        return tiny
+
+    @staticmethod
+    def _lifts(app, name="image", voxels="brain"):
+        """The lifts of the query decoding *name*, a voxel chosen among the
+        *voxels*, without its keeping the terms of 30 studies or more,
+        which the tiny engine has not."""
+        query, missing = nifti.decoding_query(app, name, voxels)
+        assert not missing
+        rules = [rule for rule in query.splitlines()
+                 if not rule.startswith("ans(")]
+        app._execute_and_display("\n".join(rules) + "\n" + (
+            f"ans(term, lift) :- p_{name}_given_term(term, a), p_{name}(b), "
+            "(lift == a / b)"
+        ))
+        frame = app.results[-1].frame
+        return {row[0]: round(row[1], 6)
+                for row in frame.itertuples(index=False, name=None)}
+
+    def _probabilities(self, app, name="image_probability"):
+        return {tuple(row[:3]): row[3]
+                for row in app._nl.symbols[name].value}
+
+    def test_each_line_of_the_query_is_explained(self, decoding):
+        """The decoding query, which the page offers to put in the box, has
+        a comment (%, not the %% documenting a rule) before each rule."""
+        query, missing = nifti.decoding_query(decoding, "image")
+        assert not missing
+        lines = query.splitlines()
+        rules = [n for n, line in enumerate(lines)
+                 if not line.startswith("%")]
+        assert len(rules) == 6
+        for n in rules:
+            assert n > 0 and lines[n - 1].startswith("% "), lines[n]
+        assert not any(line.startswith("%%") for line in lines)
+        assert "image_probability(i, j, k, p)" in query
+
+    def test_the_query_decodes_a_mask(self, decoding, tmp_path):
+        """A mask's voxels are active for sure: its probabilities are 1."""
+        mask = self._mask(tmp_path, [(1, 2, 3)])
+        decoding._handle_dot_command(f".image {mask} --name image")
+        out = " ".join(_output(decoding).split())
+        assert "loaded image_probability(i, j, k, p): 1 voxels" in out
+        assert "Decode it with this query: % " in out
+        assert "image_active(i, j, k) :: p :- " \
+            "image_probability(i, j, k, p)" in out
+        assert self._probabilities(decoding) == {(1, 2, 3): 1.0}
+        # P(hit | pain) = 1 over P(hit) = 2/3; vision, of probability 0, is
+        # no answer
+        assert self._lifts(decoding) == {"pain": 1.5}
+
+    def test_the_cortex_of_an_image_is_decoded_alone(self, decoding, tmp_path):
+        """--cortex chooses the voxel in the cortex: of the mask of (1, 2,
+        3) and (0, 0, 0), only (1, 2, 3), that the studies of pain activate,
+        is decoded; in the brain, each study activates a voxel of it."""
+        mask = self._mask(tmp_path, [(1, 2, 3), (0, 0, 0)])
+        decoding._handle_dot_command(f".image {mask} --cortex --name image")
+        out = " ".join(_output(decoding).split())
+        assert "image_hit(s) :- selected_voxel(i, j, k), " \
+            "cortical_mask(i, j, k), image_active(i, j, k)" in out
+        assert self._lifts(decoding) == {"pain": 1.0, "vision": 1.0}
+        # P(hit | pain) = 1/3 over P(hit) = 2/9
+        assert self._lifts(decoding, voxels="cortex") == {"pain": 1.5}
+
+    @staticmethod
+    def _tractogram(tmp_path, lines, name="tracts.tck"):
+        """Save the streamlines *lines*, in mm, in the tractogram *name*
+        (.tck or .trk, whose voxel grid is the tiny one)."""
+        tractogram = nib.streamlines.Tractogram(
+            [np.array(line, dtype=np.float32) for line in lines],
+            affine_to_rasmm=np.eye(4),
+        )
+        path = tmp_path / name
+        if name.endswith(".trk"):
+            header = {"voxel_to_rasmm": TINY_AFFINE,
+                      "voxel_sizes": (2.0, 2.0, 2.0),
+                      "dimensions": (4, 4, 4)}
+            nib.streamlines.TrkFile(tractogram, header).save(str(path))
+        else:
+            nib.streamlines.save(tractogram, str(path))
+        return path
+
+    @pytest.mark.parametrize("name", ["tracts.tck", "tracts.trk"])
+    def test_a_tractogram_is_the_voxels_near_the_ends_of_its_streamlines(
+        self, decoding, tmp_path, name
+    ):
+        """
+        The centre of voxel (1, 2, 3) of the tiny grid (2 mm, from (-3, -5,
+        -7)) is (-1, -1, -1): the ends of the first streamline are 0.5 and
+        0.2 mm from it, the first of the second 0.2 mm, the other ends are
+        out of the brain. Within 1 mm, it is the only voxel, of 3 ends, and
+        decoded as a mask: p = 1.
+        """
+        path = self._tractogram(tmp_path, [
+            [(-0.5, -1, -1), (2, 2, 2), (-1, -1, -1.2)],
+            [(-1.2, -1, -1), (20, 20, 20)],
+        ], name)
+        decoding._handle_dot_command(f".image {path} --radius 1")
+        out = " ".join(_output(decoding).split())
+        assert "loaded tracts(i, j, k, value): 1 voxels from" in out
+        assert "within 1 mm of the ends of its 2 streamlines" in out
+        assert "1 for each voxel within 1 mm of an end" in out
+        assert "Decode it with this query: % " in out
+        assert "Only " not in out  # 3 ends of 4 are in the brain
+        assert {tuple(row) for row in decoding._nl.symbols["tracts"].value} \
+            == {(1, 2, 3, 3)}
+        assert self._probabilities(decoding, "tracts_probability") == {
+            (1, 2, 3): 1.0}
+        assert self._lifts(decoding, "tracts") == {"pain": 1.5}
+
+    def test_the_default_radius_of_a_tractogram(self, tiny, tmp_path):
+        """By default the voxels within endpoint_radius (3) mm of an end:
+        those of the tiny grid whose centre is, measured here."""
+        ends = np.array([(-0.5, -1, -1), (1.4, 2.6, -6.1)])
+        path = self._tractogram(tmp_path, [ends])
+        tiny._handle_dot_command(f".image {path}")
+        voxels = np.argwhere(np.ones((4, 4, 4)))
+        centres = nib.affines.apply_affine(TINY_AFFINE, voxels)
+        distances = np.linalg.norm(centres[:, None] - ends[None], axis=2)
+        near = (distances <= 3).sum(axis=1)
+        expected = {(*map(int, v), int(n))
+                    for v, n in zip(voxels, near) if n}
+        assert nifti.IMAGE_DEFAULTS["endpoint_radius"] == 3
+        assert {tuple(row) for row in tiny._nl.symbols["tracts"].value} \
+            == expected
+        assert len(expected) > 2 and max(n for *_, n in expected) == 1
+
+    def test_the_streamlines_of_a_tractogram_are_shown(
+        self, tiny, tmp_path, monkeypatch
+    ):
+        """The viewer draws its streamlines, in MNI mm, over the voxels
+        near their ends: at most MAX_STREAMLINES, evenly subsampled."""
+        calls = []
+
+        def viewer_html(img, background, **kwargs):
+            calls.append(kwargs)
+            return "<html></html>"
+
+        monkeypatch.setattr(nifti.brain_viewer, "viewer_html", viewer_html)
+        monkeypatch.setattr(nifti.brain_viewer, "MAX_STREAMLINES", 2)
+        path = self._tractogram(tmp_path, [
+            [(-1, -1, -1), (-3, -5, -7)], [(-1, -1, -1), (1, -1, -1)],
+            [(-3, -5, -7), (-3, -3, -7)],
+        ])
+        tiny._handle_dot_command(f".image {path}")
+        (kwargs,) = calls
+        assert kwargs["space"] == "MNI"
+        assert kwargs["streamlines"]["shown"] == 2
+        assert kwargs["streamlines"]["total"] == 3
+
+    def test_a_tractogram_out_of_the_brain(self, tiny, tmp_path):
+        """Ends out of the brain but near it are loaded with a warning
+        (5.5 mm is 2.5 from the centre of voxel 3); none near, an error."""
+        near = self._tractogram(tmp_path, [[(5.5, -1, -1), (5.5, -1, 30)]],
+                                "near.tck")
+        tiny._handle_dot_command(f".image {near}")
+        out = " ".join(_output(tiny).split())
+        assert "Only 0% of the ends of the streamlines of" in out
+        assert "loaded near(i, j, k, value)" in out
+        far = self._tractogram(tmp_path, [[(50, 50, 50), (60, 60, 60)]],
+                               "far.tck")
+        tiny._handle_dot_command(f".image {far}")
+        assert "No end of the streamlines of" in " ".join(
+            _output(tiny).split())
+        assert "far" not in tiny.loaded_relations
+
+    def test_the_options_of_a_tractogram(self, tiny, zmap, tmp_path):
+        path = self._tractogram(tmp_path, [[(-1, -1, -1), (-3, -5, -7)]])
+        tiny._handle_dot_command(f".image {path} --zscore")
+        tiny._handle_dot_command(f".image {path} --radius 0")
+        tiny._handle_dot_command(f".image {zmap} --radius 2")
+        out = " ".join(_output(tiny).split())
+        assert "is a tractogram: it has no z-scores" in out
+        assert "--radius is a distance in mm, more than 0, not 0" in out
+        assert "--radius is for a tractogram" in out
+        assert not tiny.loaded_relations
+
+    def test_a_zscore_map_is_decoded_by_the_probabilities_of_its_voxels(
+        self, decoding, tmp_path
+    ):
+        """--zscore: each voxel weighs its probability of being active
+        (1 - its local false discovery rate); a voxel of twice the
+        probability is chosen twice as often."""
+        rng = np.random.default_rng(0)
+        data = rng.normal(0, 1, (4, 4, 4)).astype(np.float32)
+        data[1, 2, 3], data[0, 0, 0] = 8.0, -1.0
+        path = tmp_path / "zscores.nii.gz"
+        nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
+        decoding._handle_dot_command(f".image {path} --zscore --name image")
+        out = " ".join(_output(decoding).split())
+        assert "loaded image_probability(i, j, k, p)" in out
+        assert "1 - its local false discovery rate" in out
+        probabilities = self._probabilities(decoding)
+        assert probabilities[(1, 2, 3)] > 0.99
+        assert (0, 0, 0) not in probabilities  # deactivated: never active
+        assert self._lifts(decoding) == {"pain": 1.5}
+        decoding._nl.add_tuple_set(
+            [(1, 2, 3, 0.4), (0, 0, 0, 0.8)], name="mine_probability"
+        )
+        # P(hit) = (0.4/1.2 + 0.4/1.2 + 0.8/1.2) / 3 = 4/9
+        assert self._lifts(decoding, name="mine") == {
+            "pain": round((1 / 3) / (4 / 9), 6),
+            "vision": round((2 / 3) / (4 / 9), 6),
+        }
+
+    def test_a_map_of_values_is_decoded_once_said_how(
+        self, decoding, zmap
+    ):
+        """A map of values but no mask: decoded once said of z-scores
+        (--zscore) or taken as a mask (--mask)."""
+        decoding._handle_dot_command(f".image {zmap} --name image")
+        out = " ".join(_output(decoding).split())
+        assert "--zscore" in out and "--mask" in out
+        assert "Decode it" not in out
+        assert "image_probability" not in decoding._nl.symbols
+
+    def test_a_map_taken_as_a_mask_from_its_threshold(self, decoding, zmap):
+        """--mask: the voxels of a map from image.threshold, equally; the
+        map of 5, 3 and -2 keeps the voxel of 5."""
+        decoding._handle_dot_command(f".image {zmap} --mask --name image")
+        out = " ".join(_output(decoding).split())
+        threshold = nifti.IMAGE_DEFAULTS["threshold"]
+        assert f"a map taken as a mask from {threshold}" in out
+        assert self._probabilities(decoding) == {(1, 2, 3): 1.0}
+        assert self._lifts(decoding) == {"pain": 1.5}
+
+    def test_the_kinds_of_decoding_are_one_of_them(
+        self, decoding, zmap, tmp_path
+    ):
+        """--mask and --zscore exclude each other, and a binary mask has
+        no z-scores."""
+        decoding._handle_dot_command(
+            f".image {zmap} --mask --zscore --name image"
+        )
+        decoding._handle_dot_command(
+            f".image {self._mask(tmp_path, [(1, 2, 3)])} --zscore "
+            "--name image")
+        out = " ".join(_output(decoding).split())
+        assert "--mask or --zscore, not both" in out
+        assert "a binary mask has no z-scores" in out
+        assert "image" not in decoding.loaded_relations
+
+    def test_another_image_is_decoded_in_its_place(self, decoding, tmp_path):
+        first = self._mask(tmp_path, [(1, 2, 3)], "first.nii")
+        second = self._mask(tmp_path, [(0, 0, 0)], "second.nii")
+        decoding._handle_dot_command(f".image {first} --name image")
+        assert self._lifts(decoding) == {"pain": 1.5}
+        decoding._handle_dot_command(f".image {second} --name image")
+        assert self._lifts(decoding) == {"vision": 3.0}
+
+    def test_two_images_are_decoded_each_by_its_name(
+        self, decoding, tmp_path
+    ):
+        """Each image is a relation named after its file, and its decoding
+        query names its rules after it: decoding one leaves the other's
+        as they are."""
+        first = self._mask(tmp_path, [(1, 2, 3)], "first.nii")
+        second = self._mask(tmp_path, [(0, 0, 0)], "second.nii")
+        decoding._handle_dot_command(f".image {first}")
+        decoding._handle_dot_command(f".image {second}")
+        out = " ".join(_output(decoding).split())
+        assert "loaded first(i, j, k, value)" in out
+        assert "loaded second_probability(i, j, k, p)" in out
+        query, _ = nifti.decoding_query(decoding, "second")
+        assert "second_hit(s) :- selected_voxel(i, j, k), " \
+            "second_active(i, j, k)" in query
+        assert self._lifts(decoding, "first") == {"pain": 1.5}
+        assert self._lifts(decoding, "second") == {"vision": 3.0}
+        assert self._lifts(decoding, "first") == {"pain": 1.5}
+
+    def test_an_uploaded_image_is_named_after_its_file(self, decoding):
+        """An upload is named after its file; the same file uploaded again
+        replaces its relation, another of the same name has another."""
+        assert nifti.image_relation_name(decoding, "motor map.nii.gz") == \
+            "motor_map"
+        decoding._nl.add_tuple_set([(1, 2, 3, 1.0)], name="motor_map")
+        assert nifti.image_relation_name(decoding, "motor map.nii.gz") == \
+            "motor_map_2"
+        assert nifti.image_relation_name(
+            decoding, "motor map.nii.gz", ["motor_map"]
+        ) == "motor_map"
+
+    def test_a_map_loaded_after_a_mask_drops_its_probabilities(
+        self, decoding, tmp_path, zmap
+    ):
+        """Without probabilities of its own, an image loaded in place of
+        another leaves none of the other's, which would decode it."""
+        decoding._handle_dot_command(
+            f".image {self._mask(tmp_path, [(1, 2, 3)])} --name image")
+        decoding._handle_dot_command(f".image {zmap} --name image")
+        assert "image_probability" not in decoding._nl.symbols
+
+    def test_an_engine_without_peaks_does_not_decode(
+        self, decoding, tmp_path
+    ):
+        del decoding._nl.program_ir.symbol_table[
+            nifti.Symbol("activated")]
+        decoding._handle_dot_command(
+            f".image {self._mask(tmp_path, [(1, 2, 3)])} --name image"
+        )
+        out = " ".join(_output(decoding).split())
+        assert "cannot decode the image: it has no activated" in out
+        assert "Decode it" not in out
+
+    def test_the_help_quotes_the_defaults(self, tiny):
+        help_text = " ".join(nifti.IMAGE_HELP.split())
+        assert "--zscore" in help_text and "--mask" in help_text
+        assert f"{nifti.IMAGE_DEFAULTS['min_probability']}" in help_text
+        tiny._handle_dot_command(".help image")
+        assert "--name" in _output(tiny)
+
+
+def test_the_probability_of_activation_of_z_scores():
+    """1 - the local false discovery rate of each z-score (Efron), its
+    null the normal of the median and the MAD of the map: the activations
+    are active, the null voxels and the deactivations are not."""
+    rng = np.random.default_rng(0)
+    z = np.concatenate([rng.normal(0, 1, 20000), np.full(500, 6.0), [-6.0]])
+    p, (delta0, sigma0) = nifti.activation_probability(z)
+    assert p[20000:20500].min() > 0.99
+    assert np.median(p[:20000]) < 0.01 and p[-1] == 0
+    assert abs(delta0) < 0.1 and abs(sigma0 - 1) < 0.1
+    assert ((0 <= p) & (p <= 1)).all()

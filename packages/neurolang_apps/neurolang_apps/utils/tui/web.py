@@ -183,6 +183,9 @@ class Reply:
     :mod:`~neurolang_apps.utils.tui.query_graph`). *tokens*, if the
     assistant answered, are the tokens it sent (``input``) and received
     (``output``), its requests (``calls``), its ``provider`` and ``model``.
+    *uploads* are the files the page uploaded in the session, which it
+    lists: their ``files`` (see :meth:`session.Uploads.listing`), the bytes
+    they take, ``used``, and the most the session may keep, ``most``.
     """
 
     html: str
@@ -195,6 +198,7 @@ class Reply:
     ratable: bool = False
     graph: str = ""
     tokens: dict = field(default_factory=dict)
+    uploads: dict = field(default_factory=dict)
 
 
 class Download(NamedTuple):
@@ -576,7 +580,15 @@ class WebRepl:
             self._output(), viewers, self.app.failed, self._tables, prompt,
             "squall" if self.app.settings.squall else "datalog",
             self.predicates(), self._rated is not None, self._graph, tokens,
+            self.uploads(),
         )
+
+    def uploads(self) -> dict:
+        """Return the files the page uploaded in the session, as a reply
+        carries them (see :class:`Reply`)."""
+        uploads = self.app.uploads
+        return {"files": uploads.listing(), "used": uploads.used(),
+                "most": uploads.most_all}
 
     def _show_graph(self, page: str) -> None:
         """Keep the *page* of the graph of a query for the reply."""
@@ -724,10 +736,40 @@ class WebRepl:
         """
         Keep the file *name* of the bytes *data* the page uploaded, in the
         memory of the session, and return the statement that loads it
-        (``.load NAME``): a ValueError tells why it is refused.
+        (``.load NAME``, or ``.image NAME --name RELATION``, the
+        ``relation`` of the file's name, which an upload of the same file
+        replaces) and for an image the ``query`` decoding it, if the engine
+        can, the ``cortex_query`` decoding its cortex only (``--cortex``),
+        and its ``kind``: ``mask``, ``map`` (of values: decoded once
+        loaded with ``--zscore``), or ``tractogram`` (decoded on the voxels
+        within ``radius`` mm of the ends of its streamlines). A ValueError
+        tells why it is refused.
         """
+        replaced = next((upload["loaded"] for upload in
+                         self.app.uploads.listing()
+                         if upload["name"] == name), ())
         session.store_upload(self.app, name, data)
-        return {"name": name, "statement": f".load {shlex.quote(name)}"}
+        if not session.is_image(name):
+            return {"name": name, "statement": f".load {shlex.quote(name)}"}
+        relation = nifti.image_relation_name(self.app, name, replaced)
+        try:  # a mask is decoded as it is, a map once said of z-scores
+            kind = "tractogram" if session.is_tractogram(name) else \
+                "mask" if nifti.is_mask(nifti.read_image(data)) else "map"
+            query, missing = nifti.decoding_query(self.app, relation)
+            cortex, missing_cortex = nifti.decoding_query(
+                self.app, relation, "cortex"
+            )
+        except Exception:  # .image tells what is wrong with the file
+            kind, query, missing, cortex, missing_cortex = "", "", [], "", []
+        return {
+            "name": name, "relation": relation,
+            "statement": f".image {shlex.quote(name)} --name {relation}",
+            "query": "" if missing else query, "kind": kind,
+            "cortex_query": "" if missing or missing_cortex else cortex,
+            # a map, decoded as a mask, keeps its voxels from it (--mask)
+            "threshold": nifti.IMAGE_DEFAULTS["threshold"],
+            "radius": nifti.IMAGE_DEFAULTS["endpoint_radius"],
+        }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:
         """

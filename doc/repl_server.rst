@@ -117,6 +117,11 @@ Serving
    Leave out the analyses a browser cannot hold, as the page does.
 ``--engine NAME``
    The engines the page offers (repeat it; default: all of them).
+``--default-engine NAME``
+   With ``--local``, the engine the page starts with, one of ``--engine``
+   (default: the bundle's, ``neurosynth_iit``, if offered).  The admin
+   console may turn engines off and choose another (see `The admin
+   console`_).
 ``--host HOST``, ``--port PORT``
    Where it listens: ``127.0.0.1`` by default, this machine only; ``0.0.0.0``
    for the network.  A port below 1024 needs root, which the service does
@@ -192,6 +197,14 @@ Who may use it
    With ``--users`` and ``--local``: the queries running at once, of all
    the sessions (the machine's CPUs, at least 1), and the minutes after
    which a query is stopped (60; 0, never); see `Sessions`_.
+``--uploads-dir DIR``, ``--max-upload-mb MB``, ``--max-uploads-mb MB``
+   The files the pages upload (**Upload data**: tables, images): with
+   ``--users`` and ``--local``, a session keeps them in a folder of its own
+   in DIR (``~/.cache/neurolang/repl-uploads``), removed when it ends,
+   stopped or unused for ``--idle-minutes``; the server empties DIR when it
+   starts, and removes the folders of the sessions whose process died.  A
+   file takes at most MB megabytes (50), all those of a session together
+   at most MB (200).
 ``--guests``, ``--max-guest-sessions N``
    With ``--users`` and ``--local``: let visitors in as guests, without an
    account, at most N sessions of guests at once (2); see `Guests`_.
@@ -270,8 +283,13 @@ log and the dashboard go there too::
    idle_minutes: 120
    max_running: 4              # queries at once (the machine's CPUs)
    query_minutes: 60           # 0: no limit
+   uploads_dir: /srv/neurolang/uploads  # a folder per session, removed when it ends
+   max_upload_mb: 50
+   max_uploads_mb: 200
    activity_db: activity.sqlite
    dashboard: true             # needs the dashboard extra
+   engines: [neurosynth_iit, neurostore_iit]  # prepared and offered
+   default_engine: neurostore_iit             # the one the page starts with
 
 Its secrets go in a second YAML file, readable by you only (the server
 refuses it otherwise: ``chmod 600 secrets.yaml``), which ``server.yaml``
@@ -394,10 +412,26 @@ refusal (403).  It shows:
   them (ending their sessions).  The last admin cannot be removed.
 - **Groups**: their members, assistant, variables and own key; it sets or
   removes a group's assistant and own key.
+- **Engines**: with ``--local``, the engines the server prepared
+  (``--engine``), whether its page offers each, and the one it starts with
+  (``--default-engine``).  A change is the page's when it is opened (or
+  reloaded); the sessions running keep their engine, and the server
+  starts none on an engine turned off.  One engine at least stays offered,
+  the default among them.  The choice is kept next to the users file
+  (``users.yaml.engines.json``), and holds over the configuration's at the
+  next start; an engine it does not name (added to ``engines`` since) is
+  offered.  Remove the file to go back to the configuration's.
 - **Sessions**: the user, tab and engine of each, how long it has been
   unused, whether it works, the CPU seconds and the memory of its process
   (see `Activity and usage`_); it ends one.  Above them, the memory of the
   builder, which the sessions share.
+- **Uploads**: with ``--uploads-dir``, the files the pages uploaded, by
+  session (its user and tab, or *session ended* for a folder whose
+  session is gone), with their size and age, the space they take and that
+  free on the disk, and the limits; it erases a file, the files of a
+  session or all of them (the server's log tells who erased what).  A
+  session whose file is erased no longer has it: ``.load`` says so, and
+  the page uploads it again after a *Stop*.
 - **Usage by user**: with ``--activity-db``, each user's inputs run and
   failed, their time and CPU seconds, the most memory of their sessions,
   and a link to their log.
@@ -812,8 +846,9 @@ Security
 
 - With ``--local``, anyone who logs in runs queries and commands in the
   server's Python.  With users or a password, their statements are *confined*
-  (``neurolang.confine``): ``.load`` loads the files they upload (**Upload
-  data**, kept in the memory of their session), and no path;
+  (``neurolang.confine``): ``.load`` and ``.image`` load the files they
+  upload (**Upload data**, kept in the session's folder of
+  ``--uploads-dir``), and no path;
   ``.load_csv``, ``.load_atlas``, ``.import``, ``.load_tractogram`` and
   ``.view`` read the files of the data directory only (``--data-dir``) and
   fetch no address; ``.save``,

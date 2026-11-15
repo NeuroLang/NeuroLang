@@ -172,12 +172,43 @@ gzipped) into a relation whose columns are the file's header:
 
 On the page, **Upload data** sends a CSV or TSV file of yours (at most
 50 MB) to the session and loads it, with ``.load NAME``; ``.load NAME``
-loads it again later, under another relation name if given.  The file is
-kept in the memory of the session only, never written on a disk; the page
-sends it again when it gives the session's rules back (after **Stop**, or
-when a saved session is opened), and forgets it on **Restart**.  A server
-(``neurolang-repl-serve``) loads the files you upload, and no path of its
-own.
+loads it again later, under another relation name if given.  The page in
+the browser keeps the file in the memory of the session; a server
+(``neurolang-repl-serve``) keeps it in a folder of the session, removed
+when the session ends, stopped or unused for a while (its limits and its
+folder are its options, see :doc:`repl_server`).  The page sends the file
+again when it gives the session's rules back (after **Stop**, or when a
+saved session is opened), and forgets it on **Restart**.  A server loads
+the files you upload, and no path of its own.  ``.uploads`` lists the files
+of the session, what each was loaded as, and the room left; the page lists
+them under its toolbar, with a *Download* and a *Remove* for each: *Remove*
+(``.uploads remove NAME``) deletes one from the session, and from what the
+page uploads again, leaving the output as it was; its *Undo* (``.uploads
+restore NAME``) brings it back, until another file is uploaded or removed.
+The relations loaded from a removed file stay until ``.drop`` or
+**Restart**.
+
+The query assistant reads, with the relations and their columns, their
+descriptions: describe yours, so that it finds them and knows what they
+hold.  ``.document`` describes a relation loaded or defined in the
+session, a ``%%`` line right before a rule describes it (see
+:doc:`tutorial_datalog`), and ``.image`` describes the image it loads
+(its file, a mask or a map of values)::
+
+   .load 'my scores.csv' scores
+   .document(scores, "The scores of the studies of my lab: study is a PubMed id, score from 0 to 1.")
+   %% The studies of my lab with a high score.
+   high(s) :- scores(s, x), (x > 0.4)
+
+The page keeps the descriptions with the rules of the session, after
+**Stop** or in a saved session.
+
+**Upload data** also takes a NIfTI image of activations (``.nii`` or
+``.nii.gz``), a binary mask or a z-map, and a tractogram (``.trk`` or
+``.tck``), decoded where its streamlines end: the page loads it with
+``.image``, shows it, and asks whether the query decoding it towards the
+terms of the studies, a comment explaining each line, goes in the box and
+runs (:doc:`tutorial_decoding`).
 
 
 Results
@@ -274,6 +305,19 @@ Every command
    * - ``.load PATH|UPLOADED [NAME]``
      - a CSV or TSV file as a relation: a path in a terminal, a file
        uploaded (**Upload data**) on the page
+     - both
+   * - ``.image PATH|UPLOADED [--mask | --zscore] [--cortex] [--radius MM]``
+     - a NIfTI image of activations, shown and decoded as a mask
+       (``--mask``) or from z-scores (``--zscore``), in the brain or in
+       the cortex only (``--cortex``); a tractogram (``.trk``, ``.tck``),
+       as the voxels within 3 mm (``--radius``) of the ends of its
+       streamlines (see :doc:`tutorial_decoding`)
+     - both
+   * - ``.uploads [remove NAME | restore NAME]``
+     - the files the page uploaded in the session: their kind, size, age,
+       the relations loaded from them, and the room left; ``remove NAME``
+       deletes one (the relations loaded from it stay, until ``.drop``),
+       ``restore NAME`` brings back the one removed last
      - both
    * - ``.sets``, ``.predicates``, ``.engines``
      - the engine's relations, and the engines

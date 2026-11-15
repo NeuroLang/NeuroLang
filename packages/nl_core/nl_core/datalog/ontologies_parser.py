@@ -185,6 +185,16 @@ class OntologyParser:
                 )
             ])
 
+    def type_name(self):
+        """The name of the predicate of ``rdf:type`` (see *names*)."""
+        return self._parse_name(RDF.type)
+
+    def class_names(self):
+        """The name of the predicate of each class, by its IRI."""
+        return {
+            str(iri): self._parse_name(iri) for iri in self._get_all_classes()
+        }
+
     def _get_all_classes(self):
         """
         Function in charge of obtaining all the classes of the ontology

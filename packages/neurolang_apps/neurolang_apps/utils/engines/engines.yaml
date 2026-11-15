@@ -488,6 +488,47 @@ engines:
         n: 500
         scheme: bayesian
         seed: 0
+    # The query decoding an image (.image loads a NIfTI image as one), from
+    # the probability that each of its voxels is active,
+    # {image}_probability(i, j, k, p), its rules named after the image: 1 for those of a mask, 1 - the local
+    # false discovery rate of a z-score (.image --zscore).  Each voxel is a
+    # probabilistic fact, active with its probability, and a voxel of the
+    # brain is chosen at random (selected_voxel), independently of the
+    # study: image_hit(s), that the study s activates the chosen voxel and
+    # that it is active.  The lift of a
+    # term is the probability of it for the studies of the term over the
+    # same for all the studies (doc/tutorial_decoding.rst); the query keeps
+    # the concepts of the Cognitive Atlas with 30 studies or more, the lift
+    # of fewer being noisy.
+    # The voxels the decoding chooses one of, the {voxel} of the query: of
+    # the brain (selected_voxel), or of its cortex only (.image --cortex,
+    # the page's Only the cortex), the Harvard–Oxford cortical atlas's.
+    image_decoding_voxels:
+      brain: selected_voxel(i, j, k)
+      cortex: selected_voxel(i, j, k), cortical_mask(i, j, k)
+    image_decoding_query: |-
+      % Each voxel of the image is active with its
+      % probability, independently: a probabilistic fact.
+      {image}_active(i, j, k) :: p :- {image}_probability(i, j, k, p)
+      % A study s hits the image when a voxel chosen at
+      % random in the brain (selected_voxel), or in its
+      % cortex (cortical_mask), is active and s activates
+      % it (a peak within the kernel of the voxel).
+      {image}_hit(s) :- {voxel}, {image}_active(i, j, k), activated(i, j, k, s)
+      % For each term t, the probability that a study of t,
+      % chosen at random, hits the image.
+      p_{image}_given_term(t, PROB) :- ({image}_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      % The probability that any study, chosen at random,
+      % hits the image.
+      p_{image}(PROB) :- {image}_hit(s) & selected_study(s)
+      % The number of studies of each term: the lift of a
+      % term of few studies is noisy.
+      term_studies(t, count(s)) :- term_in_study(s, t)
+      % The lift of each concept of the Cognitive Atlas of
+      % 30 studies or more: how many times more often its
+      % studies hit the image than the average study does.
+      % The larger, the more the concept decodes the image.
+      ans(term, lift, studies) :- p_{image}_given_term(term, a), p_{image}(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
     # The Cognitive Atlas ontology, for open-world queries over concepts,
     # tasks and contrasts: see doc/tutorial_cognitive_atlas.rst.  Its
     # triples are facts (``rdfs:label(iri, 'Working memory')``) and its

@@ -133,3 +133,27 @@ assistant_guidance: >
   PROB[active(l, s) // cond(s)] = p with cond(s) :- recent(s),
   mentions(s, 'pain'), selected_study(s) for the studies mentioning
   pain.
+  An image loaded with .image (a binary mask, or a map of z-scores with
+  --zscore) is a relation named after its file, NAME(i, j, k, value)
+  (its description says which file), and NAME_probability(i, j, k, p)
+  the probability that each voxel is active; the examples call it
+  image: use its NAME, and NAME_active, NAME_hit for their rules.
+  A tractogram (.trk, .tck) loaded with .image is the same: NAME the
+  voxels within 3 mm of the ends of its streamlines (value the number of
+  ends), NAME_probability 1 for each.
+  Decode it, or any such relation of probabilities, as the examples do: each voxel a probabilistic fact of its probability
+  (image_active(i, j, k) :: p :- ...), a voxel of the brain chosen at
+  random (selected_voxel), a study hitting the image when it activates
+  the chosen voxel and the voxel is active (with cortical_mask(i, j, k)
+  for the cortex of the image only); the
+  probability of a hit conditioned on the studies of each term, divided
+  by its probability over all the studies, is the lift of the term.  A map of values without image_probability is decoded once
+  loaded again with .image NAME --zscore, if its values are z-scores,
+  or --mask, its voxels from 3.1 as a mask: say so rather than guess.  For a mask or a small region, the overlap
+  example (each voxel a probabilistic fact, a hit if a study activates
+  one) says how often the studies of a term report a peak in it.
+  Decode towards the concepts with cogat_term(concept, term) and answer
+  with the term, not the IRI of the concept.  Compare the lifts of two
+  terms on the same bootstrap replicate, as the Bayes factors are.
+  Never join the image with p_a_given_t over its voxels: it computes
+  every term at every voxel.

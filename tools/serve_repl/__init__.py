@@ -37,6 +37,7 @@ The REPL with NeuroLang in the Python of this machine::
     uv run --extra apps --extra tui --extra llm neurolang-repl-serve --local
         [--data-dir DIR]
         [--resolution MM] [--light] [--engine NAME ...] [--no-prepare]
+        [--default-engine NAME]
 
 builds no bundle: the page's worker sends what it is asked to this server,
 which builds the engine from DIR (``neurolang_data`` by default, as
@@ -44,7 +45,9 @@ which builds the engine from DIR (``neurolang_data`` by default, as
 the REPL (``neurolang_apps.utils.tui.local_backend``). Before serving, it
 builds each engine once, in a process of its own, unless ``--no-prepare``:
 what it downloads and the tables it finds are kept in DIR, so that a
-session starts from them, without the network. The page is the same,
+session starts from them, without the network. The page starts with
+``--default-engine``; the admin console turns engines off and chooses
+another (:class:`EngineChoice`). The page is the same,
 in SITE/local, and it is as fast, and has as much memory, as this machine.
 It serves this machine only, unless ``--host``: anyone it serves can run
 queries, and save files, in its Python.
@@ -159,6 +162,7 @@ import socketserver
 import ssl
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -228,6 +232,7 @@ DEFAULT_EMBEDDINGS = Path(DEFAULTS["embeddings"]).expanduser()
 # directory each, kept for the next build: a source down (OSF, GitHub) then
 # stops no rebuild.
 DEFAULT_DOWNLOADS = Path(DEFAULTS["downloads"]).expanduser()
+DEFAULT_UPLOADS = Path(DEFAULTS["uploads_dir"]).expanduser()
 # The repository whose CI uploads the site of each pull request, and the
 # artifacts holding it (.github/workflows/docs.yml).
 REPOSITORY = "NeuroLang/NeuroLang"
@@ -399,31 +404,131 @@ def prepare_engines(
     return failed
 
 
-def prepare_local_site(site: Path, engines=None, users=False) -> Path:
+def prepare_local_site(site: Path, engines=None, users=False, default=None,
+                       saved=None):
     """
     Put the page in *site* with a ``bundle.json`` telling it to have this
     machine's Python answer it (``"backend": "local"``), offering the
-    *engines* (by default all of the page's), and that it has *users* (whose
-    account page it links), and return the path of the page.
+    *engines* (by default all of the page's), starting with *default* (by
+    default the bundle's), and that it has *users* (whose account page it
+    links); return the engines it offers, an :class:`EngineChoice` (its
+    ``page`` the path of the page), which the admin console changes, its
+    choice kept in the file *saved* if given.
     """
-    script = bundle_script()
-    engines = list(engines or script.ENGINES)
-    # The engine the page starts with: that of the bundle's, if offered.
-    default = getattr(script, "DEFAULT_ENGINE", engines[0])
     page = copy_page(site)
-    (page.parent / "bundle.json").write_text(json.dumps({
-        "backend": "local",
-        "engines": {
+    choice = EngineChoice(page, engines or bundle_engines(), default, users,
+                          saved)
+    bundle_script().write_highlight_words(page.parent)
+    return choice
+
+
+def engines_path(users_path: Path) -> Path:
+    """The file of the admin console's choice of the engines, next to the
+    users file."""
+    users_path = Path(users_path)
+    return users_path.with_name(users_path.name + ".engines.json")
+
+
+def write_json(path: Path, data) -> None:
+    """Write *data* in the JSON file *path* at once: a reader finds it
+    whole, before or after."""
+    handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=".write-")
+    try:
+        with os.fdopen(handle, "w") as file:
+            json.dump(data, file)
+            file.write("\n")
+        os.chmod(temporary, 0o644)  # the page reads bundle.json
+        os.replace(temporary, path)
+    except BaseException:
+        os.unlink(temporary)
+        raise
+
+
+class EngineChoice:
+    """
+    The engines the page offers, in its ``bundle.json``, which it reads when
+    it opens: of the *engines* the server prepared, those the admin console
+    did not turn off, and the one it starts with, *default* (the bundle's if
+    None) unless the console chose another. The console's choice is kept in
+    the file *saved* if given (:func:`engines_path`), which a restart reads
+    again; the engines it does not name (added to ``--engine`` since) are
+    offered. The server starts no session on an engine turned off.
+    """
+
+    def __init__(self, page: Path, engines, default=None, users=False,
+                 saved=None):
+        script = bundle_script()
+        self.page, self.users = page, users
+        self.saved = saved and Path(saved)
+        self.entries = {
             name: {"label": script.LABELS.get(name, name),
                    # what the page's credits list (credits.html)
                    "acknowledgements": script.acknowledgements(name)}
             for name in engines
-        },
-        "default": default if default in engines else engines[0],
-        **({"users": True} if users else {}),
-    }) + "\n")
-    script.write_highlight_words(page.parent)
-    return page
+        }
+        default = default or getattr(script, "DEFAULT_ENGINE", None)
+        self.default = default if default in self.entries else engines[0]
+        self.off = set()
+        self.lock = threading.Lock()
+        try:
+            kept = json.loads(self.saved.read_text()) if self.saved else {}
+        except (OSError, ValueError):
+            kept = {}
+        if not isinstance(kept, dict) or not isinstance(
+                kept.get("off", []), list):
+            kept = {}  # not one the console wrote
+        configured = self.default
+        off = {str(name) for name in kept.get("off", [])} & set(self.entries)
+        if off != set(self.entries):  # one at least stays
+            self.off = off
+        if kept.get("default") in self.on():
+            self.default = kept["default"]
+        elif self.default in self.off:
+            self.default = self.on()[0]
+        #: Whether the console's choice is not the configuration's.
+        self.overrides = bool(self.off) or self.default != configured
+        self._write_bundle()
+
+    def on(self) -> list:
+        """The engines the page offers."""
+        return [name for name in self.entries if name not in self.off]
+
+    def state(self) -> dict:
+        """The engines, whether each is offered, and the default, for the
+        admin console."""
+        return {"engines": [{"name": name, "label": entry["label"],
+                             "on": name not in self.off}
+                            for name, entry in self.entries.items()],
+                "default": self.default,
+                "saved": self.saved and str(self.saved)}
+
+    def change(self, on, default) -> None:
+        """Offer the engines *on* only, starting with *default*, one of
+        them; keep the choice in the file ``saved``."""
+        on = [str(name) for name in on or ()]
+        unknown = set(on) - set(self.entries)
+        if unknown:
+            raise ValueError(f"No engine {', '.join(sorted(unknown))}: "
+                             f"those of the server are "
+                             f"{', '.join(self.entries)}")
+        if not on:
+            raise ValueError("The page offers one engine at least")
+        if default not in on:
+            raise ValueError("The default engine is one of those offered")
+        with self.lock:
+            self.off, self.default = set(self.entries) - set(on), default
+            if self.saved:
+                write_json(self.saved, {"off": sorted(self.off),
+                                        "default": default})
+            self._write_bundle()
+
+    def _write_bundle(self) -> None:
+        write_json(self.page.parent / "bundle.json", {
+            "backend": "local",
+            "engines": {name: self.entries[name] for name in self.on()},
+            "default": self.default,
+            **({"users": True} if self.users else {}),
+        })
 
 
 def feedback_target() -> tuple:
@@ -929,11 +1034,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "query_seconds": getattr(self.sessions, "query_seconds",
                                          None),
                 "sessions": getattr(self.sessions, "most", None)},
+            # the files the pages uploaded, by session (--uploads-dir)
+            "uploads": self.sessions.uploads_info()
+            if hasattr(self.sessions, "uploads_info") else None,
             "activity": getattr(self.sessions, "activity", None) is not None,
             "dashboard": self.dashboard is not None,
             "feedback": bool(self.feedback_db),
             "feedback_engines": self._feedback_engines(),
             "update": (CHECKOUT / ".git").exists(),
+            "engines": self.engines and self.engines.state(),
         }
 
     def _feedback_engines(self) -> list:
@@ -1018,6 +1127,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/admin/api/end-session" and self.sessions:
             tab = body.get("tab")
             return {"ended": self.sessions.end(name, tab and str(tab))}
+        if path == "/admin/api/erase-uploads" and hasattr(
+            self.sessions, "erase_uploads"
+        ):
+            start, file = body.get("start"), body.get("name")
+            erased = self.sessions.erase_uploads(
+                None if start is None else str(start),
+                None if file is None else str(file),
+            )
+            print(f"{self.user} erased {erased} uploaded files"
+                  f"{f' of the session {start}' if start else ''}"
+                  f"{f': {file}' if file else ''}", flush=True)
+            return {"erased": erased}
+        if path == "/admin/api/engines":
+            if self.engines is None:
+                raise ValueError("No engines here: the server runs no REPL "
+                                 "of its own (--local)")
+            self.engines.change(body.get("on"), body.get("default"))
+            print(f"{self.user} set the engines of the page: "
+                  f"{', '.join(self.engines.on())}, starting with "
+                  f"{self.engines.default}", flush=True)
+            return {"ok": True}
         if path == "/admin/api/update":  # and restart, if master moved
             check = update()
             return {**check, "restarting": bool(check["new"])}
@@ -1032,6 +1162,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     logged_out = {}
     #: Whether a visitor may come in as a guest (--guests).
     guests = False
+    #: The engines the page may start (--local), an EngineChoice.
+    engines = None
 
     #: The client of the server at ORCID (--orcid), and the requests of an
     #: account of those who sign in with it and are no user.
@@ -1394,8 +1526,10 @@ class LocalHandler(Handler):
         action = path[len("/api/"):]
         try:
             # A file the page uploads comes as it is, named in the address
-            # (?name=), up to the size of one (session.store_upload).
-            body = {"data": self._bytes(MOST_UPLOAD_BYTES), "name":
+            # (?name=), up to the size of one (--max-upload-mb).
+            most = (getattr(self.backend, "uploads", None) or {}).get(
+                "most_file", MOST_UPLOAD_BYTES)
+            body = {"data": self._bytes(most), "name":
                     urllib.parse.parse_qs(urllib.parse.urlsplit(
                         self.path).query).get("name", [""])[0]} \
                 if action == "upload" else self._body()
@@ -1416,6 +1550,9 @@ class LocalHandler(Handler):
         if action == "stop":
             return self._json({"stopped": backend.stop()})
         if action == "start":
+            if self.engines and body["engine"] not in self.engines.on():
+                return self._json({"error": f"The engine {body['engine']} "
+                                   "is not offered: reload the page"}, 403)
             return self._json(backend.start(body["engine"]))
         if action == "submit":
             return self._json(backend.submit(body["text"]))
@@ -1520,7 +1657,7 @@ def make_server(site: Path, host: str, port: int, backend=None,
                 tls=None, password=None, names=(), users=None,
                 feedback_db=None, guests: bool = False,
                 max_guest_sessions: int = 2, secure_cookie: bool = False,
-                orcid_client=None, dashboard=None):
+                orcid_client=None, dashboard=None, engines=None):
     """Return the HTTP server of *site* on *host*:*port*, answering the
     page with the REPL of *backend* if given, over HTTPS with the TLS
     context *tls* if given, to the requests giving the *password* (a str)
@@ -1529,7 +1666,9 @@ def make_server(site: Path, host: str, port: int, backend=None,
     or *secure_cookie* (behind a proxy of HTTPS). With *orcid_client* (an
     :class:`~serve_repl.orcid.OrcidClient`), the users sign in with ORCID
     too, and an iD of no user may ask for an account, in a file next to the
-    users file (:func:`~serve_repl.orcid.requests_path`)."""
+    users file (:func:`~serve_repl.orcid.requests_path`). *engines*, an
+    :class:`EngineChoice`, are those the page may start, which the admin
+    console chooses."""
     base = Handler if backend is None else LocalHandler
     names = {*LOCAL_NAMES, *names, host} - {"0.0.0.0", "::", ""}
     handler = type("Handler", (base,), {
@@ -1547,6 +1686,7 @@ def make_server(site: Path, host: str, port: int, backend=None,
             orcid.requests_path(users.path))
         if users is not None and orcid_client is not None else None,
         "dashboard": dashboard, "started": time.monotonic(),
+        "engines": engines,
     })
     server = Server(
         (host, port),
@@ -2686,14 +2826,19 @@ def service_command(args) -> list:
     if args.local:
         command += ["--local", "--data-dir", str(args.data_dir.resolve()),
                     "--resolution", str(args.resolution)]
+        if args.default_engine:
+            command += ["--default-engine", args.default_engine]
         command += ["--light"] if args.light else []
         command += [] if args.prepare else ["--no-prepare"]
         command += [] if args.preload_embeddings else [
             "--no-preload-embeddings"]
+    command += ["--max-upload-mb", str(args.max_upload_mb),
+                "--max-uploads-mb", str(args.max_uploads_mb)]
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes),
-                    "--query-minutes", str(args.query_minutes)]
+                    "--query-minutes", str(args.query_minutes),
+                    "--uploads-dir", str(args.uploads_dir.resolve())]
         if args.max_running:
             command += ["--max-running", str(args.max_running)]
     if args.secure_cookie:
@@ -2928,6 +3073,11 @@ def parse_args(argv=None):
         help="an engine to put in the bundle (repeat for several; default: "
         "all of them)",
     )
+    parser.add_argument(
+        "--default-engine", choices=bundle_engines(), metavar="NAME",
+        help="with --local, the engine the page starts with (default: the "
+        "bundle's, if offered); the admin console may choose another",
+    )
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument(
         "--cert", type=Path, metavar="PEM",
@@ -2999,6 +3149,26 @@ def parse_args(argv=None):
         metavar="M",
         help="with --users and --local, end a session unused for M minutes "
         "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--uploads-dir", type=Path, default=DEFAULT_UPLOADS,
+        metavar="DIR",
+        help="with --users and --local, the directory of the files the "
+        "pages upload, a folder per session, removed when it ends (stopped, "
+        "or idle for --idle-minutes); emptied when the server starts "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--max-upload-mb", type=float,
+        default=float(DEFAULTS["max_upload_mb"]), metavar="MB",
+        help="a file a page uploads takes at most MB megabytes "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--max-uploads-mb", type=float,
+        default=float(DEFAULTS["max_uploads_mb"]), metavar="MB",
+        help="the files a session's page uploads take at most MB megabytes "
+        "together (default: %(default)s)",
     )
     parser.add_argument(
         "--max-running", type=int, metavar="N",
@@ -3204,6 +3374,12 @@ def parse_args(argv=None):
         parser.error("--guests needs --users and --local")
     if args.feedback_db and not args.local:
         parser.error("--feedback-db stores the ratings of --local")
+    if args.default_engine and not args.local:
+        parser.error("--default-engine is that of --local")
+    if args.default_engine and args.engines and \
+            args.default_engine not in args.engines:
+        parser.error(f"--default-engine {args.default_engine} is not one of "
+                     f"--engine {', '.join(args.engines)}")
     if args.activity_db and not (args.local and args.users):
         parser.error("--activity-db logs the sessions of --local --users")
     if args.dashboard and not args.activity_db:
@@ -3414,7 +3590,7 @@ def main(argv=None) -> None:
                   f"{assistant or 'the key their page gives'}", flush=True)
     if args.daemon:
         return daemon(args)
-    backend = None
+    backend = engines = None
     if args.local and (users or password) and not args.unconfined:
         # The statements of those who log in read the engines' data only,
         # and write no file of the server: they run with its rights.
@@ -3427,8 +3603,19 @@ def main(argv=None) -> None:
     if args.local:
         from neurolang_apps.utils.tui.local_backend import LocalBackend
 
+        # How large the files the pages upload may be (session.Uploads).
+        uploads = {"most_file": int(args.max_upload_mb * (1 << 20)),
+                   "most_all": int(args.max_uploads_mb * (1 << 20))}
         args.site = args.site / "local"
-        page = prepare_local_site(args.site, args.engines, bool(users))
+        engines = prepare_local_site(
+            args.site, args.engines, bool(users), args.default_engine,
+            users and engines_path(users.path))
+        page = engines.page
+        print(f"The page offers the engines {', '.join(engines.on())}, "
+              f"starting with {engines.default}"
+              + (f": the admin console's choice, kept in {engines.saved}, "
+                 "holds over the configuration's (remove the file to go "
+                 "back to it)" if engines.overrides else ""), flush=True)
         if args.prepare:
             prepare_engines(
                 args.data_dir.resolve(),
@@ -3453,6 +3640,7 @@ def main(argv=None) -> None:
 
             backend = Sessions(
                 args.data_dir, identity=identity, withhold=strip,
+                uploads={**uploads, "directory": str(args.uploads_dir)},
                 feedback_db=args.feedback_db and args.feedback_db.resolve(),
                 activity_db=args.activity_db and args.activity_db.resolve(),
                 most=args.max_sessions, idle=args.idle_minutes * 60,
@@ -3471,7 +3659,7 @@ def main(argv=None) -> None:
                     "groups": ""}
             backend = LocalBackend(
                 args.data_dir, preload_embeddings=args.preload_embeddings,
-                **options)
+                uploads=uploads, **options)
         if args.feedback_db:
             from neurolang_apps.utils.llm.feedback_server import (
                 FeedbackStore,
@@ -3497,7 +3685,7 @@ def main(argv=None) -> None:
                          password, args.server_names or (), users,
                          args.feedback_db, args.guests,
                          args.max_guest_sessions, args.secure_cookie,
-                         orcid_client, board)
+                         orcid_client, board, engines)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     scheme = "https" if tls else "http"
     url = (f"{scheme}://{host}:{server.server_address[1]}/"

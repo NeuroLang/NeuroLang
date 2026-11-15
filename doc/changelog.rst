@@ -17,7 +17,91 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
+Nothing yet.
+
+
+v0.1a23 (2026-11-15)
+--------------------
+
 **New features:**
+
+* A tractogram is decoded as an image is, where its streamlines end:
+  ``.image`` and **Upload data** take a ``.trk`` or ``.tck`` in MNI mm and
+  load the voxels of the brain within 3 mm (``image.endpoint_radius``,
+  ``--radius MM``) of the ends of its streamlines, each of probability 1,
+  and draw its streamlines in the brain viewer; the page offers the
+  decoding query, and the query assistant has an example.  The page's
+  decoding buttons now run the query they put in the box.  The left arcuate fasciculus of HCP842 decodes to sentence
+  comprehension, reading and language (:doc:`tutorial_decoding`).
+
+* ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF
+  says, for the types a program states with rules as for those of the
+  files: ``rdf:type(e, t) :- our_experiment(e, n), cogat_term(t, n)``
+  types our experiments as Cognitive Atlas tasks by their names, and the
+  Atlas's axioms then apply to them.  In a question, ``rdf:type(c, k),
+  cogat_term(k, 'response inhibition')`` names the class by its label,
+  for an unnamed ``c`` too, in the query and in the program's rules.  Only
+  the classes with instances get them, so the rewriting still drops the
+  others.  The example (IV) of :doc:`ontologies` is rewritten on it, with
+  no identifier of the Atlas in its queries: our experiments, then the
+  Stroop studies of Neurosynth, in the closed and the open world, every
+  query of it now ending.
+
+* Upload a brain image to the REPL: the page's *Upload data* takes a NIfTI
+  image of activations (``.nii``/``.nii.gz``), a binary mask or a z-map,
+  kept with the session as the CSV files are, so a server reading none of
+  its files loads it.  On a server (``--users --local``), the files a
+  session's page uploads go to a folder of its own in ``--uploads-dir``
+  (``uploads_dir`` of ``server.yaml``), removed when the session ends,
+  stopped or unused for ``--idle-minutes``, or when its process died; their
+  sizes are its ``--max-upload-mb`` (50) and ``--max-uploads-mb`` (200).
+  The admin console shows them by session, with their sizes, ages and the
+  free disk space, and erases a file, a session's or all.  ``.uploads`` lists, in a session, the files its page uploaded, their
+  kind, size and age, the relations loaded from them and the room left.
+  The page has *Upload data* in its toolbar, and lists the files uploaded
+  in the session (each reply carries them).  ``.image`` describes the image
+  to the query assistant (its file, a mask or a map of values, its voxels),
+  replacing the description of an image loaded before under the same name
+  (``document_predicate(..., replace=True)``, ``.document(p, "...",
+  replace=True)``).  ``.document(p, "...")`` in the REPL says ``documented p`` (not
+  "nothing defined"), and the page keeps it with the rules of the session,
+  after *Stop* or in a saved session.  ``.uploads remove NAME``, the
+  *Remove* of the page's list, deletes an uploaded file from the session
+  (from its folder on a server), and the page forgets it: the relations
+  loaded from it stay until ``.drop``.  The list has a *Download* and a *Remove* button for each file;
+  *Remove* leaves the output as it was and offers an *Undo*
+  (``.uploads restore NAME``, the file removed last).  ``.image PATH|UPLOADED [--name
+  NAME]`` loads it as ``NAME(i, j, k, value)``, NAME the file's name by
+  default (``motor_map`` for ``motor map.nii.gz``; an upload of another
+  file of the same name gets another), on the grid of the engine
+  (resampled, a mask to the nearest voxel; at most ``image.max_mb``
+  uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells
+  the query assistant what it is; the page gives it back after *Stop* or
+  *Open session*.
+
+* Decoding a brain image (:doc:`tutorial_decoding`): ``.image`` loads, with
+  the image, ``image_probability(i, j, k, p)``, the probability that each
+  voxel is active: 1 for a mask, or a map of values from 3.1 taken as one
+  (``.image --mask``, masked decoding); for a map of z-scores, which
+  ``.image --zscore`` says it is, 1 - the local false discovery rate of its
+  z-score (Efron 2004: an empirical null of the map's median and MAD, a
+  kernel density; ``image.min_probability`` and ``image.kde_sample`` in
+  ``viewer.yaml``), with no threshold.  It prints, on the meta-analysis
+  engines, the query decoding the image (``image_decoding_query`` in
+  ``engines.yaml``, a comment explaining each line), and the page asks,
+  after an upload, whether it goes in the box, and, for a map of values,
+  how to decode it (*Decode as z-scores*, *Decode as a mask*), in the
+  brain or, *Only the cortex* (``.image --cortex``), in its cortex: a plain
+  Datalog query over the
+  probabilities, so any relation of voxels and probabilities is decoded
+  the same way.  Each voxel is a probabilistic fact of its probability and
+  a voxel of the brain is chosen at random (``selected_voxel``); its score
+  is the lift of each term: the
+  probability that a study of the term activates the chosen voxel, which
+  is active, over the same for all the studies.
+  The query assistant's bank and guidance decode an uploaded image, and
+  have the overlap query too (each voxel a probabilistic fact, a study
+  hitting the image if it activates one), for a mask or a small region.
 
 * The admin console of ``neurolang-repl-serve`` has *Update and restart*:
   it asks whether origin/master (the upstream of the server's checkout)
@@ -306,6 +390,27 @@ Unreleased
 
 **Performance:**
 
+* The greedy join ordering starts from the join of two relations with the
+  fewest rows at most, and adds at each step the relation whose join with
+  the joined ones has the fewest rows at most, rather than the smallest
+  relation: a relation all of whose columns are joined, which cannot add
+  rows, is joined first.  Decoding a whole map of z-scores with its voxels
+  as probabilistic facts and one chosen at random, which ran out of memory
+  (more than 24 GB) on neurosynth at 2 mm, takes 13.4 s and 6 GB for the
+  motor map of nilearn: the image is joined with the activations and
+  summed per study before the terms.
+
+* The plans of the lifted probabilistic queries sum each side of a join
+  over the columns the projection drops before joining it
+  (``PushSumsThroughJoins``), the
+  product of the probabilities distributing over their sum: the same
+  probabilities, from smaller joins.  Decoding an image with each voxel a
+  probabilistic fact of its probability and one chosen at random takes
+  8.4 s instead of 13.5 s on neurosynth
+  at 2 mm for a mask, the voxels summed out per study before the terms
+  are joined; ``uniformity('pain', ...)`` 5.9 s instead of 6.4 s.  The
+  other queries of the example banks take the same time.
+
 * The pattern matching of the walkers, which every compilation of a
   program goes through, tries for an expression only the patterns its class
   does not rule out, from a list made once per walker class, and builds its
@@ -523,6 +628,16 @@ Unreleased
   text; and, on a phone, the legend of the empty result still draws the
   probability bars it explains.
 
+* The account and admin pages of the REPL server (``neurolang-repl-serve
+  --users``) look like its login and activity pages: the tokens of the
+  REPL's page, light and dark with the REPL's choice of theme, its logo and
+  heading, cards and fields with a border read at 3:1, a focus ring on
+  every control, a mark with the colour of an error or a success, 44 px
+  controls on a touch screen, and tables that scroll by themselves on a
+  narrow one, with their column heads scoped and the empty ones named.  The
+  activity page keeps its theme under the same key as the others, so that one
+  choice serves the REPL and all its pages.
+  
 * The slider of the streamlines in the brain viewer sets their number, from
   one to all of those the page has, on a logarithmic scale (a linear one
   would put the counts worth seeing in its first notch), where it set their

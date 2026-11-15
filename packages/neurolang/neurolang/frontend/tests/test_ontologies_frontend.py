@@ -3,9 +3,12 @@
 
 import io
 import re
+
+import pytest
 from typing import Callable
 from nl_expr.logic import Implication
 
+from nl_expr.exceptions import NeuroLangException
 from nl_expr.expressions import Constant, Symbol
 from ...frontend import NeurolangPDL
 
@@ -1131,3 +1134,84 @@ def test_a_chain_of_existentials_to_what_a_task_measures():
         assert not set(nl.execute_datalog_program(
             program + "ans(s) :- c:measures(s, c)"
         ))
+
+
+DEANS_WITH_LABELS = """
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix : <http://ex.org/> .
+:Dean a owl:Class ; rdfs:label "dean" ; rdfs:subClassOf :Professor , [
+    a owl:Restriction ; owl:onProperty :headOf ; owl:someValuesFrom :Unit ] .
+:Professor a owl:Class ; rdfs:label "professor" .
+:Unit a owl:Class ; rdfs:label "unit" .
+:Juan a :Dean .
+"""
+TYPED_BY_LABEL = "rdf:type(p, c) :- staff(p, n), rdfs:label(c, n)\n"
+
+
+def _labelled_deans():
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(DEANS_WITH_LABELS), format="turtle", individuals=True,
+        names="prefixed", prefixes={"ex": "http://ex.org/"},
+    )
+    nl.add_tuple_set([("Ana", "dean"), ("Luis", "professor")], name="staff")
+    return nl
+
+
+def _rows(nl, program):
+    with nl.scope:
+        return set(nl.execute_datalog_program(program))
+
+
+def test_rdf_type_rules_make_instances_of_the_classes():
+    """``rdf:type(x, C)`` makes ``x`` an instance of ``C``, as RDF says,
+    for the types a rule states as for those of the file: the subclass
+    and the existential axioms apply to both."""
+    nl = _labelled_deans()
+    juan = "http://ex.org/Juan"
+    assert _rows(nl, "ans(x) :- ex:Dean(x)") == {(juan,)}
+    assert _rows(nl, TYPED_BY_LABEL + "ans(x) :- ex:Dean(x)") == {
+        (juan,), ("Ana",)}
+    assert _rows(nl, TYPED_BY_LABEL + "ans(x) :- ex:Professor(x)") == {
+        (juan,), ("Ana",), ("Luis",)}
+    assert _rows(
+        nl, TYPED_BY_LABEL + "ans(x) :- exists(y; ex:headOf(x, y))"
+    ) == {(juan,), ("Ana",)}
+    # the program's rules are those of its query: the file's types stay
+    assert _rows(nl, "ans(x) :- ex:Dean(x)") == {(juan,)}
+
+
+def test_rdf_type_in_a_question_names_the_class_by_its_label():
+    """``rdf:type(y, k)``, ``k`` fixed by its label, applies to the unnamed
+    unit a dean heads; a label of no class gives no answer."""
+    nl = _labelled_deans()
+    heads = "ans(x) :- exists(y, k; ex:headOf(x, y), rdf:type(y, k), "
+    assert _rows(nl, TYPED_BY_LABEL + heads + "rdfs:label(k, 'unit'))") == {
+        ("http://ex.org/Juan",), ("Ana",)}
+    assert _rows(nl, heads + "rdfs:label(k, 'nothing'))") == set()
+
+
+def test_rdf_type_from_a_predicate_the_ontology_constrains_is_refused():
+    nl = _labelled_deans()
+    with pytest.raises(NeuroLangException, match="ontology constrains"):
+        _rows(nl, "rdf:type(x, <http://ex.org/Unit>) :- ex:Dean(x)\n"
+                  "ans(x) :- ex:Unit(x)")
+
+
+def test_a_type_stated_between_two_queries_is_seen():
+    nl = _labelled_deans()
+    assert _rows(nl, "ans(x) :- ex:Dean(x)") == {("http://ex.org/Juan",)}
+    nl.execute_datalog_program(TYPED_BY_LABEL)
+    assert _rows(nl, "ans(x) :- ex:Dean(x)") == {
+        ("http://ex.org/Juan",), ("Ana",)}
+
+
+def test_rdf_type_in_a_rule_of_the_program_names_the_class():
+    """A rule of the program, not only the query's, finds the class of
+    ``rdf:type(y, k)`` by its label, as a condition of the query does."""
+    nl = _labelled_deans()
+    assert _rows(nl, TYPED_BY_LABEL + (
+        "heads_a_unit(x) :- exists(y, k; ex:headOf(x, y), rdf:type(y, k), "
+        "rdfs:label(k, 'unit'))\nans(x) :- heads_a_unit(x)"
+    )) == {("http://ex.org/Juan",), ("Ana",)}

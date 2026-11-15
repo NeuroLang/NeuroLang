@@ -259,7 +259,8 @@ def submit(text):
          "prompt": reply.prompt, "mode": getattr(reply, "mode", ""),
          "predicates": getattr(reply, "predicates", []),
          "ratable": getattr(reply, "ratable", False),
-         "graph": getattr(reply, "graph", "")}
+         "graph": getattr(reply, "graph", ""),
+         "uploads": getattr(reply, "uploads", {})}
     )
 
 # The providers of the AI assistant, for the page's form: none when this

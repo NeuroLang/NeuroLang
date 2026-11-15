@@ -6,6 +6,7 @@ import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { answerTabs, imageButtons, renderTable } from "./table_view.js";
+import { removedUploads, uploadRows, uploadsSummary } from "./uploads.js";
 import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
@@ -17,7 +18,7 @@ import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
 import { followUps } from "./follow_up.js";
 import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
-import { Session, parseSession, replayTexts } from "./session.js";
+import { Session, parseSession, replayTexts, withoutUploads } from "./session.js";
 import { PmcLookup } from "./study_links.js";
 import { frameHeight, themeMessage, themed } from "./frames.js";
 import { tabAfter } from "./tabs.js";
@@ -542,7 +543,10 @@ const workerMessages = {
   // The login expired: the login page, then back here.
   login: () => location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`),
   status: (data) => setStatus(data.message, "busy"),
-  error: (data) => fail(data.message),
+  error: (data) => {
+    afterReply = null; // what was to run after is not
+    fail(data.message);
+  },
   ready: (data, restore) => {
     setStatus("Ready.");
     $("boot").hidden = true;
@@ -616,6 +620,16 @@ const workerMessages = {
   },
   reply: (data) => {
     rerun = null;
+    if (quietRun) {
+      const { before, after } = quietRun;
+      quietRun = null;
+      before?.(data);
+      applyReply(data);
+      setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
+      setBusy(false);
+      after?.(data);
+      return replied(data);
+    }
     setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
     if (!data.failed) session.add(lastRun, $("mode").value);
     showLog(html(data.html), !data.failed && Boolean(data.tables?.length), Boolean(data.failed));
@@ -632,11 +646,118 @@ const workerMessages = {
     // On a narrow screen the result is under the query: it is brought into view.
     if (stacked.matches && !$("no-answer").hidden) $("no-answer").scrollIntoView({ behavior: "smooth", block: "start" });
     else if (stacked.matches && (data.tables?.length || data.graph || data.failed)) $("result-title").scrollIntoView({ behavior: "smooth", block: "start" });
+    replied(data);
   },
 };
 
+// The buttons of a row of the uploads: an icon and a word each.
+const UPLOAD_ICONS = {
+  download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  // a brain with a spark: the image is decoded into the concepts it resembles
+  decode: '<path d="M9.5 5a3 3 0 0 0-5.3 1.9A3.6 3.6 0 0 0 2.7 12a3.6 3.6 0 0 0 1.4 5.2A3.2 3.2 0 0 0 9.5 19.3V5"/><path d="M9.5 5a3 3 0 0 1 4.2-1.5M16.3 9a3.6 3.6 0 0 1 .5 5.5 3.6 3.6 0 0 1-1.7 2.7 3.2 3.2 0 0 1-5.6 2.1"/><path d="M5.2 11.5h2.3M9.5 14c1.5 0 2.6-.8 3.2-2.2"/><path fill="currentColor" stroke-width="1" d="M19.6 1.2c.4 2.2 1.1 2.9 3.2 3.3-2.1.4-2.8 1.1-3.2 3.3-.4-2.2-1.1-2.9-3.3-3.3 2.2-.4 2.9-1.1 3.3-3.3z"/>',
+  remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+};
+function iconButton(kind, text, label, action) {
+  const button = Object.assign(document.createElement("button"), {
+    type: "button", className: `upload-${kind}`, title: label,
+  });
+  button.setAttribute("aria-label", label);
+  button.setAttribute("aria-describedby", "uploaded-note");
+  button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${UPLOAD_ICONS[kind]}</svg>`;
+  button.append(text);
+  button.addEventListener("click", action);
+  return button;
+}
+// Remove the uploaded file *name* from the session, quietly: its panel
+// says so, with an Undo, and the focus goes to the next file's Remove.
+function removeUpload(name) {
+  const bytes = uploads.get(name);
+  const entries = session.entries.map((entry) => ({ ...entry }));
+  const rows = [...$("uploaded-list").rows];
+  const at = rows.findIndex((row) => row.cells[0].textContent === name);
+  run(`.uploads remove '${name}'`, { quiet: { after: (data) => {
+    if (data.failed) return setUploadsStatus(plainText(data.html), null, true);
+    setUploadsStatus(plainText(data.html), bytes && (() => restoreUpload(name, bytes, entries)));
+    const removes = $("uploaded-list").querySelectorAll("button.upload-remove");
+    (removes[Math.min(at, removes.length - 1)] ?? $("uploaded-summary")).focus();
+  } } });
+}
+// Undo a removal: the session brings the file back, and the page its bytes
+// and the statements loading it.
+function restoreUpload(name, bytes, entries) {
+  run(`.uploads restore '${name}'`, { quiet: {
+    before: (data) => {
+      if (data.failed) return;
+      uploads.set(name, bytes);
+      session.replace(entries);
+    },
+    after: (data) => {
+      setUploadsStatus(plainText(data.html), null, data.failed);
+      $("uploaded-summary").focus();
+    },
+  } });
+}
+// The line of the uploads panel telling what was done, with an Undo.
+function setUploadsStatus(text, undo = null, failed = false) {
+  const line = $("uploads-status");
+  line.replaceChildren(text);
+  line.classList.toggle("agent-bad", failed);
+  if (undo) {
+    const button = Object.assign(document.createElement("button"), { type: "button", textContent: "Undo" });
+    button.addEventListener("click", undo);
+    line.append(" ", button);
+  }
+  line.hidden = !text;
+}
+const plainText = (markup) => Object.assign(document.createElement("div"), { innerHTML: markup }).textContent.trim();
+
+// The type of an uploaded file, for its download.
+function uploadMime(name) {
+  if (/\.gz$/i.test(name)) return "application/gzip";
+  if (/\.csv$/i.test(name)) return "text/csv";
+  if (/\.tsv$/i.test(name)) return "text/tab-separated-values";
+  return "application/octet-stream";
+}
+
+// The files uploaded in the session, as the latest reply tells them: hidden
+// without any.
+function showUploads(listed) {
+  const summary = uploadsSummary(listed);
+  $("uploaded").hidden = !summary;
+  $("uploaded-summary").textContent = summary;
+  $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells) => {
+    const row = document.createElement("tr");
+    for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text, title: text }));
+    const name = cells[0];
+    const actions = document.createElement("td");
+    actions.className = "upload-actions";
+    if (uploads.has(name)) { // the page has its bytes (it uploaded it)
+      actions.append(iconButton("download", "Download", `Download ${name}`,
+        () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) })));
+    }
+    const decoding = decodings.get(name); // an image: its decoding query may be offered again
+    if (decoding) {
+      actions.append(iconButton("decode", "Decode", `Decode ${name}`, () => {
+        offerDecoding(name, decoding.query, decoding.kind, decoding.threshold, decoding.cortex_query, decoding.relation);
+        $("decode-offer").scrollIntoView({ block: "nearest" });
+      }));
+    }
+    actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
+    row.append(actions);
+    return row;
+  }));
+}
+
 // What a reply changes in the page besides its output: the predicates, the language, and the box.
 function applyReply(data) {
+  if (data.uploads) {
+    // A file the session no longer has (.uploads remove) is not uploaded,
+    // nor loaded, again when the session is given back.
+    const removed = removedUploads([...uploads.keys()], data.uploads);
+    for (const name of removed) { uploads.delete(name); decodings.delete(name); }
+    if (removed.length) session.replace(withoutUploads(session.entries, removed));
+    showUploads(data.uploads);
+  }
   if (data.predicates) guide.predicates = data.predicates;
   if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
   showGuide();
@@ -767,11 +888,15 @@ function goOn(text) {
 // The files uploaded in this tab (.load NAME), by name: a session started
 // anew has none, so they are sent again before its statements are restored.
 const uploads = new Map();
+const decodings = new Map(); // the answer of the upload of each image that can be decoded
 let uploaded = null; // resolves on the worker's answer to an upload
 
 function sendUpload(name, bytes) {
   return new Promise((resolve) => {
-    uploaded = resolve;
+    uploaded = (answer) => { // an image that can be decoded keeps what its Decode button offers
+      if (answer.query) decodings.set(name, answer); else decodings.delete(name);
+      resolve(answer);
+    };
     worker.postMessage({ type: "upload", name, bytes: bytes.slice() });
   });
 }
@@ -809,9 +934,33 @@ function replayStep(data) {
   replayNext();
 }
 
-function run(text, { remember = false } = {}) {
+// A run of the page's own (Remove, Undo), *quiet*: its reply changes the
+// uploads and says what it did in their panel, not the output nor the
+// results being read; ``before`` and ``after`` take the reply.
+let quietRun = null;
+// What runs once the statement running replies (whenReady), given the reply.
+let afterReply = null;
+function whenReady(action) {
+  if ($("run").disabled) afterReply = action;
+  else action();
+}
+function replied(data) {
+  const next = afterReply;
+  afterReply = null;
+  next?.(data);
+}
+function run(text, { remember = false, quiet = null, keepOffer = false } = {}) {
   text = text.trim();
   if (!text) return;
+  if (quiet) {
+    quietRun = quiet;
+    setBusy(true);
+    setStatus("Running…", "busy");
+    worker.postMessage({ text });
+    return;
+  }
+  setUploadsStatus(""); // what was undoable is so no longer
+  if (!keepOffer && $("decode-offer-back") && !$("decode-offer-back").hidden) closeDecodingOffer();
   if (remember) {
     history.add(text);
     showHistory();
@@ -984,7 +1133,9 @@ $("llm-forget").addEventListener("click", () => {
   $("refine-run").hidden = true;
 });
 $("restart").addEventListener("click", () => {
-  uploads.clear(); // a fresh session: without the rules, nor the files uploaded
+  uploads.clear(); decodings.clear(); // a fresh session: without the rules, nor the files uploaded
+  closeDecodingOffer();
+  showUploads(null);
   start();
 });
 // The next user of this browser does not have this one's key.
@@ -1013,6 +1164,80 @@ $("upload-file").addEventListener("change", async (event) => {
   }
   uploads.set(answer.name, bytes);
   run(answer.statement, { remember: true });
+  // An image comes with the query decoding it: the visitor is asked
+  // whether it goes in the box, where it replaces what they wrote.
+  if (answer.query) offerDecoding(answer.name, answer.query, answer.kind, answer.threshold, answer.cortex_query, answer.relation, answer.radius);
+  $("uploaded").open = true; // the file is listed, with its buttons
+});
+
+// The offer to put the query decoding an uploaded image in the box, and,
+// once taken, to bring back the query it replaced, until the next run. A
+// map of values is decoded as z-scores or as a mask from its threshold:
+// it is loaded again so (.image --zscore or --mask); a tractogram is
+// decoded on the voxels near the ends of its streamlines. Only the cortex
+// takes the query choosing the voxel in the cortex (--cortex).
+let decodingQuery = "";
+let cortexQuery = "";
+let replacedQuery = "";
+let decodedMap = ""; // the map of values to load again, decoded so
+let decodedRelation = ""; // the relation it is loaded as
+function offerDecoding(name, query, kind, threshold = 3.1, cortex = "", relation = "image", radius = 3) {
+  decodingQuery = query;
+  decodedRelation = relation;
+  cortexQuery = cortex;
+  $("decode-offer-cortex").checked = false;
+  $("decode-offer-cortex-label").hidden = !cortex;
+  decodedMap = kind === "map" ? name : "";
+  const what = kind === "map"
+    ? `${name} is uploaded, a map of values. A query can decode it, ranking the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line. As z-scores, each voxel weighs the probability that it is active; as a mask, its voxels from ${threshold} weigh the same.`
+    : kind === "tractogram"
+    ? `${name} is uploaded, a tractogram. A query can decode the voxels within ${radius} mm of the ends of its streamlines: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit them, a comment explaining each line.`
+    : `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`;
+  const where = cortex ? " Only the cortex decodes the voxels of the image in the cortex alone." : "";
+  $("decode-offer-text").textContent = what + where + (editor.value.trim() ? " It replaces the query in the box." : "");
+  $("decode-offer-yes").textContent = kind === "map" ? "Decode as z-scores" : "Run the decoding query";
+  $("decode-offer-mask").textContent = `Decode as a mask (from ${threshold})`;
+  $("decode-offer-mask").hidden = kind !== "map";
+  $("decode-offer-yes").hidden = $("decode-offer-no").hidden = false;
+  $("decode-offer-back").hidden = true;
+  $("decode-offer").hidden = false;
+}
+function closeDecodingOffer() {
+  $("decode-offer").hidden = true;
+  decodingQuery = cortexQuery = replacedQuery = decodedMap = "";
+}
+// Put the decoding query in the box and run it, a map loaded again as
+// *flag* says first; once the statement running (the upload's .image)
+// has replied.
+function insertDecoding(flag) {
+  const cortex = cortexQuery && $("decode-offer-cortex").checked;
+  const query = cortex ? cortexQuery : decodingQuery;
+  const reload = decodedMap && `.image '${decodedMap}' --name ${decodedRelation} ${flag}${cortex ? " --cortex" : ""}`;
+  const decode = () => run(query, { remember: true, keepOffer: true });
+  whenReady(() => {
+    if (!reload) return decode();
+    afterReply = (data) => data.failed || decode();
+    run(reload, { remember: true, keepOffer: true });
+  });
+  replacedQuery = editor.value;
+  putQuery(query);
+  if (!replacedQuery.trim()) {
+    closeDecodingOffer();
+  } else {
+    $("decode-offer-text").textContent = "The decoding query is in the box, in place of the query that was there, and runs.";
+    $("decode-offer-yes").hidden = $("decode-offer-mask").hidden = $("decode-offer-no").hidden = true;
+    $("decode-offer-cortex-label").hidden = true;
+    $("decode-offer-back").hidden = false;
+  }
+  input.focus();
+}
+$("decode-offer-yes").addEventListener("click", () => insertDecoding("--zscore"));
+$("decode-offer-mask").addEventListener("click", () => insertDecoding("--mask"));
+$("decode-offer-no").addEventListener("click", closeDecodingOffer);
+$("decode-offer-back").addEventListener("click", () => {
+  editor.value = replacedQuery;
+  closeDecodingOffer();
+  input.focus();
 });
 $("session-open").addEventListener("click", () => $("session-file").click());
 $("session-file").addEventListener("change", async (event) => {
