@@ -26,7 +26,10 @@ What is in the ontology
 
 The ontology is loaded with ``individuals: true`` and ``names: prefixed``,
 so that a triple ``s p o`` is the fact ``p(s, o)``, with classes and
-properties named after their prefix, and the IRIs of the classes
+properties named after their prefix (the file declares none for its own
+namespace: the engine gives it ``cogat``, so that the class of working
+memory is ``cogat:CAO_00587`` and the property ``cogat:measures``), and the
+IRIs of the classes
 (``http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00587``) are their
 values.  The ones to know:
 
@@ -36,9 +39,10 @@ values.  The ones to know:
     (``'Digit_span_task-backward'``).
 ``skos:definition(class, text)``
     its definition.
-``neurolang:subClassOf(class, super_class)``
-    the class hierarchy.  ``rdfs:subClassOf`` also holds the axioms that
-    are not a class, such as the restrictions below.
+``rdfs:subClassOf(class, super_class)``
+    the class hierarchy, and the axioms that are not a class, such as the
+    restrictions below.  ``neurolang:subClassOf`` holds the hierarchy on
+    the names of the classes (``cogat:CAO_00587``), not on their IRIs.
 ``owl:onProperty(restriction, property)``, ``owl:someValuesFrom(restriction, class)``
     the existential restrictions.  A contrast that measures a concept is a
     subclass of the restriction ``measures some <concept>``.
@@ -46,7 +50,8 @@ values.  The ones to know:
 and, defined by the engine with rules over those:
 
 ``cogat_subclass_of(class, ancestor)``
-    the hierarchy at any depth: the closure of ``neurolang:subClassOf``.
+    the hierarchy at any depth: the closure of ``rdfs:subClassOf`` on
+    classes.
 ``cogat_measures(contrast, concept)``
     the contrasts (and tasks) that measure a concept.
 ``cogat_term(class, term)``
@@ -67,7 +72,7 @@ A concept is found by its label, and what is known of it by its IRI:
     ans(d) :- rdfs:label(c, 'Working memory'), skos:definition(c, d)
 
     ans(parent) :- rdfs:label(c, 'Working memory'),
-        neurolang:subClassOf(c, p), rdfs:label(p, parent)
+        rdfs:subClassOf(c, p), rdfs:label(p, parent)
 
 The first returns the definition of *working memory*, "active maintenance and
 flexible updating of goal-task relevant information…", the second its parent,
@@ -174,3 +179,5 @@ of its entry in ``engines.yaml``, or extend ``coordinate_meta_analysis``
       - url: https://raw.githubusercontent.com/CognitiveAtlas/cogat-ontology/master/ontology/cogat.v2.owl
         individuals: true
         names: prefixed
+        prefixes:
+          cogat: http://www.cognitiveatlas.org/ontology/cogat.owl#

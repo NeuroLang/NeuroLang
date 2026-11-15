@@ -398,7 +398,8 @@ def vocabulary_engine():
     # The Cognitive Atlas of the engine, reduced to a few classes.
     from neurolang_apps.utils import conftest, engine_registry
 
-    nl.add_symbol(engine_registry._BUILTIN_SYMBOLS["lcase"], name="lcase")
+    for builtin in ("lcase", "startswith"):
+        nl.add_symbol(engine_registry._BUILTIN_SYMBOLS[builtin], name=builtin)
 
     nl.load_ontology(
         str(conftest.MINI_COGAT), individuals=True, names="prefixed"

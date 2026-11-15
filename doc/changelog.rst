@@ -382,6 +382,35 @@ Unreleased
   ``p(x, y) :- rr(x, y)`` and ``rr(x, y) :- p(x, y)``, ``p`` lacked the
   first tuple of ``rr``.  In the first iteration a recursive atom now sees
   its whole relation.
+
+* The constraints of an ontology ignored the instances a rule derives:
+  with ``c:K(s) :- two_back(s)`` and ``c:K ⊑ ∃c:measures.c:WM``,
+  ``ans(s) :- c:measures(s, c)`` returned nothing, while a fact of ``c:K``
+  gave its answer.  The code a query needs is now followed through the
+  constraints, so the rules defining the predicates of their bodies are
+  solved with the query (:doc:`ontologies`).
+
+* The classes and properties of an ontology named by their IRI, those of a
+  namespace the file declares no prefix for, as the Cognitive Atlas's,
+  could not be written in Datalog: ``<iri>(x)`` is now an atom of the
+  predicate the IRI names, in heads and bodies.  ``load_ontology`` and the
+  ``ontologies`` of ``engines.yaml`` take ``prefixes``, from prefix to
+  namespace, and the ``neurosynth`` and ``neurostore`` engines name the
+  Cognitive Atlas's ``cogat:CAO_00587``, ``cogat:measures``.  Their
+  ``cogat_subclass_of`` is now the closure of ``rdfs:subClassOf`` on
+  classes, whose values are IRIs, as ``rdfs:label``'s: that of
+  ``neurolang:subClassOf``, on the names of the classes, would join with
+  nothing, and gave the CogPO and SKOS classes by name.
+
+* The rewriting of a query over an ontology drops a rewriting as soon as
+  one of its atoms, over a predicate without values, can never be
+  rewritten, instead of exploring all the rewritings it gives: on the
+  Cognitive Atlas, ``ans(s) :- cogat:measures(s, c), cogat:CAO_00587(c)``
+  explores 224 rewritings instead of 26,600 and takes 24 s instead of 60 s
+  (:doc:`ontologies`).  The W3C OWL test cases in the fragment NeuroLang
+  reads are run as tests, the others listed with the reason they are
+  skipped.
+
 * An engine extending another with the same ``text_embeddings`` entry
   (``neurosynth_iit``, ``neurostore_iit``, the ``_tracts`` ones) shares its
   caches (document embeddings, PubMed texts, model copies) in the
@@ -390,6 +419,7 @@ Unreleased
   abstracts again under its own name, which took hours on NeuroStore.  An
   engine whose documents differ from the shared embeddings, or whose own
   directory alone has them, keeps its own.
+
 * Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
   taken for an aggregation, the operator applied to each group's values,
   and gave rows of missing values or failed in pandas; it is now refused

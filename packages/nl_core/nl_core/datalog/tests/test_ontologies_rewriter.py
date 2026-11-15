@@ -542,3 +542,48 @@ def test_chase_rules():
     assert chased.antecedent.functor == Dept
     assert copy.consequent.functor == unit
     assert copy.antecedent.functor == Unit
+
+
+def test_rewritings_with_a_blocked_atom_without_values_are_left_out():
+    """With ``K_i ⊑ ∃m.W_i`` and ``W_i ⊑ CC``, ``m(s, c), CC(c)`` gives
+    ``aux_i(s, c), aux_j(z, c)``, never rewritten for ``i ≠ j`` as ``c``
+    is shared: with ``holds`` these are left out, and the rewritings over
+    predicates with values are the same."""
+    ttl = """
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    @prefix owl: <http://www.w3.org/2002/07/owl#> .
+    @prefix : <http://ex.org/> .
+    :CC a owl:Class .
+    """ + "".join(
+        f"""
+    :K{i} a owl:Class ; rdfs:subClassOf [
+        a owl:Restriction ; owl:onProperty :m ; owl:someValuesFrom :W{i}
+    ] .
+    :W{i} a owl:Class ; rdfs:subClassOf :CC .
+    """ for i in range(4)
+    )
+    onto = OntologyParser(io.StringIO(ttl), load_format="turtle")
+    constraints, _, _ = onto.parse_ontology()
+    s, c, q = Symbol("s"), Symbol("c"), Symbol("q")
+    query = Union((I_(q(s), Conjunction((Symbol("m")(s, c), Symbol("CC")(c)))),))
+    holds = frozenset(Symbol(f"K{i}") for i in range(4))
+    constraints = constraints_that_can_hold(constraints, holds)
+
+    def valued(rewritings):
+        return {
+            r for r in rewritings
+            if all(
+                not a.functor.is_fresh
+                for a in extract_logic_atoms(r.antecedent)
+            )
+        }
+
+    full = OntologyRewriter(query, constraints, chased=True).Xrewrite()
+    pruned = OntologyRewriter(
+        query, constraints, chased=True, holds=holds
+    ).Xrewrite()
+    assert len(pruned) < len(full)
+    assert valued(pruned) == valued(full)
+    assert {r.antecedent for r in valued(pruned)} >= {
+        Conjunction((Symbol(f"K{i}")(s),)) for i in range(4)
+    }

@@ -203,6 +203,20 @@ def test_iri_constants():
     ))),))
 
 
+def test_iri_as_the_functor_of_an_atom():
+    """``<iri>(…)`` is the atom of the predicate named by the IRI, in a
+    head, a body and a negation; as an argument it stays a value."""
+    res = parser(
+        "<http://x.org/c#K>(s) :- <http://x.org/c#m>(s, <http://x.org/a>),"
+        " ~<http://x.org/c#N>(s)"
+    )
+    s = Symbol("s")
+    assert res == Union((Implication(Symbol("http://x.org/c#K")(s), Conjunction((
+        Symbol("http://x.org/c#m")(s, Constant("http://x.org/a")),
+        Negation(Symbol("http://x.org/c#N")(s)),
+    ))),))
+
+
 def test_iri_with_parentheses_and_percent_is_not_a_comment():
     res = parser(
         "q(x) :- p(x, <http://dbpedia.org/resource/Python_(language)%20>)"

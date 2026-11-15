@@ -272,6 +272,39 @@ def test_ontologies_load_local_files_with_options(tmp_path):
     assert set(animals) == {("Rex", "3")}
 
 
+def test_ontologies_declare_prefixes(tmp_path):
+    """``prefixes`` names the classes of a namespace the file declares no
+    prefix for."""
+    from neurolang_apps.utils import engine_registry
+
+    (tmp_path / "vocab.ttl").write_text(
+        "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+        "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
+        "<http://example.org/Dog> a owl:Class ;\n"
+        "    rdfs:subClassOf <http://example.org/Animal> .\n"
+        "<http://example.org/Animal> a owl:Class .\n"
+        "<http://example.org/rex> a <http://example.org/Dog> ;\n"
+        '    <http://example.org/name> "Rex" .\n'
+    )
+    config = tmp_path / "engines.yaml"
+    config.write_text(
+        "engines:\n"
+        "  pets:\n"
+        "    ontologies:\n"
+        "      - url: vocab.ttl\n"
+        "        individuals: true\n"
+        "        names: prefixed\n"
+        "        prefixes:\n"
+        "          ex: http://example.org/\n"
+    )
+    nl = engine_registry.build_engine(
+        "pets", tmp_path / "cache", yaml_path=config
+    )
+    assert set(nl.execute_datalog_program(
+        "ans(n) :- ex:Animal(x), ex:name(x, n)"
+    )) == {("Rex",)}
+
+
 def test_sparql_builtins(tmp_path):
     """The SPARQL-like builtins apply to strings and numbers."""
     from neurolang_apps.utils import engine_registry
