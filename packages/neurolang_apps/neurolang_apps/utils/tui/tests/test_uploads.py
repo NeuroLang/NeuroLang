@@ -92,3 +92,46 @@ def test_the_session_lists_its_uploads(tmp_path):
     out = " ".join(console.file.getvalue().split())
     assert "my scores.csv" in out and "table" in out and "scores" in out
     assert "of 200 MB" in out
+
+
+def test_a_file_is_removed_from_the_uploads(tmp_path):
+    for directory in (None, tmp_path / "5"):
+        uploads = Uploads(directory=directory)
+        uploads.put("a.csv", b"x\n1\n")
+        uploads.loaded("a.csv", "a")
+        assert uploads.remove("a.csv") is True
+        assert uploads.get("a.csv") is None and "a.csv" not in uploads
+        assert uploads.listing() == [] and uploads.used() == 0
+        assert uploads.remove("a.csv") is False
+    assert list((tmp_path / "5").iterdir()) == []
+
+
+def test_the_user_removes_an_uploaded_file(tmp_path):
+    """.uploads remove NAME deletes the file from the session (from its
+    folder, on a server); the relations loaded from it stay, which .drop
+    removes."""
+    import io
+
+    from rich.console import Console
+
+    from neurolang.frontend import NeurolangPDL
+    from neurolang_apps.utils.tui import InteractiveTuiApp, TuiSettings
+    from neurolang_apps.utils.tui.session import store_upload
+
+    console = Console(file=io.StringIO(), width=200)
+    app = InteractiveTuiApp(NeurolangPDL(), TuiSettings(), console=console,
+                            err_console=console)
+    app.uploads = Uploads(directory=tmp_path / "s")
+    store_upload(app, "my scores.csv", b"study,score\ns1,0.5\n")
+    app._handle_dot_command(".load 'my scores.csv' scores")
+    app._handle_dot_command(".uploads remove 'my scores.csv'")
+    out = " ".join(console.file.getvalue().split())
+    assert "removed my scores.csv" in out
+    assert "scores, loaded from it, stays" in out and ".drop scores" in out
+    assert app.uploads.listing() == []
+    assert not (tmp_path / "s" / "my scores.csv").exists()
+    assert "scores" in app.loaded_relations
+    app._handle_dot_command(".uploads remove other.csv")
+    assert "No file other.csv was uploaded" in console.file.getvalue()
+    app._handle_dot_command(".uploads drop x")
+    assert "Usage: .uploads [remove NAME]" in console.file.getvalue()

@@ -37,7 +37,10 @@ Unreleased
   (``document_predicate(..., replace=True)``, ``.document(p, "...",
   replace=True)``).  ``.document(p, "...")`` in the REPL says ``documented p`` (not
   "nothing defined"), and the page keeps it with the rules of the session,
-  after *Stop* or in a saved session.  ``.image PATH|UPLOADED [--name
+  after *Stop* or in a saved session.  ``.uploads remove NAME``, the
+  *Remove* of the page's list, deletes an uploaded file from the session
+  (from its folder on a server), and the page forgets it: the relations
+  loaded from it stay until ``.drop``.  ``.image PATH|UPLOADED [--name
   NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
   (resampled, a mask to the nearest voxel; at most ``image.max_mb``
   uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells

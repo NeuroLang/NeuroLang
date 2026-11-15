@@ -27,3 +27,12 @@ export function uploadRows(uploads) {
     file.loaded.length ? file.loaded.join(", ") : "not loaded",
   ]);
 }
+
+// The files of *names*, those the page keeps to upload again, that the
+// session no longer has (.uploads remove): none without the uploads of a
+// reply, as an older version gives.
+export function removedUploads(names, uploads) {
+  if (!uploads?.files) return [];
+  const kept = new Set(uploads.files.map((file) => file.name));
+  return names.filter((name) => !kept.has(name));
+}

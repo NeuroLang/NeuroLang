@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { uploadRows, uploadsSummary } from "../../../../../../../doc/_static/repl/uploads.js";
+import { removedUploads, uploadRows, uploadsSummary } from "../../../../../../../doc/_static/repl/uploads.js";
+import { withoutUploads } from "../../../../../../../doc/_static/repl/session.js";
 
 const uploads = {
   files: [
@@ -22,5 +23,24 @@ test("each upload is a row: name, kind, size, what it was loaded as", () => {
   assert.deepEqual(uploadRows(uploads), [
     ["my scores.csv", "table", "4.8 MB", "scores"],
     ["roi.nii.gz", "image", "820 B", "not loaded"],
+  ]);
+});
+
+test("the files a reply no longer lists are those removed", () => {
+  const kept = ["my scores.csv", "roi.nii.gz", "old.csv"];
+  assert.deepEqual(removedUploads(kept, uploads), ["old.csv"]);
+  assert.deepEqual(removedUploads(kept, undefined), []); // a reply of an older version
+});
+
+test("the statements loading a removed file are not run again", () => {
+  const entries = [
+    { text: ".load 'old.csv' old", mode: "datalog" },
+    { text: ".load old.csv", mode: "datalog" },
+    { text: ".load 'my scores.csv' scores", mode: "datalog" },
+    { text: "a(x) :- old(x)", mode: "datalog" },
+    { text: ".image roi.nii.gz --name image", mode: "datalog" },
+  ];
+  assert.deepEqual(withoutUploads(entries, ["old.csv", "roi.nii.gz"]).map((e) => e.text), [
+    ".load 'my scores.csv' scores", "a(x) :- old(x)",
   ]);
 });

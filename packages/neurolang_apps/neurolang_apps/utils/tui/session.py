@@ -530,6 +530,18 @@ class Uploads:
     def __contains__(self, name) -> bool:
         return name in self._sizes()
 
+    def remove(self, name: str) -> bool:
+        """Remove the file *name*, from the memory of the session or from
+        its folder; return whether there was one."""
+        self._loaded.pop(name, None)
+        self._times.pop(name, None)
+        if self.directory is None:
+            return self._memory.pop(name, None) is not None
+        if name not in self:
+            return False
+        (self.directory / name).unlink(missing_ok=True)
+        return True
+
     def loaded(self, name: str, relation: str) -> None:
         """Tell that the relation *relation* was loaded from the file
         *name* (.load NAME, .image NAME)."""
@@ -617,13 +629,28 @@ def cmd_load(app, arg: str) -> None:
         app.uploads.loaded(words[0], name)
 
 
+UPLOADS_USAGE = ".uploads [remove NAME]"
+
+
 @command(
     ".uploads", "List the files the page uploaded in this session (Upload "
-    "data): their kind, size, age and the relations loaded from them",
-    ".uploads",
+    "data): their kind, size, age and the relations loaded from them; "
+    "remove NAME deletes one",
+    UPLOADS_USAGE,
 )
 def cmd_uploads(app, arg: str) -> None:
-    """Print the files of the session's uploads (session.Uploads)."""
+    """Print the files of the session's uploads (session.Uploads), or
+    remove one."""
+    try:
+        words = shlex.split(arg)
+    except ValueError:
+        words = None
+    if words and len(words) == 2 and words[0] == "remove":
+        _remove_upload(app, words[1])
+        return
+    if words != []:
+        _warn(app, f"Usage: {UPLOADS_USAGE}")
+        return
     listing = app.uploads.listing()
     if not listing:
         app.console.print(
@@ -647,6 +674,24 @@ def cmd_uploads(app, arg: str) -> None:
         f"{app.uploads.most_all >> 20} MB used; a file takes at most "
         f"{app.uploads.most_file >> 20} MB.", markup=False,
     )
+
+
+def _remove_upload(app, name: str) -> None:
+    """Delete the uploaded file *name* from the session, telling which
+    relations loaded from it stay."""
+    listing = {upload["name"]: upload for upload in app.uploads.listing()}
+    if not app.uploads.remove(name):
+        _warn(app, f"No file {name} was uploaded in this session: "
+                   ".uploads lists them.")
+        return
+    loaded = listing.get(name, {}).get("loaded", [])
+    message = f"removed {name}"
+    if loaded:
+        relations = ", ".join(loaded)
+        message += (f"; {relations}, loaded from it, "
+                    f"{'stays' if len(loaded) == 1 else 'stay'} in this "
+                    f"session (.drop {loaded[0]} removes it)")
+    app.console.print(message, style="green", markup=False)
 
 
 def _megabytes(size: int) -> str:

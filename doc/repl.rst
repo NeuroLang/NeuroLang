@@ -180,7 +180,10 @@ folder are its options, see :doc:`repl_server`).  The page sends the file
 again when it gives the session's rules back (after **Stop**, or when a
 saved session is opened), and forgets it on **Restart**.  A server loads
 the files you upload, and no path of its own.  ``.uploads`` lists the files
-of the session, what each was loaded as, and the room left.
+of the session, what each was loaded as, and the room left; the page lists
+them under its toolbar, and its *Remove* (``.uploads remove NAME``) deletes
+one from the session, and from what the page uploads again: the relations
+loaded from it stay until ``.drop`` or **Restart**.
 
 The query assistant reads, with the relations and their columns, their
 descriptions: describe yours, so that it finds them and knows what they
@@ -302,9 +305,10 @@ Every command
      - a NIfTI image of activations as ``image(i, j, k, value)``, shown in
        the brain viewer
      - both
-   * - ``.uploads``
+   * - ``.uploads [remove NAME]``
      - the files the page uploaded in the session: their kind, size, age,
-       the relations loaded from them, and the room left
+       the relations loaded from them, and the room left; ``remove NAME``
+       deletes one (the relations loaded from it stay, until ``.drop``)
      - both
    * - ``.sets``, ``.predicates``, ``.engines``
      - the engine's relations, and the engines

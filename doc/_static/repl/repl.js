@@ -6,7 +6,7 @@ import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { answerTabs, imageButtons, renderTable } from "./table_view.js";
-import { uploadRows, uploadsSummary } from "./uploads.js";
+import { removedUploads, uploadRows, uploadsSummary } from "./uploads.js";
 import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
@@ -18,7 +18,7 @@ import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
 import { followUps } from "./follow_up.js";
 import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
-import { Session, parseSession, replayTexts } from "./session.js";
+import { Session, parseSession, replayTexts, withoutUploads } from "./session.js";
 import { PmcLookup } from "./study_links.js";
 import { frameHeight, themeMessage, themed } from "./frames.js";
 import { tabAfter } from "./tabs.js";
@@ -644,13 +644,28 @@ function showUploads(uploads) {
   $("uploaded-list").replaceChildren(...uploadRows(uploads).map((cells) => {
     const row = document.createElement("tr");
     for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text }));
+    const remove = Object.assign(document.createElement("button"), {
+      type: "button", className: "quiet", textContent: "Remove",
+      title: `Delete ${cells[0]} from this session: the relations loaded from it stay until .drop`,
+    });
+    remove.addEventListener("click", () => run(`.uploads remove '${cells[0]}'`));
+    const cell = document.createElement("td");
+    cell.append(remove);
+    row.append(cell);
     return row;
   }));
 }
 
 // What a reply changes in the page besides its output: the predicates, the language, and the box.
 function applyReply(data) {
-  if (data.uploads) showUploads(data.uploads);
+  if (data.uploads) {
+    // A file the session no longer has (.uploads remove) is not uploaded,
+    // nor loaded, again when the session is given back.
+    const removed = removedUploads([...uploads.keys()], data.uploads);
+    for (const name of removed) uploads.delete(name);
+    if (removed.length) session.replace(withoutUploads(session.entries, removed));
+    showUploads(data.uploads);
+  }
   if (data.predicates) guide.predicates = data.predicates;
   if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
   showGuide();
