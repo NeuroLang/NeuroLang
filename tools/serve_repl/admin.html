@@ -198,6 +198,12 @@
 </table></div>
 <p class="note">Memory is that of a session's own (MB, its most in parentheses), beyond what it shares with the engines' builder; CPU, the seconds of its process. Linux only.</p>
 
+<section id="update-box" hidden>
+<h2>Server</h2>
+<p><button type="button" id="update">Update and restart</button></p>
+<p class="note">Asks whether the upstream of the server's checkout (origin/master) moved; if it did, brings the checkout there, its environment to the lock, and restarts the server: the sessions end, and the server prepares its engines again (a few minutes).</p>
+</section>
+
 <h2>Usage by user</h2>
 <p class="note" id="usage-note"></p>
 <div class="scroll"><table>
@@ -368,6 +374,8 @@ async function show() {
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
   $("activity-link").hidden = !state.activity;
+  $("update-box").hidden = !state.update;
+  sessionCount = sessions ? sessions.length : 0;
   $("dashboard-link").hidden = !state.dashboard;
   const builder = state.builder;
   const limits = state.limits;
@@ -449,6 +457,37 @@ $("group").addEventListener("submit", (event) => {
   if (own) body.own_key = own === "yes";
   change("/admin/api/group", body, `The group ${name} is changed.`)
     .then(() => { event.target.key.value = ""; });
+});
+
+// Update and restart, if master moved; then wait for the server to be back.
+let sessionCount = 0;
+$("update").addEventListener("click", async () => {
+  const node = $("update");
+  node.disabled = true;
+  try {
+    say("Asking whether master moved…");
+    const check = await call("/admin/api/update");
+    if (!check.new.length) return say(`${check.upstream} has not moved: the server runs ${check.head}.`);
+    if (check.changed) return say("The checkout has changes of its own: update it by hand.", true);
+    const commits = check.new.slice(0, 15).join("\n") + (check.new.length > 15 ? "\n…" : "");
+    if (!confirm(`${check.upstream} has ${check.new.length} new commit(s):\n\n${commits}\n\n`
+      + `Update and restart? The ${sessionCount} session(s) end.`)) return say("");
+    say("Updating: the checkout, then the environment…");
+    const done = await call("/admin/api/update", {});
+    if (!done.restarting) return say(`${done.upstream} has not moved: the server runs ${done.head}.`);
+    const asked = Date.now();
+    say(`Updated to ${done.new[0]}. The server restarts and prepares its engines; this page reloads once it is back.`);
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const health = await fetch("/health", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+      // the new server: it started after the update was asked
+      if (health?.ok && health.uptime_seconds * 1000 < Date.now() - asked) return location.reload();
+    }
+  } catch (error) {
+    say(error.message, true);
+  } finally {
+    node.disabled = false;
+  }
 });
 
 show().catch((error) => say(error.message, true));

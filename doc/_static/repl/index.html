@@ -266,6 +266,9 @@
   #boot { display: grid; gap: .7rem; justify-items: center; color: var(--muted); }
   #boot:not([hidden]) ~ .empty-ready { display: none; }
   .empty-ready { display: grid; gap: .8rem; justify-items: center; }
+  .empty-busy { display: none; }
+  body[data-busy] .empty-ready > :not(.empty-busy) { display: none; }
+  body[data-busy] .empty-busy { display: grid; gap: .9rem; justify-items: center; }
   .boot-track { position: relative; width: min(16rem, 70%); height: .45rem; border-radius: 999px; background: var(--track); overflow: hidden; }
   .boot-track::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: inherit; background: var(--accent); animation: boot 1.6s cubic-bezier(.45, 0, .25, 1) infinite; }
   @keyframes boot { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
@@ -283,6 +286,9 @@
   #out:empty { display: none; }
   #out > div { padding: .6rem .8rem; }
   #out pre { margin: 0; font-size: 12.5px; }
+  #out.failed pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  #failed { display: flex; gap: .5rem; align-items: start; margin: 0; padding: .6rem .8rem; border: 1px solid color-mix(in srgb, var(--bad) 50%, transparent); border-radius: var(--radius); background: var(--bad-soft); color: var(--bad); font-weight: 600; }
+  #failed .icon { margin-top: .15rem; }
   #out.quiet { background: none; color: var(--muted); overflow: visible; }
   #out.quiet > details > summary { display: flex; align-items: center; gap: .4rem; font-size: .8125rem; }
   #out.quiet > details > summary::before { content: ""; width: .7rem; height: .7rem; background: var(--muted); -webkit-mask: var(--chevron) center / contain no-repeat; mask: var(--chevron) center / contain no-repeat; transition: transform .2s; }
@@ -365,6 +371,7 @@
   .rt-menu > summary:hover, .rt-menu[open] > summary { background: var(--hover); }
   .rt-menu-items { min-width: 15rem; }
   .rt-menu-items button:disabled { cursor: help; }
+  .rt-menu-items .note { padding: 0 .65rem .4rem; }
   body[data-busy] .rt-menu summary, body[data-busy] .brain-bar button { pointer-events: none; opacity: .4; }
   .rt-scroll { max-height: 34rem; overflow: auto; border-radius: 0 0 var(--radius) var(--radius); }
   .rt-table { border-collapse: collapse; min-width: 20rem; font: 12.5px/1.45 var(--mono); font-variant-numeric: tabular-nums; }
@@ -396,7 +403,7 @@
     .workspace > .pane:first-child > .card:nth-child(n+3) { order: 2; }
   }
   @media (max-width: 40rem) {
-    .rt-track { display: none; } /* the value first; the plot draws them */
+    .rt-table .rt-track { display: none; } /* the value first; the plot draws them */
     .nav-menu-items { right: auto; left: 0; } /* Docs is at the left of a narrow screen: its menu opens rightwards, not off the screen */
     .menu-items, .rt-menu-items { position: static; } /* the others open in the flow, which has the room */
     .topbar-in { gap: .5rem .75rem; }
@@ -580,6 +587,7 @@
         <p class="note">The first start takes about 30 s: it loads Python, the engine and its data (Neurosynth, Neurosynth + tracts or NeuroStore, as the selector at the top says), which the browser keeps for the next visit.</p>
       </div>
       <div class="empty-ready">
+        <div class="empty-busy"><h3>Running…</h3><p>The answer comes here as a table. The status above says how long it has lasted.</p></div>
         <h3>Run a query to see its answer here</h3>
         <p>Pick one of the examples, or write your own query. The answer comes as a table. Brain shows its regions and studies on the brain, and Graph shows where it comes from.</p>
         <div class="legend" aria-hidden="true">
@@ -588,6 +596,7 @@
         </div>
       </div>
     </div>
+    <p id="failed" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg><span id="failed-text"></span></p>
     <div id="out" aria-live="polite"></div>
     <section id="results" data-tab="table">
       <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button><button id="tab-graph" type="button" role="tab" aria-controls="graph" aria-selected="false" tabindex="-1" hidden title="Where the answer of the query comes from: its data, rules and probabilities">Graph</button></div>

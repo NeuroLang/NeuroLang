@@ -19,6 +19,13 @@ Unreleased
 
 **New features:**
 
+* The admin console of ``neurolang-repl-serve`` has *Update and restart*:
+  it asks whether origin/master (the upstream of the server's checkout)
+  moved, lists its new commits, and, confirmed, fast-forwards the checkout,
+  syncs the environment to the lock with the extras installed (``uv sync
+  --frozen --inexact``) and restarts the server in place; the page reloads
+  once the server is back. A checkout with changes of its own is not
+  updated.
 * A dense whole-brain tractogram for tract_querier's bundles, the engines
   ``neurosynth_disconnectome7t`` and ``neurostore_disconnectome7t``:
   Disconnectome7T's tractography of the Human Connectome Project's 7 T
@@ -560,7 +567,12 @@ Unreleased
   the faint text of the REPL's tokens, and the account and admin pages
   read their notes and states at 4.5:1 in a dark system and have 44 px
   controls on a touch screen, as the activity page, which had them only on
-  narrow ones.
+  narrow ones. The menus close with Escape and with a click elsewhere; the
+  result card says "Running…" while a query runs, and shows a failed
+  statement as one line with an icon above its log, which wraps; the steps
+  of the assistant are open while it works; a disabled menu item says why in
+  text; and, on a phone, the legend of the empty result still draws the
+  probability bars it explains.
 
 * The account and admin pages of the REPL server (``neurolang-repl-serve
   --users``) look like its login and activity pages: the tokens of the
