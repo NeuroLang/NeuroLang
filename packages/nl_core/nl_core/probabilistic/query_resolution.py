@@ -43,9 +43,9 @@ from ..relational_algebra.optimisers import (
     GreedyJoinOrdering,
     PushUnnamedSelectionsUp,
 )
-from ..relational_algebra.optimisers.columns import _ra_columns
-from ..relational_algebra.optimisers.projections import _project_if_narrower
-from nl_expr.utils.orderedset import OrderedSet
+from ..relational_algebra.optimisers.projections import (
+    _push_projection_through_join,
+)
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet
@@ -516,22 +516,17 @@ class PushSumsThroughJoins(ExpressionWalker):
         lambda expression: type(expression.relation) is NaturalJoin,
     )
     def push_sum_through_join(self, expression):
-        join = expression.relation
-        left, right = join.relation_left, join.relation_right
-        columns = OrderedSet(expression.attributes)
-        left_columns, right_columns = _ra_columns(left), _ra_columns(right)
-        shared = left_columns & right_columns
-        new_left = self.walk(_project_if_narrower(
-            left, left_columns, (columns & left_columns) | shared
-        ))
-        new_right = self.walk(_project_if_narrower(
-            right, right_columns, (columns & right_columns) | shared
-        ))
-        if new_left is left and new_right is right:
+        pushed = _push_projection_through_join(expression)
+        join = pushed.relation
+        left = self.walk(join.relation_left)
+        right = self.walk(join.relation_right)
+        if (
+            pushed is expression
+            and left is join.relation_left
+            and right is join.relation_right
+        ):
             return expression
-        return Projection(
-            NaturalJoin(new_left, new_right), expression.attributes
-        )
+        return Projection(NaturalJoin(left, right), expression.attributes)
 
 
 class AddNeededProjections(PatternWalker):
@@ -574,7 +569,6 @@ def generate_provenance_query_solver(
     symbol_table, run_relational_algebra_solver,
     needed_projections=None,
     solver_class=ProbSemiringToRelationalAlgebraSolver,
-    push_sums=False,
 ):
     """
     Generate a walker that solves a RAP query.
@@ -609,7 +603,7 @@ def generate_provenance_query_solver(
 
     steps = [
         RAQueryGOOOptimiser(symbol_table=symbol_table),
-        *((PushSumsThroughJoins(),) if push_sums else ()),
+        PushSumsThroughJoins(),
         RAQueryOptimiser(),
         solver_class(symbol_table=symbol_table),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),

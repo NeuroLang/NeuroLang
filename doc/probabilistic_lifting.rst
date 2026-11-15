@@ -1595,10 +1595,13 @@ Sums pushed through joins
    it is, and the rewriting recurses into the joins of each side. It
    applies to the join of the provenance solver only: the
    ``NaturalJoinInverse`` of the conditional queries divides, and a sum
-   does not distribute over a division; and to the plans of this solver
-   only (``push_sums`` of ``generate_provenance_query_solver``), as the
-   plans of the other solvers have projections which are not sums
-   (``IndependentProjection``). A deterministic relation has the number 1
+   does not distribute over a division. It applies to the plans of every
+   solver built by ``generate_provenance_query_solver``: the lifted plans
+   of the next solver compute a ``Projection`` and a ``NaturalJoin`` the
+   same way (``ExtendedRAPToRAWalker`` extends this solver's walker), and
+   their projections which are not sums, ``IndependentProjection`` and
+   the other ``LiftedPlanProjection``, are other operators, never
+   rewritten. A deterministic relation has the number 1
    on each of its rows, and a projection dropping its columns sums them
    as the projection at the top would. The sums of each side are no
    larger than the rows of that side, and the join of the summed sides no

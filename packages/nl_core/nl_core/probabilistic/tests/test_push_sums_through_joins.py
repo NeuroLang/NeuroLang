@@ -10,6 +10,7 @@ from typing import AbstractSet
 import numpy as np
 import pytest
 
+from nl_expr.expression_walker import IdentityWalker
 from nl_expr.expressions import Constant
 from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
@@ -18,7 +19,7 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import NaturalJoinInverse
-from .. import small_dichotomy_theorem_based_solver as sdt
+from .. import query_resolution
 from ..query_resolution import PushSumsThroughJoins
 
 
@@ -67,14 +68,10 @@ def test_a_division_is_not_a_product():
 
 @pytest.fixture
 def without_push(monkeypatch):
-    """Solve with the small dichotomy theorem solver, but without pushing
-    the sums through the joins."""
-    def solver(*args, **kwargs):
-        kwargs["push_sums"] = False
-        return original(*args, **kwargs)
-
-    original = sdt.generate_provenance_query_solver
-    monkeypatch.setattr(sdt, "generate_provenance_query_solver", solver)
+    """Solve without pushing the sums through the joins."""
+    monkeypatch.setattr(
+        query_resolution, "PushSumsThroughJoins", IdentityWalker
+    )
 
 
 def _decoding_engine(probabilities):
@@ -189,13 +186,9 @@ def test_the_probabilities_are_those_without_the_push(
     """Random programs of choices, facts and deterministic relations: the
     same probabilities with the sums pushed through the joins as without."""
     pushed = _probabilities(_random_engine(seed), query)
-    original = sdt.generate_provenance_query_solver
-
-    def solver(*args, **kwargs):
-        kwargs["push_sums"] = False
-        return original(*args, **kwargs)
-
-    monkeypatch.setattr(sdt, "generate_provenance_query_solver", solver)
+    monkeypatch.setattr(
+        query_resolution, "PushSumsThroughJoins", IdentityWalker
+    )
     unpushed = _probabilities(_random_engine(seed), query)
     assert pushed.keys() == unpushed.keys()
     for key, value in unpushed.items():
@@ -203,21 +196,20 @@ def test_the_probabilities_are_those_without_the_push(
 
 
 def test_the_random_programs_push_sums(monkeypatch):
-    """The random programs above are solved by the small dichotomy
-    theorem, and some of their sums are pushed through joins: they test
-    the push."""
-    from .. import query_resolution
-
+    """Some sums of the random programs above are pushed through joins:
+    they test the push."""
     narrowed = []
-    narrow = query_resolution._project_if_narrower
+    push = query_resolution._push_projection_through_join
 
-    def counting(operand, operand_columns, needed):
-        result = narrow(operand, operand_columns, needed)
-        if result is not operand:
+    def counting(expression):
+        result = push(expression)
+        if result is not expression:
             narrowed.append(result)
         return result
 
-    monkeypatch.setattr(query_resolution, "_project_if_narrower", counting)
+    monkeypatch.setattr(
+        query_resolution, "_push_projection_through_join", counting
+    )
     for query in RANDOM_QUERIES[:3]:
         before = len(narrowed)
         _probabilities(_random_engine(0), query)

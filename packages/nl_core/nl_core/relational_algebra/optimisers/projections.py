@@ -470,6 +470,36 @@ def _project_if_narrower(operand, operand_cols, needed):
     return operand
 
 
+def _push_projection_through_join(expression):
+    """π[cols](A ⋈ B) → π[cols](π[cols_A](A) ⋈ π[cols_B](B)), each side
+    keeping the columns projected on and those of the join; ``expression``
+    itself when neither side drops a column."""
+    cols = expression.attributes
+    join = expression.relation
+    A = join.relation_left
+    B = join.relation_right
+
+    cols_set = OrderedSet(cols)
+    A_cols = _ra_columns(A)
+    B_cols = _ra_columns(B)
+
+    # Columns each child must provide:
+    #   (a) columns needed in the projection output
+    #   (b) columns shared with the other side (required for the ⋈)
+    A_needed = (cols_set & A_cols) | (A_cols & B_cols)
+    B_needed = (cols_set & B_cols) | (A_cols & B_cols)
+
+    new_A = _project_if_narrower(A, A_cols, A_needed)
+    new_B = _project_if_narrower(B, B_cols, B_needed)
+    # Return the expression itself when neither side is narrowed (for
+    # instance when a side needs no column at all): rebuilding an
+    # equal expression makes the walker rewrite it forever.
+    if new_A is A and new_B is B:
+        return expression
+
+    return Projection(NaturalJoin(new_A, new_B), cols)
+
+
 class PushProjectionsDown(ew.PatternWalker):
     """
     Push projections through NaturalJoins.
@@ -498,7 +528,7 @@ class PushProjectionsDown(ew.PatternWalker):
         lambda expression: not _has_join_operand(expression.relation)
     )
     def push_through_join(self, expression):
-        result = self._push_through_pair(expression, NaturalJoin)
+        result = _push_projection_through_join(expression)
         if result is not expression:
             return result
         # Fall through to walk children so inner patterns
@@ -532,29 +562,3 @@ class PushProjectionsDown(ew.PatternWalker):
             if all(a is b for a, b in zip(new_operands, operands)):
                 return expression
         return Projection(NaryNaturalJoin(new_operands), cols)
-
-    def _push_through_pair(self, expression, join_cls):
-        cols = expression.attributes
-        join = expression.relation
-        A = join.relation_left
-        B = join.relation_right
-
-        cols_set = OrderedSet(cols)
-        A_cols = _ra_columns(A)
-        B_cols = _ra_columns(B)
-
-        # Columns each child must provide:
-        #   (a) columns needed in the projection output
-        #   (b) columns shared with the other side (required for the ⋈)
-        A_needed = (cols_set & A_cols) | (A_cols & B_cols)
-        B_needed = (cols_set & B_cols) | (A_cols & B_cols)
-
-        new_A = _project_if_narrower(A, A_cols, A_needed)
-        new_B = _project_if_narrower(B, B_cols, B_needed)
-        # Return the expression itself when neither side is narrowed (for
-        # instance when a side needs no column at all): rebuilding an
-        # equal expression makes the walker rewrite it forever.
-        if new_A is A and new_B is B:
-            return expression
-
-        return Projection(NaturalJoin(new_A, new_B), cols)
