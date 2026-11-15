@@ -117,6 +117,37 @@ terms of the largest lifts decode it.  It is the ``uniformity`` of
 :doc:`tutorial_neurosynth_tests` with the voxels of the image, weighted,
 in place of those of the whole brain.
 
+The model: the voxels as facts, one of them chosen
+--------------------------------------------------
+
+The probabilistic program of this decoding takes each voxel of the image
+as a fact, active with its probability, chooses one voxel uniformly, and
+says a study hits the image when it activates the chosen voxel and that
+voxel is active:
+
+.. code-block:: text
+
+    image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+    image_size(sum(o)) :- image_probability(i, j, k, p), (o == 1.0)
+    image_voxel(i, j, k) ^ q :- image_probability(i, j, k, p), image_size(n), (q == 1.0 / n)
+    image_hit(s) :- image_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+    p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+
+Of :math:`n` voxels, :math:`P(\mathrm{hit} \mid s) = \frac{1}{n}
+\sum_{v \,:\, A_v(s)} p_v`, and averaged over the studies of :math:`T`,
+or over all of them, :math:`\frac{1}{n} \sum_v p_v P(A_v \mid T)` and
+:math:`\frac{1}{n} \sum_v p_v P(A_v)`.  These are :math:`P(A_V \mid T)` and
+:math:`P(A_V)` above times the same constant :math:`\sum_u p_u / n`, so
+their ratio is the lift.  This program is the decoding, as it is said.
+
+The engine solves it exactly (:doc:`probabilistic_lifting`): the choice
+of the voxel makes the probability a sum over the voxels.  But the
+engine's join order joins the studies, their terms and ``activated``, all
+the peaks of the engine, before the image: seconds for the amygdala below,
+more than 30 GB for a whole statistical map.  The
+query of the engines, below, computes the same lift from the studies
+alone.
+
 The query
 ---------
 
@@ -164,12 +195,11 @@ the image joined with the engine's ``p_a_given_t(t, i, j, k, p)`` and
 voxel before the join, more than 40 GB for the amygdala below, where the
 query above reads only the studies.
 
-The overlap: the voxels as probabilistic facts
-----------------------------------------------
+The overlap: the voxels as facts, none chosen
+---------------------------------------------
 
-The probabilities of the voxels may be taken as independent facts too:
-each voxel is active with its probability, and a study hits the image if
-it activates an active voxel of it,
+Without the choice of a voxel, a study hits the image if it activates
+any active voxel of it,
 
 .. math::
 
@@ -182,7 +212,7 @@ which NeuroLang writes as it is said:
     image_active(i, j, k) :: p :- image_probability(i, j, k, p)
     image_hit(s) :- activated(i, j, k, s), image_active(i, j, k)
 
-the rest of the query as above.  For a mask or a small region, it is how
+the rest of the program as above.  For a mask or a small region, it is how
 much more often the studies of a term report a peak in it: fear 2.92,
 valence 2.50, emotion 2.32 for the amygdala below.  On a whole map, nearly
 every study activates some active voxel of it, 98% of them for the motor
