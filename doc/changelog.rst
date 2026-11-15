@@ -19,6 +19,19 @@ Unreleased
 
 **New features:**
 
+* ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF
+  says, for the types a program states with rules as for those of the
+  files: ``rdf:type(e, t) :- our_experiment(e, n), cogat_term(t, n)``
+  types our experiments as Cognitive Atlas tasks by their names, and the
+  Atlas's axioms then apply to them.  In a question, ``rdf:type(c, k),
+  cogat_term(k, 'response inhibition')`` names the class by its label,
+  for an unnamed ``c`` too, in the query and in the program's rules.  Only
+  the classes with instances get them, so the rewriting still drops the
+  others.  The example (IV) of :doc:`ontologies` is rewritten on it, with
+  no identifier of the Atlas in its queries: our experiments, then the
+  Stroop studies of Neurosynth, in the closed and the open world, every
+  query of it now ending.
+
 * The admin console of ``neurolang-repl-serve`` has *Update and restart*:
   it asks whether origin/master (the upstream of the server's checkout)
   moved, lists its new commits, and, confirmed, fast-forwards the checkout,
