@@ -397,7 +397,8 @@
   }
   @media (max-width: 40rem) {
     .rt-track { display: none; } /* the value first; the plot draws them */
-    .nav-menu-items, .menu-items, .rt-menu-items { position: static; } /* open in the flow: from the left of a narrow screen an absolute one would leave it */
+    .nav-menu-items { right: auto; left: 0; } /* Docs is at the left of a narrow screen: its menu opens rightwards, not off the screen */
+    .menu-items, .rt-menu-items { position: static; } /* the others open in the flow, which has the room */
     .topbar-in { gap: .5rem .75rem; }
     .topbar { position: static; }
     .topbar nav { margin-left: 0; width: 100%; gap: 1rem; }
