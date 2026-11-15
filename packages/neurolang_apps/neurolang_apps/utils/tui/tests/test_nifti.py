@@ -1464,7 +1464,7 @@ class TestImage:
         return path
 
     def test_loads_the_voxels_and_their_values(self, tiny, zmap):
-        tiny._handle_dot_command(f".image {zmap}")
+        tiny._handle_dot_command(f".image {zmap} --name image")
         out = " ".join(_output(tiny).split())
         assert "loaded image(i, j, k, value): 3 voxels" in out
         assert "a map of values" in out
@@ -1490,7 +1490,7 @@ class TestImage:
             return next(row for row in schema.splitlines()
                         if row.startswith("- image(i, j, k, value)"))
 
-        tiny._handle_dot_command(f".image {zmap}")
+        tiny._handle_dot_command(f".image {zmap} --name image")
         first = line()
         assert "brain image" in first and "z.nii.gz" in first
         assert "a map of values of 3 voxels, from -2 to 5" in first
@@ -1511,16 +1511,21 @@ class TestImage:
         assert "loaded z(i, j, k, value)" in _output(tiny)
 
     def test_loading_again_replaces_it_when_named(self, tiny, zmap):
+        """The image is named after its file, z.nii.gz z, as .load names a
+        table; loaded again, it replaces the relation of that name only
+        when given."""
         tiny._handle_dot_command(f".image {zmap}")
         tiny._handle_dot_command(f".image {zmap}")
         assert "already loaded" in " ".join(_output(tiny).split())
-        tiny._handle_dot_command(f".image {zmap} --name image")
-        assert _output(tiny).count("loaded image(i, j, k, value)") == 2
+        tiny._handle_dot_command(f".image {zmap} --name z")
+        assert _output(tiny).count("loaded z(i, j, k, value)") == 2
 
     def test_errors(self, tiny, zmap, tmp_path):
         tiny._handle_dot_command(f".image {tmp_path / 'none.nii'}")
         tiny._handle_dot_command(".image")
-        tiny._handle_dot_command(f".image {self._mask(tmp_path, [])}")
+        tiny._handle_dot_command(
+            f".image {self._mask(tmp_path, [])} --name image"
+        )
         out = " ".join(_output(tiny).split())
         assert "Cannot load" in out
         assert "Usage: .image PATH" in out
@@ -1530,7 +1535,7 @@ class TestImage:
         self, tiny, zmap, monkeypatch
     ):
         monkeypatch.setitem(nifti.IMAGE_DEFAULTS, "max_mb", 0)
-        tiny._handle_dot_command(f".image {zmap}")
+        tiny._handle_dot_command(f".image {zmap} --name image")
         assert "more than 0 MB uncompressed" in _output(tiny)
         assert "image" not in tiny.loaded_relations
 
@@ -1543,7 +1548,7 @@ class TestImage:
         affine[:3, :3] *= 0.5
         path = tmp_path / "fine.nii.gz"
         nib.save(nib.Nifti1Image(data, affine), path)
-        tiny._handle_dot_command(f".image {path}")
+        tiny._handle_dot_command(f".image {path} --name image")
         assert "a mask" in _output(tiny)
         values = {row[-1] for row in tiny._nl.symbols["image"].value}
         assert values == {4.0}
@@ -1557,12 +1562,12 @@ class TestImage:
 
         monkeypatch.setenv(CONFINE_ENV, str(tmp_path / "data"))
         tiny.uploads["my z.nii.gz"] = zmap.read_bytes()
-        tiny._handle_dot_command(f".image {zmap}")
+        tiny._handle_dot_command(f".image {zmap} --name image")
         assert "No image" in _output(tiny) and "was uploaded" in _output(tiny)
         tiny._handle_dot_command(".image 'my z.nii.gz'")
-        assert "loaded image(i, j, k, value): 3 voxels from my z.nii.gz" in \
+        assert "loaded my_z(i, j, k, value): 3 voxels from my z.nii.gz" in \
             " ".join(_output(tiny).split())
-        assert tiny.uploads.listing()[0]["loaded"] == ["image"]
+        assert tiny.uploads.listing()[0]["loaded"] == ["my_z"]
 
     @pytest.fixture
     def decoding(self, tiny, monkeypatch):
@@ -1613,7 +1618,7 @@ class TestImage:
         rules = [rule for rule in query.splitlines()
                  if not rule.startswith("ans(")]
         app._execute_and_display("\n".join(rules) + "\n" + (
-            "ans(term, lift) :- p_image_given_term(term, a), p_image(b), "
+            f"ans(term, lift) :- p_{name}_given_term(term, a), p_{name}(b), "
             "(lift == a / b)"
         ))
         frame = app.results[-1].frame
@@ -1641,7 +1646,7 @@ class TestImage:
     def test_the_query_decodes_a_mask(self, decoding, tmp_path):
         """A mask's voxels are active for sure: its probabilities are 1."""
         mask = self._mask(tmp_path, [(1, 2, 3)])
-        decoding._handle_dot_command(f".image {mask}")
+        decoding._handle_dot_command(f".image {mask} --name image")
         out = " ".join(_output(decoding).split())
         assert "loaded image_probability(i, j, k, p): 1 voxels" in out
         assert "Decode it with this query: % " in out
@@ -1657,7 +1662,7 @@ class TestImage:
         3) and (0, 0, 0), only (1, 2, 3), that the studies of pain activate,
         is decoded; in the brain, each study activates a voxel of it."""
         mask = self._mask(tmp_path, [(1, 2, 3), (0, 0, 0)])
-        decoding._handle_dot_command(f".image {mask} --cortex")
+        decoding._handle_dot_command(f".image {mask} --cortex --name image")
         out = " ".join(_output(decoding).split())
         assert "image_hit(s) :- selected_voxel(i, j, k), " \
             "cortical_mask(i, j, k), image_active(i, j, k)" in out
@@ -1676,7 +1681,7 @@ class TestImage:
         data[1, 2, 3], data[0, 0, 0] = 8.0, -1.0
         path = tmp_path / "zscores.nii.gz"
         nib.save(nib.Nifti1Image(data, TINY_AFFINE), path)
-        decoding._handle_dot_command(f".image {path} --zscore")
+        decoding._handle_dot_command(f".image {path} --zscore --name image")
         out = " ".join(_output(decoding).split())
         assert "loaded image_probability(i, j, k, p)" in out
         assert "1 - its local false discovery rate" in out
@@ -1698,7 +1703,7 @@ class TestImage:
     ):
         """A map of values but no mask: decoded once said of z-scores
         (--zscore) or taken as a mask (--mask)."""
-        decoding._handle_dot_command(f".image {zmap}")
+        decoding._handle_dot_command(f".image {zmap} --name image")
         out = " ".join(_output(decoding).split())
         assert "--zscore" in out and "--mask" in out
         assert "Decode it" not in out
@@ -1707,7 +1712,7 @@ class TestImage:
     def test_a_map_taken_as_a_mask_from_its_threshold(self, decoding, zmap):
         """--mask: the voxels of a map from image.threshold, equally; the
         map of 5, 3 and -2 keeps the voxel of 5."""
-        decoding._handle_dot_command(f".image {zmap} --mask")
+        decoding._handle_dot_command(f".image {zmap} --mask --name image")
         out = " ".join(_output(decoding).split())
         threshold = nifti.IMAGE_DEFAULTS["threshold"]
         assert f"a map taken as a mask from {threshold}" in out
@@ -1719,9 +1724,12 @@ class TestImage:
     ):
         """--mask and --zscore exclude each other, and a binary mask has
         no z-scores."""
-        decoding._handle_dot_command(f".image {zmap} --mask --zscore")
         decoding._handle_dot_command(
-            f".image {self._mask(tmp_path, [(1, 2, 3)])} --zscore")
+            f".image {zmap} --mask --zscore --name image"
+        )
+        decoding._handle_dot_command(
+            f".image {self._mask(tmp_path, [(1, 2, 3)])} --zscore "
+            "--name image")
         out = " ".join(_output(decoding).split())
         assert "--mask or --zscore, not both" in out
         assert "a binary mask has no z-scores" in out
@@ -1730,10 +1738,42 @@ class TestImage:
     def test_another_image_is_decoded_in_its_place(self, decoding, tmp_path):
         first = self._mask(tmp_path, [(1, 2, 3)], "first.nii")
         second = self._mask(tmp_path, [(0, 0, 0)], "second.nii")
-        decoding._handle_dot_command(f".image {first}")
+        decoding._handle_dot_command(f".image {first} --name image")
         assert self._lifts(decoding) == {"pain": 1.5}
         decoding._handle_dot_command(f".image {second} --name image")
         assert self._lifts(decoding) == {"vision": 3.0}
+
+    def test_two_images_are_decoded_each_by_its_name(
+        self, decoding, tmp_path
+    ):
+        """Each image is a relation named after its file, and its decoding
+        query names its rules after it: decoding one leaves the other's
+        as they are."""
+        first = self._mask(tmp_path, [(1, 2, 3)], "first.nii")
+        second = self._mask(tmp_path, [(0, 0, 0)], "second.nii")
+        decoding._handle_dot_command(f".image {first}")
+        decoding._handle_dot_command(f".image {second}")
+        out = " ".join(_output(decoding).split())
+        assert "loaded first(i, j, k, value)" in out
+        assert "loaded second_probability(i, j, k, p)" in out
+        query, _ = nifti.decoding_query(decoding, "second")
+        assert "second_hit(s) :- selected_voxel(i, j, k), " \
+            "second_active(i, j, k)" in query
+        assert self._lifts(decoding, "first") == {"pain": 1.5}
+        assert self._lifts(decoding, "second") == {"vision": 3.0}
+        assert self._lifts(decoding, "first") == {"pain": 1.5}
+
+    def test_an_uploaded_image_is_named_after_its_file(self, decoding):
+        """An upload is named after its file; the same file uploaded again
+        replaces its relation, another of the same name has another."""
+        assert nifti.image_relation_name(decoding, "motor map.nii.gz") == \
+            "motor_map"
+        decoding._nl.add_tuple_set([(1, 2, 3, 1.0)], name="motor_map")
+        assert nifti.image_relation_name(decoding, "motor map.nii.gz") == \
+            "motor_map_2"
+        assert nifti.image_relation_name(
+            decoding, "motor map.nii.gz", ["motor_map"]
+        ) == "motor_map"
 
     def test_a_map_loaded_after_a_mask_drops_its_probabilities(
         self, decoding, tmp_path, zmap
@@ -1741,7 +1781,7 @@ class TestImage:
         """Without probabilities of its own, an image loaded in place of
         another leaves none of the other's, which would decode it."""
         decoding._handle_dot_command(
-            f".image {self._mask(tmp_path, [(1, 2, 3)])}")
+            f".image {self._mask(tmp_path, [(1, 2, 3)])} --name image")
         decoding._handle_dot_command(f".image {zmap} --name image")
         assert "image_probability" not in decoding._nl.symbols
 
@@ -1751,7 +1791,7 @@ class TestImage:
         del decoding._nl.program_ir.symbol_table[
             nifti.Symbol("activated")]
         decoding._handle_dot_command(
-            f".image {self._mask(tmp_path, [(1, 2, 3)])}"
+            f".image {self._mask(tmp_path, [(1, 2, 3)])} --name image"
         )
         out = " ".join(_output(decoding).split())
         assert "cannot decode the image: it has no activated" in out

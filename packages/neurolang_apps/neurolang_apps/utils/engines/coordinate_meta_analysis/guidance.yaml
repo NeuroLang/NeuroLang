@@ -134,10 +134,11 @@ assistant_guidance: >
   mentions(s, 'pain'), selected_study(s) for the studies mentioning
   pain.
   An image loaded with .image (a binary mask, or a map of z-scores with
-  --zscore) is the relation image(i, j, k, value), and
-  image_probability(i, j, k, p) the probability that each voxel is
-  active: decode it, or any such relation of probabilities, as the
-  examples do: each voxel a probabilistic fact of its probability
+  --zscore) is a relation named after its file, NAME(i, j, k, value)
+  (its description says which file), and NAME_probability(i, j, k, p)
+  the probability that each voxel is active; the examples call it
+  image: use its NAME, and NAME_active, NAME_hit for their rules.
+  Decode it, or any such relation of probabilities, as the examples do: each voxel a probabilistic fact of its probability
   (image_active(i, j, k) :: p :- ...), a voxel of the brain chosen at
   random (selected_voxel), a study hitting the image when it activates
   the chosen voxel and the voxel is active (with cortical_mask(i, j, k)

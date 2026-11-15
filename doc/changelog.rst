@@ -43,7 +43,9 @@ Unreleased
   loaded from it stay until ``.drop``.  The list has a *Download* and a *Remove* button for each file;
   *Remove* leaves the output as it was and offers an *Undo*
   (``.uploads restore NAME``, the file removed last).  ``.image PATH|UPLOADED [--name
-  NAME]`` loads it as ``image(i, j, k, value)`` on the grid of the engine
+  NAME]`` loads it as ``NAME(i, j, k, value)``, NAME the file's name by
+  default (``motor_map`` for ``motor map.nii.gz``; an upload of another
+  file of the same name gets another), on the grid of the engine
   (resampled, a mask to the nearest voxel; at most ``image.max_mb``
   uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells
   the query assistant what it is; the page gives it back after *Stop* or

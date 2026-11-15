@@ -794,8 +794,9 @@ assistant_examples:
 
 
   # After ``.image PATH`` (an image of activations, a binary mask, or a
-  # map of z-scores with --zscore), image(i, j, k, value) holds its voxels
-  # and image_probability(i, j, k, p) the probability that each is active:
+  # map of z-scores with --zscore), NAME(i, j, k, value) holds its voxels,
+  # NAME the file's name (image in these examples), and
+  # NAME_probability(i, j, k, p) the probability that each is active:
   # 1 for a mask, 1 - the local false discovery rate of a z-score. Decoding
   # it: each voxel is a probabilistic fact, active with its probability, and
   # a voxel of the brain is chosen at random (selected_voxel); a study hits

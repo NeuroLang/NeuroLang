@@ -20,12 +20,13 @@ In the REPL in a terminal, ``.image`` loads a NIfTI image, gzipped or not:
 
     nl(neurosynth:datalog)> .image doc/_static/decoding/amygdala_mask.nii.gz
 
-as the relation ``image(i, j, k, value)``: the voxels of the brain where
-the image is not 0, with their value, on the grid of the engine.  The image
+as a relation named after its file, ``amygdala_mask(i, j, k, value)`` here
+(``--name`` gives another): the voxels of the brain where the image is not
+0, with their value, on the grid of the engine.  The image
 is resampled to that grid if it has another, a mask (an image of one value
 other than 0) to the nearest voxel so that it stays a mask, and its first
 volume is kept if it has several.  It loads, too,
-``image_probability(i, j, k, p)``, the probability that each voxel is
+``amygdala_mask_probability(i, j, k, p)``, the probability that each voxel is
 active, which the decoding weighs the voxels by (see `The score: the lift
 of a term`_).  Two decodings are offered:
 
@@ -245,12 +246,12 @@ right amygdala, at (24, -2, -20) mm in MNI space, on the grid of 2 mm:
 .. code-block:: text
 
     nl(neurosynth:datalog)> .image doc/_static/decoding/amygdala_mask.nii.gz
-    loaded image(i, j, k, value): 257 voxels from
+    loaded amygdala_mask(i, j, k, value): 257 voxels from
     doc/_static/decoding/amygdala_mask.nii.gz, a mask
-    loaded image_probability(i, j, k, p): 257 voxels, the probability that
-    each is active: 1 for each voxel of the mask
+    loaded amygdala_mask_probability(i, j, k, p): 257 voxels, the probability
+    that each is active: 1 for each voxel of the mask
     Decode it with this query:
-    % The probability that each voxel of the image is
+    % Each voxel of the image is active with its
     ...
 
 The 118 concepts of the Cognitive Atlas among the terms of Neurosynth with
@@ -285,10 +286,10 @@ Shown from 3.1 (``image.threshold``):
 
 .. code-block:: text
 
-    nl(neurosynth:datalog)> .image image_10426.nii.gz --name image --zscore
-    loaded image(i, j, k, value): 179612 voxels from image_10426.nii.gz, a map
+    nl(neurosynth:datalog)> .image image_10426.nii.gz --name motor --zscore
+    loaded motor(i, j, k, value): 179612 voxels from image_10426.nii.gz, a map
     of z-scores
-    loaded image_probability(i, j, k, p): 38141 voxels, the probability that
+    loaded motor_probability(i, j, k, p): 38141 voxels, the probability that
     each is active: 1 - its local false discovery rate, the null of the map
     N(-0.04, 0.90)
     Decode it with this query:

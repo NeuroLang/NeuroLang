@@ -1138,7 +1138,7 @@ $("upload-file").addEventListener("change", async (event) => {
   run(answer.statement, { remember: true });
   // An image comes with the query decoding it: the visitor is asked
   // whether it goes in the box, where it replaces what they wrote.
-  if (answer.query) offerDecoding(answer.name, answer.query, answer.kind, answer.threshold, answer.cortex_query);
+  if (answer.query) offerDecoding(answer.name, answer.query, answer.kind, answer.threshold, answer.cortex_query, answer.relation);
   $("uploaded").open = true; // the file is listed, with its buttons
 });
 
@@ -1151,8 +1151,10 @@ let decodingQuery = "";
 let cortexQuery = "";
 let replacedQuery = "";
 let decodedMap = ""; // the map of values to load again, decoded so
-function offerDecoding(name, query, kind, threshold = 3.1, cortex = "") {
+let decodedRelation = ""; // the relation it is loaded as
+function offerDecoding(name, query, kind, threshold = 3.1, cortex = "", relation = "image") {
   decodingQuery = query;
+  decodedRelation = relation;
   cortexQuery = cortex;
   $("decode-offer-cortex").checked = false;
   $("decode-offer-cortex-label").hidden = !cortex;
@@ -1176,7 +1178,7 @@ function closeDecodingOffer() {
 // Put the decoding query in the box, a map loaded again as *flag* says.
 function insertDecoding(flag) {
   const cortex = cortexQuery && $("decode-offer-cortex").checked;
-  if (decodedMap) run(`.image '${decodedMap}' --name image ${flag}${cortex ? " --cortex" : ""}`, { remember: true });
+  if (decodedMap) run(`.image '${decodedMap}' --name ${decodedRelation} ${flag}${cortex ? " --cortex" : ""}`, { remember: true });
   replacedQuery = editor.value;
   putQuery(cortex ? cortexQuery : decodingQuery);
   if (!replacedQuery.trim()) {

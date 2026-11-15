@@ -736,26 +736,31 @@ class WebRepl:
         """
         Keep the file *name* of the bytes *data* the page uploaded, in the
         memory of the session, and return the statement that loads it
-        (``.load NAME``, or ``.image NAME`` replacing the image of the
-        session) and for an image the ``query`` decoding it, if the engine
+        (``.load NAME``, or ``.image NAME --name RELATION``, the
+        ``relation`` of the file's name, which an upload of the same file
+        replaces) and for an image the ``query`` decoding it, if the engine
         can, the ``cortex_query`` decoding its cortex only (``--cortex``),
         and its ``kind``: ``mask``, or ``map`` (of values: decoded once
         loaded with ``--zscore``). A ValueError tells why it is refused.
         """
+        replaced = next((upload["loaded"] for upload in
+                         self.app.uploads.listing()
+                         if upload["name"] == name), ())
         session.store_upload(self.app, name, data)
         if not session.is_image(name):
             return {"name": name, "statement": f".load {shlex.quote(name)}"}
+        relation = nifti.image_relation_name(self.app, name, replaced)
         try:  # a mask is decoded as it is, a map once said of z-scores
             kind = "mask" if nifti.is_mask(nifti.read_image(data)) else "map"
-            query, missing = nifti.decoding_query(self.app, "image")
+            query, missing = nifti.decoding_query(self.app, relation)
             cortex, missing_cortex = nifti.decoding_query(
-                self.app, "image", "cortex"
+                self.app, relation, "cortex"
             )
         except Exception:  # .image tells what is wrong with the file
             kind, query, missing, cortex, missing_cortex = "", "", [], "", []
         return {
-            "name": name,
-            "statement": f".image {shlex.quote(name)} --name image",
+            "name": name, "relation": relation,
+            "statement": f".image {shlex.quote(name)} --name {relation}",
             "query": "" if missing else query, "kind": kind,
             "cortex_query": "" if missing or missing_cortex else cortex,
             # a map, decoded as a mask, keeps its voxels from it (--mask)

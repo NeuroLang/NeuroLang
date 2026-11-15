@@ -2037,7 +2037,8 @@ IMAGE_DEFAULTS = brain_viewer.DEFAULTS["image"]
 IMAGE_HELP = f"""\
 [bold cyan]{IMAGE_USAGE}[/bold cyan] loads a NIfTI image of
 activations, a binary mask or a z-score map, as the relation
-[bold]NAME(i, j, k, value)[/bold] (NAME is [bold]image[/bold] by default):
+[bold]NAME(i, j, k, value)[/bold] (NAME is the file's name by default,
+motor_map for motor map.nii.gz):
 its voxels of the brain with a value other than 0, on the grid of the engine
 (the image is resampled to it if it has another, a mask to the nearest
 voxel), and shows it in the brain viewer. UPLOADED is the name of an image
@@ -2212,6 +2213,27 @@ def decoding_query(
     return query, missing
 
 
+def image_relation_name(app, source: str, replaced=()) -> str:
+    """
+    Return the name of the relation an uploaded image *source* is loaded
+    as: the file's name (``default_relation_name``), a number added when
+    another relation has it, or its probabilities' name, but when it is
+    one of the relations *replaced*, loaded from the file before.
+    """
+    from .session import default_relation_name
+
+    base = default_relation_name(source)
+    name, number = base, 1
+    symbols = app._nl.program_ir.symbol_table
+    while name not in replaced and any(
+        Symbol(relation) in symbols
+        for relation in (name, f"{name}_probability")
+    ):
+        number += 1
+        name = f"{base}_{number}"
+    return name
+
+
 @command(
     ".image", "Load a NIfTI image of activations (a mask, a z-map) as a "
     "relation NAME(i, j, k, value), show it and tell how to decode it "
@@ -2219,7 +2241,7 @@ def decoding_query(
 )
 def cmd_image(app, arg: str) -> None:
     """Load the NIfTI image of *arg* as a relation of the session."""
-    from .session import _load_failed, _name_problem
+    from .session import _load_failed, _name_problem, default_relation_name
 
     try:
         words, options = split_args(
@@ -2229,7 +2251,7 @@ def cmd_image(app, arg: str) -> None:
         if len(words) != 1:
             raise SaveError(f"Usage: {IMAGE_USAGE}")
         source = words[0]
-        name = options.get("--name", ["image"])[0]
+        name = options.get("--name", [default_relation_name(source)])[0]
         zscore, as_mask = "--zscore" in options, "--mask" in options
         if zscore and as_mask:
             raise SaveError("Give --mask or --zscore, not both: the image "

@@ -870,8 +870,8 @@ def test_the_page_uploads_an_image_that_image_loads(repl):
     image of the session; an engine that cannot decode it gives no query."""
     answer = repl.upload("my map.nii.gz", b"\x1f\x8b")
     assert answer == {
-        "name": "my map.nii.gz",
-        "statement": ".image 'my map.nii.gz' --name image",
+        "name": "my map.nii.gz", "relation": "my_map",
+        "statement": ".image 'my map.nii.gz' --name my_map",
         "query": "", "kind": "", "cortex_query": "",
         "threshold": nifti.IMAGE_DEFAULTS["threshold"],
     }
@@ -890,6 +890,27 @@ def test_the_page_is_told_if_an_uploaded_image_is_a_mask(repl):
         data[1, 1, 1], data[2, 2, 2] = values
         image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
         assert repl.upload("i.nii.gz", image)["kind"] == kind
+
+
+def test_each_uploaded_image_is_a_relation_of_its_own(repl):
+    """Two images uploaded are loaded as two relations, each of its file's
+    name; the same file uploaded again replaces its own."""
+    import gzip
+
+    import nibabel as nib
+    import numpy as np
+
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[1, 1, 1] = 1
+    image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+    relations = []
+    for name in ("first.nii.gz", "second.nii.gz", "first.nii.gz"):
+        answer = repl.upload(name, image)
+        relations.append(answer["relation"])
+        assert answer["statement"].endswith(f"--name {answer['relation']}")
+        repl.app.uploads.loaded(name, answer["relation"])
+        repl.app._nl.add_tuple_set([(1, 1, 1, 1.0)], name=answer["relation"])
+    assert relations == ["first", "second", "first"]
 
 
 def test_the_page_gets_the_queries_decoding_the_brain_and_the_cortex(
@@ -943,7 +964,7 @@ def test_a_server_loads_shows_and_tells_an_uploaded_image(
     reply = repl.submit(answer["statement"])
     text = " ".join(re.sub(r"<[^>]+>", "", reply.html).split())
     assert not reply.failed, text
-    assert f"loaded image(i, j, k, value): 2 voxels from {name}, " \
+    assert f"loaded my_roi(i, j, k, value): 2 voxels from {name}, " \
         "a mask" in text
     assert "cannot decode the image: it has no activated" in text
     assert answer["query"] == answer["cortex_query"] == ""  # nor does the
