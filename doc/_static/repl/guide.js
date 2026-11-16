@@ -39,6 +39,18 @@ export function filterQuestions(questions, filter) {
   return questions.filter((question) => words.every((word) => question.toLowerCase().includes(word)));
 }
 
+// The query that answers *question* in the language *mode*, from
+// *queries* ({question: {language: query}}); "" if it has none.
+export const queryOf = (queries, question, mode) => queries[question]?.[mode] ?? "";
+
+// The question that *query* answers in the language *mode*, if any of the
+// *queries* is it (whatever its spaces); "" otherwise.
+export function questionOf(queries, query, mode) {
+  const squeeze = (text) => text.replace(/\s+/g, " ").trim();
+  const wanted = squeeze(query);
+  return Object.keys(queries).find((question) => queries[question][mode] && squeeze(queries[question][mode]) === wanted) ?? "";
+}
+
 // The query a first visit starts with: the first of the *examples* of the
 // language *mode*, when the *box* is empty and the browser has no history of
 // queries run here (*visited*); "" otherwise.

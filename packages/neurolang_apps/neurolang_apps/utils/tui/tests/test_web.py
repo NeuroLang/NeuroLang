@@ -1011,3 +1011,11 @@ def test_more_questions_are_those_of_the_bank_the_page_does_not_list(repl):
     assert first and more
     assert not set(first) & set(more)
     assert len(more) == len(set(more))
+
+
+def test_question_queries_give_the_query_of_each_question(repl):
+    """Picking a question fills the box of the query too: the page has
+    the query of every question the REPL lists."""
+    queries = repl.question_queries()
+    for question in repl.questions() + repl.more_questions():
+        assert queries[question]["datalog"]

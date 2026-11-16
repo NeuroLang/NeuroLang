@@ -667,6 +667,25 @@ class WebRepl:
         config = engine_registry.get_engine_config(engine)
         return list(config.get("questions") or [])
 
+    def question_queries(self) -> dict:
+        """Return the queries of the assistant's bank on the engine, by
+        the question they answer: ``{question: {language: query}}``, for
+        the page to fill both boxes when an example is picked."""
+        engine = self.app.settings.engine_name
+        if not engine:
+            return {}
+        config = engine_registry.get_engine_config(engine)
+        queries = {}
+        for entry in config.get("assistant_examples") or []:
+            question = (entry.get("question") or "").strip()
+            found = {
+                language: entry[language].strip()
+                for language in ("datalog", "squall") if entry.get(language)
+            }
+            if question and found:
+                queries.setdefault(question, found)
+        return queries
+
     def more_questions(self) -> List[str]:
         """Return the other questions of the assistant's bank on the
         engine, those that :meth:`questions` does not list, each once."""

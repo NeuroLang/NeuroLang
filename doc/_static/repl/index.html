@@ -252,6 +252,8 @@
   #guide-more-box[open] > summary { margin-bottom: .5rem; }
   #guide-more-filter { width: 100%; box-sizing: border-box; margin: 0 0 .5rem; }
   #guide-more .guide-item { font-family: var(--sans); font-size: 13px; }
+  #guide-more-status { margin: 0 0 .4rem; }
+  @media (pointer: coarse) { #guide-shuffle { min-height: 44px; min-width: 44px; } #guide-questions .guide-item, #guide-more .guide-item { min-height: 44px; align-items: center; } }
   #guide-queries > summary h3 { display: inline; margin: 0; }
   #guide-queries[open] > summary { margin-bottom: .5rem; }
   #guide-commands-box > summary h3 { display: inline; margin: 0; }
@@ -596,8 +598,8 @@
             <details id="guide-more-box" class="disclosure" hidden>
               <summary><h3>More questions <span class="note" id="guide-more-count"></span></h3></summary>
               <input id="guide-more-filter" type="search" placeholder="Filter the questions…" aria-label="Filter the questions" spellcheck="false" autocomplete="off">
+              <p id="guide-more-status" class="note" role="status" aria-live="polite"></p>
               <ul id="guide-more" class="guide-list"></ul>
-              <p id="guide-more-none" class="note" hidden>No question has all these words.</p>
             </details>
           </div>
           <details id="guide-queries" class="disclosure"><summary><h3>Queries <span class="note">click one to put it in the box</span></h3></summary>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { columnDocs, exampleQuestion, filterQuestions, matchesCommand, showAllQuery, startingQuery, suggestedQuestion } from "../../../../../../../doc/_static/repl/guide.js";
+import { columnDocs, exampleQuestion, queryOf, questionOf, filterQuestions, matchesCommand, showAllQuery, startingQuery, suggestedQuestion } from "../../../../../../../doc/_static/repl/guide.js";
 
 const peaks = {
   name: "peak_reported", signature: "peak_reported(voxel(i, j, k), study(study_id))", kind: "stored",
@@ -67,4 +67,14 @@ test("the questions are filtered by all the words typed, in any case", () => {
   assert.deepEqual(filterQuestions(questions, "STUDIES which"), [questions[0]]);
   assert.deepEqual(filterQuestions(questions, "  "), questions);
   assert.deepEqual(filterQuestions(questions, "fear"), []);
+});
+
+test("a question and its query find each other, in the language chosen", () => {
+  const queries = { "Which studies mention pain?": { datalog: "ans(s) :-\n  mentions(s, 'pain')", squall: "obtain every Study." }, "No query": {} };
+  assert.equal(queryOf(queries, "Which studies mention pain?", "datalog"), queries["Which studies mention pain?"].datalog);
+  assert.equal(queryOf(queries, "Which studies mention pain?", "squall"), "obtain every Study.");
+  assert.equal(queryOf(queries, "No query", "datalog"), "");
+  assert.equal(queryOf(queries, "unknown", "datalog"), "");
+  assert.equal(questionOf(queries, "ans(s) :-   mentions(s, 'pain')", "datalog"), "Which studies mention pain?");
+  assert.equal(questionOf(queries, "ans(s) :- other(s)", "datalog"), "");
 });
