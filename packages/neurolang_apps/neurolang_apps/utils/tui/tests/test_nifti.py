@@ -1813,8 +1813,18 @@ class TestImage:
         app._execute_and_display(
             nifti.tractogram_index(app, "other.tck")["index"])
         assert "'other' replaces 'mine_2'" in " ".join(_output(app).split())
-        assert nifti.tractogram_index(app, "mine.tck")["index"].startswith(
-            '.load_tractogram("mine", "mine.tck"')
+        # replaced, it stays loaded: indexed again by .index_tracts alone
+        assert nifti.tractogram_index(app, "mine.tck")["index"] == \
+            '.index_tracts("mine_2", "fs", replace=1)'
+        # the engine's own, listed by the page, is indexed again so too
+        assert app.engine_tractograms == ["mine"]
+        engine = nifti.tractogram_index(app, "", "mine")
+        assert engine == {"indexed": "",
+                          "index": '.index_tracts("mine", "fs", replace=1)'}
+        app._execute_and_display(engine["index"])
+        assert "'mine' replaces 'other'" in " ".join(_output(app).split())
+        assert nifti.tractogram_index(app, "", "mine") == {
+            "index": "", "indexed": "mine"}
 
     def test_no_index_without_tractography_or_in_another_space(self, tiny):
         from types import SimpleNamespace

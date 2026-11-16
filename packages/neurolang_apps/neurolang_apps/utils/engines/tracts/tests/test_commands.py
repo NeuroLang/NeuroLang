@@ -142,12 +142,14 @@ def test_replace_indexes_one_tractogram_at_a_time(files):
     traverses, _ = expected(files, "t2", "b")
     assert labelled == set(zip(traverses["s"], traverses["l"]))
     state = nl.program_ir._tracts
-    assert "t1" not in state.tractograms and state.in_store == {"t2"}
-    # t1 can be loaded and indexed again, in place of t2
+    assert "t1" in state.tractograms and state.in_store == {"t2"}
+    # t1, still loaded, is indexed again in place of t2, with new ids
     with pytest.warns(UserWarning, match="'t1' replaces 't2'"):
-        nl.execute_datalog_program(
-            tractogram_command(files)
-            + '.index_tracts("t1", "fs", replace=1)\n')
+        nl.execute_datalog_program('.index_tracts("t1", "fs", replace=1)\n')
+    labelled = rows(nl.execute_datalog_program(
+        'ans(s, l) :- streamline_label("fs", x, l), streamline(x, "t1", s)'))
+    traverses, _ = expected(files)
+    assert labelled == set(zip(traverses["s"], traverses["l"]))
     assert rows(nl.execute_datalog_program(
         "ans(t) :- tractogram(t)")) == {("t1",)}
 

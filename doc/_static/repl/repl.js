@@ -731,20 +731,23 @@ function showUploads(listed) {
     const name = cells[0];
     const actions = document.createElement("td");
     actions.className = "upload-actions";
-    if (uploads.has(name)) { // the page has its bytes (it uploaded it)
+    if (!file.engine && uploads.has(name)) { // the page has its bytes (it uploaded it)
       actions.append(iconButton("download", "Download", `Download ${name}`,
         () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) })));
     }
     // A tractogram, on an engine of tractography: one is indexed at a time.
     if (file.index) {
-      actions.append(iconButton("index", "Index", `Index ${name} for the rules of the bundles, in place of the engine's tractogram`,
-        () => indexTractogram(name, file.index)));
+      actions.append(iconButton("index", "Index", file.engine
+        ? `Index the engine's tractogram ${name} again, for the rules of the bundles`
+        : `Index ${name} for the rules of the bundles, in place of the tractogram indexed`,
+        () => indexTractogram(name, file.index, file.engine)));
     } else if (file.indexed) {
       const button = iconButton("index", "Indexed", `${name} is the tractogram the rules of the bundles select from, as ${file.indexed}`, () => {});
       button.disabled = true;
       actions.append(button);
     }
-    actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
+    // The engine's tractogram is listed to be indexed again, never removed.
+    if (!file.engine) actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
     row.append(actions);
     return row;
   }));
@@ -1208,10 +1211,12 @@ function closeDecodingOffer() {
 }
 // Index the uploaded tractogram *name* in place of the engine's (the
 // statements of its row), and say how its streamlines are queried.
-function indexTractogram(name, statements) {
-  const ident = /load_tractogram\("([^"]+)"/.exec(statements)?.[1] ?? name;
+function indexTractogram(name, statements, engine = false) {
+  const ident = /index_tracts\("([^"]+)"/.exec(statements)?.[1] ?? name;
   whenReady(() => run(statements, { remember: true, keepOffer: true }));
-  setUploadsStatus(`${name} is indexed as the tractogram ${ident}, in place of the engine's: the rules of the bundles select its streamlines, e.g. ans(x) :- uf(x, "left"), and .view draws them.`);
+  setUploadsStatus(engine
+    ? `The engine's tractogram ${ident} is indexed again: the rules of the bundles select its streamlines.`
+    : `${name} is indexed as the tractogram ${ident}, in place of the one indexed before: the rules of the bundles select its streamlines, e.g. ans(x) :- uf(x, "left"), and .view draws them.`);
 }
 // Put the decoding query in the box and run it, a map loaded again as
 // *flag* says first; once the statement running (the upload's .image)

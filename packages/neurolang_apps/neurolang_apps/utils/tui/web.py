@@ -585,13 +585,20 @@ class WebRepl:
 
     def uploads(self) -> dict:
         """Return the files the page uploaded in the session, as a reply
-        carries them (see :class:`Reply`)."""
+        carries them (see :class:`Reply`), after the tractograms of the
+        engine (``engine``), which the page lists to index them again."""
         uploads = self.app.uploads
         files = uploads.listing()
         for upload in files:  # a tractogram, indexed or not (index)
             if session.is_tractogram(upload["name"]):
                 upload.update(
                     nifti.tractogram_index(self.app, upload["name"]))
+        # the engine's tractograms, first, which are not removed
+        files[:0] = [
+            {"name": ident, "size": 0, "age": 0, "loaded": [ident],
+             "engine": True, **nifti.tractogram_index(self.app, "", ident)}
+            for ident in getattr(self.app, "engine_tractograms", ())
+        ]
         return {"files": files, "used": uploads.used(),
                 "most": uploads.most_all}
 

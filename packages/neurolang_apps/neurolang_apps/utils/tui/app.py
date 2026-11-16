@@ -199,6 +199,9 @@ class InteractiveTuiApp:
         tracts = getattr(nl.program_ir, "_tracts", None)
         if tracts is not None:
             tracts.read_upload = self._read_upload
+        # Those of the engine, which the page lists with the uploads.
+        self.engine_tractograms = list(
+            tracts.tractograms if tracts is not None else ())
         self.squall_rules: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:

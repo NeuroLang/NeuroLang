@@ -30,7 +30,8 @@ Unreleased
   name, and *Index*, on its row of the uploaded files, indexes it in place
   of the engine's tractogram (``.index_tracts(..., replace=1)``, which
   removes the one indexed before, with a note), for the rules of the
-  bundles to select its streamlines.  The left arcuate fasciculus of HCP842 decodes to sentence
+  bundles to select its streamlines.  The engine's own tractogram is listed
+  first, never removed, its *Index* putting it back.  The left arcuate fasciculus of HCP842 decodes to sentence
   comprehension, reading and language (:doc:`tutorial_decoding`).
 
 * ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF

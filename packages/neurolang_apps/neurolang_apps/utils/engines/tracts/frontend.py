@@ -136,7 +136,8 @@ class TractsCommandsMixin(PatternWalker):
         as tract_querier's boxes, for the directional terms to reproduce
         its own). With ``replace=1``, the tractogram is the only one: those
         indexed before are removed from the relations, with a warning that
-        names them.
+        names them; they stay loaded, to be indexed again by
+        ``.index_tracts`` alone.
 
     The matches are exact: a command that is not one of these is left to the
     ones after it in the solver, which refuse it.
@@ -329,13 +330,12 @@ class TractsCommandsMixin(PatternWalker):
 
     def _remove_tractograms_but(self, ident):
         """Remove the tractograms indexed but *ident* from the relations,
-        and from those loaded, with a warning that names them."""
+        with a warning that names them; they stay loaded."""
         state = self._tracts
         removed = sorted(state.in_store - {ident})
         for other in removed:
             state.store.remove_tractogram(other)
             state.in_store.discard(other)
-            state.tractograms.pop(other, None)
             state.length_threshold.pop(other, None)
         if removed:
             warnings.warn(

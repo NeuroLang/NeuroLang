@@ -391,7 +391,10 @@ runs
 ``replace=1`` removes the tractogram indexed before (the engine's own, or
 another upload) from the relations, and the REPL notes which one; the row
 of the file indexed says *Indexed*, and *Index* on another file's row puts
-it in its place.  The rules then select the streamlines of the upload:
+it in its place.  The engine's own tractogram is listed first, as the
+engine's, without *Download* or *Remove*: its *Index* puts it back.  A
+tractogram replaced stays loaded, and is indexed again by
+``.index_tracts(..., replace=1)`` alone.  The rules then select the streamlines of the upload:
 
 .. code-block:: text
 

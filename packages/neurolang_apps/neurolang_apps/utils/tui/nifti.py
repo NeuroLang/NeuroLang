@@ -2295,16 +2295,17 @@ def decoding_query(
     return query, missing
 
 
-def tractogram_index(app, source: str) -> dict:
+def tractogram_index(app, source: str, ident: str = "") -> dict:
     """
-    Return how the uploaded tractogram *source* is indexed for the rules of
-    the bundles, on an engine of tractography whose atlas is in MNI space
-    (that of an uploaded tractogram): ``indexed``, the id it is indexed as,
-    if it is the engine's tractogram, else ``index``, the statements
-    indexing it in place of the engine's (``.load_tractogram`` and
-    ``.index_tracts(..., replace=1)``, by the atlas the engine indexed its
-    own by), as the file's name (a number added if the engine has a
-    tractogram of that name); both empty on another engine.
+    Return how the tractogram uploaded as *source*, or the engine's *ident*,
+    is indexed for the rules of the bundles, on an engine of tractography
+    whose atlas is in MNI space (that of an uploaded tractogram):
+    ``indexed``, its id, if it is the tractogram the engine holds, else
+    ``index``, the statements indexing it in place of that one (by the
+    atlas the engine indexed its own by, ``.index_tracts(..., replace=1)``,
+    after ``.load_tractogram`` for an upload not loaded yet, as its file's
+    name, a number added if the engine has a tractogram of that name);
+    both empty on another engine.
     """
     from .session import default_relation_name
 
@@ -2316,11 +2317,15 @@ def tractogram_index(app, source: str) -> dict:
     space = str(indexed.space)
     if not space.upper().startswith("MNI"):
         return none
-    mine = next((upload["loaded"] for upload in app.uploads.listing()
-                 if upload["name"] == source), [])
-    current = [ident for ident in mine if ident in tracts.in_store]
-    if current:
-        return {"index": "", "indexed": current[0]}
+    if not ident:  # an upload: the tractogram loaded from it, if any
+        mine = next((upload["loaded"] for upload in app.uploads.listing()
+                     if upload["name"] == source), [])
+        ident = next((i for i in mine if i in tracts.tractograms), "")
+    if ident in tracts.in_store:
+        return {"index": "", "indexed": ident}
+    statement = f'.index_tracts("{{}}", "{atlas}", replace=1)'
+    if ident in tracts.tractograms:  # loaded, indexed before
+        return {"index": statement.format(ident), "indexed": ""}
     name = default_relation_name(source)
     ident, number = name, 1
     while ident in tracts.tractograms:
@@ -2328,7 +2333,7 @@ def tractogram_index(app, source: str) -> dict:
         ident = f"{name}_{number}"
     return {"index": (
         f'.load_tractogram("{ident}", "{source}", space="{space}")\n'
-        f'.index_tracts("{ident}", "{atlas}", replace=1)'), "indexed": ""}
+        + statement.format(ident)), "indexed": ""}
 
 
 def image_relation_name(app, source: str, replaced=()) -> str:
