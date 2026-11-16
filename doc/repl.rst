@@ -246,7 +246,11 @@ An answer whose rows are edges, two columns of the same sort and a
 weight (``ans(concept_1, concept_2, correlation)``), also shows in the
 *Network* tab: its nodes and edges, the stronger an edge the thicker
 (dashed if negative), from the weight its slider sets; it starts with
-the strongest edges, two per node.
+the strongest edges, two per node. Its controls size and shade the nodes
+by their links, their rows in each column (the children of a parent, in
+``ans(concept, parent)``) or, of a hierarchy, the nodes under each, and
+shade the edges by their weight; a hierarchy (an edge per node, and a
+root) can be drawn as a radial tree, as it is at first if small.
 
 
 The query assistant

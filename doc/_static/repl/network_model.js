@@ -124,3 +124,92 @@ export function layout({ nodes, edges }, threshold, steps = STEPS) {
   const span = Math.max(Math.max(...xs) - x0, Math.max(...ys) - y0, 1e-9);
   return at.map(([x, y]) => [(x - x0) / span, (y - y0) / span]);
 }
+
+// The network as a hierarchy, each row a node (source) and its parent
+// (target), or null if it is none: a tree has an edge fewer than nodes
+// (here, at most 5% more, for the nodes of two parents), and a root, a node
+// without a parent. The *parent* of each
+// node (that of its strongest edge), its *children*, the *roots*, and the
+// nodes under each (*descendants*). A node a cycle leaves without a root
+// is one more root.
+export function hierarchy({ nodes, edges }) {
+  if (edges.length > 1.05 * nodes.length) return null;
+  const parent = new Map();
+  for (const edge of edges) if (!parent.has(edge.source)) parent.set(edge.source, edge.target);
+  const roots = nodes.map((node) => node.id).filter((id) => !parent.has(id));
+  if (!roots.length) return null;
+  const children = new Map(nodes.map((node) => [node.id, []]));
+  for (const [child, up] of parent) children.get(up).push(child);
+  const order = []; // from the roots down, each node once
+  const seen = new Set();
+  const visit = (root) => {
+    const stack = [root];
+    while (stack.length) {
+      const id = stack.pop();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      order.push(id);
+      stack.push(...[...children.get(id)].reverse());
+    }
+  };
+  roots.forEach(visit);
+  for (const node of nodes) {
+    if (!seen.has(node.id)) {
+      roots.push(node.id);
+      visit(node.id);
+    }
+  }
+  // the children of a node are those it was reached from: a tree
+  for (const [id, list] of children) children.set(id, list.filter((child) => order.indexOf(child) > order.indexOf(id) && !roots.includes(child)));
+  const descendants = new Map(order.map((id) => [id, 0]));
+  for (const id of [...order].reverse()) for (const child of children.get(id)) descendants.set(id, descendants.get(id) + 1 + descendants.get(child));
+  return { parent, children, roots, descendants };
+}
+
+// The positions of the nodes of the *tree* (hierarchy), a radial tree in
+// [0, 1] × [0, 1]: the roots at the centre (several around it), each level
+// on a circle further out (at the square root of its depth), the leaves
+// evenly spaced around, and each node at
+// the middle of its leaves.
+export function treeLayout({ nodes }, tree) {
+  const angle = new Map(), depth = new Map();
+  let leaf = 0;
+  const leaves = [...tree.descendants].filter(([id]) => !tree.children.get(id).length).length;
+  const place = (id, level) => { // iterative: the post-order of the subtree of *id*
+    const stack = [[id, level, false]];
+    while (stack.length) {
+      const [node, d, done] = stack.pop();
+      const below = tree.children.get(node);
+      depth.set(node, d);
+      if (!below.length) angle.set(node, (2 * Math.PI * (leaf++ + 0.5)) / leaves);
+      else if (done) angle.set(node, (angle.get(below[0]) + angle.get(below.at(-1))) / 2);
+      else stack.push([node, d, true], ...[...below].reverse().map((child) => [child, d + 1, false]));
+    }
+  };
+  const first = tree.roots.length > 1 ? 1 : 0; // several roots are on the first circle
+  for (const root of tree.roots) place(root, first);
+  const deepest = Math.max(1, ...depth.values());
+  return nodes.map(({ id }) => {
+    const radius = Math.sqrt(depth.get(id) / deepest); // the inner circles, of fewer nodes, not too small
+    return [0.5 + 0.5 * radius * Math.cos(angle.get(id)), 0.5 + 0.5 * radius * Math.sin(angle.get(id))];
+  });
+}
+
+// What the size or the colour of a node can show: the edges shown it has
+// (*links*), the rows it is in each column of (as concept, as parent: the
+// children of a parent), and, of a hierarchy, the nodes under it.
+export function nodeMeasures({ nodes, columns }, shown, tree) {
+  const count = (end) => {
+    const counts = new Map(nodes.map((node) => [node.id, 0]));
+    for (const edge of shown) counts.set(edge[end], counts.get(edge[end]) + 1);
+    return counts;
+  };
+  const links = new Map(nodes.map((node) => [node.id, 0]));
+  for (const edge of shown) for (const end of [edge.source, edge.target]) links.set(end, links.get(end) + 1);
+  return [
+    { name: "links", values: links },
+    { name: `rows as ${columns.source}`, values: count("source") },
+    { name: `rows as ${columns.target}`, values: count("target") },
+    ...(tree ? [{ name: "nodes under it", values: tree.descendants }] : []),
+  ];
+}

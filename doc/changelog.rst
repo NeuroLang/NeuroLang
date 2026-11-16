@@ -24,8 +24,11 @@ Unreleased
   and a numeric weight) as a network laid out by force, with a slider for
   the weakest edge shown; it starts with the strongest, two per node, and
   says which edges and nodes it leaves out; of more than 40 nodes it names
-  the most linked, the others under the pointer. The limits are in
-  ``settings.yaml`` (``network``).
+  the most linked, the others under the pointer. The size and the shade of
+  the nodes show a measure chosen (links, rows in a column, such as the
+  children of a parent, or the nodes under it in a hierarchy), the shade
+  of the edges their weight; a hierarchy can be drawn as a radial tree.
+  The limits are in ``settings.yaml`` (``network``).
 
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
   the regions a question lists (which regions, parcels or structures a

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultThreshold, labelled, layout, networkColumns, networkOf } from "../../../../../../../doc/_static/repl/network_model.js";
+import { defaultThreshold, hierarchy, labelled, layout, networkColumns, networkOf, nodeMeasures, treeLayout } from "../../../../../../../doc/_static/repl/network_model.js";
 
 const payload = (columns, kinds, sorts, rows) => ({ columns, kinds, sorts, rows, total: rows.length, truncated: false });
 const concepts = () => payload(
@@ -56,4 +56,39 @@ test("of many nodes only the most linked are named", () => {
   const degree = new Map([["a", 1], ["b", 3], ["c", 2], ["d", 3]]);
   assert.deepEqual([...labelled(degree, 2)].sort(), ["b", "d"]);
   assert.equal(labelled(degree, 4).size, 4);
+});
+
+const ontology = () => networkOf(payload(["concept", "parent"], ["str", "str"], ["cogat_term", "cogat_term"],
+  [["memory", "Concept"], ["attention", "Concept"], ["visual memory", "memory"], ["iconic memory", "visual memory"], ["spatial memory", "memory"]]));
+
+test("an answer of nodes and their parents is a hierarchy, with the nodes under each", () => {
+  const tree = hierarchy(ontology());
+  assert.deepEqual(tree.roots, ["Concept"]);
+  assert.deepEqual(tree.children.get("memory").sort(), ["spatial memory", "visual memory"]);
+  assert.equal(tree.descendants.get("Concept"), 5);
+  assert.equal(tree.descendants.get("memory"), 3);
+  assert.equal(tree.descendants.get("iconic memory"), 0);
+  // a network of many more edges than nodes is none, nor one whose cycle has no root
+  assert.equal(hierarchy(networkOf(payload(["a_1", "a_2"], ["str", "str"], [null, null], [["a", "b"], ["a", "c"], ["b", "c"], ["a", "d"], ["b", "d"], ["c", "d"]]))), null);
+  assert.equal(hierarchy(networkOf(payload(["a_1", "a_2"], ["str", "str"], [null, null], [["a", "b"], ["b", "a"]]))), null);
+});
+
+test("the radial tree puts the root at the centre and each level on a circle further out", () => {
+  const network = ontology();
+  const at = Object.fromEntries(network.nodes.map((node, i) => [node.id, treeLayout(network, hierarchy(network))[i]]));
+  const radius = (id) => Math.hypot(at[id][0] - 0.5, at[id][1] - 0.5);
+  const level = (id, depth) => assert.ok(Math.abs(radius(id) - Math.sqrt(depth / 3) / 2) < 1e-9, id); // 3 levels below the root
+  level("Concept", 0);
+  ["memory", "attention"].forEach((id) => level(id, 1));
+  ["visual memory", "spatial memory"].forEach((id) => level(id, 2));
+  level("iconic memory", 3);
+});
+
+test("the measures of the nodes count their links, their rows in each column and the nodes under them", () => {
+  const network = ontology();
+  const measures = Object.fromEntries(nodeMeasures(network, network.edges, hierarchy(network)).map((m) => [m.name, m.values]));
+  assert.deepEqual(Object.keys(measures), ["links", "rows as concept", "rows as parent", "nodes under it"]);
+  assert.equal(measures["rows as parent"].get("memory"), 2); // its children
+  assert.equal(measures.links.get("memory"), 3);
+  assert.equal(measures["nodes under it"].get("memory"), 3);
 });
