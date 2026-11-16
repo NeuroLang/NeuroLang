@@ -691,9 +691,9 @@ class Sort(NamedTuple):
     ``""`` otherwise. The *grid* of a sort of voxels is the grid it
     indexes: that of the engine's template (see :func:`build_engine`)
     when ``""`` or ``template``, else that of the atlas of this name.
-    The *atlas* of a sort of region labels is the atlas they name the
-    regions of, one the engine loads: ``.view`` paints the regions of a
-    result on its grid (see :func:`atlas_label_values`).
+    The *atlas* of a sort of region labels is the atlases they name the
+    regions of, ones the engine loads: ``.view`` paints the regions of a
+    result on the grid of the first (see :func:`atlas_label_values`).
     """
 
     name: str
@@ -702,7 +702,7 @@ class Sort(NamedTuple):
     description: str = ""
     space: str = ""
     grid: str = ""
-    atlas: str = ""
+    atlas: Tuple[str, ...] = ()
 
 
 SORT_SPACES = ("voxel", "mm")
@@ -741,24 +741,27 @@ def _sort_grid(name: str, info: Dict[str, Any], grids) -> str:
     return grid
 
 
-def _sort_atlas(name: str, info: Dict[str, Any], atlases) -> str:
+def _sort_atlas(name: str, info: Dict[str, Any], atlases) -> Tuple[str, ...]:
     """
-    Return the atlas whose regions the sort *name* declared by *info*
-    labels, or "".
+    Return the atlases whose regions the sort *name* declared by *info*
+    labels, or ().
 
-    Only a sort of one column and no space labels the regions of an
-    atlas, one of *atlases*.
+    Only a sort of one column and no space labels the regions of atlases,
+    of *atlases*: one, ``atlas: tian``, or several, ``atlas: [schaefer400,
+    tian]``.
     """
-    atlas = str(info.get("atlas", ""))
+    atlas = info.get("atlas") or ()
+    atlas = (atlas,) if isinstance(atlas, str) else tuple(map(str, atlas))
     if atlas and (info.get("space") or len(info.get("columns", ())) != 1):
         raise ValueError(
-            f"sort {name!r} names the atlas {atlas!r}; only a sort of one "
-            "column and no space labels the regions of an atlas"
+            f"sort {name!r} names the atlas {', '.join(atlas)}; only a sort "
+            "of one column and no space labels the regions of an atlas"
         )
-    if atlas and atlas not in atlases:
+    unknown = [a for a in atlas if a not in atlases]
+    if unknown:
         raise ValueError(
-            f"sort {name!r} names the atlas {atlas!r}; the atlases of the "
-            f"engine are {', '.join(atlases) or 'none'}"
+            f"sort {name!r} names the atlas {', '.join(unknown)}; the "
+            f"atlases of the engine are {', '.join(atlases) or 'none'}"
         )
     return atlas
 
