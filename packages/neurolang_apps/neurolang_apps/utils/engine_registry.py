@@ -200,7 +200,8 @@ def _builtin_str(x) -> str:
 
 def _builtin_t_pvalue(t, df) -> float:
     """Return the two-sided p-value of the statistic *t* of Student's t
-    distribution with *df* degrees of freedom (a t-test's, e.g. Welch's)."""
+    distribution with *df* degrees of freedom (a t-test's, e.g. Student's,
+    of n1 + n2 - 2)."""
     from scipy.stats import t as student
 
     return float(2 * student.sf(abs(float(t)), float(df)))

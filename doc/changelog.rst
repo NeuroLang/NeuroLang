@@ -167,7 +167,7 @@ v0.1a23 (2026-11-15)
   choices), and join them with the activations of a term.
   A builtin ``t_pvalue(t, df)``, the two-sided p-value of Student's t,
   declared by the connectivity and meta-analysis engines, lets a query
-  test a difference (Welch's t from ``mean``, ``std`` and ``sum``) and
+  test a difference (Student's t from ``mean``, ``std`` and ``sum``) and
   correct the p-values of many tests (Benjamini-Hochberg, by ranks).
 * Ontologies: the property axioms ``subPropertyOf``, ``equivalentProperty``,
   ``inverseOf``, ``domain``, ``range``, ``SymmetricProperty`` and

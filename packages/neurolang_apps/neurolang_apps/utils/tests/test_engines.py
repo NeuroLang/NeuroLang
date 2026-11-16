@@ -339,7 +339,7 @@ def test_sparql_builtins(tmp_path):
 
 def test_t_pvalue_builtin(tmp_path):
     """t_pvalue(t, df) is the two-sided p-value of Student's t, as scipy's
-    Welch test gives it, in a rule."""
+    Student test gives it, in a rule."""
     import numpy as np
     from scipy import stats
 
@@ -351,11 +351,11 @@ def test_t_pvalue_builtin(tmp_path):
         "stats", tmp_path / "cache", yaml_path=config
     )
     a, b = [0.3, 0.5, 0.4, 0.6], [0.1, 0.2, 0.0, 0.15, 0.25]
-    welch = stats.ttest_ind(a, b, equal_var=False)
-    nl.add_tuple_set([(welch.statistic, welch.df)], name="test")
+    student = stats.ttest_ind(a, b)
+    nl.add_tuple_set([(student.statistic, len(a) + len(b) - 2)], name="test")
     (p,), = nl.execute_datalog_program(
         "ans(p) :- test(t, df), (p == t_pvalue(t, df))")
-    assert np.isclose(p, welch.pvalue)
+    assert np.isclose(p, student.pvalue)
     assert engine_registry._builtin_t_pvalue(-2.0, 10) == \
         engine_registry._builtin_t_pvalue(2.0, 10)
 
