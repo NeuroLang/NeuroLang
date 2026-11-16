@@ -240,6 +240,7 @@ class LocalBackend:
             "questions": repl.questions(),
             "moreQuestions": repl.more_questions(),
             "questionQueries": repl.question_queries(),
+            "questionTopics": repl.question_topics(),
             "predicates": repl.predicates(),
             "commands": repl.commands(),
             "canRate": can_rate,

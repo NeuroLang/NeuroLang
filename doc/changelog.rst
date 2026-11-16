@@ -24,7 +24,10 @@ Unreleased
   grey hint otherwise. "Surprise me" picks another. Picking an example, a question or a query, fills
   both boxes, the English one and the query. The Questions list of
   "Examples and relations" is followed by the rest of the assistant's bank,
-  "More questions", which a filter narrows.
+  "More questions", listed under topics (decoding, encoding, functional and
+  structural connectivity, atlases...; the ``topic:`` of an entry of the bank
+  overrides the one the page derives) and narrowed by a filter. Two new
+  decoding examples: the terms of a Schaefer parcel and of a Tian region.
 
 
 v0.1a23 (2026-11-15)

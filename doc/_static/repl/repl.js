@@ -11,7 +11,7 @@ import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
 import { layoutQuery } from "./layout.js";
-import { exampleQuestion, queryOf, questionOf, filterQuestions, renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
+import { exampleQuestion, renderGroupedQuestions, queryOf, questionOf, filterQuestions, renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
 import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
@@ -195,7 +195,7 @@ function pickQuestion(text) {
 }
 
 // The questions and examples of the engine and its predicates, which put their text in a box.
-let guide = { examples: {}, questions: [], moreQuestions: [], questionQueries: {}, predicates: [], commands: [] };
+let guide = { examples: {}, questions: [], moreQuestions: [], questionQueries: {}, questionTopics: {}, predicates: [], commands: [] };
 function showGuide() {
   if (!$("guide").open) return;
   const squall = $("mode").value === "squall";
@@ -206,7 +206,7 @@ function showGuide() {
   $("guide-more-box").hidden = !guide.moreQuestions.length;
   $("guide-more-count").textContent = `${guide.moreQuestions.length} more, of the assistant's examples`;
   $("guide-more-status").textContent = more.length === guide.moreQuestions.length ? "" : more.length ? `${more.length} of ${guide.moreQuestions.length} questions` : "No question has all these words.";
-  renderExamples($("guide-more"), more, putQuestion, "Put this question in the box of the assistant");
+  renderGroupedQuestions($("guide-more"), more, guide.questionTopics, putQuestion, "Put this question in the box of the assistant");
   const list = $("guide-examples");
   const width = Math.max(30, Math.floor((list.clientWidth - 24) / 7.5)); // 12.5px monospace
   renderExamples(list, guide.examples[squall ? "squall" : "datalog"], (query) => {
@@ -595,7 +595,7 @@ const workerMessages = {
     // This server logs what the user runs (--activity-db).
     $("log-note").textContent = data.logNote ?? "";
     $("log-note").hidden = !data.logNote;
-    guide = { examples: data.examples ?? {}, questions: data.questions ?? [], moreQuestions: data.moreQuestions ?? [], questionQueries: data.questionQueries ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
+    guide = { examples: data.examples ?? {}, questions: data.questions ?? [], moreQuestions: data.moreQuestions ?? [], questionQueries: data.questionQueries ?? {}, questionTopics: data.questionTopics ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
     suggestQuestion();
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
     $("guide-queries").open = !guide.questions.length; // the queries, when there is no question to start from

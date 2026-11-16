@@ -12,7 +12,9 @@ import numpy as np  # noqa: E402
 
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui import nifti  # noqa: E402
-from neurolang_apps.utils.tui.web import WebRepl  # noqa: E402
+from neurolang_apps.utils.tui.web import (  # noqa: E402
+    QUESTION_TOPICS, WebRepl, question_topic,
+)
 from neurolang_apps.utils.tui.tests import test_nifti  # noqa: E402
 
 tiny = test_nifti.tiny  # the REPL on the tiny engine, with its template
@@ -1019,3 +1021,31 @@ def test_question_queries_give_the_query_of_each_question(repl):
     queries = repl.question_queries()
     for question in repl.questions() + repl.more_questions():
         assert queries[question]["datalog"]
+
+
+@pytest.mark.parametrize("question, query, topic", [
+    ("Which studies mention pain?", "ans(s) :- mentions(s, 'pain')", 0),
+    ("Which gyri are activated by studies about language?",
+     "ans(r) :- destrieux_activated(r, s)", 1),
+    ("Which terms have a Bayes factor above 3 for the left putamen?",
+     "bayes_factor(l, t, bf) :- p(l, t, bf)\n"
+     "ans(term, bf) :- bayes_factor('pPUT lh', term, bf)", 2),
+    ("Which regions are functionally connected at rest with the thalamus?",
+     "ans(r) :- f(r)", 3),
+    ("How many white-matter streamlines connect the hemispheres?",
+     "ans(n) :- n = 1", 4),
+    ("Which regions are hippocampal, with their full names?",
+     "ans(r, n) :- tian_name(r, n)", 5),
+])
+def test_the_topic_of_a_question(question, query, topic):
+    assert question_topic(question, query) == QUESTION_TOPICS[topic]
+
+
+def test_the_topics_of_the_questions_are_known_and_grouped(repl):
+    """Every question of the bank has a topic of the list, and the more
+    questions come in the order of the topics."""
+    topics = repl.question_topics()
+    more = repl.more_questions()
+    assert set(topics.values()) <= set(QUESTION_TOPICS)
+    ranks = [QUESTION_TOPICS.index(topics[q]) for q in more]
+    assert ranks == sorted(ranks)

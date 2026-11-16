@@ -51,6 +51,34 @@ export function questionOf(queries, query, mode) {
   return Object.keys(queries).find((question) => queries[question][mode] && squeeze(queries[question][mode]) === wanted) ?? "";
 }
 
+// The *questions* in runs of the same topic, in order: [{topic, questions}],
+// the topic of each question being *topics*[question] ("" if unknown).
+export function groupQuestions(questions, topics) {
+  const groups = [];
+  for (const question of questions) {
+    const topic = topics[question] ?? "";
+    if (groups.length && groups[groups.length - 1].topic === topic) groups[groups.length - 1].questions.push(question);
+    else groups.push({ topic, questions: [question] });
+  }
+  return groups;
+}
+
+// Fill *list* with a heading per topic of the *questions* and a button per
+// question; a click gives its text to *pick*.
+export function renderGroupedQuestions(list, questions, topics, pick, title) {
+  const groups = groupQuestions(questions, topics);
+  const rows = [];
+  for (const { topic, questions: grouped } of groups) {
+    if (topic && groups.length > 1) rows.push(element("li", { className: "guide-group" }, `${topic} · ${grouped.length}`));
+    for (const text of grouped) {
+      const button = element("button", { type: "button", className: "guide-item", textContent: text, title });
+      button.addEventListener("click", () => pick(text));
+      rows.push(element("li", {}, button));
+    }
+  }
+  list.replaceChildren(...rows);
+}
+
 // The query a first visit starts with: the first of the *examples* of the
 // language *mode*, when the *box* is empty and the browser has no history of
 // queries run here (*visited*); "" otherwise.

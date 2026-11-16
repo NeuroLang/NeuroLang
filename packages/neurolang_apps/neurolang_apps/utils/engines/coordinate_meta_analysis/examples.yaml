@@ -160,6 +160,33 @@ assistant_examples:
       bayes_factor(l, t, bf) :- joint_probability(l, t, p_rt), region_probability(l, p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
       ans(term, bayes_factor) :- bayes_factor('L G temporal middle', term, bayes_factor), (bayes_factor > 3.16)
 
+  # The same decoding for a parcel of the Schaefer atlas (17Networks LH
+  # DefaultA pCunPCC 1): precuneus, posterior cingulate, autobiographical.
+  - question: Decode the left posterior cingulate and precuneus parcel of the Schaefer atlas, which terms have a Bayes factor above 3.16 for its activation?
+    topic: "Decoding: from the brain to terms"
+    datalog: |-
+      active_region(l) :- schaefer_activated(l, s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(l, t) :- schaefer_activated(l, s), mentions(s, t), selected_study(s)
+      region_probability(l, p_r) :- PROB[active_region(l)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(l, t, p_rt) :- PROB[cooccurrence(l, t)] = p_rt
+      bayes_factor(l, t, bf) :- joint_probability(l, t, p_rt), region_probability(l, p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(term, bayes_factor) :- bayes_factor('17Networks LH DefaultA pCunPCC 1', term, bayes_factor), (bayes_factor > 3.16)
+
+  # And for a region of the Tian atlas (pPUT lh): putamen, basal ganglia.
+  - question: Decode the left posterior putamen of the Tian atlas, which terms have a Bayes factor above 3.16 for its activation?
+    topic: "Decoding: from the brain to terms"
+    datalog: |-
+      active_region(l) :- tian_activated(l, s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(l, t) :- tian_activated(l, s), mentions(s, t), selected_study(s)
+      region_probability(l, p_r) :- PROB[active_region(l)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(l, t, p_rt) :- PROB[cooccurrence(l, t)] = p_rt
+      bayes_factor(l, t, bf) :- joint_probability(l, t, p_rt), region_probability(l, p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(term, bayes_factor) :- bayes_factor('pPUT lh', term, bayes_factor), (bayes_factor > 3.16)
+
   - question: What is the Bayes factor of fear for the activation of the left amygdala?
     datalog: |-
       amygdala(s) :- tian_activated('lAMY lh', s)

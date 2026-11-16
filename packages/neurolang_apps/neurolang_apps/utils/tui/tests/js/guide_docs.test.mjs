@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { columnDocs, exampleQuestion, queryOf, questionOf, filterQuestions, matchesCommand, showAllQuery, startingQuery, suggestedQuestion } from "../../../../../../../doc/_static/repl/guide.js";
+import { columnDocs, exampleQuestion, groupQuestions, queryOf, questionOf, filterQuestions, matchesCommand, showAllQuery, startingQuery, suggestedQuestion } from "../../../../../../../doc/_static/repl/guide.js";
 
 const peaks = {
   name: "peak_reported", signature: "peak_reported(voxel(i, j, k), study(study_id))", kind: "stored",
@@ -77,4 +77,13 @@ test("a question and its query find each other, in the language chosen", () => {
   assert.equal(queryOf(queries, "unknown", "datalog"), "");
   assert.equal(questionOf(queries, "ans(s) :-   mentions(s, 'pain')", "datalog"), "Which studies mention pain?");
   assert.equal(questionOf(queries, "ans(s) :- other(s)", "datalog"), "");
+});
+
+test("the questions are grouped in runs of a topic, in order", () => {
+  const topics = { a: "X", b: "X", c: "Y", d: "X" };
+  assert.deepEqual(groupQuestions(["a", "b", "c", "d"], topics), [
+    { topic: "X", questions: ["a", "b"] }, { topic: "Y", questions: ["c"] }, { topic: "X", questions: ["d"] },
+  ]);
+  assert.deepEqual(groupQuestions(["z"], topics), [{ topic: "", questions: ["z"] }]);
+  assert.deepEqual(groupQuestions([], topics), []);
 });
