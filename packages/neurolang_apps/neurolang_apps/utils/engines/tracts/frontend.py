@@ -69,6 +69,9 @@ class _State:
         self.tractograms: Dict[str, Tractogram] = {}
         self.in_store = set()  # the tractograms in the store
         self.length_threshold: Dict[str, float] = {}
+        # The bytes of a file a page uploaded, by its name, for the id it
+        # is loaded as, or None (the REPL of the apps gives its uploads).
+        self.read_upload = None
 
 
 def _value(expression):
@@ -104,6 +107,8 @@ class TractsCommandsMixin(PatternWalker):
     ``.load_tractogram(id, path, space=..., drop_short=0)``
         A ``.trk``, ``.tck`` or ``.vtk``, taken to RAS+ mm; with
         ``drop_short=1``, its streamlines of one point are in no relation.
+        ``path`` is the name of a file a page uploaded, if it is one of
+        those of the state's ``read_upload`` (the REPL of the apps).
     ``.load_tractogram(id, kind="hcp842", bundle=None, space="MNI152",
     data_dir=None, url=None, md5=None, drop_short=1)``
         The whole brain or a bundle (``bundle="UF_L"``) of an atlas of
@@ -179,6 +184,18 @@ class TractsCommandsMixin(PatternWalker):
         if ident in self._tracts.tractograms:
             raise InvalidCommandExpression(
                 f"tractogram {ident!r} was already loaded")
+        uploaded = None
+        if names.get("path") and self._tracts.read_upload is not None:
+            uploaded = self._tracts.read_upload(names["path"], ident)
+        if uploaded is not None:  # a file the page uploaded, by its name
+            try:
+                self._tracts.tractograms[ident] = Tractogram.from_bytes(
+                    ident, uploaded, options["space"],
+                    bool(options["drop_short"]))
+            except (OSError, ValueError, NotImplementedError) as e:
+                raise InvalidCommandExpression(
+                    f"cannot load the tractogram {ident!r}: {e}") from e
+            return
         # the file, the address and the directory a statement gives (see
         # neurolang.confine)
         for given in (names.get("path"), options.get("url"),

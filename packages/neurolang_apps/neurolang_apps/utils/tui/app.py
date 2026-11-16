@@ -194,12 +194,25 @@ class InteractiveTuiApp:
         self.loaded_relations: dict = {}
         # The files the page uploaded, by name (.load NAME, .image NAME).
         self.uploads = Uploads()
+        # On an engine of tractography (engines/tracts), .load_tractogram
+        # reads an uploaded tractogram by its name.
+        tracts = getattr(nl.program_ir, "_tracts", None)
+        if tracts is not None:
+            tracts.read_upload = self._read_upload
         self.squall_rules: dict = {}
         open_session_scope(nl)
         if self.settings.history_path:
             self._history = FileHistory(self.settings.history_path)
         else:
             self._history = InMemoryHistory()
+
+    def _read_upload(self, name: str, loaded_as: str):
+        """Return the bytes of the file *name* the page uploaded, marked
+        as loaded as *loaded_as*, or None if none was."""
+        data = self.uploads.get(name)
+        if data is not None:
+            self.uploads.loaded(name, loaded_as)
+        return data
 
     def _engine_join_settings(self) -> dict:
         """

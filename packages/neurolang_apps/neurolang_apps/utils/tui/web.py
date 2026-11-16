@@ -742,8 +742,10 @@ class WebRepl:
         can, the ``cortex_query`` decoding its cortex only (``--cortex``),
         and its ``kind``: ``mask``, ``map`` (of values: decoded once
         loaded with ``--zscore``), or ``tractogram`` (decoded on the voxels
-        within ``radius`` mm of the ends of its streamlines). A ValueError
-        tells why it is refused.
+        within ``radius`` mm of the ends of its streamlines), and, for a
+        tractogram on an engine of tractography, the statements of ``index``
+        indexing it for the rules of the bundles. A ValueError tells why it
+        is refused.
         """
         replaced = next((upload["loaded"] for upload in
                          self.app.uploads.listing()
@@ -769,6 +771,8 @@ class WebRepl:
             # a map, decoded as a mask, keeps its voxels from it (--mask)
             "threshold": nifti.IMAGE_DEFAULTS["threshold"],
             "radius": nifti.IMAGE_DEFAULTS["endpoint_radius"],
+            "index": nifti.tractogram_index_statements(
+                self.app, name, relation) if kind == "tractogram" else "",
         }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:

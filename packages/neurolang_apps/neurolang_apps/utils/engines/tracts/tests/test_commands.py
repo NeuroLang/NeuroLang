@@ -96,6 +96,30 @@ def test_the_commands_build_the_relations(files):
     assert len(rows(result)) > 20
 
 
+def test_an_uploaded_tractogram_is_loaded_by_its_name(files, monkeypatch):
+    """With the state's read_upload (the REPL's uploads), the path of
+    .load_tractogram names an uploaded file, read from its bytes, not
+    from the files a server confines statements to; another path is
+    still a file."""
+    from neurolang.confine import CONFINE_ENV
+
+    monkeypatch.setenv(CONFINE_ENV, str(files / "elsewhere"))
+    nl = tracts_engine()
+    read = []
+    uploads = {"my tracts.tck": (files / "a.tck").read_bytes()}
+    nl.program_ir._tracts.read_upload = \
+        lambda name, ident: read.append((name, ident)) or uploads.get(name)
+    nl.execute_datalog_program(
+        '.load_tractogram("t1", "my tracts.tck", space="s")\n')
+    assert read == [("my tracts.tck", "t1")]
+    loaded = nl.program_ir._tracts.tractograms["t1"]
+    expected = Tractogram.from_file("t1", files / "a.tck", "s")
+    assert np.array_equal(loaded.points, expected.points)
+    assert np.array_equal(loaded.offsets, expected.offsets)
+    with pytest.raises(InvalidCommandExpression, match="outside its data"):
+        nl.execute_datalog_program(tractogram_command(files, ident="t2"))
+
+
 def test_every_relation_of_the_schema_is_there(files):
     nl = tracts_engine()
     nl.execute_datalog_program(

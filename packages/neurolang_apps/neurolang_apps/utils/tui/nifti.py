@@ -2295,6 +2295,30 @@ def decoding_query(
     return query, missing
 
 
+def tractogram_index_statements(app, source: str, name: str) -> str:
+    """
+    Return the statements indexing the uploaded tractogram *source* as the
+    tractogram *name* (a number added if the engine has one of that name)
+    by the atlas the engine indexed its own by, for the rules of the
+    bundles to query it: its ``.load_tractogram`` and ``.index_tracts``;
+    none on an engine without tractography or whose atlas is not in MNI
+    space, the space of an uploaded tractogram.
+    """
+    tracts = getattr(app._nl.program_ir, "_tracts", None)
+    if tracts is None or not tracts.atlases:
+        return ""
+    atlas, indexed = next(iter(tracts.atlases.items()))
+    space = str(indexed.space)
+    if not space.upper().startswith("MNI"):
+        return ""
+    ident, number = name, 1
+    while ident in tracts.tractograms:
+        number += 1
+        ident = f"{name}_{number}"
+    return (f'.load_tractogram("{ident}", "{source}", space="{space}")\n'
+            f'.index_tracts("{ident}", "{atlas}")')
+
+
 def image_relation_name(app, source: str, replaced=()) -> str:
     """
     Return the name of the relation an uploaded image *source* is loaded

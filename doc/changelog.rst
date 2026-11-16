@@ -25,7 +25,10 @@ Unreleased
   ``--radius MM``) of the ends of its streamlines, each of probability 1,
   and draw its streamlines in the brain viewer; the page offers the
   decoding query, and the query assistant has an example.  The page's
-  decoding buttons now run the query they put in the box.  The left arcuate fasciculus of HCP842 decodes to sentence
+  decoding buttons now run the query they put in the box.  On an engine of
+  tractography, ``.load_tractogram`` reads an uploaded tractogram by its
+  name, and the page offers to index it (*Index it for queries*), for the
+  rules of the bundles to select its streamlines.  The left arcuate fasciculus of HCP842 decodes to sentence
   comprehension, reading and language (:doc:`tutorial_decoding`).
 
 * ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF
