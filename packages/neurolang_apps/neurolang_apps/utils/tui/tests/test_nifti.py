@@ -1756,15 +1756,16 @@ class TestImage:
         assert kwargs["streamlines"]["shown"] == 2
         assert kwargs["streamlines"]["total"] == 3
 
-    def test_an_uploaded_tractogram_is_indexed_for_the_bundles(
-        self, tmp_path, monkeypatch
+    def test_an_uploaded_tractogram_is_indexed_in_place_of_the_engines(
+        self, tmp_path
     ):
         """
-        On an engine of tractography, the statements of the upload's
-        ``index`` (tractogram_index_statements) load the uploaded file by
-        its name and index it by the engine's atlas, in its MNI space, a
-        number added to a name the engine has; the rules then select its
-        streamlines, and the upload is listed as loaded as it.
+        On an engine of tractography, an uploaded tractogram has the
+        statements indexing it (tractogram_index) by the engine's atlas, in
+        its MNI space, as its file's name, a number added to the name of the
+        engine's tractogram; run, they replace it, with a note, and the file
+        is the one indexed. Another indexed in its place gives it back its
+        statements.
         """
         from neurolang_apps.utils.engines.tracts.tests.engine import (
             tracts_engine,
@@ -1780,43 +1781,51 @@ class TestImage:
         lut.write_text("0 Unknown 0 0 0 0\n1 Left-Putamen 1 1 1 0\n"
                        "2 Right-Thalamus 1 1 1 0\n3 Brain-Stem 1 1 1 0\n"
                        "4 ctx-lh-precuneus 1 1 1 0\n")
-        nl = tracts_engine()
-        nl.execute_datalog_program(
-            f'.load_atlas("fs", "{labels}", "{lut}", kind="freesurfer", '
-            'space="MNI152")\n')
-        console = Console(file=io.StringIO(), width=200)
-        app = InteractiveTuiApp(nl, TuiSettings(),
-                                console=console, err_console=console)
         path = self._tractogram(tmp_path, [
             [(-4, -14, -26), (-3, -13, -25)], [(-5, -15, -27), (40, 40, 40)],
-        ], "my tracts.tck")
-        # the engine's own tractogram, indexed by its atlas
-        nl.execute_datalog_program(
-            f'.load_tractogram("brain", "{path}", space="MNI152")\n'
-            '.index_tracts("brain", "fs")\n')
-        app.uploads["my tracts.tck"] = path.read_bytes()
-        statements = nifti.tractogram_index_statements(
-            app, "my tracts.tck", "brain")
-        assert statements == (
-            '.load_tractogram("brain_2", "my tracts.tck", space="MNI152")\n'
-            '.index_tracts("brain_2", "fs")')
-        app._execute_and_display(statements)
+        ], "mine.tck")
+        nl = tracts_engine()
+        nl.execute_datalog_program(  # the engine's own, of the same name
+            f'.load_atlas("fs", "{labels}", "{lut}", kind="freesurfer", '
+            'space="MNI152")\n'
+            f'.load_tractogram("mine", "{path}", space="MNI152")\n'
+            '.index_tracts("mine", "fs")\n')
+        console = Console(file=io.StringIO(), width=200)
+        app = InteractiveTuiApp(nl, TuiSettings(), console=console,
+                                err_console=console)
+        app.uploads["mine.tck"] = path.read_bytes()
+        app.uploads["other.tck"] = path.read_bytes()
+        status = nifti.tractogram_index(app, "mine.tck")
+        assert status == {"indexed": "", "index": (
+            '.load_tractogram("mine_2", "mine.tck", space="MNI152")\n'
+            '.index_tracts("mine_2", "fs", replace=1)')}
+        app._execute_and_display(status["index"])
+        out = " ".join(_output(app).split())
+        assert "'mine_2' replaces 'mine': one tractogram is indexed at a " \
+            "time" in out
+        app._execute_and_display("ans(t) :- tractogram(t)")
+        assert list(app.results[-1].frame.iloc[:, 0]) == ["mine_2"]
         app._execute_and_display(
-            'ans(s) :- streamline(x, "brain_2", s), '
-            'streamline_label("fs", x, l)')
-        assert {row[0] for row in app.results[-1].frame.itertuples(
-            index=False)} == {0, 1}
-        assert app.uploads.listing()[0]["loaded"] == ["brain_2"]
+            'ans(s) :- streamline(x, t, s), streamline_label("fs", x, l)')
+        assert set(app.results[-1].frame.iloc[:, 0]) == {0, 1}
+        assert nifti.tractogram_index(app, "mine.tck") == {
+            "index": "", "indexed": "mine_2"}
+        app._execute_and_display(
+            nifti.tractogram_index(app, "other.tck")["index"])
+        assert "'other' replaces 'mine_2'" in " ".join(_output(app).split())
+        assert nifti.tractogram_index(app, "mine.tck")["index"].startswith(
+            '.load_tractogram("mine", "mine.tck"')
 
     def test_no_index_without_tractography_or_in_another_space(self, tiny):
-        assert nifti.tractogram_index_statements(tiny, "t.tck", "t") == ""
         from types import SimpleNamespace
 
+        none = {"index": "", "indexed": ""}
+        assert nifti.tractogram_index(tiny, "t.tck") == none
         subject = SimpleNamespace(_nl=SimpleNamespace(
             program_ir=SimpleNamespace(_tracts=SimpleNamespace(
                 atlases={"fs": SimpleNamespace(space="subject")},
-                tractograms={}))))
-        assert nifti.tractogram_index_statements(subject, "t.tck", "t") == ""
+                tractograms={}, in_store=set()))))
+        assert nifti.tractogram_index(subject, "t.tck") == none
 
     def test_a_tractogram_out_of_the_brain(self, tiny, tmp_path):
         """Ends out of the brain but near it are loaded with a warning

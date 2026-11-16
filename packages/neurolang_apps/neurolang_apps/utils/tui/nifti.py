@@ -2295,28 +2295,40 @@ def decoding_query(
     return query, missing
 
 
-def tractogram_index_statements(app, source: str, name: str) -> str:
+def tractogram_index(app, source: str) -> dict:
     """
-    Return the statements indexing the uploaded tractogram *source* as the
-    tractogram *name* (a number added if the engine has one of that name)
-    by the atlas the engine indexed its own by, for the rules of the
-    bundles to query it: its ``.load_tractogram`` and ``.index_tracts``;
-    none on an engine without tractography or whose atlas is not in MNI
-    space, the space of an uploaded tractogram.
+    Return how the uploaded tractogram *source* is indexed for the rules of
+    the bundles, on an engine of tractography whose atlas is in MNI space
+    (that of an uploaded tractogram): ``indexed``, the id it is indexed as,
+    if it is the engine's tractogram, else ``index``, the statements
+    indexing it in place of the engine's (``.load_tractogram`` and
+    ``.index_tracts(..., replace=1)``, by the atlas the engine indexed its
+    own by), as the file's name (a number added if the engine has a
+    tractogram of that name); both empty on another engine.
     """
+    from .session import default_relation_name
+
+    none = {"index": "", "indexed": ""}
     tracts = getattr(app._nl.program_ir, "_tracts", None)
     if tracts is None or not tracts.atlases:
-        return ""
+        return none
     atlas, indexed = next(iter(tracts.atlases.items()))
     space = str(indexed.space)
     if not space.upper().startswith("MNI"):
-        return ""
+        return none
+    mine = next((upload["loaded"] for upload in app.uploads.listing()
+                 if upload["name"] == source), [])
+    current = [ident for ident in mine if ident in tracts.in_store]
+    if current:
+        return {"index": "", "indexed": current[0]}
+    name = default_relation_name(source)
     ident, number = name, 1
     while ident in tracts.tractograms:
         number += 1
         ident = f"{name}_{number}"
-    return (f'.load_tractogram("{ident}", "{source}", space="{space}")\n'
-            f'.index_tracts("{ident}", "{atlas}")')
+    return {"index": (
+        f'.load_tractogram("{ident}", "{source}", space="{space}")\n'
+        f'.index_tracts("{ident}", "{atlas}", replace=1)'), "indexed": ""}
 
 
 def image_relation_name(app, source: str, replaced=()) -> str:

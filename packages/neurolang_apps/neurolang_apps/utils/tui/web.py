@@ -587,7 +587,12 @@ class WebRepl:
         """Return the files the page uploaded in the session, as a reply
         carries them (see :class:`Reply`)."""
         uploads = self.app.uploads
-        return {"files": uploads.listing(), "used": uploads.used(),
+        files = uploads.listing()
+        for upload in files:  # a tractogram, indexed or not (index)
+            if session.is_tractogram(upload["name"]):
+                upload.update(
+                    nifti.tractogram_index(self.app, upload["name"]))
+        return {"files": files, "used": uploads.used(),
                 "most": uploads.most_all}
 
     def _show_graph(self, page: str) -> None:
@@ -742,10 +747,10 @@ class WebRepl:
         can, the ``cortex_query`` decoding its cortex only (``--cortex``),
         and its ``kind``: ``mask``, ``map`` (of values: decoded once
         loaded with ``--zscore``), or ``tractogram`` (decoded on the voxels
-        within ``radius`` mm of the ends of its streamlines), and, for a
-        tractogram on an engine of tractography, the statements of ``index``
-        indexing it for the rules of the bundles. A ValueError tells why it
-        is refused.
+        within ``radius`` mm of the ends of its streamlines; the uploads
+        of a reply tell how it is indexed for the rules of the bundles,
+        :func:`.nifti.tractogram_index`). A ValueError tells why it is
+        refused.
         """
         replaced = next((upload["loaded"] for upload in
                          self.app.uploads.listing()
@@ -771,8 +776,9 @@ class WebRepl:
             # a map, decoded as a mask, keeps its voxels from it (--mask)
             "threshold": nifti.IMAGE_DEFAULTS["threshold"],
             "radius": nifti.IMAGE_DEFAULTS["endpoint_radius"],
-            "index": nifti.tractogram_index_statements(
-                self.app, name, relation) if kind == "tractogram" else "",
+            # a tractogram the engine can index (its row's Index)
+            "index": nifti.tractogram_index(self.app, name)["index"]
+            if kind == "tractogram" else "",
         }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:

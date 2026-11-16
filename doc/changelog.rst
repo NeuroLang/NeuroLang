@@ -27,8 +27,10 @@ Unreleased
   decoding query, and the query assistant has an example.  The page's
   decoding buttons now run the query they put in the box.  On an engine of
   tractography, ``.load_tractogram`` reads an uploaded tractogram by its
-  name, and the page offers to index it (*Index it for queries*), for the
-  rules of the bundles to select its streamlines.  The left arcuate fasciculus of HCP842 decodes to sentence
+  name, and *Index*, on its row of the uploaded files, indexes it in place
+  of the engine's tractogram (``.index_tracts(..., replace=1)``, which
+  removes the one indexed before, with a note), for the rules of the
+  bundles to select its streamlines.  The left arcuate fasciculus of HCP842 decodes to sentence
   comprehension, reading and language (:doc:`tutorial_decoding`).
 
 * ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF

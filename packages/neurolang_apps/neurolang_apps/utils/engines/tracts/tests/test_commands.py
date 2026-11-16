@@ -120,6 +120,38 @@ def test_an_uploaded_tractogram_is_loaded_by_its_name(files, monkeypatch):
         nl.execute_datalog_program(tractogram_command(files, ident="t2"))
 
 
+def test_replace_indexes_one_tractogram_at_a_time(files):
+    """replace=1 removes the tractograms indexed before from every
+    relation, with a warning naming them; the ids of the one indexed are
+    not those of the removed one, nor are its rows changed."""
+    nl = tracts_engine()
+    nl.execute_datalog_program(
+        atlas_command(files) + tractogram_command(files)
+        + '.index_tracts("t1", "fs")\n')
+    with pytest.warns(UserWarning, match="'t2' replaces 't1': one "
+                      "tractogram is indexed at a time"):
+        nl.execute_datalog_program(
+            tractogram_command(files, "b", "t2")
+            + '.index_tracts("t2", "fs", replace=1)\n')
+    assert rows(nl.execute_datalog_program(
+        "ans(t) :- tractogram(t)")) == {("t2",)}
+    assert {t for _, t, _ in rows(nl.execute_datalog_program(
+        "ans(x, t, s) :- streamline(x, t, s)"))} == {"t2"}
+    labelled = rows(nl.execute_datalog_program(
+        'ans(s, l) :- streamline_label("fs", x, l), streamline(x, "t2", s)'))
+    traverses, _ = expected(files, "t2", "b")
+    assert labelled == set(zip(traverses["s"], traverses["l"]))
+    state = nl.program_ir._tracts
+    assert "t1" not in state.tractograms and state.in_store == {"t2"}
+    # t1 can be loaded and indexed again, in place of t2
+    with pytest.warns(UserWarning, match="'t1' replaces 't2'"):
+        nl.execute_datalog_program(
+            tractogram_command(files)
+            + '.index_tracts("t1", "fs", replace=1)\n')
+    assert rows(nl.execute_datalog_program(
+        "ans(t) :- tractogram(t)")) == {("t1",)}
+
+
 def test_every_relation_of_the_schema_is_there(files):
     nl = tracts_engine()
     nl.execute_datalog_program(

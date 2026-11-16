@@ -118,7 +118,7 @@ class TractsCommandsMixin(PatternWalker):
         (:func:`.fetch.fetch_tractogram`).
     ``.index_tracts(tractogram, atlas, crossing_threshold=2.0,
     length_threshold=0.0, emit_background=0, cache=None,
-    allow_space_mismatch=0, term_mapping=None, extent=None)``
+    allow_space_mismatch=0, term_mapping=None, extent=None, replace=0)``
         Index the tractogram by the atlas, one of the engine
         (``.load_atlas``, ``add_atlas_set``, the ``atlases:`` of an engine
         of the apps: its ``atlases``): ``streamline_label`` and
@@ -134,7 +134,9 @@ class TractsCommandsMixin(PatternWalker):
         indexing by the atlas, ``"edge"`` if not given: ``"edge"`` (the
         voxel edges, DESIGN.md 6.1.1) or ``"centre"`` (the voxel centres,
         as tract_querier's boxes, for the directional terms to reproduce
-        its own).
+        its own). With ``replace=1``, the tractogram is the only one: those
+        indexed before are removed from the relations, with a warning that
+        names them.
 
     The matches are exact: a command that is not one of these is left to the
     ones after it in the solver, which refuse it.
@@ -228,7 +230,7 @@ class TractsCommandsMixin(PatternWalker):
             {"crossing_threshold": 2.0, "length_threshold": 0.0,
              "emit_background": 0, "cache": None,
              "allow_space_mismatch": 0, "term_mapping": None,
-             "extent": None},
+             "extent": None, "replace": 0},
         )
         try:  # the files a statement gives (see neurolang.confine)
             if options["cache"]:
@@ -311,6 +313,8 @@ class TractsCommandsMixin(PatternWalker):
             state.atlases[atlas_name] = atlas
             state.term_mappings[atlas_name] = mapping
             state.extents[atlas_name] = extent or "edge"
+        if options["replace"]:
+            self._remove_tractograms_but(ident)
         if ident not in state.in_store:
             state.store.add_tractogram(tractogram, params)
             state.in_store.add(ident)
@@ -322,6 +326,24 @@ class TractsCommandsMixin(PatternWalker):
                 allow_space_mismatch=allow,
             )
         self._publish_tracts()
+
+    def _remove_tractograms_but(self, ident):
+        """Remove the tractograms indexed but *ident* from the relations,
+        and from those loaded, with a warning that names them."""
+        state = self._tracts
+        removed = sorted(state.in_store - {ident})
+        for other in removed:
+            state.store.remove_tractogram(other)
+            state.in_store.discard(other)
+            state.tractograms.pop(other, None)
+            state.length_threshold.pop(other, None)
+        if removed:
+            warnings.warn(
+                f"tractogram {ident!r} replaces "
+                f"{', '.join(map(repr, removed))}: one tractogram is "
+                "indexed at a time, the rules of the bundles select its "
+                "streamlines"
+            )
 
     def _publish_tracts(self):
         """Give the program the relations built so far (what ``load_csv``

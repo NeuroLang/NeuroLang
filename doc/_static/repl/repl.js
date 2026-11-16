@@ -654,6 +654,7 @@ const workerMessages = {
 const UPLOAD_ICONS = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  index: '<path d="M4 6h16M4 12h10M4 18h7M16 15l3 3-3 3"/>',
 };
 function iconButton(kind, text, label, action) {
   const button = Object.assign(document.createElement("button"), {
@@ -723,7 +724,8 @@ function showUploads(listed) {
   const summary = uploadsSummary(listed);
   $("uploaded").hidden = !summary;
   $("uploaded-summary").textContent = summary;
-  $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells) => {
+  $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells, n) => {
+    const file = listed.files[n];
     const row = document.createElement("tr");
     for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text }));
     const name = cells[0];
@@ -732,6 +734,15 @@ function showUploads(listed) {
     if (uploads.has(name)) { // the page has its bytes (it uploaded it)
       actions.append(iconButton("download", "Download", `Download ${name}`,
         () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) })));
+    }
+    // A tractogram, on an engine of tractography: one is indexed at a time.
+    if (file.index) {
+      actions.append(iconButton("index", "Index", `Index ${name} for the rules of the bundles, in place of the engine's tractogram`,
+        () => indexTractogram(name, file.index)));
+    } else if (file.indexed) {
+      const button = iconButton("index", "Indexed", `${name} is the tractogram the rules of the bundles select from, as ${file.indexed}`, () => {});
+      button.disabled = true;
+      actions.append(button);
     }
     actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
     row.append(actions);
@@ -1168,10 +1179,8 @@ let cortexQuery = "";
 let replacedQuery = "";
 let decodedMap = ""; // the map of values to load again, decoded so
 let decodedRelation = ""; // the relation it is loaded as
-let indexing = ""; // the statements indexing a tractogram for the rules of the bundles
 function offerDecoding(name, query, kind, threshold = 3.1, cortex = "", relation = "image", radius = 3, index = "") {
   decodingQuery = query;
-  indexing = index;
   decodedRelation = relation;
   cortexQuery = cortex;
   $("decode-offer-cortex").checked = false;
@@ -1183,29 +1192,26 @@ function offerDecoding(name, query, kind, threshold = 3.1, cortex = "", relation
     ? `${name} is uploaded, a tractogram. A query can decode the voxels within ${radius} mm of the ends of its streamlines: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit them, a comment explaining each line.`
     : `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`;
   const where = cortex ? " Only the cortex decodes the voxels of the image in the cortex alone." : "";
-  const indexed = index ? " Index it for queries indexes its streamlines by the atlas of the engine, for the rules of the bundles (uf(x, \"left\")…) to select them." : "";
+  const indexed = index ? " Index, on its row of the uploaded files, puts its streamlines in place of the engine's tractogram, for the rules of the bundles (uf(x, \"left\")…) to select them." : "";
   $("decode-offer-text").textContent = (query ? what + where + (editor.value.trim() ? " It replaces the query in the box." : "") : `${name} is uploaded, a tractogram.`) + indexed;
   $("decode-offer-yes").textContent = kind === "map" ? "Decode as z-scores" : "Run the decoding query";
   $("decode-offer-mask").textContent = `Decode as a mask (from ${threshold})`;
   $("decode-offer-mask").hidden = kind !== "map";
   $("decode-offer-yes").hidden = !query;
   $("decode-offer-no").hidden = false;
-  $("decode-offer-index").hidden = !index;
   $("decode-offer-back").hidden = true;
   $("decode-offer").hidden = false;
 }
 function closeDecodingOffer() {
   $("decode-offer").hidden = true;
-  decodingQuery = cortexQuery = replacedQuery = decodedMap = indexing = "";
+  decodingQuery = cortexQuery = replacedQuery = decodedMap = "";
 }
-// Index the uploaded tractogram, and say how its streamlines are queried.
-function indexTractogram() {
-  const statements = indexing;
-  const ident = /load_tractogram\("([^"]+)"/.exec(statements)?.[1] ?? decodedRelation;
+// Index the uploaded tractogram *name* in place of the engine's (the
+// statements of its row), and say how its streamlines are queried.
+function indexTractogram(name, statements) {
+  const ident = /load_tractogram\("([^"]+)"/.exec(statements)?.[1] ?? name;
   whenReady(() => run(statements, { remember: true, keepOffer: true }));
-  $("decode-offer-index").hidden = true;
-  $("decode-offer-text").textContent = `Indexed as the tractogram ${ident}: the rules of the bundles select its streamlines, e.g. ans(x) :- uf(x, "left"), streamline(x, "${ident}", s), and .view draws them.`;
-  indexing = "";
+  setUploadsStatus(`${name} is indexed as the tractogram ${ident}, in place of the engine's: the rules of the bundles select its streamlines, e.g. ans(x) :- uf(x, "left"), and .view draws them.`);
 }
 // Put the decoding query in the box and run it, a map loaded again as
 // *flag* says first; once the statement running (the upload's .image)
@@ -1222,22 +1228,19 @@ function insertDecoding(flag) {
   });
   replacedQuery = editor.value;
   putQuery(query);
-  if (!replacedQuery.trim() && !indexing) {
+  if (!replacedQuery.trim()) {
     closeDecodingOffer();
   } else {
-    // A tractogram can still be indexed; the query replaced, brought back.
-    $("decode-offer-text").textContent = (replacedQuery.trim() ? "The decoding query is in the box, in place of the query that was there, and runs." : "The decoding query runs.") + (indexing ? " Index it for queries indexes the tractogram for the rules of the bundles." : "");
-    $("decode-offer-yes").hidden = $("decode-offer-mask").hidden = true;
-    $("decode-offer-no").hidden = !indexing;
+    $("decode-offer-text").textContent = replacedQuery.trim() ? "The decoding query is in the box, in place of the query that was there, and runs." : "The decoding query runs.";
+    $("decode-offer-yes").hidden = $("decode-offer-mask").hidden = $("decode-offer-no").hidden = true;
     $("decode-offer-cortex-label").hidden = true;
-    $("decode-offer-back").hidden = !replacedQuery.trim();
+    $("decode-offer-back").hidden = false;
   }
   input.focus();
 }
 $("decode-offer-yes").addEventListener("click", () => insertDecoding("--zscore"));
 $("decode-offer-mask").addEventListener("click", () => insertDecoding("--mask"));
 $("decode-offer-no").addEventListener("click", closeDecodingOffer);
-$("decode-offer-index").addEventListener("click", indexTractogram);
 $("decode-offer-back").addEventListener("click", () => {
   editor.value = replacedQuery;
   closeDecodingOffer();

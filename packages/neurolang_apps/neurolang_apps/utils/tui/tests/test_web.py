@@ -890,6 +890,8 @@ def test_the_page_uploads_a_tractogram_that_image_loads(repl, monkeypatch):
     assert (answer["query"], answer["cortex_query"]) == ("brain", "cortex")
     assert answer["radius"] == nifti.IMAGE_DEFAULTS["endpoint_radius"]
     assert answer["index"] == ""  # an engine without tractography
+    (listed,) = repl.uploads()["files"]
+    assert (listed["index"], listed["indexed"]) == ("", "")
 
 
 def test_the_page_is_told_if_an_uploaded_image_is_a_mask(repl):
