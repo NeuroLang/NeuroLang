@@ -10,21 +10,23 @@ export function bytes(size) {
 }
 
 // The line over the list: how many files, and the room they take; empty
-// without any.
+// without any, unless the engine's tractogram (listed with them, never
+// removed) is not the one indexed, to be indexed again.
 export function uploadsSummary(uploads) {
   const files = uploads?.files ?? [];
-  if (!files.length) return "";
-  return `Uploaded files (${files.length}): ${bytes(uploads.used)} of ${bytes(uploads.most)} used`;
+  const uploaded = files.filter((file) => !file.engine);
+  if (!uploaded.length && !files.some((file) => file.engine && file.index)) return "";
+  return `Uploaded files (${uploaded.length}): ${bytes(uploads.used)} of ${bytes(uploads.most)} used`;
 }
 
 // A row of the list for each file: its name, kind, size, and the relations
-// loaded from it.
+// loaded from it; the engine's tractogram has no size, it is the engine's.
 export function uploadRows(uploads) {
   return (uploads?.files ?? []).map((file) => [
     file.name,
-    /\.(trk|tck)$/i.test(file.name) ? "tractogram"
+    file.engine || /\.(trk|tck)$/i.test(file.name) ? "tractogram"
       : /\.nii(\.gz)?$/i.test(file.name) ? "image" : "table",
-    bytes(file.size),
+    file.engine ? "the engine's" : bytes(file.size),
     file.loaded.length ? file.loaded.join(", ") : "not loaded",
   ]);
 }

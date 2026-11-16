@@ -1,6 +1,7 @@
 """Tractograms: streamlines in flat arrays (DESIGN.md, 2 and 7)."""
 
 import hashlib
+import io
 import os
 import warnings
 from typing import Any, Union
@@ -100,6 +101,17 @@ class Tractogram:
         reference image is not otherwise used.
         """
         tractogram = nib.streamlines.load(str(path)).tractogram.to_world()
+        return cls.from_streamlines(
+            id, tractogram.streamlines, space, drop_short)
+
+    @classmethod
+    def from_bytes(
+        cls, id: str, data: bytes, space: Space, drop_short: bool = False,
+    ) -> "Tractogram":
+        """The same as :meth:`from_file`, of the bytes *data* of a file
+        (one a page uploaded), its format told by its header."""
+        tractogram = nib.streamlines.load(
+            io.BytesIO(data)).tractogram.to_world()
         return cls.from_streamlines(
             id, tractogram.streamlines, space, drop_short)
 

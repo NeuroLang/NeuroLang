@@ -374,6 +374,40 @@ and its lifts are those of the brain, the largest 1.48; decode a bundle.
 ``.image`` warns when fewer than half of the ends (``image.endpoint_share``)
 are in the brain: the tractogram is likely in another space.
 
+On an engine of tractography (``neurosynth_iit``,
+``neurosynth_disconnectome7t``…), a tractogram can be queried too: the
+bundles of its rules (``uf``, ``cst``, ``ilf``…, :doc:`tutorial_datalog`)
+select its streamlines once it is indexed by the atlas the engine indexes
+its own by.  The engine holds one tractogram at a time: the uploaded one
+takes the place of the engine's.  ``.load_tractogram`` reads an uploaded
+file by its name, and *Index*, on the file's row of the uploaded files,
+runs
+
+.. code-block:: text
+
+    .load_tractogram("uf_l", "UF_L.trk", space="MNI152")
+    .index_tracts("uf_l", "fs", replace=1)
+
+``replace=1`` removes the tractogram indexed before (the engine's own, or
+another upload) from the relations, and the REPL notes which one; the row
+of the file indexed says *Indexed*, and *Index* on another file's row puts
+it in its place.  The engine's own tractogram is listed first, as the
+engine's, without *Download* or *Remove*: its *Index* puts it back.  A
+tractogram replaced stays loaded, and is indexed again by
+``.index_tracts(..., replace=1)`` alone.  The rules then select the streamlines of the upload:
+
+.. code-block:: text
+
+    nl(neurosynth_iit:datalog)> ans(x) :- uf(x, "left")
+
+finds 336 of the 370 streamlines of the left uncinate fasciculus of
+HCP842, in 8 s, and ``.view`` draws them.  The 300,000 streamlines of the
+Disconnectome7T tractogram are indexed in 3 s (0.6 GB more), and the left
+uncinate of them found in 17 s.  The arcuate fasciculus of the rules
+(tract_querier's, ``af``) leaves out the streamlines through the centrum
+semiovale, as nearly all those of HCP842's arcuate are: it selects none of
+them.
+
 What the decoding does not say
 ------------------------------
 

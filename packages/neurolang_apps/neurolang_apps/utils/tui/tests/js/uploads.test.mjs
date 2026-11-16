@@ -28,6 +28,17 @@ test("each upload is a row: name, kind, size, what it was loaded as", () => {
   assert.deepEqual(uploadRows(tracts), [["AF_L.trk", "tractogram", "820 B", "af_l"]]);
 });
 
+test("the engine's tractogram is a row, but no upload", () => {
+  const engine = { name: "iit", size: 0, age: 0, loaded: ["iit"], engine: true };
+  const listed = { files: [{ ...engine, indexed: "iit", index: "" }, uploads.files[1]], used: 820, most: 200 << 20 };
+  assert.deepEqual(uploadRows(listed)[0], ["iit", "tractogram", "the engine's", "iit"]);
+  assert.equal(uploadsSummary(listed), "Uploaded files (1): 820 B of 200 MB used");
+  // alone: listed while it is not the one indexed, to be indexed again
+  const alone = (index) => ({ files: [{ ...engine, index, indexed: index ? "" : "iit" }], used: 0, most: 1 << 20 });
+  assert.equal(uploadsSummary(alone("")), "");
+  assert.equal(uploadsSummary(alone('.index_tracts("iit", "fs", replace=1)')), "Uploaded files (0): 0 B of 1 MB used");
+});
+
 test("the files a reply no longer lists are those removed", () => {
   const kept = ["my scores.csv", "roi.nii.gz", "old.csv"];
   assert.deepEqual(removedUploads(kept, uploads), ["old.csv"]);
