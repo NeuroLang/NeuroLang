@@ -310,9 +310,11 @@ A column of unknown sort, such as one of a relation loaded with
 ``.load``, is of the sort it is named as.  ``--voxel I J K`` and ``--mm
 X Y Z`` give the columns, on the template's grid (see ``.help save``).
 
-A sort of region labels may name, with ``atlas``, the atlas whose
-regions it labels, by its key under ``atlases``; it has one column and
-no ``space``::
+A sort of region labels names, with ``atlas``, the atlas whose regions
+it labels, by its key under ``atlases``; it has one column and no
+``space``.  Its name is ``label`` or ends in ``_label``, and the tests
+check that every such sort of the engines names an atlas: without one,
+``.view`` cannot draw its regions::
 
     destrieux_label:
       columns: [label]
