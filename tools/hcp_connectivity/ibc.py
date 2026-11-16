@@ -237,7 +237,7 @@ def run(work: Path, ibc: Path, out: Path, task: int, tasks: int) -> None:
     """The connectivity of the share *task* of *tasks* of the runs of
     every subject, ``OUT/<subject>/<condition>__<run>.npz``, those
     already there skipped (a run without events: an empty file)."""
-    images = None
+    grids = {}  # the label images of each grid: the runs differ
     for subject, found in all_runs(ibc)[task::tasks]:
         cond, path = found[0], found[3]
         folder = out / subject
@@ -246,9 +246,11 @@ def run(work: Path, ibc: Path, out: Path, task: int, tasks: int) -> None:
             continue
         folder.mkdir(parents=True, exist_ok=True)
         start = time.time()
-        if images is None:
-            images = label_images(work, nib.load(path))
-        z = run_connectivity(ibc, found, images)
+        image = nib.load(path)
+        grid = (image.shape[:3], image.affine.round(4).tobytes())
+        if grid not in grids:
+            grids[grid] = label_images(work, image)
+        z = run_connectivity(ibc, found, grids[grid])
         partial = target.with_name(target.stem + ".partial.npz")
         np.savez(partial, **(z or {}))
         partial.rename(target)
