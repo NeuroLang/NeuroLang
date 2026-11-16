@@ -283,7 +283,8 @@ assistant_examples:
   # by how close their studies are, by text (the lift of the studies
   # closest to both definitions) or by activation (the correlation,
   # across the regions, of the lifts of their activations). The
-  # definitions are bound in close itself, so each one is a text.
+  # definitions are bound in close itself: a rule of two texts,
+  # close(t1, s), close(t2, s), does not get them from the answer.
   - question: Draw a graph of the kinds of memory of the Cognitive Atlas by the similarity of the abstracts of their studies
     datalog: |-
       node(t, d) :- cogat_term(c, 'memory'), cogat_subclass_of(x, c), cogat_term(x, t), cogat_definition(t, d)

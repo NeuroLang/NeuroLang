@@ -104,7 +104,8 @@ assistant_guidance: >
   their activations (mean and std of each, then the mean of the
   products of the z-scores). Bind the definitions in close itself,
   close(t, s) :- node(t, d), similar_study(d, s), selected_study(s):
-  similar_study needs its text from an atom of the same rule.
+  a rule over two texts, PROB of close(t1, s), close(t2, s), does not
+  get them from the answer.
   A question naming a cognitive process, task or concept (studies
   about working memory, regions for response inhibition, the n-back
   task) without saying mention, term or word: look it up with
