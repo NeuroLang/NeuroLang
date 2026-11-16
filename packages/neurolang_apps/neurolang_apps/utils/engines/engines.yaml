@@ -235,7 +235,7 @@ engines:
       MNI brain. No cerebellum. Structural, not functional.
     requires_mni_mask: true
     use_base_symbols: true
-    builtins: [exp, log, startswith]
+    builtins: [exp, log, startswith, t_pvalue]
     relations:
       schaefer400_tian_structural_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.3/tsv/schaefer400_17_tian_structural_connectivity.tsv.gz
@@ -331,7 +331,7 @@ engines:
       MNI brain. Functional, not structural.
     requires_mni_mask: true
     use_base_symbols: true
-    builtins: [exp, log, startswith]
+    builtins: [exp, log, startswith, t_pvalue]
     relations:
       schaefer400_tian_functional_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.3/tsv/schaefer400_17_tian_functional_connectivity.tsv.gz
@@ -416,7 +416,7 @@ engines:
       activates the voxels within {kernel_radius_mm} mm of its peaks.
     requires_mni_mask: true
     use_base_symbols: true
-    builtins: [exp, log, startswith, lcase]
+    builtins: [exp, log, startswith, lcase, t_pvalue]
     python_init_options:
       # Peaks whose coordinate space is neither MNI nor Talairach
       # (Neurosynth's UNKNOWN: 53,878 peaks of 1,832 studies; NeuroStore's

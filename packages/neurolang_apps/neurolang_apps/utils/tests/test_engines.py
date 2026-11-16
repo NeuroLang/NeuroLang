@@ -337,6 +337,29 @@ def test_sparql_builtins(tmp_path):
     assert set(matched) == {("a",)}
 
 
+def test_t_pvalue_builtin(tmp_path):
+    """t_pvalue(t, df) is the two-sided p-value of Student's t, as scipy's
+    Welch test gives it, in a rule."""
+    import numpy as np
+    from scipy import stats
+
+    from neurolang_apps.utils import engine_registry
+
+    config = tmp_path / "engines.yaml"
+    config.write_text("engines:\n  stats:\n    builtins: [t_pvalue]\n")
+    nl = engine_registry.build_engine(
+        "stats", tmp_path / "cache", yaml_path=config
+    )
+    a, b = [0.3, 0.5, 0.4, 0.6], [0.1, 0.2, 0.0, 0.15, 0.25]
+    welch = stats.ttest_ind(a, b, equal_var=False)
+    nl.add_tuple_set([(welch.statistic, welch.df)], name="test")
+    (p,), = nl.execute_datalog_program(
+        "ans(p) :- test(t, df), (p == t_pvalue(t, df))")
+    assert np.isclose(p, welch.pvalue)
+    assert engine_registry._builtin_t_pvalue(-2.0, 10) == \
+        engine_registry._builtin_t_pvalue(2.0, 10)
+
+
 class TestNeurosynthEngineVocabulary:
     """Check the vocabulary predicates the neurosynth engine defines."""
 

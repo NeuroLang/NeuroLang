@@ -198,8 +198,17 @@ def _builtin_str(x) -> str:
     return str(x)
 
 
+def _builtin_t_pvalue(t, df) -> float:
+    """Return the two-sided p-value of the statistic *t* of Student's t
+    distribution with *df* degrees of freedom (a t-test's, e.g. Welch's)."""
+    from scipy.stats import t as student
+
+    return float(2 * student.sf(abs(float(t)), float(df)))
+
+
 _BUILTIN_SYMBOLS: Dict[str, object] = {
     "exp": np.exp,
+    "t_pvalue": _builtin_t_pvalue,
     "log": np.log,
     "startswith": _builtin_startswith,
     # String and numeric functions of SPARQL, e.g. for RDF engines.
