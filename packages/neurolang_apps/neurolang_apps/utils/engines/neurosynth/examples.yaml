@@ -1,0 +1,2683 @@
+# Merged into the entry of neurosynth in ../engines.yaml (see
+# doc/engine_configuration.rst).
+#
+# Questions on the neurosynth engine with their Datalog queries, added
+# after the shared bank of coordinate_meta_analysis: Sonnet 5.5's answers
+# to generated questions (neurolang-text2query-bench, runs/nsv3e.md), kept
+# when DeepSeek returned the same rows or a Sonnet judge accepted them,
+# deduplicated, without mentions for a question not about the words of
+# the studies, and far from the questions of the evaluation sets. Every
+# query is checked against the engine by the tests
+# (NEUROLANG_TEST_DATA_DIR).
+assistant_examples:
+- question: Which studies are about people feeling left out during a virtual ball-tossing game?
+  datalog: ans(study, title) :- similar_study('people feeling left out during a virtual ball-tossing game', study), study_title(study, title)
+- question: Which networks are activated by studies on choosing a small reward now versus a larger one later?
+  datalog: |-
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+    ans(parcel, probability) :- p_active_given_close('choosing a small reward now versus a larger one later', parcel, probability)
+- question: Which studies focus on infants hearing their mother's voice?
+  datalog: ans(study) :- similar_study('infants hearing their mothers voice', study)
+- question: List studies where participants hold digits in mind while ignoring distractors.
+  datalog: ans(study) :- similar_study('holding digits in mind while ignoring distractors', study)
+- question: Which gyri and sulci are activated by studies of humming a familiar melody?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    close(s) :- similar_study('humming a familiar melody', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Which brain areas are activated by studies of forgiving someone who wronged you?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    close(s) :- similar_study('forgiving someone who wronged you', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Which studies test memory for words seen earlier in the session?
+  datalog: ans(study) :- similar_study('memory for words seen earlier in the session', study)
+- question: Which cortical regions are activated by studies of watching a magician's trick?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    close(s) :- similar_study('watching a magician trick', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: What titles are about imagining oneself walking through a familiar neighborhood?
+  datalog: ans(study, title) :- similar_study('imagining oneself walking through a familiar neighborhood', study), study_title(study, title)
+- question: Which studies involve reading stories about other people's feelings?
+  datalog: ans(study, title) :- similar_study('reading stories about the feelings of other people', study), study_title(study, title)
+- question: Which studies use odd-one-out tasks with rare deviant sounds?
+  datalog: ans(study, title) :- similar_study('odd-one-out tasks with rare deviant sounds', study), study_title(study, title)
+- question: Which studies are about cheating on a test for personal gain?
+  datalog: ans(study, title) :- similar_study('cheating on a test for personal gain', study), study_title(study, title)
+- question: Which regions are activated by studies of thinking about what another person believes?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    close(s) :- similar_study('thinking about what another person believes', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Is the hippocampus activated by studies of navigating through virtual mazes?
+  datalog: |-
+    hip(l) :- tian(l, r), startswith('aHIP', l)
+    hip(l) :- tian(l, r), startswith('pHIP', l)
+    active(s) :- hip(l), tian_activated(l, s), selected_study(s)
+    close(s) :- similar_study('navigating through virtual mazes', s), selected_study(s)
+    ans(probability) :- PROB[active(s) // close(s)] = probability
+- question: Show titles of studies on juggling or learning a new motor skill.
+  datalog: ans(study, title) :- similar_study('juggling or learning a new motor skill', study), study_title(study, title)
+- question: Which gyri are activated by studies of naming pictures of tools?
+  datalog: |-
+    gyrus(l) :- destrieux(l, r), startswith('L G ', l)
+    gyrus(l) :- destrieux(l, r), startswith('R G ', l)
+    active(l, s) :- destrieux_activated(l, s), gyrus(l), selected_study(s)
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close('naming pictures of tools', s)] = probability
+- question: Which studies explore watching videos of people yawning?
+  datalog: ans(study, title) :- similar_study('watching videos of people yawning', study), study_title(study, title)
+- question: Which brain areas are activated by studies of people judging whether a joke is funny?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    close(s) :- similar_study('people judging whether a joke is funny', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Is the amygdala activated by studies of seeing angry faces in a crowd?
+  datalog: |-
+    amygdala(s) :- tian_activated('lAMY lh', s)
+    amygdala(s) :- tian_activated('mAMY lh', s)
+    amygdala(s) :- tian_activated('lAMY rh', s)
+    amygdala(s) :- tian_activated('mAMY rh', s)
+    active_roi(s) :- amygdala(s), selected_study(s)
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    ans(probability) :- PROB[active_roi(s) // close('seeing angry faces in a crowd', s)] = probability
+- question: Which cortical regions are activated by studies of seeing written words flashed very briefly?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    close(s) :- similar_study('seeing written words flashed very briefly', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Which studies ask participants to switch between two different task rules?
+  datalog: ans(study) :- similar_study('participants switch between two different task rules', study)
+- question: Which parcels are activated by studies on suppressing a prepotent motor response?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // close('suppressing a prepotent motor response', s)] = probability
+- question: Is the insula activated by studies of holding one's breath?
+  datalog: |-
+    insula_label(l) :- destrieux(l, r), startswith('L G Ins', l)
+    insula_label(l) :- destrieux(l, r), startswith('R G Ins', l)
+    insula_label(l) :- destrieux(l, r), startswith('L G insular', l)
+    insula_label(l) :- destrieux(l, r), startswith('R G insular', l)
+    insula_label(l) :- destrieux(l, r), startswith('L S circular insula', l)
+    insula_label(l) :- destrieux(l, r), startswith('R S circular insula', l)
+    insula(s) :- insula_label(l), destrieux_activated(l, s), selected_study(s)
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    p_insula_given_close(q, PROB) :- insula(s) // close(q, s)
+    ans(probability) :- cogat_definition('breath-holding', d), p_insula_given_close(d, probability)
+- question: Which subcortical regions are activated by studies of listening to rhythmic drumming?
+  datalog: |-
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    close(s) :- similar_study('listening to rhythmic drumming', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Which studies look at hearing a sentence with an unexpected final word?
+  datalog: ans(study, title) :- similar_study('hearing a sentence with an unexpected final word', study), study_title(study, title)
+- question: Which regions are activated by studies of making moral decisions about sacrificing one person?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    close(s) :- similar_study('making moral decisions about sacrificing one person', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Which studies deal with gambling decisions under uncertain odds?
+  datalog: ans(study, title) :- similar_study('gambling decisions under uncertain odds', study), study_title(study, title)
+- question: Which gyri are activated by studies of understanding sarcasm in conversation?
+  datalog: |-
+    gyrus(l) :- destrieux(l, r), startswith('L G ', l)
+    gyrus(l) :- destrieux(l, r), startswith('R G ', l)
+    sulc(l) :- destrieux(l, r), startswith('L G and S', l)
+    sulc(l) :- destrieux(l, r), startswith('R G and S', l)
+    g(l) :- gyrus(l), ~sulc(l)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s), g(l)
+    close(s) :- similar_study('understanding sarcasm in conversation', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Which networks are activated by studies of meditating on one's breath?
+  datalog: |-
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+    ans(parcel, probability) :- p_active_given_close('meditating on the breath', parcel, probability)
+- question: Which cortical networks respond in studies of daydreaming while reading?
+  datalog: |-
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+    ans(parcel, probability) :- p_active_given_close('daydreaming while reading', parcel, probability)
+- question: Which parcels are activated by studies of counting backwards by sevens?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    close(s) :- similar_study('counting backwards by sevens', s), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // close(s)] = probability
+- question: List the studies that never mention speech perception.
+  datalog: ans(study) :- study(study), ~mentions(study, 'speech perception')
+- question: Is the right superior temporal gyrus activated by studies mentioning gaze?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[active('R G temp sup Lateral', s) // term_association(s, 'gaze')] = probability
+- question: Which terms co-occur with risk in a study?
+  datalog: |-
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[term_association(s, term) // term_association(s, 'risk')] = probability
+- question: Which terms are most frequently mentioned alongside recognition?
+  datalog: |-
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[term_association(s, term) // term_association(s, 'recognition')] = probability
+- question: What is the probability that the left insula is activated, given that a study mentions coordination?
+  datalog: |-
+    lab('L G Ins lg and S cent ins')
+    lab('L G insular short')
+    lab('L S circular insula ant')
+    lab('L S circular insula inf')
+    lab('L S circular insula sup')
+    ins(s) :- destrieux_activated(l, s), lab(l)
+    active(s) :- ins(s), selected_study(s)
+    ta(s) :- mentions(s, 'coordination'), selected_study(s)
+    ans(probability) :- PROB[active(s) // ta(s)] = probability
+- question: Is the right amygdala activated by studies mentioning valence?
+  datalog: |-
+    amy(s) :- tian_activated('lAMY rh', s)
+    amy(s) :- tian_activated('mAMY rh', s)
+    active(s) :- amy(s), selected_study(s)
+    term_association(s) :- mentions(s, 'valence'), selected_study(s)
+    ans(probability) :- PROB[active(s) // term_association(s)] = probability
+- question: Which gyri are activated by studies that mention perception, and how often?
+  datalog: |-
+    gyrus(l) :- destrieux(l, r), startswith('L G ', l)
+    gyrus(l) :- destrieux(l, r), startswith('R G ', l)
+    mixed(l) :- destrieux(l, r), startswith('L G and S', l)
+    mixed(l) :- destrieux(l, r), startswith('R G and S', l)
+    pure(l) :- gyrus(l), ~mixed(l)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    pa(l, p) :- PROB[active(l, s) // term_association(s, 'perception')] = p
+    ans(region, probability) :- pure(region), pa(region, probability)
+- question: What is the probability that a study mentions updating, given that it mentions dopaminergic?
+  datalog: |-
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[ta(s, 'updating') // ta(s, 'dopaminergic')] = probability
+- question: What is the probability that a study activates the MNI point (-24, -4, -20), given that it mentions memory?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[active(s) // term_association(s, 'memory')] = probability
+- question: Which studies mention reasoning but not putamen?
+  datalog: ans(study) :- mentions(study, 'reasoning'), ~mentions(study, 'putamen')
+- question: Which studies mention social cognition?
+  datalog: ans(study) :- mentions(study, 'social cognition')
+- question: Which thalamic regions are activated by studies mentioning consciousness?
+  datalog: |-
+    tha(l) :- tian(l, r), startswith('THA', l)
+    active(l, s) :- tian_activated(l, s), selected_study(s), tha(l)
+    term_association(s) :- mentions(s, 'consciousness'), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // term_association(s)] = probability
+- question: Which studies mention expertise and attention together?
+  datalog: ans(study) :- mentions(study, 'expertise'), mentions(study, 'attention')
+- question: Which studies mention consolidation in their text?
+  datalog: ans(study) :- mentions(study, 'consolidation')
+- question: Which studies mention salience and also report activation in the prefrontal cortex?
+  datalog: |-
+    pf(l) :- destrieux(l, r), startswith('L G front', l)
+    pf(l) :- destrieux(l, r), startswith('R G front', l)
+    pf(l) :- destrieux(l, r), startswith('L S front', l)
+    pf(l) :- destrieux(l, r), startswith('R S front', l)
+    pf(l) :- destrieux(l, r), startswith('L G and S front', l)
+    pf(l) :- destrieux(l, r), startswith('R G and S front', l)
+    pf(l) :- destrieux(l, r), startswith('L G and S transv front', l)
+    pf(l) :- destrieux(l, r), startswith('R G and S transv front', l)
+    pf(l) :- destrieux(l, r), startswith('L G orbital', l)
+    pf(l) :- destrieux(l, r), startswith('R G orbital', l)
+    pf(l) :- destrieux(l, r), startswith('L G rectus', l)
+    pf(l) :- destrieux(l, r), startswith('R G rectus', l)
+    pfs(s) :- pf(l), destrieux_activated(l, s)
+    ans(study) :- mentions(study, 'salience'), pfs(study)
+- question: What is the Cognitive Atlas description of arousal?
+  datalog: ans(definition) :- cogat_definition('arousal', definition)
+- question: Which terms are most associated with adaptation?
+  datalog: |-
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t, s) :- mentions(s, t), mentions(s, 'adaptation'), selected_study(s)
+    active_roi(s) :- mentions(s, 'adaptation'), selected_study(s)
+    roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+    bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+    ans(term, bayes_factor) :- bayes_factor(term, bayes_factor), (bayes_factor > 3.16)
+- question: What is the hierarchy of concepts below body representation?
+  datalog: |-
+    below(x) :- cogat_term(c, 'body representation'), cogat_subclass_of(x, c)
+    edge(a, b) :- below(x), below(y), cogat_subclass_of(x, y), cogat_term(x, a), cogat_term(y, b)
+    edge(a, b) :- below(x), cogat_term(c, 'body representation'), cogat_term(c, b), cogat_term(x, a)
+    ans(concept_1, concept_2) :- edge(concept_1, concept_2)
+- question: Which concepts fall under search in the Cognitive Atlas?
+  datalog: ans(concept) :- cogat_term(c, 'search'), cogat_subclass_of(x, c), cogat_term(x, concept)
+- question: Which regions are activated by each subclass of rehearsal?
+  datalog: |-
+    sub(t) :- cogat_term(c, 'rehearsal'), cogat_subclass_of(x, c), cogat_term(x, t)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    sub_def(t, d) :- sub(t), cogat_definition(t, d)
+    ans(concept, region, probability) :- sub_def(concept, d), PROB[active(region, s) // close(d, s)] = probability
+- question: Which subclasses of attention are mentioned together with painful in a study?
+  datalog: ans(concept) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, concept), mentions(s, concept), mentions(s, 'painful')
+- question: What are the subclasses of somatosensation in the Cognitive Atlas?
+  datalog: ans(subclass, concept) :- cogat_term(c, 'somatosensation'), cogat_subclass_of(subclass, c), cogat_term(subclass, concept)
+- question: Which studies mention at least one concept belonging to the declarative memory family?
+  datalog: ans(study) :- cogat_term(c, 'declarative memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(study, t)
+- question: What are the direct children of feedback in the Cognitive Atlas?
+  datalog: ans(concept_class, concept) :- cogat_term(c, 'feedback'), rdfs:subClassOf(concept_class, c), cogat_term(concept_class, concept)
+- question: Which concepts are children of executive function, and which studies mention them?
+  datalog: ans(concept, study) :- cogat_term(c, 'executive function'), cogat_subclass_of(x, c), cogat_term(x, concept), mentions(study, concept)
+- question: Which terms co-occur with subclasses of object recognition in a study?
+  datalog: |-
+    subterm(t) :- cogat_term(c, 'object recognition'), cogat_subclass_of(x, c), cogat_term(x, t)
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    sub_study(s) :- mentions(s, u), subterm(u), selected_study(s)
+    ans(term, probability) :- PROB[ta(s, term) // sub_study(s)] = probability
+- question: Name the more specific concepts under planning.
+  datalog: ans(concept) :- cogat_term(c, 'planning'), cogat_subclass_of(x, c), cogat_term(x, concept)
+- question: Which subclasses of cognitive heuristic are activated in the right hippocampus?
+  datalog: |-
+    hip(l) :- tian(l, r), startswith('aHIP rh', l)
+    hip(l) :- tian(l, r), startswith('pHIP rh', l)
+    sub(t) :- cogat_term(c, 'cognitive heuristic'), cogat_subclass_of(x, c), cogat_term(x, t)
+    close(t, s) :- sub(t), cogat_definition(t, d), similar_study(d, s), selected_study(s)
+    active(s) :- hip(l), tian_activated(l, s), selected_study(s)
+    ans(concept, probability) :- PROB[active(s) // close(concept, s)] = probability
+- question: Which studies mention a kind of fixation?
+  datalog: ans(study) :- cogat_term(c, 'fixation'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(study, t)
+- question: Which studies mention emotion or one of its subclasses?
+  datalog: |-
+    cls(t) :- cogat_term(c, 'emotion'), cogat_subclass_of(x, c), cogat_term(x, t)
+    cls('emotion') :- term('emotion')
+    ans(study) :- cls(t), mentions(study, t)
+- question: Which subcortical structures are activated by each subclass of forgetting?
+  datalog: |-
+    sub(t) :- cogat_term(c, 'forgetting'), cogat_subclass_of(x, c), cogat_term(x, t)
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    ans(concept, region, probability) :- sub(concept), cogat_definition(concept, q), PROB[active(region, s) // close(q, s)] = probability
+- question: How many subclasses does inference have in the Cognitive Atlas?
+  datalog: |-
+    sub(x) :- cogat_term(c, 'inference'), cogat_subclass_of(x, c)
+    ans(number) :- AGGREGATE[](sub(x) @ count(x)) = number
+- question: Which Schaefer parcels are activated by studies that mention medial prefrontal?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // term_association(s, 'medial prefrontal')] = probability
+- question: Which networks are activated by studies that mention either behavioral or memory retrieval?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    assoc(s) :- mentions(s, 'behavioral'), selected_study(s)
+    assoc(s) :- mentions(s, 'memory retrieval'), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // assoc(s)] = probability
+- question: Which terms best predict activation of the somatomotor network?
+  datalog: |-
+    sm(l) :- schaefer(l, r), startswith('17Networks LH SomMot', l)
+    sm(l) :- schaefer(l, r), startswith('17Networks RH SomMot', l)
+    active(s) :- sm(l), schaefer_activated(l, s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t) :- active(s), mentions(s, t)
+    region_probability(p_r) :- PROB[active(s)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t)] = p_rt
+    bayes_factor(t, bf) :- joint_probability(t, p_rt), region_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+    ans(term, bayes_factor) :- bayes_factor(term, bayes_factor), (bayes_factor > 3.16)
+- question: How many parcels does the central visual network have in each hemisphere?
+  datalog: |-
+    hemi(l, 'LH') :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    hemi(l, 'RH') :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    cnt(h, n) :- AGGREGATE[h](hemi(l, h) @ count(l)) = n
+    ans(hemisphere, parcels) :- cnt(hemisphere, parcels)
+- question: Which terms are mentioned by studies activating the central visual network but not the limbic network?
+  datalog: |-
+    cent(l) :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    cent(l) :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    limb(l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    limb(l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    cent_act(s) :- cent(l), schaefer_activated(l, s)
+    limb_act(s) :- limb(l), schaefer_activated(l, s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s), cent_act(s), ~limb_act(s)
+    ans(term, probability) :- PROB[mentioned_term(term)] = probability
+- question: Which studies activate parcels of the peripheral visual network in both hemispheres?
+  datalog: |-
+    lh(l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    rh(l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    a(s) :- lh(l), schaefer_activated(l, s)
+    b(s) :- rh(l), schaefer_activated(l, s)
+    ans(study) :- a(study), b(study)
+- question: How does the probability of default mode activation change when studies mention multimodal?
+  datalog: |-
+    default_label(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    default_label(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    default_mode(s) :- default_label(l), schaefer_activated(l, s), selected_study(s)
+    mm(s) :- mentions(s, 'multimodal'), selected_study(s)
+    alls(s) :- selected_study(s)
+    p_cond(p) :- PROB[default_mode(s) // mm(s)] = p
+    p_base(p) :- PROB[default_mode(s) // alls(s)] = p
+    ans(probability_1, probability_2) :- p_cond(probability_1), p_base(probability_2)
+- question: Name the parcels that make up the temporoparietal network.
+  datalog: |-
+    tp(l) :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    tp(l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    ans(parcel) :- tp(parcel)
+- question: Which Schaefer networks are activated by studies that mention insula?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // term_association(s, 'insula')] = probability
+- question: What percentage of studies mentioning trait activate the peripheral visual network?
+  datalog: |-
+    vp(l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    vp(l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    active(s) :- vp(l), schaefer_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[active(s) // term_association(s, 'trait')] = probability
+- question: Which studies activate both the default mode and temporoparietal networks?
+  datalog: |-
+    dl(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    dl(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    tl(l) :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    tl(l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    d(s) :- dl(l), schaefer_activated(l, s)
+    t(s) :- tl(l), schaefer_activated(l, s)
+    ans(study) :- d(study), t(study)
+- question: What is the probability that a study activates the somatomotor network, given that it mentions deficits?
+  datalog: |-
+    lab(l) :- schaefer(l, r), startswith('17Networks LH SomMot', l)
+    lab(l) :- schaefer(l, r), startswith('17Networks RH SomMot', l)
+    net(s) :- lab(l), schaefer_activated(l, s)
+    active(s) :- net(s), selected_study(s)
+    ta(s) :- mentions(s, 'deficits'), selected_study(s)
+    ans(probability) :- PROB[active(s) // ta(s)] = probability
+- question: Which terms are mentioned by studies that activate both the peripheral visual and temporoparietal networks?
+  datalog: |-
+    vp_l(l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    vp_l(l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    tp_l(l) :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    tp_l(l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    vp(s) :- vp_l(l), schaefer_activated(l, s)
+    tp(s) :- tp_l(l), schaefer_activated(l, s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s), vp(s), tp(s)
+    ans(term, probability) :- PROB[mentioned_term(term)] = probability
+- question: Which functional networks are activated by studies mentioning angular gyrus, left or right?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // term_association(s, 'angular gyrus')] = probability
+- question: What is the probability that a study activates the somatomotor network, given that it does not mention consciousness?
+  datalog: |-
+    lab(l) :- schaefer(l, r), startswith('17Networks LH SomMot', l)
+    lab(l) :- schaefer(l, r), startswith('17Networks RH SomMot', l)
+    net(s) :- schaefer_activated(l, s), lab(l)
+    active(s) :- net(s), selected_study(s)
+    nm(s) :- selected_study(s), ~mentions(s, 'consciousness')
+    ans(probability) :- PROB[active(s) // nm(s)] = probability
+- question: Which networks are jointly activated with the salience ventral attention network when sentence is mentioned?
+  datalog: |-
+    sal(l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l)
+    sal(l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l)
+    net(s) :- sal(l), schaefer_activated(l, s)
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    cond(s) :- net(s), mentions(s, 'sentence'), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // cond(s)] = probability
+- question: Which gyri and sulci are activated by studies mentioning either auditory cortex or auditory?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    aud(s) :- mentions(s, 'auditory cortex'), selected_study(s)
+    aud(s) :- mentions(s, 'auditory'), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // aud(s)] = probability
+- question: How often do studies mentioning semantic activate the right middle occipital gyrus?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[active('R G occipital middle', s) // term_association(s, 'semantic')] = probability
+- question: Which terms co-occur with activation of the right intraparietal sulcus and transverse parietal sulci?
+  datalog: |-
+    seed(s) :- destrieux_activated('R S intrapariet and P trans', s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[term_association(s, term) // seed(s)] = probability
+- question: Which studies report an activation in the right parahippocampal gyrus?
+  datalog: ans(study) :- destrieux_activated('R G oc temp med Parahip', study)
+- question: How likely is activation of the right central sulcus when a study mentions young adults?
+  datalog: |-
+    active(s) :- destrieux_activated('R S central', s), selected_study(s)
+    ta(s) :- mentions(s, 'young adults'), selected_study(s)
+    ans(probability) :- PROB[active(s) // ta(s)] = probability
+- question: What proportion of studies activating the left lateral occipitotemporal sulcus mention aging?
+  datalog: |-
+    seed(s) :- destrieux_activated('L S oc temp lat', s), selected_study(s)
+    ta(s) :- mentions(s, 'aging'), selected_study(s)
+    ans(probability) :- PROB[ta(s) // seed(s)] = probability
+- question: Which studies activating the left subcallosal gyrus and the right superior frontal sulcus do not mention switching?
+  datalog: ans(study) :- destrieux_activated('L G subcallosal', study), destrieux_activated('R S front sup', study), ~mentions(study, 'switching')
+- question: Which studies activate the right planum polare of the superior temporal gyrus or the left transverse frontopolar gyri and sulci, or mention reading?
+  datalog: ans(study) :- (destrieux_activated('R G temp sup Plan polar', study) | destrieux_activated('L G and S transv frontopol', study) | mentions(study, 'reading')), study(study)
+- question: Which terms are mentioned by studies activating the right lateral fissure, anterior horizontal ramus but not the left frontomarginal gyrus and sulcus (frontal pole region)?
+  datalog: |-
+    a(s) :- destrieux_activated('R Lat Fis ant Horizont', s), selected_study(s)
+    b(s) :- destrieux_activated('L G and S frontomargin', s), selected_study(s)
+    c(s) :- a(s), ~b(s)
+    m(t, s) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[m(term, s) // c(s)] = probability
+- question: Which gyri and sulci are most strongly activated by studies that mention sound?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // term_association(s, 'sound')] = probability
+- question: Is priming mentioned more often in studies activating the right circular sulcus of the insula (superior segment) than in others?
+  datalog: |-
+    active(s) :- destrieux_activated('R S circular insula sup', s), selected_study(s)
+    term_s(s) :- mentions(s, 'priming'), selected_study(s)
+    both(s) :- active(s), term_s(s)
+    p_r(p) :- PROB[active(s)] = p
+    p_t(p) :- PROB[term_s(s)] = p
+    p_rt(p) :- PROB[both(s)] = p
+    ans(bayes_factor, p_rt, p_r, p_t) :- p_r(p_r), p_t(p_t), p_rt(p_rt), (bayes_factor == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+- question: Which terms are linked to the right posterior mid-cingulate gyrus and sulcus but not the right paracentral lobule and sulcus?
+  datalog: |-
+    a(s) :- destrieux_activated('R G and S cingul Mid Post', s)
+    b(s) :- destrieux_activated('R G and S paracentral', s)
+    m(t) :- mentions(s, t), a(s), selected_study(s), ~b(s)
+    ans(term, probability) :- PROB[m(term)] = probability
+- question: Rank the gyri and sulci by number of studies mentioning elderly.
+  datalog: |-
+    act_m(l, s) :- destrieux_activated(l, s), mentions(s, 'elderly')
+    cnt(l, n) :- AGGREGATE[l](act_m(l, s) @ count(s)) = n
+    ans(region, studies) :- cnt(region, studies)
+- question: What are the top five gyri and sulci for studies mentioning olfactory?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    prob(l, p) :- PROB[active(l, s) // term_association(s, 'olfactory')] = p
+    larger(l, m) :- prob(l, p), prob(m, q), (q > p)
+    rank(l, r) :- AGGREGATE[l](larger(l, m) @ count(m)) = r
+    ans(region, probability) :- prob(region, probability), rank(region, r), (r < 5)
+- question: What is the probability that a study activates the left supramarginal gyrus, given that it does not mention injury?
+  datalog: |-
+    active(s) :- destrieux_activated('L G pariet inf Supramar', s), selected_study(s)
+    noinj(s) :- study(s), ~mentions(s, 'injury'), selected_study(s)
+    ans(probability) :- PROB[active(s) // noinj(s)] = probability
+- question: Which studies mention working memory and activate neither the right transverse frontopolar gyri and sulci nor the right medial orbital (olfactory) sulcus?
+  datalog: |-
+    act(s) :- destrieux_activated('R G and S transv frontopol', s)
+    act(s) :- destrieux_activated('R S orbital med olfact', s)
+    ans(study) :- mentions(study, 'working memory'), ~act(study)
+- question: Are studies mentioning caudate more likely to activate the left inferior frontal sulcus than the left transverse temporal gyri (Heschl's gyrus)?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s) :- mentions(s, 'caudate'), selected_study(s)
+    p_active(l, p) :- PROB[active(l, s) // term_association(s)] = p
+    ans(probability_1, probability_2) :- p_active('L S front inf', probability_1), p_active('L G temp sup G T transv', probability_2), (probability_1 > probability_2)
+- question: Which studies mention both response inhibition and parahippocampal, and activate the right superior temporal gyrus (lateral surface)?
+  datalog: ans(study) :- mentions(study, 'response inhibition'), mentions(study, 'parahippocampal'), destrieux_activated('R G temp sup Lateral', study)
+- question: Which terms co-occur with choice in studies that activate the left temporal pole?
+  datalog: |-
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    seed(s) :- mentions(s, 'choice'), destrieux_activated('L Pole temporal', s), selected_study(s)
+    ans(term, probability) :- PROB[term_association(s, term) // seed(s)] = probability
+- question: Does mentioning childhood change the chance of activating the left middle occipital sulcus and lunate sulcus?
+  datalog: |-
+    active(s) :- destrieux_activated('L S oc middle and Lunatus', s), selected_study(s)
+    term_s(s) :- mentions(s, 'childhood'), selected_study(s)
+    p_cond(p) :- PROB[active(s) // term_s(s)] = p
+    p_act(p) :- PROB[active(s)] = p
+    ans(probability_1, probability_2, lift) :- p_cond(probability_1), p_act(probability_2), (lift == probability_1 / probability_2)
+- question: Which studies activate the left suborbital sulcus but not the left postcentral sulcus?
+  datalog: ans(study) :- destrieux_activated('L S suborbital', study), ~destrieux_activated('L S postcentral', study)
+- question: Which gyri show activation in studies that mention autism spectrum?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    prob_active(l, p) :- PROB[active(l, s) // term_association(s, 'autism spectrum')] = p
+    gyrus(l) :- destrieux(l, r), startswith('L G', l)
+    gyrus(l) :- destrieux(l, r), startswith('R G', l)
+    ans(region, probability) :- prob_active(region, probability), gyrus(region)
+- question: What proportion of studies that mention occipital cortex activate the caudate?
+  datalog: |-
+    caudate(s) :- tian_activated('aCAU rh', s)
+    caudate(s) :- tian_activated('pCAU rh', s)
+    caudate(s) :- tian_activated('aCAU lh', s)
+    caudate(s) :- tian_activated('pCAU lh', s)
+    active(s) :- caudate(s), selected_study(s)
+    seed(s) :- mentions(s, 'occipital cortex'), selected_study(s)
+    ans(probability) :- PROB[active(s) // seed(s)] = probability
+- question: Which studies mention inhibition and activate neither the putamen nor the nucleus accumbens?
+  datalog: |-
+    lab(l) :- tian(l, r), startswith('aPUT', l)
+    lab(l) :- tian(l, r), startswith('pPUT', l)
+    lab(l) :- tian(l, r), startswith('NAc', l)
+    act(s) :- lab(l), tian_activated(l, s)
+    ans(study) :- mentions(study, 'inhibition'), study(study), ~act(study)
+- question: What is the probability that a study mentions syntactic, given that it activates the putamen?
+  datalog: |-
+    put(l) :- tian(l, r), startswith('aPUT', l)
+    put(l) :- tian(l, r), startswith('pPUT', l)
+    act(s) :- put(l), tian_activated(l, s), selected_study(s)
+    m(s) :- mentions(s, 'syntactic'), selected_study(s)
+    ans(probability) :- PROB[m(s) // act(s)] = probability
+- question: Which terms are most associated with activation of the amygdala?
+  datalog: |-
+    amygdala(s) :- tian_activated('lAMY lh', s)
+    amygdala(s) :- tian_activated('mAMY lh', s)
+    amygdala(s) :- tian_activated('lAMY rh', s)
+    amygdala(s) :- tian_activated('mAMY rh', s)
+    active_roi(s) :- amygdala(s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t, s) :- amygdala(s), mentions(s, t), selected_study(s)
+    roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+    bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+    ans(term, bayes_factor) :- bayes_factor(term, bayes_factor), (bayes_factor > 3.16)
+- question: How many studies activate the globus pallidus?
+  datalog: |-
+    gp_label(l) :- tian(l, r), startswith('aGP', l)
+    gp_label(l) :- tian(l, r), startswith('pGP', l)
+    gp(s) :- gp_label(l), tian_activated(l, s)
+    ans(studies) :- AGGREGATE[](gp(s) @ count(s)) = studies
+- question: Which subcortical regions of the Tian atlas are activated by studies mentioning anterior cingulate or healthy controls?
+  datalog: |-
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    assoc(s) :- mentions(s, 'anterior cingulate'), selected_study(s)
+    assoc(s) :- mentions(s, 'healthy controls'), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // assoc(s)] = probability
+- question: Which studies mention either frontal cortex or cognitive tasks and activate the nucleus accumbens?
+  datalog: |-
+    nac(l) :- tian(l, r), startswith('NAc', l)
+    m(s) :- mentions(s, 'frontal cortex')
+    m(s) :- mentions(s, 'cognitive tasks')
+    ans(study) :- m(study), nac(l), tian_activated(l, study)
+- question: How many studies mentioning thalamus activate the amygdala or the globus pallidus?
+  datalog: |-
+    lab(l) :- tian(l, r), startswith('lAMY', l)
+    lab(l) :- tian(l, r), startswith('mAMY', l)
+    lab(l) :- tian(l, r), startswith('aGP', l)
+    lab(l) :- tian(l, r), startswith('pGP', l)
+    act(s) :- lab(l), tian_activated(l, s)
+    res(s) :- act(s), mentions(s, 'thalamus')
+    ans(studies) :- AGGREGATE[](res(s) @ count(s)) = studies
+- question: What share of studies activating the putamen mention either face or lexical?
+  datalog: |-
+    put_label(l) :- tian(l, r), startswith('aPUT', l)
+    put_label(l) :- tian(l, r), startswith('pPUT', l)
+    put(s) :- put_label(l), tian_activated(l, s), selected_study(s)
+    fl(s) :- mentions(s, 'face'), selected_study(s)
+    fl(s) :- mentions(s, 'lexical'), selected_study(s)
+    both(s) :- put(s), fl(s)
+    ans(probability) :- PROB[both(s) // put(s)] = probability
+- question: Which studies mention cerebellar but not attention deficit and activate the amygdala?
+  datalog: |-
+    amy(l) :- tian(l, r), startswith('lAMY', l)
+    amy2(l) :- tian(l, r), startswith('mAMY', l)
+    act(s) :- amy(l), tian_activated(l, s)
+    act(s) :- amy2(l), tian_activated(l, s)
+    ans(study) :- mentions(study, 'cerebellar'), ~mentions(study, 'attention deficit'), act(study)
+- question: Which studies report activation in the caudate but not in the putamen?
+  datalog: |-
+    cau(s) :- tian_activated('aCAU rh', s)
+    cau(s) :- tian_activated('pCAU rh', s)
+    cau(s) :- tian_activated('aCAU lh', s)
+    cau(s) :- tian_activated('pCAU lh', s)
+    put(s) :- tian_activated('aPUT rh', s)
+    put(s) :- tian_activated('pPUT rh', s)
+    put(s) :- tian_activated('aPUT lh', s)
+    put(s) :- tian_activated('pPUT lh', s)
+    ans(study) :- cau(study), ~put(study)
+- question: Which studies activate the nucleus accumbens and mention both depression and parkinson?
+  datalog: |-
+    nac(l) :- tian(l, r), startswith('NAc', l)
+    act(s) :- nac(l), tian_activated(l, s)
+    ans(study) :- act(study), mentions(study, 'depression'), mentions(study, 'parkinson')
+- question: Name the Tian structure most often activated when studies mention amplitude.
+  datalog: |-
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    term_association(s) :- mentions(s, 'amplitude'), selected_study(s)
+    p_l(l, p) :- PROB[active(l, s) // term_association(s)] = p
+    top(m) :- AGGREGATE[](p_l(l, p) @ max(p)) = m
+    ans(region, probability) :- p_l(region, probability), top(probability)
+- question: Is the thalamus activated in studies that mention both monetary and feedback?
+  datalog: |-
+    tha_label(l) :- tian(l, r), startswith('THA', l)
+    tha_act(s) :- tha_label(l), tian_activated(l, s), selected_study(s)
+    both(s) :- mentions(s, 'monetary'), mentions(s, 'feedback'), selected_study(s)
+    ans(probability) :- PROB[tha_act(s) // both(s)] = probability
+- question: Which Tian regions are co-activated with the thalamus in studies that mention grey matter?
+  datalog: |-
+    tha_label(l) :- tian(l, r), startswith('THA', l)
+    tha(s) :- tha_label(l), tian_activated(l, s)
+    seed(s) :- tha(s), mentions(s, 'grey matter'), selected_study(s)
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+- question: Which studies activate both the caudate and the globus pallidus?
+  datalog: |-
+    cau_label(l) :- tian(l, r), startswith('aCAU', l)
+    cau_label(l) :- tian(l, r), startswith('pCAU', l)
+    gp_label(l) :- tian(l, r), startswith('aGP', l)
+    gp_label(l) :- tian(l, r), startswith('pGP', l)
+    cau(s) :- cau_label(l), tian_activated(l, s)
+    gp(s) :- gp_label(l), tian_activated(l, s)
+    ans(study) :- cau(study), gp(study)
+- question: Which terms are most specific to activation of the caudate?
+  datalog: |-
+    caudate(s) :- tian_activated('aCAU rh', s)
+    caudate(s) :- tian_activated('pCAU rh', s)
+    caudate(s) :- tian_activated('aCAU lh', s)
+    caudate(s) :- tian_activated('pCAU lh', s)
+    active_region() :- caudate(s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t) :- caudate(s), mentions(s, t), selected_study(s)
+    p_r(p) :- PROB[active_region()] = p
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t)] = p_rt
+    bayes_factor(t, bf) :- joint_probability(t, p_rt), p_r(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+    ans(term, bayes_factor) :- bayes_factor(term, bayes_factor), (bayes_factor > 3.16)
+- question: Are studies that activate the thalamus more likely to mention frontal eye than temporal gyrus?
+  datalog: |-
+    tha_label(l) :- tian(l, r), startswith('THA', l)
+    tha(s) :- tha_label(l), tian_activated(l, s), selected_study(s)
+    fe(s) :- mentions(s, 'frontal eye'), selected_study(s)
+    tg(s) :- mentions(s, 'temporal gyrus'), selected_study(s)
+    p_fe(p) :- PROB[fe(s) // tha(s)] = p
+    p_tg(p) :- PROB[tg(s) // tha(s)] = p
+    ans(probability_1, probability_2) :- p_fe(probability_1), p_tg(probability_2)
+- question: What is the probability that a study activates the thalamus, given that it mentions hippocampal?
+  datalog: |-
+    tl(l) :- tian(l, r), startswith('THA', l)
+    active(s) :- tl(l), tian_activated(l, s), selected_study(s)
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[active(s) // ta(s, 'hippocampal')] = probability
+- question: Is amygdala more probable in studies that mention sensory than in all studies?
+  datalog: |-
+    amygdala(s) :- tian_activated('lAMY lh', s)
+    amygdala(s) :- tian_activated('mAMY lh', s)
+    amygdala(s) :- tian_activated('lAMY rh', s)
+    amygdala(s) :- tian_activated('mAMY rh', s)
+    active_roi(s) :- amygdala(s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    p_cond(p) :- PROB[active_roi(s) // term_association(s, 'sensory')] = p
+    p_all(p) :- PROB[active_roi(s)] = p
+    ans(probability_1, probability_2, lift) :- p_cond(probability_1), p_all(probability_2), (lift == probability_1 / probability_2)
+- question: What is the probability that a study mentions at least one of recall and conditioning?
+  datalog: |-
+    m(s) :- (mentions(s, 'recall') | mentions(s, 'conditioning')), selected_study(s)
+    ans(probability) :- PROB[m(s)] = probability
+- question: What fraction of studies activating right amygdala (MNI 24, -4, -20) mention cognition?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 24.0, -4.0, -20.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    m(s) :- mentions(s, 'cognition'), selected_study(s)
+    ans(probability) :- PROB[m(s) // active(s)] = probability
+- question: What is the probability that a study mentions brainstem given that it mentions visuospatial?
+  datalog: |-
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[ta(s, 'brainstem') // ta(s, 'visuospatial')] = probability
+- question: How much does mentioning pain raise the probability of activating right frontal eye field (MNI 30, -4, 52)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 30.0, -4.0, 52.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    ta(s) :- mentions(s, 'pain'), selected_study(s)
+    cond(p) :- PROB[active(s) // ta(s)] = p
+    marg(p) :- PROB[active(s)] = p
+    ans(ratio) :- cond(pc), marg(pm), (ratio == pc / pm)
+- question: What is the forward inference probability of activation at left visual word form area (MNI -44, -58, -12) for caudate?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -44.0, -58.0, -12.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    term_s(s) :- mentions(s, 'caudate'), selected_study(s)
+    ans(probability) :- PROB[active(s) // term_s(s)] = probability
+- question: What is the probability that a study activates the MNI point left amygdala (MNI -24, -4, -20), given that it mentions pain?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[active(s) // ta(s, 'pain')] = probability
+- question: Compute the probability of cognitive impairment among studies mentioning thalamus.
+  datalog: |-
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[ta(s, 'cognitive impairment') // ta(s, 'thalamus')] = probability
+- question: What is the probability that a study mentions default mode or monetary?
+  datalog: |-
+    ms(s) :- mentions(s, 'default mode'), selected_study(s)
+    ms(s) :- mentions(s, 'monetary'), selected_study(s)
+    ans(probability) :- PROB[ms(s)] = probability
+- question: How enriched is left Broca's area (MNI -48, 18, 14) among studies that mention premotor cortex?
+  datalog: |-
+    act(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -48.0, 18.0, 14.0) <= {kernel_radius_mm}), selected_study(s)
+    t(s) :- mentions(s, 'premotor cortex'), selected_study(s)
+    pat(p) :- PROB[act(s) // t(s)] = p
+    pa(p) :- PROB[act(s)] = p
+    ans(probability_1, probability_2, lift) :- pat(probability_1), pa(probability_2), (lift == (probability_1 / probability_2))
+- question: What is the base rate of studies mentioning arousal?
+  datalog: |-
+    m(s) :- mentions(s, 'arousal'), selected_study(s)
+    ans(probability) :- PROB[m(s)] = probability
+- question: Given recognition, what are the odds that sleep is mentioned?
+  datalog: |-
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    cond(p) :- PROB[ta(s, 'sleep') // ta(s, 'recognition')] = p
+    ans(ratio) :- cond(p), (ratio == (p / (1.0 - p)))
+- question: What is the probability of not mentioning acoustic given that retrieval is mentioned?
+  datalog: |-
+    no_acoustic(s) :- selected_study(s), ~mentions(s, 'acoustic')
+    retr(s) :- mentions(s, 'retrieval'), selected_study(s)
+    ans(probability) :- PROB[no_acoustic(s) // retr(s)] = probability
+- question: What is the baseline rate of activation at medial prefrontal cortex (MNI 0, 52, -6)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 0.0, 52.0, -6.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    ans(probability) :- PROB[active(s)] = probability
+- question: What is the chance that a random study mentions dlpfc?
+  datalog: |-
+    ms(s) :- mentions(s, 'dlpfc'), selected_study(s)
+    ans(probability) :- PROB[ms(s)] = probability
+- question: What share of all studies mention fearful but not inferior parietal?
+  datalog: |-
+    m(s) :- selected_study(s), mentions(s, 'fearful'), ~mentions(s, 'inferior parietal')
+    ans(probability) :- PROB[m(s)] = probability
+- question: How surprising is the co-mention of sensory and conflict?
+  datalog: |-
+    ma(s) :- mentions(s, 'sensory'), selected_study(s)
+    mb(s) :- mentions(s, 'conflict'), selected_study(s)
+    mab(s) :- mentions(s, 'sensory'), mentions(s, 'conflict'), selected_study(s)
+    pa(p) :- PROB[ma(s)] = p
+    pb(p) :- PROB[mb(s)] = p
+    pab(p) :- PROB[mab(s)] = p
+    ans(ratio) :- pa(a), pb(b), pab(ab), (ratio == ab / (a * b))
+- question: How likely is a study to mention imagery if it mentions lexical?
+  datalog: |-
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[ta(s, 'imagery') // ta(s, 'lexical')] = probability
+- question: What proportion of studies about behaviors also mention depressive disorder?
+  datalog: |-
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    m(s) :- mentions(s, 'depressive disorder'), selected_study(s)
+    p_t(q, PROB) :- m(s) // close(q, s)
+    ans(probability) :- p_t('behaviors', probability)
+- question: What proportion of studies activating default mode also activate right lingual gyrus (medial occipitotemporal)?
+  datalog: |-
+    default_label(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    default_label(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    default_mode(s) :- default_label(l), schaefer_activated(l, s), selected_study(s)
+    ling(s) :- destrieux_activated('R G oc temp med Lingual', s), selected_study(s)
+    ans(probability) :- PROB[ling(s) // default_mode(s)] = probability
+- question: What is the conditional probability of activating nucleus accumbens given activation of peripheral visual?
+  datalog: |-
+    nl(l) :- tian(l, r), startswith('NAc', l)
+    vp(l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    vp(l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    nac(s) :- nl(l), tian_activated(l, s), selected_study(s)
+    seed(s) :- vp(l), schaefer_activated(l, s), selected_study(s)
+    ans(probability) :- PROB[nac(s) // seed(s)] = probability
+- question: Which regions co-activate with hippocampus but not with right precentral gyrus?
+  datalog: |-
+    hip(s) :- tian_activated('aHIP rh', s)
+    hip(s) :- tian_activated('pHIP rh', s)
+    hip(s) :- tian_activated('aHIP lh', s)
+    hip(s) :- tian_activated('pHIP lh', s)
+    prec(s) :- destrieux_activated('R G precentral', s)
+    seed(s) :- hip(s), ~prec(s), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+- question: Which studies that mention angular gyrus activate both left pericallosal sulcus and hippocampus?
+  datalog: |-
+    hip(l) :- tian(l, r), startswith('aHIP', l)
+    hip(l) :- tian(l, r), startswith('pHIP', l)
+    hs(s) :- hip(l), tian_activated(l, s)
+    ans(study) :- mentions(study, 'angular gyrus'), destrieux_activated('L S pericallosal', study), hs(study)
+- question: How correlated are the activation patterns of putamen and limbic?
+  datalog: |-
+    put_label(l) :- tian(l, r), startswith('aPUT', l)
+    put_label(l) :- tian(l, r), startswith('pPUT', l)
+    lim_label(l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    lim_label(l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    put(s) :- put_label(l), tian_activated(l, s), selected_study(s)
+    lim(s) :- lim_label(l), schaefer_activated(l, s), selected_study(s)
+    both(s) :- put(s), lim(s)
+    p_put(p) :- PROB[put(s)] = p
+    p_lim(p) :- PROB[lim(s)] = p
+    p_both(p) :- PROB[both(s)] = p
+    ans(lift, probability_1, probability_2, probability_3) :- p_put(probability_2), p_lim(probability_3), p_both(probability_1), (lift == (probability_1 / (probability_2 * probability_3)))
+- question: Which regions are most often co-activated with left anterior occipital sulcus?
+  datalog: |-
+    seed(s) :- destrieux_activated('L S occipital ant', s), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+- question: Which regions are activated by the same studies as nucleus accumbens?
+  datalog: |-
+    nac(s) :- tian_activated('NAc core rh', s)
+    nac(s) :- tian_activated('NAc core lh', s)
+    nac(s) :- tian_activated('NAc shell rh', s)
+    nac(s) :- tian_activated('NAc shell lh', s)
+    seed(s) :- nac(s), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+- question: Which regions are co-activated with seeds in default mode for studies mentioning bipolar?
+  datalog: |-
+    default_label(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    default_label(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    seed(s) :- default_label(l), schaefer_activated(l, s), mentions(s, 'bipolar'), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+- question: Does mentioning action change which regions co-activate with right anterior cingulate gyrus and sulcus?
+  datalog: |-
+    seed(s) :- destrieux_activated('R G and S cingul Ant', s), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    cond(s) :- seed(s), mentions(s, 'action')
+    base(l, p) :- PROB[active(l, s) // seed(s)] = p
+    withact(l, p) :- PROB[active(l, s) // cond(s)] = p
+    ans(region, probability_1, probability_2) :- base(region, probability_1), withact(region, probability_2)
+- question: Which subcortical regions co-activate with the limbic network?
+  datalog: |-
+    limbic_label(l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    limbic_label(l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    limbic(s) :- limbic_label(l), schaefer_activated(l, s), selected_study(s)
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // limbic(s)] = probability
+- question: Which studies mentioning perceptual activate dorsal attention together with putamen?
+  datalog: |-
+    da_label(l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    da_label(l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    put_label(l) :- tian(l, r), startswith('aPUT', l)
+    put_label(l) :- tian(l, r), startswith('pPUT', l)
+    da(s) :- da_label(l), schaefer_activated(l, s)
+    put(s) :- put_label(l), tian_activated(l, s)
+    ans(study) :- mentions(study, 'perceptual'), da(study), put(study)
+- question: List the gyri and sulci that are co-activated with right inferior temporal sulcus in studies mentioning behaviour.
+  datalog: |-
+    seed(s) :- destrieux_activated('R S temporal inf', s), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    cond(s) :- seed(s), term_association(s, 'behaviour')
+    ans(region, probability) :- PROB[active(region, s) // cond(s)] = probability
+- question: List the regions that co-activate with central visual across all studies.
+  datalog: |-
+    vc(l) :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    vc(l) :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    vs(s) :- vc(l), schaefer_activated(l, s)
+    seed(s) :- vs(s), selected_study(s)
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // seed(s)] = probability
+- question: Which gyri and sulci co-activate with left medial orbital (olfactory) sulcus?
+  datalog: |-
+    seed(s) :- destrieux_activated('L S orbital med olfact', s), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+- question: Is the co-activation between left subparietal sulcus and central visual stronger for studies mentioning stroop?
+  datalog: |-
+    vl(l) :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    vl(l) :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    vc(s) :- schaefer_activated(l, s), vl(l)
+    both(s) :- vc(s), destrieux_activated('L S subparietal', s), selected_study(s)
+    term_association(s) :- mentions(s, 'stroop'), selected_study(s)
+    cond(p) :- PROB[both(s) // term_association(s)] = p
+    base(p) :- PROB[both(s)] = p
+    ans(probability_1, probability_2, ratio) :- cond(probability_1), base(probability_2), (ratio == probability_1 / probability_2)
+- question: Are right suborbital sulcus and left paracentral lobule and sulcus activated by the same studies?
+  datalog: |-
+    a(s) :- destrieux_activated('R S suborbital', s), selected_study(s)
+    b(s) :- destrieux_activated('L G and S paracentral', s), selected_study(s)
+    both(s) :- destrieux_activated('R S suborbital', s), destrieux_activated('L G and S paracentral', s), selected_study(s)
+    pa(p) :- PROB[a(s)] = p
+    pb(p) :- PROB[b(s)] = p
+    pab(p) :- PROB[both(s)] = p
+    ans(lift) :- pab(p12), pa(p1), pb(p2), (lift == p12 / (p1 * p2))
+- question: Which studies activate both salience ventral attention and amygdala?
+  datalog: |-
+    sal(l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l)
+    sal(l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l)
+    amy(l) :- tian(l, r), startswith('lAMY', l)
+    amy(l) :- tian(l, r), startswith('mAMY', l)
+    a(s) :- sal(l), schaefer_activated(l, s)
+    b(s) :- amy(l), tian_activated(l, s)
+    ans(study) :- a(study), b(study)
+- question: Which of the studies activating left inferior temporal sulcus also activate amygdala?
+  datalog: |-
+    amygdala(s) :- tian_activated('lAMY lh', s)
+    amygdala(s) :- tian_activated('mAMY lh', s)
+    amygdala(s) :- tian_activated('lAMY rh', s)
+    amygdala(s) :- tian_activated('mAMY rh', s)
+    ans(study) :- destrieux_activated('L S temporal inf', study), amygdala(study)
+- question: What is the probability that a study activates right inferior frontal sulcus, given that it activates putamen?
+  datalog: |-
+    put(s) :- tian_activated('aPUT rh', s)
+    put(s) :- tian_activated('pPUT rh', s)
+    put(s) :- tian_activated('aPUT lh', s)
+    put(s) :- tian_activated('pPUT lh', s)
+    pa(s) :- put(s), selected_study(s)
+    active(s) :- destrieux_activated('R S front inf', s), selected_study(s)
+    ans(probability) :- PROB[active(s) // pa(s)] = probability
+- question: What fraction of studies activating left orbital gyri (orbitofrontal cortex) also activate hippocampus?
+  datalog: |-
+    hip(l) :- tian(l, r), startswith('aHIP', l)
+    hip(l) :- tian(l, r), startswith('pHIP', l)
+    hs(s) :- hip(l), tian_activated(l, s), selected_study(s)
+    seed(s) :- destrieux_activated('L G orbital', s), selected_study(s)
+    ans(probability) :- PROB[hs(s) // seed(s)] = probability
+- question: Which brain areas tend to light up together with left lingual gyrus (medial occipitotemporal)?
+  datalog: |-
+    seed(s) :- destrieux_activated('L G oc temp med Lingual', s), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+- question: Which networks co-activate with amygdala in studies mentioning temporal lobe?
+  datalog: |-
+    amygdala(s) :- tian_activated('lAMY lh', s)
+    amygdala(s) :- tian_activated('mAMY lh', s)
+    amygdala(s) :- tian_activated('lAMY rh', s)
+    amygdala(s) :- tian_activated('mAMY rh', s)
+    seed(s) :- amygdala(s), mentions(s, 'temporal lobe'), selected_study(s)
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // seed(s)] = probability
+- question: Name the subcortical structures that accompany right calcarine sulcus activation in long term studies.
+  datalog: |-
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    cond(s) :- destrieux_activated('R S calcarine', s), mentions(s, 'long term'), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // cond(s)] = probability
+- question: Which functional networks are co-activated with right lateral fissure, posterior ramus?
+  datalog: |-
+    seed(s) :- destrieux_activated('R Lat Fis post', s), selected_study(s)
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // seed(s)] = probability
+- question: Show the co-activation map of limbic for studies that mention phonological.
+  datalog: |-
+    limbic_label(l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    limbic_label(l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    active(l, s) :- limbic_label(l), schaefer_activated(l, s), selected_study(s)
+    co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(parcel_1, parcel_2, probability) :- (parcel_1 < parcel_2), PROB[co_active(parcel_1, parcel_2, s) // term_association(s, 'phonological')] = probability
+- question: What does thalamus co-activate with most strongly?
+  datalog: |-
+    tha_label(l) :- tian(l, r), startswith('THA', l)
+    tha(s) :- tha_label(l), tian_activated(l, s)
+    seed(s) :- tha(s), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    coact(l, p) :- PROB[active(l, s) // seed(s)] = p
+    top(m) :- AGGREGATE[](coact(l, p) @ max(p)) = m
+    ans(region, probability) :- coact(region, probability), top(probability)
+- question: How many studies mention conflict per subcortical region activated?
+  datalog: |-
+    c(l, s) :- tian_activated(l, s), mentions(s, 'conflict')
+    ans(region, studies) :- AGGREGATE[region](c(region, s) @ count(s)) = studies
+- question: How many studies mention response inhibition but report no activation in the thalamus?
+  datalog: |-
+    tha(l) :- tian(l, r), startswith('THA', l)
+    act(s) :- tha(l), tian_activated(l, s)
+    m(s) :- mentions(s, 'response inhibition'), study(s), ~act(s)
+    ans(studies) :- AGGREGATE[](m(s) @ count(s)) = studies
+- question: How many studies mention sensorimotor and activate the visual network?
+  datalog: |-
+    vis(l) :- schaefer(l, r), startswith('17Networks LH Vis', l)
+    vis(l) :- schaefer(l, r), startswith('17Networks RH Vis', l)
+    vact(s) :- vis(l), schaefer_activated(l, s)
+    both(s) :- mentions(s, 'sensorimotor'), vact(s)
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: How many studies report at least one activation peak?
+  datalog: ans(number) :- AGGREGATE[](study_with_peaks(s) @ count(s)) = number
+- question: How many studies mention spatial and activate within 5 mm of MNI (30, -2, -18)?
+  datalog: |-
+    both(s) :- mentions(s, 'spatial'), peak_mni(x, y, z, s), (euclidean(x, y, z, 30.0, -2.0, -18.0) <= 5)
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: How many studies activate the default mode network?
+  datalog: |-
+    default_label(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    default_label(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    default_mode(s) :- default_label(l), schaefer_activated(l, s)
+    ans(studies) :- AGGREGATE[](default_mode(s) @ count(s)) = studies
+- question: How many studies mention somatosensory cortex but not emotions?
+  datalog: |-
+    a(s) :- mentions(s, 'somatosensory cortex'), ~mentions(s, 'emotions')
+    ans(studies) :- AGGREGATE[](a(s) @ count(s)) = studies
+- question: How many studies mention either linguistic or visual and activate the insula?
+  datalog: |-
+    ins(l) :- destrieux(l, r), (contains(l, 'ins'))
+    act(s) :- ins(l), destrieux_activated(l, s)
+    t(s) :- mentions(s, 'linguistic')
+    t(s) :- mentions(s, 'visual')
+    both(s) :- t(s), act(s)
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: How many studies mentioning atrophy also mention fusiform?
+  datalog: |-
+    both(s) :- mentions(s, 'atrophy'), mentions(s, 'fusiform')
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: How many studies that mention insula report an activation near the MNI point (-24, -4, -20)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= {kernel_radius_mm})
+    c(s) :- near(s), mentions(s, 'insula')
+    ans(studies) :- AGGREGATE[](c(s) @ count(s)) = studies
+- question: How many studies mention both emotions and drug?
+  datalog: |-
+    both(s) :- mentions(s, 'emotions'), mentions(s, 'drug')
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: How many terms co-occur with rewards in at least one study?
+  datalog: |-
+    co(t) :- mentions(s, 'rewards'), mentions(s, t), (t != 'rewards')
+    ans(terms) :- AGGREGATE[](co(t) @ count(t)) = terms
+- question: How many studies mention either sensorimotor or dopamine?
+  datalog: |-
+    either(s) :- mentions(s, 'sensorimotor')
+    either(s) :- mentions(s, 'dopamine')
+    ans(studies) :- AGGREGATE[](either(s) @ count(s)) = studies
+- question: How many studies mention drug in each parcel of the functional networks?
+  datalog: |-
+    dm(l, s) :- schaefer_activated(l, s), mentions(s, 'drug')
+    ans(parcel, studies) :- AGGREGATE[parcel](dm(parcel, s) @ count(s)) = studies
+- question: How many different regions are activated by studies mentioning error?
+  datalog: |-
+    act(l) :- destrieux_activated(l, s), mentions(s, 'error')
+    ans(regions) :- AGGREGATE[](act(l) @ count(l)) = regions
+- question: How many studies do not mention visual?
+  datalog: |-
+    no_m(s) :- study(s), ~mentions(s, 'visual')
+    ans(studies) :- AGGREGATE[](no_m(s) @ count(s)) = studies
+- question: How many studies mention lesion for each brain region?
+  datalog: |-
+    les(l, s) :- destrieux_activated(l, s), mentions(s, 'lesion')
+    cnt(l, n) :- AGGREGATE[l](les(l, s) @ count(s)) = n
+    ans(region, studies) :- cnt(region, studies)
+- question: Which term is mentioned by the most studies, and how many?
+  datalog: |-
+    term_count(t, n) :- AGGREGATE[t](mentions(s, t) @ count(s)) = n
+    top(m) :- AGGREGATE[](term_count(t, n) @ max(n)) = m
+    ans(term, studies) :- term_count(term, studies), top(studies)
+- question: How many Cognitive Atlas concepts are mentioned by studies about nucleus accumbens?
+  datalog: |-
+    m(t) :- mentions(s, 'nucleus accumbens'), mentions(s, t), cogat_term(c, t)
+    ans(terms) :- AGGREGATE[](m(t) @ count(t)) = terms
+- question: How many studies mention caudate or monetary but not both?
+  datalog: |-
+    x(s) :- mentions(s, 'caudate'), ~mentions(s, 'monetary')
+    x(s) :- mentions(s, 'monetary'), ~mentions(s, 'caudate')
+    ans(studies) :- AGGREGATE[](x(s) @ count(s)) = studies
+- question: How many studies mention dorsolateral prefrontal and also report an activation in the amygdala?
+  datalog: |-
+    amy(l) :- tian(l, r), startswith('lAMY', l)
+    amy(l) :- tian(l, r), startswith('mAMY', l)
+    amy_s(s) :- amy(l), tian_activated(l, s)
+    both(s) :- mentions(s, 'dorsolateral prefrontal'), amy_s(s)
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: Is the left amygdala not activated by studies that mention parkinson?
+  datalog: |-
+    amygdala(s) :- tian_activated('lAMY lh', s)
+    amygdala(s) :- tian_activated('mAMY lh', s)
+    not_active(s) :- selected_study(s), ~amygdala(s)
+    park(s) :- mentions(s, 'parkinson'), selected_study(s)
+    ans(probability) :- PROB[not_active(s) // park(s)] = probability
+- question: Which studies mention either adolescents or social cognition, but not both?
+  datalog: |-
+    a_only(s) :- mentions(s, 'adolescents'), ~mentions(s, 'social cognition')
+    b_only(s) :- mentions(s, 'social cognition'), ~mentions(s, 'adolescents')
+    either(s) :- a_only(s)
+    either(s) :- b_only(s)
+    ans(study) :- either(study)
+- question: Which studies fail to mention cognitive processes?
+  datalog: ans(study) :- study(study), ~mentions(study, 'cognitive processes')
+- question: What is the probability that a study mentions neither orbitofrontal nor memory retrieval?
+  datalog: |-
+    m(s) :- mentions(s, 'orbitofrontal'), selected_study(s)
+    m(s) :- mentions(s, 'memory retrieval'), selected_study(s)
+    pm(p) :- PROB[m(s)] = p
+    ans(difference) :- pm(p), (difference == (1.0 - p))
+- question: What is the probability that a study mentions white matter, given that it does not mention dopamine?
+  datalog: |-
+    wm(s) :- mentions(s, 'white matter'), selected_study(s)
+    nd(s) :- selected_study(s), ~mentions(s, 'dopamine')
+    ans(probability) :- PROB[wm(s) // nd(s)] = probability
+- question: Which terms are unrelated to dopaminergic across all studies?
+  datalog: |-
+    co(t) :- mentions(s, t), mentions(s, 'dopaminergic')
+    ans(term) :- term(term), ~co(term)
+- question: List the studies that do not mention childhood or behavioral.
+  datalog: ans(study) :- study(study), ~mentions(study, 'childhood'), ~mentions(study, 'behavioral')
+- question: Which terms are mentioned together with social but without insular cortex?
+  datalog: |-
+    co_term(t) :- mentions(s, t), selected_study(s), mentions(s, 'social'), ~mentions(s, 'insular cortex')
+    ans(term, probability) :- PROB[co_term(term)] = probability
+- question: Which voxels are activated by studies that mention neither cingulate gyrus nor postcentral gyrus?
+  datalog: |-
+    either(s) :- mentions(s, 'cingulate gyrus')
+    either(s) :- mentions(s, 'postcentral gyrus')
+    neither(s) :- study(s), ~either(s)
+    ans(studies) :- AGGREGATE[](neither(s) @ count(s)) = studies
+- question: Show the studies that avoid the term vision.
+  datalog: ans(study) :- study(study), ~mentions(study, 'vision')
+- question: Which terms are not mentioned by studies about priming?
+  datalog: |-
+    priming_mentioned(t) :- mentions(s, t), mentions(s, 'priming')
+    ans(term) :- term(term), ~priming_mentioned(term)
+- question: Which studies exclude alzheimer but still mention sleep?
+  datalog: ans(study) :- mentions(study, 'sleep'), ~mentions(study, 'alzheimer')
+- question: Which cortical networks are silent in studies that mention imagery?
+  datalog: |-
+    silent(l, s) :- schaefer(l, r), selected_study(s), ~schaefer_activated(l, s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(parcel, probability) :- PROB[silent(parcel, s) // term_association(s, 'imagery')] = probability
+- question: Which studies mention switching and not extrastriate, and how often?
+  datalog: |-
+    m(s) :- mentions(s, 'switching'), ~mentions(s, 'extrastriate'), selected_study(s)
+    ans(study, probability) :- PROB[m(study)] = probability
+- question: What is the probability that a study does not mention adolescent, given that it mentions phonological?
+  datalog: |-
+    ta(s) :- mentions(s, 'phonological'), selected_study(s)
+    na(s) :- study(s), ~mentions(s, 'adolescent'), selected_study(s)
+    ans(probability) :- PROB[na(s) // ta(s)] = probability
+- question: Which terms are mentioned by the fewest studies that do not mention motor control?
+  datalog: |-
+    nm(s, t) :- mentions(s, t), ~mentions(s, 'motor control')
+    cnt(t, n) :- AGGREGATE[t](nm(s, t) @ count(s)) = n
+    low(m) :- AGGREGATE[](cnt(t, n) @ min(n)) = m
+    ans(term, studies) :- cnt(term, studies), low(studies)
+- question: Which studies mention neither caudate nor mood, and how many are there?
+  datalog: |-
+    neither(s) :- study(s), ~mentions(s, 'caudate'), ~mentions(s, 'mood')
+    cnt(n) :- AGGREGATE[](neither(s) @ count(s)) = n
+    ans(study, studies) :- neither(study), cnt(studies)
+- question: Which studies mention parkinson disease but report nothing near the MNI point (30, -60, 48)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 30.0, -60.0, 48.0) <= {kernel_radius_mm})
+    ans(study) :- mentions(study, 'parkinson disease'), ~near(study)
+- question: Which studies are not about painful yet mention dopamine?
+  datalog: ans(study) :- mentions(study, 'dopamine'), ~mentions(study, 'painful')
+- question: Which regions are activated by studies that mention multimodal but not olfactory?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    cond(s) :- mentions(s, 'multimodal'), ~mentions(s, 'olfactory'), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // cond(s)] = probability
+- question: Which networks are activated by studies that mention cognitive functions but not by those that mention nucleus accumbens?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    sel(s) :- mentions(s, 'cognitive functions'), ~mentions(s, 'nucleus accumbens'), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // sel(s)] = probability
+- question: Which terms never co-occur with cognitive tasks in a study?
+  datalog: |-
+    task_study(s) :- cognitive_task(i, n, d), mentions(s, n)
+    co(t) :- mentions(s, t), task_study(s)
+    ans(term) :- term(term), ~co(term)
+- question: Which terms are absent from studies that mention medial temporal?
+  datalog: |-
+    present(t) :- mentions(s, t), mentions(s, 'medial temporal')
+    ans(term) :- term(term), ~present(term)
+- question: Is the left superior temporal gyrus inactive in studies that do not mention discrimination?
+  datalog: |-
+    inactive(s) :- selected_study(s), ~destrieux_activated('L G temp sup Lateral', s)
+    no_disc(s) :- selected_study(s), ~mentions(s, 'discrimination')
+    ans(probability) :- PROB[inactive(s) // no_disc(s)] = probability
+- question: Which studies mention self referential and orbitofrontal but not both regions?
+  datalog: |-
+    both(s) :- mentions(s, 'self referential'), mentions(s, 'orbitofrontal')
+    either(s) :- mentions(s, 'self referential')
+    either(s) :- mentions(s, 'orbitofrontal')
+    ans(study) :- either(study), ~both(study)
+- question: What is the probability that a study mentions both action and memory?
+  datalog: |-
+    a(s) :- mentions(s, 'action'), mentions(s, 'memory'), selected_study(s)
+    ans(probability) :- PROB[a(s)] = probability
+- question: How many studies mention parahippocampal gyrus but not face?
+  datalog: |-
+    c(s) :- mentions(s, 'parahippocampal gyrus'), ~mentions(s, 'face')
+    ans(studies) :- AGGREGATE[](c(s) @ count(s)) = studies
+- question: What is the probability that a study activates both the right lateral fissure, anterior vertical ramus and the globus pallidus?
+  datalog: |-
+    gp_label(l) :- tian(l, r), startswith('aGP', l)
+    gp_label(l) :- tian(l, r), startswith('pGP', l)
+    gp(s) :- gp_label(l), tian_activated(l, s)
+    a(s) :- destrieux_activated('R Lat Fis ant Vertical', s), selected_study(s)
+    b(s) :- gp(s), selected_study(s)
+    both(s) :- a(s), b(s)
+    ans(probability) :- PROB[both(s)] = probability
+- question: What is the probability that a study mentions injury or choice and activates the right intermediate primary sulcus of Jensen (between supramarginal and angular gyri)?
+  datalog: |-
+    m(s) :- mentions(s, 'injury'), selected_study(s)
+    m(s) :- mentions(s, 'choice'), selected_study(s)
+    a(s) :- destrieux_activated('R S interm prim Jensen', s), selected_study(s)
+    both(s) :- m(s), a(s)
+    ans(probability) :- PROB[both(s)] = probability
+- question: Which studies activate both the left circular sulcus of the insula (superior segment) and the hippocampus?
+  datalog: |-
+    hip(l) :- tian(l, r), startswith('aHIP', l)
+    hip(l) :- tian(l, r), startswith('pHIP', l)
+    h(s) :- hip(l), tian_activated(l, s)
+    ans(study) :- destrieux_activated('L S circular insula sup', study), h(study)
+- question: How many studies activate either the left parieto-occipital sulcus or the thalamus?
+  datalog: |-
+    tha_label(l) :- tian(l, r), startswith('THA', l)
+    tha(s) :- tha_label(l), tian_activated(l, s)
+    either(s) :- destrieux_activated('L S parieto occipital', s)
+    either(s) :- tha(s)
+    ans(studies) :- AGGREGATE[](either(s) @ count(s)) = studies
+- question: Which studies mention neither thalamus nor activate the nucleus accumbens?
+  datalog: |-
+    nac_label(l) :- tian(l, r), startswith('NAc', l)
+    nac(s) :- nac_label(l), tian_activated(l, s)
+    ans(study) :- study(study), ~mentions(study, 'thalamus'), ~nac(study)
+- question: Which subcortical regions are activated by studies mentioning either social or executive function?
+  datalog: |-
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    term_association(s) :- mentions(s, 'social'), selected_study(s)
+    term_association(s) :- mentions(s, 'executive function'), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // term_association(s)] = probability
+- question: Which studies mention cingulate gyrus but not monetary?
+  datalog: ans(study) :- mentions(study, 'cingulate gyrus'), ~mentions(study, 'monetary')
+- question: How often do studies activate the right inferior frontal gyrus (opercular part) and the thalamus together?
+  datalog: |-
+    tha_label(l) :- tian(l, r), startswith('THA', l)
+    tha(s) :- tha_label(l), tian_activated(l, s), selected_study(s)
+    ifg(s) :- destrieux_activated('R G front inf Opercular', s), selected_study(s)
+    both(s) :- ifg(s), tha(s)
+    ans(probability) :- PROB[both(s)] = probability
+- question: What is the probability that a study mentions social cognition, given that it activates either the right inferior temporal gyrus or the thalamus?
+  datalog: |-
+    tha(l) :- tian(l, r), startswith('THA', l)
+    active(s) :- destrieux_activated('R G temporal inf', s), selected_study(s)
+    active(s) :- tha(l), tian_activated(l, s), selected_study(s)
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ms(s) :- ta(s, 'social cognition')
+    ans(probability) :- PROB[ms(s) // active(s)] = probability
+- question: Do studies that mention both behavior and social activate the left inferior frontal gyrus (orbital part)?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    both(s) :- mentions(s, 'behavior'), mentions(s, 'social'), selected_study(s)
+    ans(probability) :- PROB[active('L G front inf Orbital', s) // both(s)] = probability
+- question: What fraction of studies mention both multimodal and posterior insula?
+  datalog: |-
+    m(s) :- mentions(s, 'multimodal'), mentions(s, 'posterior insula'), selected_study(s)
+    ans(probability) :- PROB[m(s)] = probability
+- question: What is the probability that a study mentions brainstem, given that it mentions consciousness?
+  datalog: |-
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[ta(s, 'brainstem') // ta(s, 'consciousness')] = probability
+- question: Which studies mention both default mode and threat?
+  datalog: ans(study) :- mentions(study, 'default mode'), mentions(study, 'threat')
+- question: How many studies mention anterior temporal and depression together?
+  datalog: |-
+    both(s) :- mentions(s, 'anterior temporal'), mentions(s, 'depression')
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: Is a study more likely to mention consciousness or ventromedial prefrontal?
+  datalog: |-
+    m(t, s) :- mentions(s, t), selected_study(s)
+    p(t, q) :- PROB[m(t, s)] = q
+    ans(term, probability) :- p(term, probability), (term == 'consciousness' | term == 'ventromedial prefrontal')
+- question: List the studies that mention at least one of threat or sleep.
+  datalog: ans(study) :- (mentions(study, 'threat') | mentions(study, 'sleep'))
+- question: What is the probability that a study mentions either mood or conflict?
+  datalog: |-
+    m(s) :- mentions(s, 'mood'), selected_study(s)
+    m(s) :- mentions(s, 'conflict'), selected_study(s)
+    ans(probability) :- PROB[m(s)] = probability
+- question: How many studies mention at least one of speech and behavioral?
+  datalog: |-
+    either(s) :- mentions(s, 'speech')
+    either(s) :- mentions(s, 'behavioral')
+    ans(studies) :- AGGREGATE[](either(s) @ count(s)) = studies
+- question: How likely is activation of the left medial occipitotemporal sulcus and lingual sulcus in studies that mention both naming and precuneus?
+  datalog: |-
+    active(s) :- destrieux_activated('L S oc temp med and Lingual', s), selected_study(s)
+    both(s) :- mentions(s, 'naming'), mentions(s, 'precuneus'), selected_study(s)
+    ans(probability) :- PROB[active(s) // both(s)] = probability
+- question: Is the amygdala activated by studies mentioning either prefrontal or accumbens?
+  datalog: |-
+    amy(s) :- tian_activated('lAMY lh', s)
+    amy(s) :- tian_activated('mAMY lh', s)
+    amy(s) :- tian_activated('lAMY rh', s)
+    amy(s) :- tian_activated('mAMY rh', s)
+    topic(s) :- mentions(s, 'prefrontal'), selected_study(s)
+    topic(s) :- mentions(s, 'accumbens'), selected_study(s)
+    act(s) :- amy(s), selected_study(s)
+    ans(probability) :- PROB[act(s) // topic(s)] = probability
+- question: What is the probability that a study mentions motor, given that it activates both the left middle frontal gyrus and the thalamus?
+  datalog: |-
+    tha_label(l) :- tian(l, r), startswith('THA', l)
+    tha(s) :- tha_label(l), tian_activated(l, s)
+    both(s) :- destrieux_activated('L G front middle', s), tha(s), selected_study(s)
+    mot(s) :- mentions(s, 'motor'), selected_study(s)
+    ans(probability) :- PROB[mot(s) // both(s)] = probability
+- question: Which studies mention either linguistic or tactile and report activation in the thalamus?
+  datalog: |-
+    tha(l) :- tian(l, r), startswith('THA', l)
+    lt(s) :- mentions(s, 'linguistic')
+    lt(s) :- mentions(s, 'tactile')
+    act(s) :- tha(l), tian_activated(l, s)
+    ans(study) :- lt(study), act(study)
+- question: What is the probability that a study activates the left superior occipital gyrus, given that it mentions both psychiatric and vision?
+  datalog: |-
+    active(s) :- destrieux_activated('L G occipital sup', s), selected_study(s)
+    both(s) :- mentions(s, 'psychiatric'), mentions(s, 'vision'), selected_study(s)
+    ans(probability) :- PROB[active(s) // both(s)] = probability
+- question: What does the study titled 'The Brain Effective Connectivity of Chinese during Rhyming Task.' mention?
+  datalog: ans(term) :- study_title(s, 'The Brain Effective Connectivity of Chinese during Rhyming Task.'), mentions(s, term)
+- question: Which studies mention retrieval but not music? Give titles.
+  datalog: ans(study, title) :- mentions(study, 'retrieval'), ~mentions(study, 'music'), study_title(study, title)
+- question: Summarize the study titled 'The role of the basal ganglia in bimanual coordination.' by its most frequent terms.
+  datalog: ans(term, tfidf) :- study_title(s, 'The role of the basal ganglia in bimanual coordination.'), term_in_study_tfidf(s, term, tfidf), (tfidf > 0.1)
+- question: Which brain regions does study 29288866 activate?
+  datalog: ans(region) :- destrieux_activated(region, 29288866)
+- question: Which studies mention disorders? Return their titles and IDs.
+  datalog: ans(study, title) :- mentions(study, 'disorders'), study_title(study, title)
+- question: Name the study with ID 22079927.
+  datalog: ans(title) :- study_title(22079927, title)
+- question: Which title does study 19560547 have?
+  datalog: ans(title) :- study_title(19560547, title)
+- question: Which studies have titles that start with the word parahippocampal?
+  datalog: ans(study, title) :- study_title(study, title), startswith('Parahippocampal', title)
+- question: Which studies mention temporoparietal junction in their titles?
+  datalog: ans(study, title) :- study_title(study, title), (contains(lcase(title), 'temporoparietal junction'))
+- question: Show titles of studies mentioning imagery but not behavioral performance.
+  datalog: ans(study, title) :- mentions(study, 'imagery'), ~mentions(study, 'behavioral performance'), study_title(study, title)
+- question: Which titles mention both cognitive impairment and limbic?
+  datalog: ans(study, title) :- mentions(study, 'cognitive impairment'), mentions(study, 'limbic'), study_title(study, title)
+- question: Which studies activate the left amygdala and mention behavioral? Show their titles.
+  datalog: |-
+    amygdala(s) :- tian_activated('lAMY lh', s)
+    amygdala(s) :- tian_activated('mAMY lh', s)
+    ans(study, title) :- amygdala(study), mentions(study, 'behavioral'), study_title(study, title)
+- question: Find the study titled 'Refreshing and integrating visual scenes in scene-selective cortex.'.
+  datalog: ans(study) :- study_title(study, 'Refreshing and integrating visual scenes in scene-selective cortex.')
+- question: What is the ID of the study titled 'Abnormalities in personal space and parietal-frontal function in schizophrenia.', and which terms does it mention?
+  datalog: ans(study, term) :- study_title(study, 'Abnormalities in personal space and parietal-frontal function in schizophrenia.'), mentions(study, term)
+- question: Which terms are shared by study 23696279 and the study titled 'Hippocampus and retrosplenial cortex combine path integration signals for successful navigation.'?
+  datalog: ans(term) :- mentions(23696279, term), mentions(24305826, term)
+- question: Which brain regions are activated by the study titled 'Neural patterns underlying social comparisons of personal performance.'?
+  datalog: ans(region) :- study_title(s, 'Neural patterns underlying social comparisons of personal performance.'), destrieux_activated(region, s)
+- question: Which study titles come up most for inferior parietal?
+  datalog: |-
+    cand(s, w) :- term_in_study_tfidf(s, 'inferior parietal', w), (w > 0.15)
+    larger(s, t) :- cand(s, v), cand(t, w), (w > v)
+    rank(s, r) :- AGGREGATE[s](larger(s, t) @ count(t)) = r
+    top(m) :- AGGREGATE[](cand(s, w) @ max(w)) = m
+    best(s, w) :- cand(s, w), rank(s, r), (r < 10)
+    best(s, w) :- cand(s, w), top(w)
+    ans(study, title, tfidf) :- best(study, tfidf), study_title(study, title)
+- question: How many studies have response inhibition in their title?
+  datalog: |-
+    t(s) :- study_title(s, x), (contains(lcase(x), 'response inhibition'))
+    ans(studies) :- AGGREGATE[](t(s) @ count(s)) = studies
+- question: Which study mentions therapy the most? Show its title.
+  datalog: |-
+    t(s, w) :- term_in_study_tfidf(s, 'therapy', w)
+    top(m) :- AGGREGATE[](t(s, w) @ max(w)) = m
+    ans(study, title) :- t(study, w), top(w), study_title(study, title)
+- question: Which studies are related to study 29230170? Give their titles.
+  datalog: ans(study, title) :- study_title(29230170, t), similar_study(t, study), study_title(study, title)
+- question: Which MNI points are reported by the study titled 'Hierarchical organization of cognition reflected in distributed frontoparietal activity.'?
+  datalog: ans(x_mm, y_mm, z_mm) :- study_title(s, 'Hierarchical organization of cognition reflected in distributed frontoparietal activity.'), peak_mni(x_mm, y_mm, z_mm, s)
+- question: Which studies mention either cerebellar or cognitive control? Give their titles.
+  datalog: |-
+    m(s) :- mentions(s, 'cerebellar')
+    m(s) :- mentions(s, 'cognitive control')
+    ans(study, title) :- m(study), study_title(study, title)
+- question: Show the title of study 20045475.
+  datalog: ans(title) :- study_title(20045475, title)
+- question: Which studies mention perceptual most frequently? List titles.
+  datalog: |-
+    top(m) :- AGGREGATE[](term_in_study_tfidf(s, 'perceptual', w) @ max(w)) = m
+    ans(study, title) :- term_in_study_tfidf(study, 'perceptual', w), top(w), study_title(study, title)
+- question: What is the study ID of the study titled 'Temporal dynamics of cerebro-cerebellar network recruitment during a cognitive task.'?
+  datalog: ans(study) :- study_title(study, 'Temporal dynamics of cerebro-cerebellar network recruitment during a cognitive task.')
+- question: For each network, how many parcels are in the left and in the right hemisphere?
+  datalog: |-
+    par(n, 'LH', l) :- schaefer(l, r), startswith('17Networks LH VisCent', l), (n == 'VisCent')
+    par(n, 'RH', l) :- schaefer(l, r), startswith('17Networks RH VisCent', l), (n == 'VisCent')
+    par(n, 'LH', l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l), (n == 'VisPeri')
+    par(n, 'RH', l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l), (n == 'VisPeri')
+    par(n, 'LH', l) :- schaefer(l, r), startswith('17Networks LH SomMot', l), (n == 'SomMot')
+    par(n, 'RH', l) :- schaefer(l, r), startswith('17Networks RH SomMot', l), (n == 'SomMot')
+    par(n, 'LH', l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l), (n == 'DorsAttn')
+    par(n, 'RH', l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l), (n == 'DorsAttn')
+    par(n, 'LH', l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l), (n == 'SalVentAttn')
+    par(n, 'RH', l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l), (n == 'SalVentAttn')
+    par(n, 'LH', l) :- schaefer(l, r), startswith('17Networks LH Limbic', l), (n == 'Limbic')
+    par(n, 'RH', l) :- schaefer(l, r), startswith('17Networks RH Limbic', l), (n == 'Limbic')
+    par(n, 'LH', l) :- schaefer(l, r), startswith('17Networks LH Cont', l), (n == 'Cont')
+    par(n, 'RH', l) :- schaefer(l, r), startswith('17Networks RH Cont', l), (n == 'Cont')
+    par(n, 'LH', l) :- schaefer(l, r), startswith('17Networks LH Default', l), (n == 'Default')
+    par(n, 'RH', l) :- schaefer(l, r), startswith('17Networks RH Default', l), (n == 'Default')
+    par(n, 'LH', l) :- schaefer(l, r), startswith('17Networks LH TempPar', l), (n == 'TempPar')
+    par(n, 'RH', l) :- schaefer(l, r), startswith('17Networks RH TempPar', l), (n == 'TempPar')
+    cnt(n, h, c) :- AGGREGATE[n, h](par(n, h, l) @ count(l)) = c
+    ans(network, hemisphere, parcels) :- cnt(network, hemisphere, parcels)
+- question: For each network, how many studies mentioning spatial activate it?
+  datalog: |-
+    net_label('Default', l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    net_label('Default', l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    net_label('VisCent', l) :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    net_label('VisCent', l) :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    net_label('VisPeri', l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    net_label('VisPeri', l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    net_label('SomMot', l) :- schaefer(l, r), startswith('17Networks LH SomMot', l)
+    net_label('SomMot', l) :- schaefer(l, r), startswith('17Networks RH SomMot', l)
+    net_label('DorsAttn', l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    net_label('DorsAttn', l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    net_label('SalVentAttn', l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l)
+    net_label('SalVentAttn', l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l)
+    net_label('Limbic', l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    net_label('Limbic', l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    net_label('Cont', l) :- schaefer(l, r), startswith('17Networks LH Cont', l)
+    net_label('Cont', l) :- schaefer(l, r), startswith('17Networks RH Cont', l)
+    net_label('TempPar', l) :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    net_label('TempPar', l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    net_study(n, s) :- net_label(n, l), schaefer_activated(l, s), mentions(s, 'spatial')
+    cnt(n, c) :- AGGREGATE[n](net_study(n, s) @ count(s)) = c
+    ans(network, studies) :- cnt(network, studies)
+- question: For each subcortical structure, what is the number of studies mentioning parietal that activate it?
+  datalog: |-
+    act(l, s) :- tian_activated(l, s), mentions(s, 'parietal')
+    cnt(l, n) :- AGGREGATE[l](act(l, s) @ count(s)) = n
+    ans(region, studies) :- cnt(region, studies)
+- question: For each of the two terms objects and reading, how many studies activate hippocampus?
+  datalog: |-
+    hip(l) :- tian(l, r), startswith('aHIP', l)
+    hip(l) :- tian(l, r), startswith('pHIP', l)
+    hs(s) :- hip(l), tian_activated(l, s)
+    ts(t, s) :- mentions(s, t), (t == 'objects')
+    ts(t, s) :- mentions(s, t), (t == 'reading')
+    th(t, s) :- ts(t, s), hs(s)
+    ans(term, studies) :- AGGREGATE[term](th(term, s) @ count(s)) = studies
+- question: For each term of anterior cingulate and visual, what is the probability of activating putamen?
+  datalog: |-
+    put(l) :- tian(l, r), startswith('aPUT', l)
+    put(l) :- tian(l, r), startswith('pPUT', l)
+    active(s) :- put(l), tian_activated(l, s), selected_study(s)
+    tt(t) :- term(t), (t == 'visual')
+    tt(t) :- term(t), (t == 'anterior cingulate')
+    ta(s, t) :- mentions(s, t), tt(t), selected_study(s)
+    ans(term, probability) :- PROB[active(s) // ta(s, term)] = probability
+- question: Per hemisphere, how many studies mentioning sensory activate each subcortical structure?
+  datalog: |-
+    sa(l, s) :- tian_activated(l, s), mentions(s, 'sensory')
+    ans(region, studies) :- AGGREGATE[region](sa(region, s) @ count(s)) = studies
+- question: List each network with its hemisphere and parcel names.
+  datalog: |-
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks LH VisCent', l), (n == 'VisCent'), (h == 'LH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks RH VisCent', l), (n == 'VisCent'), (h == 'RH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l), (n == 'VisPeri'), (h == 'LH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l), (n == 'VisPeri'), (h == 'RH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks LH SomMot', l), (n == 'SomMot'), (h == 'LH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks RH SomMot', l), (n == 'SomMot'), (h == 'RH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l), (n == 'DorsAttn'), (h == 'LH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l), (n == 'DorsAttn'), (h == 'RH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l), (n == 'SalVentAttn'), (h == 'LH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l), (n == 'SalVentAttn'), (h == 'RH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks LH Limbic', l), (n == 'Limbic'), (h == 'LH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks RH Limbic', l), (n == 'Limbic'), (h == 'RH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks LH Cont', l), (n == 'Cont'), (h == 'LH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks RH Cont', l), (n == 'Cont'), (h == 'RH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks LH Default', l), (n == 'Default'), (h == 'LH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks RH Default', l), (n == 'Default'), (h == 'RH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks LH TempPar', l), (n == 'TempPar'), (h == 'LH')
+    nl(n, h, l) :- schaefer(l, r), startswith('17Networks RH TempPar', l), (n == 'TempPar'), (h == 'RH')
+    ans(network, hemisphere, parcel) :- nl(network, hemisphere, parcel)
+- question: For each subcortical structure, how many studies activate it per hemisphere when mentioning imagery?
+  datalog: |-
+    act(l, s) :- tian_activated(l, s), mentions(s, 'imagery')
+    ans(region, studies) :- AGGREGATE[region](act(region, s) @ count(s)) = studies
+- question: For each network, how many studies mention amygdala and activate at least one parcel in each hemisphere?
+  datalog: |-
+    lhl('VisCent', l) :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    lhl('VisPeri', l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    lhl('SomMot', l) :- schaefer(l, r), startswith('17Networks LH SomMot', l)
+    lhl('DorsAttn', l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    lhl('SalVentAttn', l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l)
+    lhl('Limbic', l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    lhl('Cont', l) :- schaefer(l, r), startswith('17Networks LH Cont', l)
+    lhl('Default', l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    lhl('TempPar', l) :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    rhl('VisCent', l) :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    rhl('VisPeri', l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    rhl('SomMot', l) :- schaefer(l, r), startswith('17Networks RH SomMot', l)
+    rhl('DorsAttn', l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    rhl('SalVentAttn', l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l)
+    rhl('Limbic', l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    rhl('Cont', l) :- schaefer(l, r), startswith('17Networks RH Cont', l)
+    rhl('Default', l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    rhl('TempPar', l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    act_l(n, s) :- lhl(n, l), schaefer_activated(l, s)
+    act_r(n, s) :- rhl(n, l), schaefer_activated(l, s)
+    both(n, s) :- act_l(n, s), act_r(n, s), mentions(s, 'amygdala')
+    cnt(n, c) :- AGGREGATE[n](both(n, s) @ count(s)) = c
+    ans(network, studies) :- cnt(network, studies)
+- question: For each parcel, which network does it belong to?
+  datalog: |-
+    net(l, 'VisCent') :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    net(l, 'VisCent') :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    net(l, 'VisPeri') :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    net(l, 'VisPeri') :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    net(l, 'SomMot') :- schaefer(l, r), startswith('17Networks LH SomMot', l)
+    net(l, 'SomMot') :- schaefer(l, r), startswith('17Networks RH SomMot', l)
+    net(l, 'DorsAttn') :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    net(l, 'DorsAttn') :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    net(l, 'SalVentAttn') :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l)
+    net(l, 'SalVentAttn') :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l)
+    net(l, 'Limbic') :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    net(l, 'Limbic') :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    net(l, 'Cont') :- schaefer(l, r), startswith('17Networks LH Cont', l)
+    net(l, 'Cont') :- schaefer(l, r), startswith('17Networks RH Cont', l)
+    net(l, 'Default') :- schaefer(l, r), startswith('17Networks LH Default', l)
+    net(l, 'Default') :- schaefer(l, r), startswith('17Networks RH Default', l)
+    net(l, 'TempPar') :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    net(l, 'TempPar') :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    ans(parcel, network) :- net(parcel, network)
+- question: Give each network and the number of its parcels.
+  datalog: |-
+    net('VisCent', l) :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    net('VisCent', l) :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    net('VisPeri', l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    net('VisPeri', l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    net('SomMot', l) :- schaefer(l, r), startswith('17Networks LH SomMot', l)
+    net('SomMot', l) :- schaefer(l, r), startswith('17Networks RH SomMot', l)
+    net('DorsAttn', l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    net('DorsAttn', l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    net('SalVentAttn', l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l)
+    net('SalVentAttn', l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l)
+    net('Limbic', l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    net('Limbic', l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    net('Cont', l) :- schaefer(l, r), startswith('17Networks LH Cont', l)
+    net('Cont', l) :- schaefer(l, r), startswith('17Networks RH Cont', l)
+    net('Default', l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    net('Default', l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    net('TempPar', l) :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    net('TempPar', l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    cnt(n, c) :- AGGREGATE[n](net(n, l) @ count(l)) = c
+    ans(network, parcels) :- cnt(network, parcels)
+- question: For each pair of frontal cortex and naming, how many studies mention both, either, or neither?
+  datalog: |-
+    both(s) :- mentions(s, 'frontal cortex'), mentions(s, 'naming')
+    either(s) :- mentions(s, 'frontal cortex')
+    either(s) :- mentions(s, 'naming')
+    neither(s) :- study(s), ~mentions(s, 'frontal cortex'), ~mentions(s, 'naming')
+    nb(n) :- AGGREGATE[](both(s) @ count(s)) = n
+    ne(n) :- AGGREGATE[](either(s) @ count(s)) = n
+    nn(n) :- AGGREGATE[](neither(s) @ count(s)) = n
+    ans(studies_1, studies_2, studies_3) :- nb(studies_1), ne(studies_2), nn(studies_3)
+- question: List the left and right parcels of dorsal attention in two groups.
+  datalog: |-
+    left_da(l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    right_da(l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    ans[left](parcel) :- left_da(parcel)
+    ans[right](parcel) :- right_da(parcel)
+- question: For each region within 3 mm of right inferior temporal gyrus, how many studies mentioning errors activate it?
+  datalog: |-
+    near(l) :- destrieux_points(x, y, z, 'R G temporal inf'), destrieux_points(x2, y2, z2, l), (euclidean(x, y, z, x2, y2, z2) <= 3)
+    act(l, s) :- near(l), destrieux_activated(l, s), mentions(s, 'errors')
+    ans(region, studies) :- AGGREGATE[region](act(region, s) @ count(s)) = studies
+- question: Per hemisphere, how many studies mentioning recollection report an activation?
+  datalog: |-
+    hs(h, s) :- destrieux(l, r), startswith('L ', l), destrieux_activated(l, s), mentions(s, 'recollection'), (h == 'L')
+    hs(h, s) :- destrieux(l, r), startswith('R ', l), destrieux_activated(l, s), mentions(s, 'recollection'), (h == 'R')
+    cnt(h, n) :- AGGREGATE[h](hs(h, s) @ count(s)) = n
+    ans(hemisphere, studies) :- cnt(hemisphere, studies)
+- question: List the networks sorted by number of parcels, with the left and right totals.
+  datalog: |-
+    lab(n, 'L', l) :- schaefer(l, r), startswith('17Networks LH VisCent', l), (n == 'VisCent')
+    lab(n, 'R', l) :- schaefer(l, r), startswith('17Networks RH VisCent', l), (n == 'VisCent')
+    lab(n, 'L', l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l), (n == 'VisPeri')
+    lab(n, 'R', l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l), (n == 'VisPeri')
+    lab(n, 'L', l) :- schaefer(l, r), startswith('17Networks LH SomMot', l), (n == 'SomMot')
+    lab(n, 'R', l) :- schaefer(l, r), startswith('17Networks RH SomMot', l), (n == 'SomMot')
+    lab(n, 'L', l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l), (n == 'DorsAttn')
+    lab(n, 'R', l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l), (n == 'DorsAttn')
+    lab(n, 'L', l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l), (n == 'SalVentAttn')
+    lab(n, 'R', l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l), (n == 'SalVentAttn')
+    lab(n, 'L', l) :- schaefer(l, r), startswith('17Networks LH Limbic', l), (n == 'Limbic')
+    lab(n, 'R', l) :- schaefer(l, r), startswith('17Networks RH Limbic', l), (n == 'Limbic')
+    lab(n, 'L', l) :- schaefer(l, r), startswith('17Networks LH Cont', l), (n == 'Cont')
+    lab(n, 'R', l) :- schaefer(l, r), startswith('17Networks RH Cont', l), (n == 'Cont')
+    lab(n, 'L', l) :- schaefer(l, r), startswith('17Networks LH Default', l), (n == 'Default')
+    lab(n, 'R', l) :- schaefer(l, r), startswith('17Networks RH Default', l), (n == 'Default')
+    lab(n, 'L', l) :- schaefer(l, r), startswith('17Networks LH TempPar', l), (n == 'TempPar')
+    lab(n, 'R', l) :- schaefer(l, r), startswith('17Networks RH TempPar', l), (n == 'TempPar')
+    cnt(n, h, c) :- AGGREGATE[n, h](lab(n, h, l) @ count(l)) = c
+    labl(n, l) :- lab(n, h, l)
+    tot(n, t) :- AGGREGATE[n](labl(n, l) @ count(l)) = t
+    ans(network, parcels, cl, cr) :- tot(network, parcels), cnt(network, 'L', cl), cnt(network, 'R', cr)
+- question: Give the number of parcels of each network, split by hemisphere.
+  datalog: |-
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks LH VisCent', l), (h == 'LH'), (n == 'VisCent')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks RH VisCent', l), (h == 'RH'), (n == 'VisCent')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks LH VisPeri', l), (h == 'LH'), (n == 'VisPeri')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks RH VisPeri', l), (h == 'RH'), (n == 'VisPeri')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks LH SomMot', l), (h == 'LH'), (n == 'SomMot')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks RH SomMot', l), (h == 'RH'), (n == 'SomMot')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l), (h == 'LH'), (n == 'DorsAttn')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l), (h == 'RH'), (n == 'DorsAttn')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l), (h == 'LH'), (n == 'SalVentAttn')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l), (h == 'RH'), (n == 'SalVentAttn')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks LH Limbic', l), (h == 'LH'), (n == 'Limbic')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks RH Limbic', l), (h == 'RH'), (n == 'Limbic')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks LH Cont', l), (h == 'LH'), (n == 'Cont')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks RH Cont', l), (h == 'RH'), (n == 'Cont')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks LH Default', l), (h == 'LH'), (n == 'Default')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks RH Default', l), (h == 'RH'), (n == 'Default')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks LH TempPar', l), (h == 'LH'), (n == 'TempPar')
+    np(l, h, n) :- schaefer(l, r), startswith('17Networks RH TempPar', l), (h == 'RH'), (n == 'TempPar')
+    cnt(h, n, c) :- AGGREGATE[h, n](np(l, h, n) @ count(l)) = c
+    ans(hemisphere, network, parcels) :- cnt(hemisphere, network, parcels)
+- question: Tabulate the number of studies mentioning each of attention and aversive.
+  datalog: |-
+    tc(t, n) :- AGGREGATE[t](mentions(s, t) @ count(s)) = n
+    ans(term, studies) :- tc(term, studies), (term == 'attention' | term == 'aversive')
+- question: For each Tian region, how many studies mentioning either deficit or word activate it?
+  datalog: |-
+    either(s) :- mentions(s, 'deficit')
+    either(s) :- mentions(s, 'word')
+    act(l, s) :- tian_activated(l, s), either(s)
+    cnt(l, n) :- AGGREGATE[l](act(l, s) @ count(s)) = n
+    ans(region, studies) :- cnt(region, studies)
+- question: For each network, give the number of studies mentioning error next to the number mentioning frontal eye.
+  datalog: |-
+    nl(n, l) :- schaefer(l, r), startswith('17Networks LH VisCent', l), (n == 'VisCent')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks RH VisCent', l), (n == 'VisCent')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l), (n == 'VisPeri')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l), (n == 'VisPeri')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks LH SomMot', l), (n == 'SomMot')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks RH SomMot', l), (n == 'SomMot')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l), (n == 'DorsAttn')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l), (n == 'DorsAttn')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l), (n == 'SalVentAttn')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l), (n == 'SalVentAttn')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks LH Limbic', l), (n == 'Limbic')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks RH Limbic', l), (n == 'Limbic')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks LH Cont', l), (n == 'Cont')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks RH Cont', l), (n == 'Cont')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks LH Default', l), (n == 'Default')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks RH Default', l), (n == 'Default')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks LH TempPar', l), (n == 'TempPar')
+    nl(n, l) :- schaefer(l, r), startswith('17Networks RH TempPar', l), (n == 'TempPar')
+    na(n, s) :- nl(n, l), schaefer_activated(l, s)
+    ae(n, s) :- na(n, s), mentions(s, 'error')
+    af(n, s) :- na(n, s), mentions(s, 'frontal eye')
+    ce(n, c) :- AGGREGATE[n](ae(n, s) @ count(s)) = c
+    cf(n, c) :- AGGREGATE[n](af(n, s) @ count(s)) = c
+    ans(network, studies_1, studies_2) :- ce(network, studies_1), cf(network, studies_2)
+- question: List each network with its parcels.
+  datalog: |-
+    net(n, l) :- schaefer(l, r), startswith('17Networks LH VisCent', l), (n == 'VisCent')
+    net(n, l) :- schaefer(l, r), startswith('17Networks RH VisCent', l), (n == 'VisCent')
+    net(n, l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l), (n == 'VisPeri')
+    net(n, l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l), (n == 'VisPeri')
+    net(n, l) :- schaefer(l, r), startswith('17Networks LH SomMot', l), (n == 'SomMot')
+    net(n, l) :- schaefer(l, r), startswith('17Networks RH SomMot', l), (n == 'SomMot')
+    net(n, l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l), (n == 'DorsAttn')
+    net(n, l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l), (n == 'DorsAttn')
+    net(n, l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l), (n == 'SalVentAttn')
+    net(n, l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l), (n == 'SalVentAttn')
+    net(n, l) :- schaefer(l, r), startswith('17Networks LH Limbic', l), (n == 'Limbic')
+    net(n, l) :- schaefer(l, r), startswith('17Networks RH Limbic', l), (n == 'Limbic')
+    net(n, l) :- schaefer(l, r), startswith('17Networks LH Cont', l), (n == 'Cont')
+    net(n, l) :- schaefer(l, r), startswith('17Networks RH Cont', l), (n == 'Cont')
+    net(n, l) :- schaefer(l, r), startswith('17Networks LH Default', l), (n == 'Default')
+    net(n, l) :- schaefer(l, r), startswith('17Networks RH Default', l), (n == 'Default')
+    net(n, l) :- schaefer(l, r), startswith('17Networks LH TempPar', l), (n == 'TempPar')
+    net(n, l) :- schaefer(l, r), startswith('17Networks RH TempPar', l), (n == 'TempPar')
+    ans(network, parcel) :- net(network, parcel)
+- question: For each cortical network and each subcortical structure, what is the activation probability for word?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // term_association(s, 'word')] = probability
+- question: For each gyrus or sulcus, what is the probability of co-activation with default mode in word studies?
+  datalog: |-
+    default_label(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    default_label(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    default_mode(s) :- default_label(l), schaefer_activated(l, s), selected_study(s)
+    co_active(d, s) :- destrieux_activated(d, s), default_mode(s)
+    word_study(s) :- mentions(s, 'word'), selected_study(s)
+    ans(region, probability) :- PROB[co_active(region, s) // word_study(s)] = probability
+- question: For each gyrus and sulcus, what is the probability of activation given studies that mention visual cortex?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // ta(s, 'visual cortex')] = probability
+- question: For each gyrus or sulcus, how many studies mentioning attention deficit activate both it and nucleus accumbens?
+  datalog: |-
+    nac_label(l) :- tian(l, r), startswith('NAc', l)
+    nac(s) :- nac_label(l), tian_activated(l, s)
+    ad(s) :- mentions(s, 'attention deficit'), nac(s)
+    both(d, s) :- ad(s), destrieux_activated(d, s)
+    ans(region, studies) :- AGGREGATE[region](both(region, s) @ count(s)) = studies
+- question: Which pairs of networks co-activate in studies mentioning alzheimer disease, ranked by probability?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    co_active(l1, l2, s) :- active(l1, s), active(l2, s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(parcel_1, parcel_2, probability) :- (parcel_1 < parcel_2), PROB[co_active(parcel_1, parcel_2, s) // term_association(s, 'alzheimer disease')] = probability
+- question: For each subcortical structure, how many studies mention naming but not discrimination and activate it?
+  datalog: |-
+    sel(s) :- mentions(s, 'naming'), ~mentions(s, 'discrimination')
+    act(l, s) :- sel(s), tian_activated(l, s)
+    ans(region, studies) :- AGGREGATE[region](act(region, s) @ count(s)) = studies
+- question: Return pairs of default mode parcels and their joint activation probability for insula.
+  datalog: |-
+    default_label(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    default_label(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    insula_label(l) :- destrieux(l, r), startswith('L G Ins', l)
+    insula_label(l) :- destrieux(l, r), startswith('R G Ins', l)
+    insula_label(l) :- destrieux(l, r), startswith('L G insular', l)
+    insula_label(l) :- destrieux(l, r), startswith('R G insular', l)
+    insula_label(l) :- destrieux(l, r), startswith('L S circular insula', l)
+    insula_label(l) :- destrieux(l, r), startswith('R S circular insula', l)
+    insula_study(s) :- insula_label(l), destrieux_activated(l, s)
+    dm_active(l, s) :- default_label(l), schaefer_activated(l, s)
+    co_active(l1, l2, s) :- dm_active(l1, s), dm_active(l2, s), insula_study(s), selected_study(s), (l1 < l2)
+    ans(parcel_1, parcel_2, probability) :- PROB[co_active(parcel_1, parcel_2, s)] = probability
+- question: Group the parcels by network and give each group's size.
+  datalog: |-
+    net(l, 'VisCent') :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    net(l, 'VisCent') :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    net(l, 'VisPeri') :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    net(l, 'VisPeri') :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    net(l, 'SomMot') :- schaefer(l, r), startswith('17Networks LH SomMot', l)
+    net(l, 'SomMot') :- schaefer(l, r), startswith('17Networks RH SomMot', l)
+    net(l, 'DorsAttn') :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    net(l, 'DorsAttn') :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    net(l, 'SalVentAttn') :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l)
+    net(l, 'SalVentAttn') :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l)
+    net(l, 'Limbic') :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    net(l, 'Limbic') :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    net(l, 'Cont') :- schaefer(l, r), startswith('17Networks LH Cont', l)
+    net(l, 'Cont') :- schaefer(l, r), startswith('17Networks RH Cont', l)
+    net(l, 'Default') :- schaefer(l, r), startswith('17Networks LH Default', l)
+    net(l, 'Default') :- schaefer(l, r), startswith('17Networks RH Default', l)
+    net(l, 'TempPar') :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    net(l, 'TempPar') :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    size(n, c) :- AGGREGATE[n](net(l, n) @ count(l)) = c
+    ans(network, parcels) :- size(network, parcels)
+- question: For each parcel of temporoparietal, give the activation probability for inferior parietal and for superior temporal.
+  datalog: |-
+    par(l) :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    par(l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    ipreg(d) :- destrieux(d, r), startswith('L G pariet inf', d)
+    ipreg(d) :- destrieux(d, r), startswith('R G pariet inf', d)
+    streg(d) :- destrieux(d, r), startswith('L G temp sup', d)
+    streg(d) :- destrieux(d, r), startswith('R G temp sup', d)
+    seed(l, s) :- schaefer_activated(l, s), par(l), selected_study(s)
+    act_ip(s) :- destrieux_activated(d, s), ipreg(d), selected_study(s)
+    act_st(s) :- destrieux_activated(d, s), streg(d), selected_study(s)
+    pip(l, p) :- PROB[act_ip(s) // seed(l, s)] = p
+    pst(l, p) :- PROB[act_st(s) // seed(l, s)] = p
+    ans(parcel, probability_1, probability_2) :- pip(parcel, probability_1), pst(parcel, probability_2)
+- question: For each Destrieux region, how many studies mentioning psychiatric also activate putamen?
+  datalog: |-
+    put_label(l) :- tian(l, r), startswith('aPUT', l)
+    put_label(l) :- tian(l, r), startswith('pPUT', l)
+    put_study(s) :- put_label(l), tian_activated(l, s)
+    good(s) :- mentions(s, 'psychiatric'), put_study(s)
+    reg(l, s) :- destrieux_activated(l, s), good(s)
+    cnt(l, n) :- AGGREGATE[l](reg(l, s) @ count(s)) = n
+    ans(region, studies) :- cnt(region, studies)
+- question: Per hemisphere, how many studies mentioning scene activate caudate?
+  datalog: |-
+    act(h, s) :- tian_activated(l, s), mentions(s, 'scene'), (l == 'aCAU lh'), (h == 'lh')
+    act(h, s) :- tian_activated(l, s), mentions(s, 'scene'), (l == 'pCAU lh'), (h == 'lh')
+    act(h, s) :- tian_activated(l, s), mentions(s, 'scene'), (l == 'aCAU rh'), (h == 'rh')
+    act(h, s) :- tian_activated(l, s), mentions(s, 'scene'), (l == 'pCAU rh'), (h == 'rh')
+    ans(hemisphere, studies) :- AGGREGATE[hemisphere](act(hemisphere, s) @ count(s)) = studies
+- question: Which parcels in each network have the highest activation probability for word?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    pl(l, p) :- PROB[active(l, s) // ta(s, 'word')] = p
+    netl('VisCent', l) :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    netl('VisCent', l) :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    netl('VisPeri', l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
+    netl('VisPeri', l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
+    netl('SomMot', l) :- schaefer(l, r), startswith('17Networks LH SomMot', l)
+    netl('SomMot', l) :- schaefer(l, r), startswith('17Networks RH SomMot', l)
+    netl('DorsAttn', l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    netl('DorsAttn', l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    netl('SalVentAttn', l) :- schaefer(l, r), startswith('17Networks LH SalVentAttn', l)
+    netl('SalVentAttn', l) :- schaefer(l, r), startswith('17Networks RH SalVentAttn', l)
+    netl('Limbic', l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    netl('Limbic', l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    netl('Cont', l) :- schaefer(l, r), startswith('17Networks LH Cont', l)
+    netl('Cont', l) :- schaefer(l, r), startswith('17Networks RH Cont', l)
+    netl('Default', l) :- schaefer(l, r), startswith('17Networks LH Default', l)
+    netl('Default', l) :- schaefer(l, r), startswith('17Networks RH Default', l)
+    netl('TempPar', l) :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    netl('TempPar', l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    pn(n, l, p) :- netl(n, l), pl(l, p)
+    pn2(n, p) :- pn(n, l, p)
+    mx(n, m) :- AGGREGATE[n](pn2(n, p) @ max(p)) = m
+    ans(network, parcel, probability) :- pn(network, parcel, probability), mx(network, probability)
+- question: How often is the MNI point left hippocampus (MNI -28, -22, -14) not activated in long term studies?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -28.0, -22.0, -14.0) <= {kernel_radius_mm})
+    notact(s) :- study(s), ~near(s), selected_study(s)
+    long(s) :- mentions(s, 'long term'), selected_study(s)
+    ans(probability) :- PROB[notact(s) // long(s)] = probability
+- question: Among studies not activating left parahippocampal gyrus, what share mention putamen?
+  datalog: |-
+    not_active(s) :- selected_study(s), ~destrieux_activated('L G oc temp med Parahip', s)
+    put(s) :- mentions(s, 'putamen'), selected_study(s)
+    ans(probability) :- PROB[put(s) // not_active(s)] = probability
+- question: In studies mentioning cingulate, how often is globus pallidus not activated?
+  datalog: |-
+    gp_label(l) :- tian(l, r), startswith('aGP', l)
+    gp_label(l) :- tian(l, r), startswith('pGP', l)
+    gp_act(s) :- gp_label(l), tian_activated(l, s)
+    no_gp(s) :- selected_study(s), ~gp_act(s)
+    cing(s) :- mentions(s, 'cingulate'), selected_study(s)
+    ans(probability) :- PROB[no_gp(s) // cing(s)] = probability
+- question: What is the probability that a study mentions neither midbrain nor temporal gyrus?
+  datalog: |-
+    either(s) :- mentions(s, 'midbrain')
+    either(s) :- mentions(s, 'temporal gyrus')
+    none(s) :- study(s), ~either(s)
+    nonesel(s) :- none(s), selected_study(s)
+    ans(probability) :- PROB[nonesel(s)] = probability
+- question: Which studies mention working memory but do not activate globus pallidus?
+  datalog: |-
+    gp_label(l) :- tian(l, r), startswith('aGP', l)
+    gp_label(l) :- tian(l, r), startswith('pGP', l)
+    gp(s) :- gp_label(l), tian_activated(l, s)
+    ans(study) :- mentions(study, 'working memory'), ~gp(study)
+- question: Among studies that do not mention scene, what fraction mention sleep?
+  datalog: |-
+    no_scene(s) :- selected_study(s), ~mentions(s, 'scene')
+    sl(s) :- selected_study(s), mentions(s, 'sleep')
+    ans(probability) :- PROB[sl(s) // no_scene(s)] = probability
+- question: Which cortical networks are unlikely to be activated by studies about young adults?
+  datalog: |-
+    close(q, s) :- similar_study(q, s), selected_study(s)
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
+    ans(parcel, probability) :- p_active_given_close('young adults', parcel, probability), (probability < 0.2)
+- question: How likely is a study that mentions cerebellum but not parietal to activate right subparietal sulcus?
+  datalog: |-
+    active(s) :- destrieux_activated('R S subparietal', s), selected_study(s)
+    cond(s) :- mentions(s, 'cerebellum'), ~mentions(s, 'parietal'), selected_study(s)
+    ans(probability) :- PROB[active(s) // cond(s)] = probability
+- question: Which gyri and sulci are least often activated by studies mentioning consciousness?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s) :- mentions(s, 'consciousness'), selected_study(s)
+    reg_p(l, p) :- PROB[active(l, s) // term_association(s)] = p
+    min_p(m) :- AGGREGATE[](reg_p(l, p) @ min(p)) = m
+    ans(region, probability) :- reg_p(region, probability), min_p(probability)
+- question: What is the probability that a study about gray matter does not activate globus pallidus but mentions medial temporal?
+  datalog: |-
+    gp_label(l) :- tian(l, r), startswith('aGP', l)
+    gp_label(l) :- tian(l, r), startswith('pGP', l)
+    gp(s) :- gp_label(l), tian_activated(l, s)
+    ev(s) :- mentions(s, 'medial temporal'), ~gp(s), selected_study(s)
+    gm(s) :- mentions(s, 'gray matter'), selected_study(s)
+    ans(probability) :- PROB[ev(s) // gm(s)] = probability
+- question: What is the probability that a study mentioning visual and behavior does not activate right posterior cingulate gyrus (dorsal part)?
+  datalog: |-
+    active(s) :- destrieux_activated('R G cingul Post dorsal', s), selected_study(s)
+    na(s) :- selected_study(s), ~active(s)
+    cond(s) :- mentions(s, 'visual'), mentions(s, 'behavior'), selected_study(s)
+    ans(probability) :- PROB[na(s) // cond(s)] = probability
+- question: How likely is a study to mention parietal and not word?
+  datalog: |-
+    m(s) :- mentions(s, 'parietal'), ~mentions(s, 'word'), selected_study(s)
+    ans(probability) :- PROB[m(s)] = probability
+- question: In studies about cognitive control, what is the probability that limbic is activated and motor cortex is not mentioned?
+  datalog: |-
+    limbic_label(l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
+    limbic_label(l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
+    event(s) :- limbic_label(l), schaefer_activated(l, s), ~mentions(s, 'motor cortex'), selected_study(s)
+    cc(s) :- mentions(s, 'cognitive control'), selected_study(s)
+    ans(probability) :- PROB[event(s) // cc(s)] = probability
+- question: Which gyri are most probably not activated by studies mentioning disorder?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    pa(l, p) :- PROB[active(l, s) // term_association(s, 'disorder')] = p
+    gyrus(l) :- destrieux(l, r), startswith('L G ', l)
+    gyrus(l) :- destrieux(l, r), startswith('R G ', l)
+    na(l, q) :- pa(l, p), gyrus(l), (q == (1.0 - p))
+    top(m) :- AGGREGATE[](na(l, q) @ max(q)) = m
+    ans(region, difference) :- na(region, difference), top(difference)
+- question: What is the probability of not mentioning social cognition among studies about visual stimuli?
+  datalog: |-
+    not_sc(s) :- study(s), ~mentions(s, 'social cognition'), selected_study(s)
+    visual(s) :- mentions(s, 'visual stimuli'), selected_study(s)
+    ans(probability) :- PROB[not_sc(s) // visual(s)] = probability
+- question: What is the probability that a study does not activate left marginal ramus of the cingulate sulcus, given that it mentions theory mind?
+  datalog: |-
+    act(s) :- destrieux_activated('L S cingul Marginalis', s)
+    na(s) :- selected_study(s), ~act(s)
+    ta(s) :- mentions(s, 'theory mind'), selected_study(s)
+    ans(probability) :- PROB[na(s) // ta(s)] = probability
+- question: What proportion of studies mentioning auditory visual do not activate nucleus accumbens?
+  datalog: |-
+    nac(l) :- tian(l, r), startswith('NAc', l)
+    active(s) :- nac(l), tian_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    not_active(s) :- selected_study(s), ~active(s)
+    ans(probability) :- PROB[not_active(s) // term_association(s, 'auditory visual')] = probability
+- question: Given a study that mentions imagery, what is the probability that it does not activate dorsal attention?
+  datalog: |-
+    dl(l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    dl(l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    net(s) :- dl(l), schaefer_activated(l, s)
+    active(s) :- net(s), selected_study(s)
+    ta(s) :- mentions(s, 'imagery'), selected_study(s)
+    ans(difference) :- PROB[active(s) // ta(s)] = p, (difference == (1.0 - p))
+- question: What is the probability that a study not mentioning motor does not activate right posterior cingulate gyrus (ventral part, isthmus/retrosplenial)?
+  datalog: |-
+    na(s) :- ~destrieux_activated('R G cingul Post ventral', s), selected_study(s)
+    nm(s) :- ~mentions(s, 'motor'), selected_study(s)
+    ans(probability) :- PROB[na(s) // nm(s)] = probability
+- question: What is the probability that a study mentions dopaminergic but not implicit?
+  datalog: |-
+    m(s) :- mentions(s, 'dopaminergic'), ~mentions(s, 'implicit'), selected_study(s)
+    ans(probability) :- PROB[m(s)] = probability
+- question: Which subcortical structures are most probably inactive in studies mentioning pain?
+  datalog: |-
+    inactive(l, s) :- tian(l, r), selected_study(s), ~tian_activated(l, s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    pr(l, p) :- PROB[inactive(l, s) // term_association(s, 'pain')] = p
+    top(m) :- AGGREGATE[](pr(l, p) @ max(p)) = m
+    ans(region, probability) :- pr(region, probability), top(probability)
+- question: Given that nucleus accumbens is not activated, what is the probability that a study mentions hippocampal?
+  datalog: |-
+    nl(l) :- tian(l, r), startswith('NAc', l)
+    nac(s) :- nl(l), tian_activated(l, s)
+    nonac(s) :- study(s), ~nac(s), selected_study(s)
+    hm(s) :- mentions(s, 'hippocampal'), selected_study(s)
+    ans(probability) :- PROB[hm(s) // nonac(s)] = probability
+- question: Given that a study mentions scene, what is the probability that it does not mention visuomotor?
+  datalog: |-
+    nv(s) :- selected_study(s), ~mentions(s, 'visuomotor')
+    ts(s) :- mentions(s, 'scene'), selected_study(s)
+    ans(probability) :- PROB[nv(s) // ts(s)] = probability
+- question: List the studies that mention discrimination without any activation in right middle frontal sulcus.
+  datalog: ans(study) :- mentions(study, 'discrimination'), ~destrieux_activated('R S front middle', study)
+- question: Among studies mentioning cognitive impairment, what share does not activate central visual?
+  datalog: |-
+    vis(l) :- schaefer(l, r), startswith('17Networks LH VisCent', l)
+    vis(l) :- schaefer(l, r), startswith('17Networks RH VisCent', l)
+    act(s) :- vis(l), schaefer_activated(l, s), selected_study(s)
+    men(s) :- mentions(s, 'cognitive impairment'), selected_study(s)
+    am() :- act(s), men(s)
+    m() :- men(s)
+    pa(p) :- PROB[am()] = p
+    pm(p) :- PROB[m()] = p
+    ans(share) :- pa(a), pm(m), (share == 1.0 - a / m)
+- question: What is the probability that a study that mentions emotion regulation does not activate putamen and left caudate (MNI -12, 12, 10)?
+  datalog: |-
+    put(s) :- tian_activated(l, s), (l == 'aPUT rh')
+    put(s) :- tian_activated('pPUT rh', s)
+    put(s) :- tian_activated('aPUT lh', s)
+    put(s) :- tian_activated('pPUT lh', s)
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -12.0, 12.0, 10.0) <= {kernel_radius_mm})
+    inactive(s) :- selected_study(s), ~put(s), ~near(s)
+    ta(s) :- mentions(s, 'emotion regulation'), selected_study(s)
+    ans(probability) :- PROB[inactive(s) // ta(s)] = probability
+- question: How likely is temporoparietal to be activated without left inferior frontal gyrus (opercular part) in studies mentioning spoken?
+  datalog: |-
+    tp_label(l) :- schaefer(l, r), startswith('17Networks LH TempPar', l)
+    tp_label(l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    tp(s) :- tp_label(l), schaefer_activated(l, s), selected_study(s)
+    ifg(s) :- destrieux_activated('L G front inf Opercular', s), selected_study(s)
+    tp_ifg(s) :- tp(s), ifg(s)
+    sp(s) :- mentions(s, 'spoken'), selected_study(s)
+    p1(p) :- PROB[tp(s) // sp(s)] = p
+    p2(p) :- PROB[tp_ifg(s) // sp(s)] = p
+    ans(difference) :- p1(a), p2(b), (difference == (a - b))
+- question: How likely is a study to mention bipolar without supplementary motor?
+  datalog: |-
+    m(s) :- mentions(s, 'bipolar'), ~mentions(s, 'supplementary motor'), selected_study(s)
+    ans(probability) :- PROB[m(s)] = probability
+- question: What is the probability that a study not mentioning thalamus activates dorsal attention?
+  datalog: |-
+    dl(l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
+    dl(l) :- schaefer(l, r), startswith('17Networks RH DorsAttn', l)
+    net(s) :- dl(l), schaefer_activated(l, s)
+    active(s) :- net(s), selected_study(s)
+    nm(s) :- study(s), ~mentions(s, 'thalamus'), selected_study(s)
+    ans(probability) :- PROB[active(s) // nm(s)] = probability
+- question: What is the probability that a study mentions exactly one of injury and white matter?
+  datalog: |-
+    x(s) :- mentions(s, 'injury'), ~mentions(s, 'white matter'), selected_study(s)
+    x(s) :- mentions(s, 'white matter'), ~mentions(s, 'injury'), selected_study(s)
+    ans(probability) :- PROB[x(s)] = probability
+- question: What are the odds that a study mentioning premotor cortex fails to activate frontoparietal control?
+  datalog: |-
+    cont_label(l) :- schaefer(l, r), startswith('17Networks LH Cont', l)
+    cont_label(l) :- schaefer(l, r), startswith('17Networks RH Cont', l)
+    cont_act(s) :- cont_label(l), schaefer_activated(l, s)
+    mention(s) :- mentions(s, 'premotor cortex'), selected_study(s)
+    fail(s) :- study(s), ~cont_act(s), selected_study(s)
+    act(s) :- cont_act(s), selected_study(s)
+    pf(p) :- PROB[fail(s) // mention(s)] = p
+    pa(p) :- PROB[act(s) // mention(s)] = p
+    ans(odds) :- pf(a), pa(b), (odds == a / b)
+- question: How many studies mention working memory but do not activate left anterior mid-cingulate gyrus and sulcus?
+  datalog: |-
+    m(s) :- mentions(s, 'working memory'), ~destrieux_activated('L G and S cingul Mid Ant', s)
+    ans(studies) :- AGGREGATE[](m(s) @ count(s)) = studies
+- question: Which functional networks are not activated by studies that mention elderly, and how likely is that?
+  datalog: |-
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    p_act(l, p) :- PROB[active(l, s) // term_association(s, 'elderly')] = p
+    ans(parcel, difference) :- p_act(parcel, p), (difference == (1.0 - p))
+- question: What is the probability that a study mentions neither cuneus nor ventrolateral prefrontal?
+  datalog: |-
+    n(s) :- selected_study(s), ~mentions(s, 'cuneus'), ~mentions(s, 'ventrolateral prefrontal')
+    ans(probability) :- PROB[n(s)] = probability
+- question: Among studies that do not activate left temporoparietal junction (MNI -50, -56, 22), how many mention medial temporal?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -50.0, -56.0, 22.0) <= {kernel_radius_mm})
+    cand(s) :- mentions(s, 'medial temporal'), ~near(s)
+    ans(studies) :- AGGREGATE[](cand(s) @ count(s)) = studies
+- question: Is right putamen (MNI 24, 4, 0) frequently reported together with pre-supplementary motor area (MNI 0, 18, 50)?
+  datalog: |-
+    near_a(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 24.0, 4.0, 0.0) <= {kernel_radius_mm})
+    near_b(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 0.0, 18.0, 50.0) <= {kernel_radius_mm})
+    a(s) :- near_a(s), selected_study(s)
+    b(s) :- near_b(s), selected_study(s)
+    both(s) :- a(s), b(s)
+    ans(p_ab, p_a, p_b, lift) :- PROB[both(s)] = p_ab, PROB[a(s)] = p_a, PROB[b(s)] = p_b, (lift == (p_ab / (p_a * p_b)))
+- question: How much more likely is a peak at left angular gyrus (MNI -44, -66, 36) when midbrain is mentioned than otherwise?
+  datalog: |-
+    act(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -44, -66, 36) <= {kernel_radius_mm}), selected_study(s)
+    t(s) :- mentions(s, 'midbrain'), selected_study(s)
+    nt(s) :- study(s), ~mentions(s, 'midbrain'), selected_study(s)
+    p1(p) :- PROB[act(s) // t(s)] = p
+    p0(p) :- PROB[act(s) // nt(s)] = p
+    ans(rr) :- p1(a), p0(b), (rr == a / b)
+- question: Which studies mentioning attention activate neither right V5/MT (MNI 46, -70, 2) nor right thalamus (MNI 10, -18, 8)?
+  datalog: |-
+    v5(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 46.0, -70.0, 2.0) <= {kernel_radius_mm})
+    tha(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 10.0, -18.0, 8.0) <= {kernel_radius_mm})
+    ans(study) :- mentions(study, 'attention'), ~v5(study), ~tha(study)
+- question: How many studies activating left temporal pole also peak near left hippocampus (MNI -28, -22, -14)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -28.0, -22.0, -14.0) <= {kernel_radius_mm})
+    both(s) :- near(s), destrieux_activated('L Pole temporal', s)
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: Which Tian subcortical regions are within 10 mm of ventral striatum (MNI 10, 10, -8)?
+  datalog: ans(region) :- tian_points(x, y, z, region), (euclidean(x, y, z, 10.0, 10.0, -8.0) <= 10)
+- question: How many studies mention aging without activating anywhere near left fusiform face area (MNI -40, -52, -18)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -40, -52, -18) <= {kernel_radius_mm})
+    res(s) :- mentions(s, 'aging'), ~near(s)
+    ans(studies) :- AGGREGATE[](res(s) @ count(s)) = studies
+- question: How many studies near right fusiform face area (MNI 40, -52, -18) mention symptoms?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 40, -52, -18) <= {kernel_radius_mm})
+    both(s) :- near(s), mentions(s, 'symptoms')
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: Is right amygdala (MNI 24, -4, -20) closer to nucleus accumbens or to right angular gyrus?
+  datalog: |-
+    nac(l) :- tian(l, r), startswith('NAc', l)
+    dn(d) :- nac(l), tian_points(x, y, z, l), (d == euclidean(x, y, z, 24.0, -4.0, -20.0))
+    ang(l) :- destrieux(l, r), (l == 'R G pariet inf Angular')
+    da(d) :- ang(l), destrieux_points(x, y, z, l), (d == euclidean(x, y, z, 24.0, -4.0, -20.0))
+    mn(m) :- AGGREGATE[](dn(d) @ min(d)) = m
+    ma(m) :- AGGREGATE[](da(d) @ min(d)) = m
+    ans(min_difference_1, min_difference_2) :- mn(min_difference_1), ma(min_difference_2)
+- question: What is the baseline probability of an activation near left Broca's area (MNI -48, 18, 14)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -48.0, 18.0, 14.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    ans(probability) :- PROB[active(s)] = probability
+- question: Which term is the best predictor of an activation near right amygdala (MNI 24, -4, -20)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 24.0, -4.0, -20.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t, s) :- near(s), mentions(s, t), selected_study(s)
+    roi_probability(p_r) :- PROB[active(s)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+    bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+    top(m) :- AGGREGATE[](bayes_factor(t, bf) @ max(bf)) = m
+    ans(term, bayes_factor) :- bayes_factor(term, bayes_factor), top(bayes_factor)
+- question: List the terms that studies activating left fusiform face area (MNI -40, -52, -18) tend to mention.
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -40.0, -52.0, -18.0) <= {kernel_radius_mm})
+    seed(s) :- near(s), selected_study(s)
+    mentioned(t, s) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[mentioned(term, s) // seed(s)] = probability
+- question: Count the studies reporting a peak at medial prefrontal cortex (MNI 0, 52, -6) or within 7 mm of it.
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 0.0, 52.0, -6.0) <= 7)
+    ans(studies) :- AGGREGATE[](near(s) @ count(s)) = studies
+- question: Is the co-occurrence of left visual word form area (MNI -44, -58, -12) and posterior cingulate (MNI 0, -52, 26) higher than their individual rates predict?
+  datalog: |-
+    va(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -44.0, -58.0, -12.0) <= {kernel_radius_mm}), selected_study(s)
+    vb(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 0.0, -52.0, 26.0) <= {kernel_radius_mm}), selected_study(s)
+    vboth(s) :- va(s), vb(s)
+    pr_a(p) :- PROB[va(s)] = p
+    pr_b(p) :- PROB[vb(s)] = p
+    pr_both(p) :- PROB[vboth(s)] = p
+    ans(lift) :- pr_both(p12), pr_a(p1), pr_b(p2), (lift == p12 / (p1 * p2))
+- question: Is left primary auditory cortex (MNI -46, -22, 8) reported more by studies mentioning object than memory?
+  datalog: |-
+    active(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -46.0, -22.0, 8.0) <= {kernel_radius_mm}), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    p_given(t, p) :- PROB[active(s) // term_association(s, t)] = p
+    ans(term, probability) :- p_given(term, probability), (term == 'object' | term == 'memory')
+- question: Which studies near right fusiform face area (MNI 40, -52, -18) mention social or grey matter?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 40.0, -52.0, -18.0) <= {kernel_radius_mm})
+    ans(study) :- near(study), (mentions(study, 'social') | mentions(study, 'grey matter'))
+- question: Which network and parcel is ventral striatum (MNI 10, 10, -8) part of?
+  datalog: |-
+    near(l) :- schaefer_points(x, y, z, l), (euclidean(x, y, z, 10.0, 10.0, -8.0) <= 8)
+    ans(parcel) :- near(parcel)
+- question: Which subcortical region is closest to left fusiform face area (MNI -40, -52, -18)?
+  datalog: |-
+    dist(l, d) :- tian_points(x, y, z, l), (d == euclidean(x, y, z, -40.0, -52.0, -18.0))
+    mind(l, m) :- AGGREGATE[l](dist(l, d) @ min(d)) = m
+    best(b) :- AGGREGATE[](mind(l, m) @ min(m)) = b
+    ans(region) :- mind(region, m), best(m)
+- question: Which studies with a peak in right posterior cingulate gyrus (dorsal part) mention dacc but not right dorsolateral prefrontal cortex (MNI 44, 36, 24)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 44.0, 36.0, 24.0) <= {kernel_radius_mm})
+    ans(study) :- destrieux_activated('R G cingul Post dorsal', study), mentions(study, 'dacc'), ~near(study)
+- question: Which studies report both a peak at left caudate (MNI -12, 12, 10) and a peak in thalamus?
+  datalog: |-
+    tha_label(l) :- tian(l, r), startswith('THA', l)
+    tha(s) :- tha_label(l), tian_activated(l, s)
+    caud(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -12.0, 12.0, 10.0) <= {kernel_radius_mm})
+    ans(study) :- caud(study), tha(study)
+- question: Which studies report a peak near left primary auditory cortex (MNI -46, -22, 8) and mention recall?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -46.0, -22.0, 8.0) <= {kernel_radius_mm})
+    ans(study) :- near(study), mentions(study, 'recall')
+- question: Which regions of the globus pallidus atlas are near right fusiform face area (MNI 40, -52, -18)?
+  datalog: |-
+    gp(l) :- tian(l, r), startswith('aGP', l)
+    gp(l) :- tian(l, r), startswith('pGP', l)
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 40.0, -52.0, -18.0) <= {kernel_radius_mm})
+    seed(s) :- near(s), selected_study(s)
+    active(l, s) :- gp(l), tian_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+- question: How strongly does posterior insula predict an activation at dorsal anterior cingulate (MNI 0, 24, 30)?
+  datalog: |-
+    pins(l) :- destrieux(l, r), startswith('L G Ins lg', l)
+    pins(l) :- destrieux(l, r), startswith('R G Ins lg', l)
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 0.0, 24.0, 30.0) <= {kernel_radius_mm})
+    ins(s) :- pins(l), destrieux_activated(l, s), selected_study(s)
+    tgt(s) :- near(s), selected_study(s)
+    p_t(p) :- PROB[tgt(s)] = p
+    p_ti(p) :- PROB[tgt(s) // ins(s)] = p
+    ans(lift, probability_1, probability_2) :- p_t(probability_2), p_ti(probability_1), (lift == (probability_1 / probability_2))
+- question: Which cortical network contains ventral striatum (MNI 10, 10, -8)?
+  datalog: ans(parcel) :- schaefer_points(x, y, z, parcel), (euclidean(x, y, z, 10.0, 10.0, -8.0) <= 10)
+- question: Which studies with peaks in globus pallidus also mention gyrus, regardless of primary visual cortex (MNI 0, -90, 0)?
+  datalog: |-
+    gp_label(l) :- tian(l, r), startswith('aGP', l)
+    gp_label(l) :- tian(l, r), startswith('pGP', l)
+    gp(s) :- gp_label(l), tian_activated(l, s)
+    ans(study) :- gp(study), mentions(study, 'gyrus')
+- question: Name the Destrieux region that left Broca's area (MNI -48, 18, 14) belongs to.
+  datalog: ans(region) :- destrieux_points(x, y, z, region), (euclidean(x, y, z, -48.0, 18.0, 14.0) <= 3)
+- question: Is the link between right frontal eye field (MNI 30, -4, 52) and precentral gyrus stronger than chance?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 30.0, -4.0, 52.0) <= {kernel_radius_mm})
+    pre(s) :- destrieux_activated('R G precentral', s)
+    pre(s) :- destrieux_activated('L G precentral', s)
+    fef(s) :- near(s), selected_study(s)
+    prec(s) :- pre(s), selected_study(s)
+    both(s) :- near(s), pre(s), selected_study(s)
+    p_f(p) :- PROB[fef(s)] = p
+    p_p(p) :- PROB[prec(s)] = p
+    p_b(p) :- PROB[both(s)] = p
+    ans(lift) :- p_b(pb), p_f(pf), p_p(pp), (lift == pb / (pf * pp))
+- question: What is the activation probability at left fusiform face area (MNI -40, -52, -18) among studies not mentioning midbrain?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -40.0, -52.0, -18.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    nomid(s) :- study(s), ~mentions(s, 'midbrain'), selected_study(s)
+    ans(probability) :- PROB[active(s) // nomid(s)] = probability
+- question: Which nucleus accumbens region has the most studies peaking near left primary auditory cortex (MNI -46, -22, 8)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -46.0, -22.0, 8.0) <= {kernel_radius_mm})
+    nac(l) :- tian(l, r), startswith('NAc', l)
+    both(l, s) :- nac(l), tian_activated(l, s), near(s)
+    cnt(l, n) :- AGGREGATE[l](both(l, s) @ count(s)) = n
+    top(m) :- AGGREGATE[](cnt(l, n) @ max(n)) = m
+    ans(region, studies) :- cnt(region, studies), top(studies)
+- question: How many studies that mention explicit activate near left hippocampus (MNI -28, -22, -14)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -28, -22, -14) <= {kernel_radius_mm})
+    m(s) :- mentions(s, 'explicit'), near(s)
+    ans(studies) :- AGGREGATE[](m(s) @ count(s)) = studies
+- question: Rank the terms by lift with the location right frontal eye field (MNI 30, -4, 52).
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 30.0, -4.0, 52.0) <= {kernel_radius_mm})
+    active_roi(s) :- near(s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t, s) :- near(s), mentions(s, t), selected_study(s)
+    roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+    term_lift(t, l) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (l == p_rt / (p_r * p_t))
+    ans(term, ratio) :- term_lift(term, ratio)
+- question: How many studies report an activation within 2 mm of right V5/MT (MNI 46, -70, 2)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 46.0, -70.0, 2.0) <= 2)
+    ans(studies) :- AGGREGATE[](near(s) @ count(s)) = studies
+- question: Which Destrieux gyrus or sulcus is nearest to right fusiform face area (MNI 40, -52, -18)?
+  datalog: |-
+    dist(l, d) :- destrieux_points(x, y, z, l), (d == euclidean(x, y, z, 40.0, -52.0, -18.0))
+    mind(m) :- AGGREGATE[](dist(l, d) @ min(d)) = m
+    ans(region) :- dist(region, d), mind(m), (d == m)
+- question: How many studies activating putamen also peak near left caudate (MNI -12, 12, 10)?
+  datalog: |-
+    put(l) :- tian(l, r), startswith('aPUT', l)
+    put(l) :- tian(l, r), startswith('pPUT', l)
+    put_s(s) :- put(l), tian_activated(l, s)
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -12.0, 12.0, 10.0) <= {kernel_radius_mm})
+    both(s) :- put_s(s), near(s)
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: What is the most frequent term among studies with peaks near medial prefrontal cortex (MNI 0, 52, -6)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 0.0, 52.0, -6.0) <= {kernel_radius_mm})
+    nm(t, s) :- mentions(s, t), near(s)
+    term_count(t, n) :- AGGREGATE[t](nm(t, s) @ count(s)) = n
+    top(m) :- AGGREGATE[](term_count(t, n) @ max(n)) = m
+    ans(term, studies) :- term_count(term, studies), top(studies)
+- question: Is left thalamus (MNI -10, -18, 8) a frequently reported location?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -10.0, -18.0, 8.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    ans(probability) :- PROB[active(s)] = probability
+- question: Which term has the strongest evidence for activation at left fusiform face area (MNI -40, -52, -18)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -40.0, -52.0, -18.0) <= {kernel_radius_mm})
+    active_roi(s) :- near(s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t, s) :- near(s), mentions(s, t), selected_study(s)
+    roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+    bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+    top(m) :- AGGREGATE[](bayes_factor(t, bf) @ max(bf)) = m
+    ans(term, bayes_factor) :- bayes_factor(term, bayes_factor), top(bayes_factor)
+- question: Which words best distinguish studies peaking at left insula (MNI -38, 6, 2) from all other studies?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -38.0, 6.0, 2.0) <= {kernel_radius_mm})
+    reg(s) :- near(s), selected_study(s)
+    tm(t) :- mentions(s, t), selected_study(s)
+    both(t) :- mentions(s, t), reg(s)
+    anyreg() :- reg(s)
+    p_r(p) :- PROB[anyreg()] = p
+    p_t(t, p) :- PROB[tm(t)] = p
+    p_rt(t, p) :- PROB[both(t)] = p
+    bf(t, b) :- p_r(pr), p_t(t, pt), p_rt(t, prt), (b == (prt / pr) / ((pt - prt) / (1.0 - pr)))
+    ans(term, ratio) :- bf(term, ratio), (ratio > 3.16)
+- question: Which cortical and subcortical regions overlap with right dorsolateral prefrontal cortex (MNI 44, 36, 24)?
+  datalog: |-
+    cort(l) :- destrieux_points(x, y, z, l), (euclidean(x, y, z, 44.0, 36.0, 24.0) <= {kernel_radius_mm})
+    sub(l) :- tian_points(x, y, z, l), (euclidean(x, y, z, 44.0, 36.0, 24.0) <= {kernel_radius_mm})
+    ans(region) :- cort(region) | sub(region)
+- question: Which studies have a reported peak at pre-supplementary motor area (MNI 0, 18, 50)?
+  datalog: ans(study) :- peak_mni(0.0, 18.0, 50.0, study)
+- question: How many studies activate left insula (MNI -38, 6, 2) and mention medial prefrontal or behaviour?
+  datalog: |-
+    act(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -38, 6, 2) <= {kernel_radius_mm})
+    m(s) :- mentions(s, 'medial prefrontal') | mentions(s, 'behaviour')
+    both(s) :- act(s), m(s)
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: Which terms are shared by studies peaking at right fusiform face area (MNI 40, -52, -18) and at ventromedial prefrontal cortex (MNI 2, 46, -10)?
+  datalog: |-
+    near_a(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 40.0, -52.0, -18.0) <= {kernel_radius_mm})
+    near_b(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 2.0, 46.0, -10.0) <= {kernel_radius_mm})
+    both(s) :- near_a(s), near_b(s), selected_study(s)
+    term_study(t, s) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[term_study(term, s) // both(s)] = probability
+- question: What percentage of studies activate left Broca's area (MNI -48, 18, 14)?
+  datalog: |-
+    act(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -48.0, 18.0, 14.0) <= {kernel_radius_mm}), selected_study(s)
+    pa(PROB) :- act(s)
+    ans(percentage) :- pa(p), (percentage == (p * 100.0))
+- question: Which studies activate right intraparietal sulcus (MNI 32, -56, 48) but do not mention orienting?
+  datalog: |-
+    act(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 32, -56, 48) <= {kernel_radius_mm})
+    ans(study) :- act(study), ~mentions(study, 'orienting')
+- question: Which studies mentioning prefrontal cortex report a peak within 4 mm of right V5/MT (MNI 46, -70, 2)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 46.0, -70.0, 2.0) <= 4)
+    ans(study) :- near(study), mentions(study, 'prefrontal cortex')
+- question: How many studies mention perception and report a peak within 3 mm of left amygdala (MNI -24, -4, -20)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= 3)
+    both(s) :- near(s), mentions(s, 'perception')
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: Which studies near left temporoparietal junction (MNI -50, -56, 22) have titles mentioning cerebellar?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -50.0, -56.0, 22.0) <= {kernel_radius_mm})
+    ans(study, title) :- near(study), study_title(study, title), contains(title, 'cerebellar')
+- question: Which studies with a peak near left angular gyrus (MNI -44, -66, 36) do not mention depressive?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -44, -66, 36) <= {kernel_radius_mm})
+    ans(study) :- near(study), study(study), ~mentions(study, 'depressive')
+- question: Which terms are most strongly associated with left temporoparietal junction (MNI -50, -56, 22)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -50.0, -56.0, 22.0) <= {kernel_radius_mm})
+    active_roi(s) :- near(s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t, s) :- near(s), mentions(s, t), selected_study(s)
+    roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+    bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+    ans(term, bayes_factor) :- bayes_factor(term, bayes_factor), (bayes_factor > 3.16)
+- question: Which terms co-occur with putamen among studies activating ventromedial prefrontal cortex (MNI 2, 46, -10)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 2.0, 46.0, -10.0) <= {kernel_radius_mm})
+    seed(s) :- near(s), mentions(s, 'putamen'), selected_study(s)
+    term_in(t, s) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[term_in(term, s) // seed(s)] = probability
+- question: Does right temporoparietal junction (MNI 52, -54, 22) lie in a cortical or subcortical region?
+  datalog: ans(region) :- destrieux_points(x, y, z, region), (euclidean(x, y, z, 52, -54, 22) <= 2)
+- question: What is the probability of activating left amygdala (MNI -24, -4, -20) or right intraparietal sulcus (MNI 32, -56, 48)?
+  datalog: |-
+    near_a(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= {kernel_radius_mm})
+    near_b(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 32.0, -56.0, 48.0) <= {kernel_radius_mm})
+    active(s) :- near_a(s), selected_study(s)
+    active(s) :- near_b(s), selected_study(s)
+    ans(probability) :- PROB[active(s)] = probability
+- question: Which studies place a peak less than 6 mm from right orbitofrontal cortex (MNI 28, 34, -14)?
+  datalog: |-
+    near(x, y, z, s) :- peak_mni(x, y, z, s), (x > 21), (x < 35), (y > 27), (y < 41), (z > -21), (z < -7)
+    ans(study) :- near(x, y, z, study), (euclidean(x, y, z, 28.0, 34.0, -14.0) < 6)
+- question: How does the chance of activating left dorsolateral prefrontal cortex (MNI -44, 36, 24) change when ventral striatum is mentioned?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -44.0, 36.0, 24.0) <= {kernel_radius_mm})
+    act(s) :- near(s), selected_study(s)
+    ment(s) :- mentions(s, 'ventral striatum'), selected_study(s)
+    base(p) :- PROB[act(s)] = p
+    cond(p) :- PROB[act(s) // ment(s)] = p
+    ans(probability_1, probability_2, lift) :- base(probability_1), cond(probability_2), (lift == (probability_2 / probability_1))
+- question: Which terms are rarely mentioned by studies activating right V5/MT (MNI 46, -70, 2)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 46.0, -70.0, 2.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    mentioned(t, s) :- mentions(s, t), selected_study(s)
+    cond(t, p) :- PROB[mentioned(t, s) // active(s)] = p
+    ans(term, probability) :- cond(term, probability), (probability < 0.01)
+- question: Give the number of studies with a peak close to right temporoparietal junction (MNI 52, -54, 22).
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 52.0, -54.0, 22.0) <= {kernel_radius_mm})
+    ans(studies) :- AGGREGATE[](near(s) @ count(s)) = studies
+- question: Which studies activate both left motor hand area (MNI -38, -22, 56) and right intraparietal sulcus (MNI 32, -56, 48)?
+  datalog: |-
+    a(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -38, -22, 56) <= {kernel_radius_mm})
+    b(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 32, -56, 48) <= {kernel_radius_mm})
+    ans(study) :- a(study), b(study)
+- question: Which functional network includes right dorsolateral prefrontal cortex (MNI 44, 36, 24)?
+  datalog: ans(parcel) :- schaefer_points(x, y, z, parcel), (euclidean(x, y, z, 44.0, 36.0, 24.0) <= 2)
+- question: Which terms have the highest lift with left amygdala (MNI -24, -4, -20)?
+  datalog: |-
+    near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= {kernel_radius_mm})
+    active(s) :- near(s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t, s) :- near(s), mentions(s, t), selected_study(s)
+    roi_probability(p_r) :- PROB[active(s)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+    lift_t(t, l) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (l == (p_rt / (p_r * p_t)))
+    ans(term, ratio) :- lift_t(term, ratio), (ratio > 2.5)
+- question: What proportion of studies mentioning linguistic do not activate left visual word form area (MNI -44, -58, -12)?
+  datalog: |-
+    act(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -44.0, -58.0, -12.0) <= {kernel_radius_mm}), selected_study(s)
+    ling(s) :- mentions(s, 'linguistic'), selected_study(s)
+    anyact() :- act(s)
+    anyling() :- ling(s)
+    ans(difference) :- PROB[anyact() // anyling()] = q, (difference == (1.0 - q))
+- question: Which terms best predict studies activating right hippocampus (MNI 28, -22, -14) but not pre-supplementary motor area (MNI 0, 18, 50)?
+  datalog: |-
+    near_a(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 28.0, -22.0, -14.0) <= {kernel_radius_mm})
+    near_b(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 0.0, 18.0, 50.0) <= {kernel_radius_mm})
+    target(s) :- near_a(s), ~near_b(s)
+    reg() :- target(s), selected_study(s)
+    tm(t) :- mentions(s, t), selected_study(s)
+    reg_tm(t) :- target(s), mentions(s, t), selected_study(s)
+    p_r(p) :- PROB[reg()] = p
+    p_t(t, p) :- PROB[tm(t)] = p
+    p_rt(t, p) :- PROB[reg_tm(t)] = p
+    ans(term, bayes_factor) :- p_r(pr), p_t(term, pt), p_rt(term, prt), (bayes_factor == (prt / pr) / ((pt - prt) / (1.0 - pr))), (bayes_factor > 3.16)
+- question: Which studies mention visual motion and activate the right middle temporal area?
+  datalog: ans(study) :- mentions(study, 'visual motion'), destrieux_activated('R G temporal middle', study)
+- question: Which terms are most strongly associated with the left angular gyrus?
+  datalog: |-
+    active_region(l) :- destrieux_activated(l, s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(l, t) :- destrieux_activated(l, s), mentions(s, t), selected_study(s)
+    region_probability(l, p_r) :- PROB[active_region(l)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(l, t, p_rt) :- PROB[cooccurrence(l, t)] = p_rt
+    bayes_factor(l, t, bf) :- joint_probability(l, t, p_rt), region_probability(l, p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+    ans(term, bayes_factor) :- bayes_factor('L G pariet inf Angular', term, bayes_factor), (bayes_factor > 3.16)
+- question: Which studies mention the ventromedial prefrontal cortex and long term?
+  datalog: ans(study) :- mentions(study, 'ventromedial prefrontal'), mentions(study, 'long term')
+- question: Which studies report activation in the right cerebellar vermis?
+  datalog: ans(study) :- peak_mni(x, y, z, study), (x >= 0), (x <= 8), (y >= -78), (y <= -35), (z >= -50), (z <= -15)
+- question: Which studies mention both the right frontal pole and the left putamen?
+  datalog: |-
+    put(s) :- tian_activated('aPUT lh', s)
+    put(s) :- tian_activated('pPUT lh', s)
+    ans(study) :- destrieux_activated('R G and S transv frontopol', study), put(study)
+- question: Show studies reporting peak activity in the left lingual gyrus.
+  datalog: ans(study) :- destrieux_activated('L G oc temp med Lingual', study)
+- question: Find studies activating the tail of the left hippocampus.
+  datalog: ans(study) :- tian_activated('pHIP lh', study)
+- question: Which subcortical regions are co-activated with the right anterior insula?
+  datalog: |-
+    seed(s) :- destrieux_activated('R S circular insula ant', s), selected_study(s)
+    seed(s) :- destrieux_activated('R G insular short', s), selected_study(s)
+    active(l, s) :- tian_activated(l, s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+- question: Which studies activate the left medial prefrontal cortex but do not mention the default network?
+  datalog: ans(study) :- destrieux_activated('L G front sup', study), study(study), ~mentions(study, 'default network')
+- question: Which gyri are activated by studies mentioning attention but not the default network?
+  datalog: |-
+    active(l, s) :- destrieux_activated(l, s), selected_study(s)
+    cond(s) :- mentions(s, 'attention'), ~mentions(s, 'default network'), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // cond(s)] = probability
+- question: Which studies mention fearful faces or angry faces?
+  datalog: ans(study) :- mentions(study, 'fearful faces') | mentions(study, 'angry faces')
+- question: List the studies that mention cingulate gyrus and the sensory-motor strip.
+  datalog: ans(study) :- mentions(study, 'cingulate gyrus'), mentions(study, 'sensory motor')
+- question: Which studies activate the right occipital pole and mention learning?
+  datalog: ans(study) :- mentions(study, 'learning'), destrieux_activated('R Pole occipital', study)
+- question: Are the left and right amygdala co-activated in studies mentioning threatening faces?
+  datalog: |-
+    amygdala_left(s) :- tian_activated('lAMY lh', s)
+    amygdala_left(s) :- tian_activated('mAMY lh', s)
+    amygdala_right(s) :- tian_activated('lAMY rh', s)
+    amygdala_right(s) :- tian_activated('mAMY rh', s)
+    topic(s) :- mentions(s, 'threatening'), mentions(s, 'faces'), selected_study(s)
+    topic(s) :- mentions(s, 'threatening'), mentions(s, 'face'), selected_study(s)
+    left(s) :- amygdala_left(s), topic(s)
+    right(s) :- amygdala_right(s), topic(s)
+    both(s) :- amygdala_left(s), amygdala_right(s), topic(s)
+    p_left(p) :- PROB[left(s)] = p
+    p_right(p) :- PROB[right(s)] = p
+    p_both(p) :- PROB[both(s)] = p
+    p_topic(p) :- PROB[topic(s)] = p
+    ans(lift) :- p_both(p12), p_left(p1), p_right(p2), p_topic(pt), (lift == p12 * pt / (p1 * p2))
+- question: Which functional networks overlap with studies activating the right angular gyrus?
+  datalog: |-
+    seed(s) :- destrieux_activated('R G pariet inf Angular', s), selected_study(s)
+    active(l, s) :- schaefer_activated(l, s), selected_study(s)
+    ans(parcel, probability) :- PROB[active(parcel, s) // seed(s)] = probability
+- question: How likely is the right putamen to be active in studies mentioning emotional?
+  datalog: |-
+    put_label(l) :- tian(l, r), startswith('aPUT rh', l)
+    put_label(l) :- tian(l, r), startswith('pPUT rh', l)
+    put(s) :- put_label(l), tian_activated(l, s), selected_study(s)
+    emo(s) :- mentions(s, 'emotional'), selected_study(s)
+    ans(probability) :- PROB[put(s) // emo(s)] = probability
+- question: How many studies mention the dorsal attention network and ventral striatum?
+  datalog: |-
+    both(s) :- mentions(s, 'dorsal attention'), mentions(s, 'ventral striatum')
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: Which studies mention the auditory network but not medial temporal?
+  datalog: ans(study) :- mentions(study, 'auditory'), ~mentions(study, 'medial temporal')
+- question: Which sulci are active in studies about reading words aloud?
+  datalog: |-
+    sulcus(l) :- destrieux(l, r), startswith('L S ', l)
+    sulcus(l) :- destrieux(l, r), startswith('R S ', l)
+    active(l, s) :- destrieux_activated(l, s), sulcus(l), selected_study(s)
+    close(s) :- similar_study('reading words aloud', s), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Which studies mention emotional faces?
+  datalog: ans(study) :- mentions(study, 'emotional faces')
+- question: Which concepts fall under the umbrella of learning?
+  datalog: ans(concept) :- cogat_term(c, 'learning'), cogat_subclass_of(x, c), cogat_term(x, concept)
+- question: Which studies activate the right superior temporal gyrus and mention sound?
+  datalog: ans(study) :- mentions(study, 'sound'), destrieux_activated('R G temp sup Lateral', study)
+- question: Which studies activate the brainstem and mention planning?
+  datalog: |-
+    bs(s) :- peak_mni(x, y, z, s), (x > -15), (x < 15), (y > -40), (y < -10), (z > -65), (z < -5)
+    ans(study) :- bs(study), mentions(study, 'planning')
+- question: What fraction of studies activating the left orbital gyrus mention middle temporal?
+  datalog: |-
+    seed(s) :- destrieux_activated('L G orbital', s), selected_study(s)
+    m(s) :- mentions(s, 'middle temporal'), selected_study(s)
+    ans(probability) :- PROB[m(s) // seed(s)] = probability
+- question: What is the definition of the concept for remembering things from one's own past?
+  datalog: ans(definition) :- cogat_definition('autobiographical memory', definition)
+- question: What is the probability that a study activates the right anterior hippocampus, given that it mentions frontal cortex?
+  datalog: |-
+    active(s) :- tian_activated('aHIP rh', s), selected_study(s)
+    ta(s) :- mentions(s, 'frontal cortex'), selected_study(s)
+    ans(probability) :- PROB[active(s) // ta(s)] = probability
+- question: Which terms co-occur with the right temporal pole in a study?
+  datalog: |-
+    seed(s) :- destrieux_activated('R Pole temporal', s), selected_study(s)
+    term_in(s, t) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[term_in(s, term) // seed(s)] = probability
+- question: Which studies about moral reasoning activate the right temporoparietal junction?
+  datalog: |-
+    tpj(l) :- schaefer(l, r), startswith('17Networks RH TempPar', l)
+    act(s) :- tpj(l), schaefer_activated(l, s)
+    ans(study) :- similar_study('moral reasoning', study), act(study)
+- question: Which terms co-occur with the left superior parietal lobule in studies about verbal fluency?
+  datalog: |-
+    seed(s) :- destrieux_activated('L G parietal sup', s), mentions(s, 'verbal fluency'), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[term_association(s, term) // seed(s)] = probability
+- question: How many studies activate the left hippocampus and mention fearful?
+  datalog: |-
+    hip(s) :- tian_activated('aHIP lh', s)
+    hip(s) :- tian_activated('pHIP lh', s)
+    both(s) :- hip(s), mentions(s, 'fearful')
+    ans(studies) :- AGGREGATE[](both(s) @ count(s)) = studies
+- question: Which concepts are broader than the idea of stopping an action?
+  datalog: ans(concept) :- cogat_term(c, 'response inhibition'), cogat_subclass_of(c, x), cogat_term(x, concept)
+- question: Which studies mention pain but not the right anterior insula?
+  datalog: ans(study) :- mentions(study, 'pain'), ~destrieux_activated('R S circular insula ant', study)
+- question: What are the most frequent terms in studies activating the left intraparietal sulcus?
+  datalog: |-
+    active(s) :- destrieux_activated('L S intrapariet and P trans', s), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(term, probability) :- PROB[term_association(s, term) // active(s)] = probability
+- question: What is the probability that a study mentions accumbens, given that it activates the left inferior temporal gyrus?
+  datalog: |-
+    active(s) :- destrieux_activated('L G temporal inf', s), selected_study(s)
+    ms(s) :- mentions(s, 'accumbens'), selected_study(s)
+    ans(probability) :- PROB[ms(s) // active(s)] = probability
+- question: Which studies report an activation in the right dorsolateral prefrontal cortex?
+  datalog: ans(study) :- destrieux_activated('R G front middle', study)
+- question: Which studies mention premotor and activate the pars triangularis of the right inferior frontal gyrus?
+  datalog: ans(study) :- mentions(study, 'premotor'), destrieux_activated('R G front inf Triangul', study)
+- question: Which studies mention the feeling of disgust?
+  datalog: ans(study) :- mentions(study, 'disgust')
+- question: Which studies mention both mental imagery and the left precentral gyrus?
+  datalog: ans(study) :- mentions(study, 'mental imagery'), destrieux_activated('L G precentral', study)
+- question: Which studies report activity in the right inferior parietal lobule?
+  datalog: |-
+    ipl('R G pariet inf Angular')
+    ipl('R G pariet inf Supramar')
+    ans(study) :- ipl(l), destrieux_activated(l, study)
+- question: Which studies report peak coordinates in the left middle frontal gyrus?
+  datalog: ans(study) :- destrieux_activated('L G front middle', study)
+- question: Which studies mention eye movements and activate the left frontal eye field?
+  datalog: ans(study) :- mentions(study, 'eye movements'), destrieux_activated('L S precentral sup part', study)
+- question: Which studies report activation in the left subthalamic nucleus?
+  datalog: |-
+    cand(x, y, z, s) :- peak_mni(x, y, z, s), (x < -4.0), (x > -16.0), (y > -20.0), (y < -6.0), (z > -12.0), (z < 2.0)
+    ans(study) :- cand(x, y, z, study), (euclidean(x, y, z, -10.0, -13.0, -5.0) <= {kernel_radius_mm})
+- question: Which studies report an activation in the head of the caudate?
+  datalog: |-
+    head(s) :- tian_activated('aCAU rh', s)
+    head(s) :- tian_activated('aCAU lh', s)
+    ans(study) :- head(study)
+- question: Which studies mention both the right superior parietal lobule and the executive network?
+  datalog: ans(study) :- mentions(study, 'superior parietal'), mentions(study, 'executive')
+- question: Which terms are mentioned alongside the anterior cingulate gyrus, and how often?
+  datalog: |-
+    acc(s) :- destrieux_activated('L G and S cingul Ant', s), selected_study(s)
+    acc(s) :- destrieux_activated('R G and S cingul Ant', s), selected_study(s)
+    mentioned_term(t, s) :- mentions(s, t), selected_study(s)
+    p_term_given_acc(t, p) :- PROB[mentioned_term(t, s) // acc(s)] = p
+    ans(term, probability) :- p_term_given_acc(term, probability)
+- question: Show studies mentioning social interactions or childhood.
+  datalog: ans(study) :- mentions(study, 'social interactions') | mentions(study, 'childhood')
+- question: Which studies mention words or reading?
+  datalog: ans(study) :- mentions(study, 'words') | mentions(study, 'reading')
+- question: Which studies activate the left angular gyrus?
+  datalog: ans(study) :- destrieux_activated('L G pariet inf Angular', study)
+- question: What is the probability that a study activates the left calcarine sulcus, given that it mentions visual cortex?
+  datalog: |-
+    active(s) :- destrieux_activated('L S calcarine', s), selected_study(s)
+    ta(s) :- mentions(s, 'visual cortex'), selected_study(s)
+    ans(probability) :- PROB[active(s) // ta(s)] = probability
+- question: Which studies activate the left central sulcus but do not mention orbitofrontal cortex?
+  datalog: ans(study) :- destrieux_activated('L S central', study), ~mentions(study, 'orbitofrontal cortex')
+- question: Which studies mention the limbic network?
+  datalog: ans(study) :- mentions(study, 'limbic')
+- question: What is the probability that a study mentions movements, given that it activates the posterior cingulate cortex?
+  datalog: |-
+    pcc(s) :- destrieux_activated('L G cingul Post dorsal', s)
+    pcc(s) :- destrieux_activated('L G cingul Post ventral', s)
+    pcc(s) :- destrieux_activated('R G cingul Post dorsal', s)
+    pcc(s) :- destrieux_activated('R G cingul Post ventral', s)
+    active(s) :- pcc(s), selected_study(s)
+    ta(s) :- mentions(s, 'movements'), selected_study(s)
+    ans(probability) :- PROB[ta(s) // active(s)] = probability
+- question: Which terms are associated with studies activating the primary visual cortex?
+  datalog: |-
+    v1(l) :- destrieux(l, r), startswith('L S calcarine', l)
+    v1(l) :- destrieux(l, r), startswith('R S calcarine', l)
+    active_roi(s) :- v1(l), destrieux_activated(l, s), selected_study(s)
+    mentioned_term(t) :- mentions(s, t), selected_study(s)
+    cooccurrence(t, s) :- active_roi(s), mentions(s, t)
+    roi_probability(p_r) :- PROB[active_roi(s)] = p_r
+    term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+    joint_probability(t, p_rt) :- PROB[cooccurrence(t, s)] = p_rt
+    bayes_factor(t, bf) :- joint_probability(t, p_rt), roi_probability(p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+    ans(term, bayes_factor) :- bayes_factor(term, bayes_factor), (bayes_factor > 3.16)
+- question: Which studies report activity in the left inferior frontal gyrus and mention trait?
+  datalog: |-
+    ifg(l) :- destrieux(l, r), startswith('L G front inf', l)
+    ans(study) :- ifg(l), destrieux_activated(l, study), mentions(study, 'trait')
+- question: What does the idea of being aware of one's own thoughts mean?
+  datalog: ans(definition) :- cogat_definition('metacognition', definition)
+- question: Which sulci are activated by studies about listening to speech sounds?
+  datalog: |-
+    sulcus(l) :- destrieux(l, r), startswith('L S ', l)
+    sulcus(l) :- destrieux(l, r), startswith('R S ', l)
+    close(s) :- similar_study('listening to speech sounds', s), selected_study(s)
+    active(l, s) :- destrieux_activated(l, s), selected_study(s), sulcus(l)
+    ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+- question: Which studies report activity in the body of the left caudate nucleus?
+  datalog: ans(study) :- tian_activated('pCAU lh', study)
+- question: What is the chance a study mentions the dorsal attention network, given right frontal eye field activation?
+  datalog: |-
+    active(s) :- schaefer_activated('17Networks RH DorsAttnB FEF 1', s), selected_study(s)
+    ta(s, t) :- mentions(s, t), selected_study(s)
+    ans(probability) :- PROB[ta(s, 'dorsal attention') // active(s)] = probability
+- question: Which studies mention the executive control network and report activity in the left supramarginal gyrus?
+  datalog: ans(study) :- mentions(study, 'executive control'), destrieux_activated('L G pariet inf Supramar', study)
+- question: Which sulci light up in studies mentioning the default network?
+  datalog: |-
+    sulcus(l) :- destrieux(l, r), startswith('L S ', l)
+    sulcus(l) :- destrieux(l, r), startswith('R S ', l)
+    active(l, s) :- destrieux_activated(l, s), sulcus(l), selected_study(s)
+    term_association(s, t) :- mentions(s, t), selected_study(s)
+    ans(region, probability) :- PROB[active(region, s) // term_association(s, 'default network')] = probability

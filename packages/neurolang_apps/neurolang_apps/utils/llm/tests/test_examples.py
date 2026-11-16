@@ -61,17 +61,17 @@ def test_banks_load(engine):
 
 def test_banks_are_inherited():
     # Both engines extend coordinate_meta_analysis and share its bank;
-    # neurostore adds examples of its own after it.
+    # each adds examples of its own after it.
     shared = load_examples("coordinate_meta_analysis")
-    assert load_examples("neurosynth") == shared
     # ...which begins with those of the connectivities it extends
     connectivity = (load_examples("structural_connectivity")
                     + load_examples("functional_connectivity"))
     assert shared[:len(connectivity)] == connectivity
     assert len(shared) > len(connectivity)
-    neurostore = load_examples("neurostore")
-    assert neurostore[:len(shared)] == shared
-    assert len(neurostore) > len(shared)
+    for engine in ("neurosynth", "neurostore"):
+        examples = load_examples(engine)
+        assert examples[:len(shared)] == shared
+        assert len(examples) > len(shared)
 
 
 ANSWER_HEAD = re.compile(r"^\s*ans\s*(?:\[\s*\w+\s*\])?\s*\(([^)]*)\)", re.M)

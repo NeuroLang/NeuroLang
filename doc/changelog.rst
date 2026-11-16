@@ -17,7 +17,15 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
-Nothing yet.
+**New features:**
+
+* Query assistant: the neurosynth engine has 449 examples of its own after
+  the bank it shares with neurostore (``engines/neurosynth/examples.yaml``):
+  Sonnet 5.5's queries for generated questions, kept when DeepSeek
+  returned the same rows or a Sonnet judge accepted them, deduplicated,
+  with ``mentions`` only for the questions on the words of the studies,
+  checked on the engine and far from the questions of the evaluation sets
+  (bge-m3 cosine at most 0.85).
 
 
 v0.1a23 (2026-11-15)
