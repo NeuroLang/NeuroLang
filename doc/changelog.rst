@@ -433,6 +433,12 @@ v0.1a23 (2026-11-15)
 
 **Performance:**
 
+* Assistant: the two requests that check an answer (its translation back
+  into English and the judgement of it) start with the same message, the
+  engine and its predicates, which the Anthropic provider now caches as a
+  block of its own, so that the second reads it from the cache instead of
+  sending it again, as does each check of a retried answer.
+
 * The greedy join ordering starts from the join of two relations with the
   fewest rows at most, and adds at each step the relation whose join with
   the joined ones has the fewest rows at most, rather than the smallest

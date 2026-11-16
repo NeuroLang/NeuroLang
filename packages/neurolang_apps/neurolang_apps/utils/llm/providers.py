@@ -335,9 +335,9 @@ class AnthropicChatClient(ChatClient):
         return converted
 
     def _payload(self, messages, tools, temperature) -> dict:
-        system = "\n\n".join(
-            m["content"] for m in messages if m["role"] == "system"
-        )
+        # One block per system message, each marked: requests that start
+        # with the same message (the engine's predicates) share its cache.
+        system = [m["content"] for m in messages if m["role"] == "system"]
         # No temperature: current Claude models reject sampling parameters.
         payload = {
             "model": self.provider.model,
@@ -346,7 +346,8 @@ class AnthropicChatClient(ChatClient):
         }
         if system:
             payload["system"] = [
-                {"type": "text", "text": system, "cache_control": CACHED}
+                {"type": "text", "text": text, "cache_control": CACHED}
+                for text in system
             ]
         if tools:
             payload["tools"] = [

@@ -112,6 +112,28 @@ def test_openrouter_caches_the_prompts_of_claude(monkeypatch):
     assert reply.usage == {"input": 1200, "output": 3, "cached": 1000}
 
 
+def test_anthropic_caches_each_system_message_apart(monkeypatch):
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={
+            "content": [{"type": "text", "text": "ok"}],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        })
+
+    client("anthropic", handler, monkeypatch).complete([
+        {"role": "system", "content": "The predicates."},
+        {"role": "system", "content": "The task."},
+        {"role": "user", "content": "Go."},
+    ])
+    cached = {"type": "ephemeral"}
+    assert seen["body"]["system"] == [
+        {"type": "text", "text": "The predicates.", "cache_control": cached},
+        {"type": "text", "text": "The task.", "cache_control": cached},
+    ]
+
+
 def test_anthropic_request_and_tool_calls(monkeypatch):
     seen = {}
 
