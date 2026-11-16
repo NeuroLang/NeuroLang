@@ -689,6 +689,7 @@ assistant_examples:
   # schaefer (100 parcels), destrieux and tian: with the connectivity of
   # Destrieux and Tian (destrieux_tian_*_connectivity), their labels join.
   - question: How do the structural connectivity and the meta-analytic co-activation of the left angular gyrus compare, region by region?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       seed(s) :- destrieux_activated('L G pariet inf Angular', s), selected_study(s)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
@@ -696,6 +697,7 @@ assistant_examples:
       ans(region, streamlines, probability) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', region, streamlines), coactivation(region, probability)
 
   - question: Which cortical regions activated by studies about pain are strongly structurally connected to each other?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
@@ -703,6 +705,7 @@ assistant_examples:
       ans(l1, l2, streamlines) :- pain(l1, p1), pain(l2, p2), (p1 > 0.4), (p2 > 0.4), destrieux_tian_structural_connectivity(l1, l2, streamlines), (l1 < l2), (streamlines > 1000)
 
   - question: Are the gyri and sulci co-activated by studies about reading also structurally connected?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       co_active(l1, l2, s) :- active(l1, s), active(l2, s)
@@ -711,6 +714,7 @@ assistant_examples:
       ans(l1, l2, probability, streamlines) :- co_activation(l1, l2, probability), destrieux_tian_structural_connectivity(l1, l2, streamlines)
 
   - question: Which regions structurally connected to the left angular gyrus are activated by studies about memory?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
       connected(l, n) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l, n), (n > 500)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
@@ -719,6 +723,7 @@ assistant_examples:
       ans(region, streamlines, probability) :- connected(region, streamlines), memory(region, probability)
 
   - question: Which cortical regions structurally connected to the left hippocampus are activated by studies about memory?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
       connected(l, n) :- destrieux_tian_structural_connectivity('aHIP lh', l, n), destrieux(l, r), (n > 10)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
@@ -727,6 +732,7 @@ assistant_examples:
       ans(region, streamlines, probability) :- connected(region, streamlines), memory(region, probability)
 
   - question: What is the probability that a white-matter streamline drawn at random from the left angular gyrus ends in a region activated by a study about memory?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
       strength(sum(n)) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l, n)
       ends_in(l) ^ (n / t) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l, n), strength(t)
@@ -739,15 +745,18 @@ assistant_examples:
   # streamlines), the resting-state functional (correlation at rest) and
   # the meta-analytic co-activation, joined by the labels of the regions.
   - question: How do the structural and the resting-state functional connectivity of the left posterior cingulate (precuneus) compare, region by region?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       ans(region, streamlines, correlation) :- schaefer400_tian_structural_connectivity('17Networks LH DefaultA pCunPCC 1', region, streamlines), schaefer400_tian_functional_connectivity('17Networks LH DefaultA pCunPCC 1', region, correlation)
 
   - question: Which pairs of parcels are strongly functionally connected at rest (correlation above 0.5) without a direct structural connection (fewer than 1 streamline)?
+    topic: "Functional connectivity"
     datalog: |-
       wired(l1, l2) :- schaefer400_tian_structural_connectivity(l1, l2, n), (n >= 1)
       ans(l1, l2, correlation) :- schaefer400_tian_functional_connectivity(l1, l2, correlation), (correlation > 0.5), (l1 < l2), ~wired(l1, l2)
 
   - question: Are the gyri and sulci co-activated by studies about reading also functionally connected at rest?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       co_active(l1, l2, s) :- active(l1, s), active(l2, s)
@@ -763,6 +772,7 @@ assistant_examples:
   # Benjamini-Hochberg, an aggregation of the p-values); hubs; regions
   # both wired and correlated; a term's activations and the resting state.
   - question: For each Schaefer parcel, are its strongly wired partners (more than 100 streamlines) more correlated at rest than the parcels no streamline joins it to? Student t-tests, significant at a false discovery rate of 0.05.
+    topic: "Functional connectivity"
     datalog: |-
       fc(l1, l2, r) :- schaefer400_tian_functional_connectivity(l1, l2, r), schaefer400(l1, a), schaefer400(l2, b)
       wired(l1, l2) :- schaefer400_tian_structural_connectivity(l1, l2, n), (n > 100)
@@ -776,6 +786,7 @@ assistant_examples:
       ans(parcel, t_value, p_value) :- tested(parcel, t_value, p_value), cutoff(c), (p_value <= c)
 
   - question: Which Schaefer parcels are structural hubs, the top 5% by their streamlines, and how strongly are they functionally connected at rest?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       s_strength(l, sum(n)) :- schaefer400_tian_structural_connectivity(l, m, n), schaefer400(l, a)
       f_strength(l, sum(r)) :- schaefer400_tian_functional_connectivity(l, m, r), schaefer400(l, a), (r > 0)
@@ -783,6 +794,7 @@ assistant_examples:
       ans(parcel, streamlines, correlation_sum) :- s_strength(parcel, streamlines), cut(c), (streamlines >= c), f_strength(parcel, correlation_sum)
 
   - question: Which gyri and sulci are both structurally (more than 100 streamlines) and functionally (r above 0.2) connected to the left caudate, by their full names?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       caudate(t) :- tian(t, b), (t == 'aCAU lh')
       caudate(t) :- tian(t, b), (t == 'pCAU lh')
@@ -790,6 +802,7 @@ assistant_examples:
       ans(structure, region, streamlines, correlation) :- both(t, l, streamlines, correlation), tian_name(t, structure), destrieux_name(l, region)
 
   - question: Which regions activated by studies about pain are functionally connected at rest to the thalamus, and how strongly?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)

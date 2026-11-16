@@ -17,6 +17,7 @@ assistant_examples:
       ans(atlas, label, name) :- named(atlas, label, name)
 
   - question: Which parcels of the dorsal prefrontal cortex (PFCd in Schaefer's labels) are structurally connected to the thalamus (THA in Tian's) by more than 50 streamlines, with their full names?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       pfcd(l) :- schaefer400(l, r), atlas_abbreviation('schaefer', a, 'dorsal prefrontal cortex'), str_contains(l, a)
       thalamus(t) :- tian(t, r), atlas_abbreviation('tian', a, 'thalamus'), str_contains(t, a)

@@ -35,51 +35,62 @@ examples:
 assistant_examples:
   # Counts: the wiring itself.
   - question: Which regions is the left superior frontal gyrus structurally connected to?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       ans(region, streamlines) :- destrieux_tian_structural_connectivity('L G front sup', region, streamlines)
 
   - question: What is the structural connectivity of the left angular gyrus, its connections of more than 500 white-matter streamlines?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       ans(region, streamlines) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', region, streamlines), (streamlines > 500)
 
   - question: Which pairs of gyri and sulci are structurally connected by more than 5000 white-matter streamlines?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       ans(l1, l2, streamlines) :- destrieux_tian_structural_connectivity(l1, l2, streamlines), destrieux(l1, r1), destrieux(l2, r2), (l1 < l2), (streamlines > 5000)
 
   - question: What is the structural network of the left default mode network?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
       ans(l1, l2, streamlines) :- schaefer400_tian_structural_connectivity(l1, l2, streamlines), default_left(l1), default_left(l2), (l1 < l2), (streamlines > 100)
 
   - question: Which Schaefer parcels have the strongest structural connectivity?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       ans(region, sum(n)) :- schaefer400_tian_structural_connectivity(region, l2, n), schaefer400(region, r)
 
   - question: How many regions is the left precentral gyrus structurally connected to by more than 100 streamlines?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       ans(count(l)) :- destrieux_tian_structural_connectivity('L G precentral', l, n), (n > 100)
 
   - question: How many white-matter streamlines structurally connect the left and the right cortex?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       between(l1, l2, n) :- destrieux_tian_structural_connectivity(l1, l2, n), startswith('L ', l1), startswith('R ', l2)
       ans(sum(n)) :- between(l1, l2, n)
 
   - question: Which regions are two strong structural connections away from the left superior frontal gyrus (more than 1000 streamlines each)?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       strong(l1, l2) :- destrieux_tian_structural_connectivity(l1, l2, n), (n > 1000)
       ans(region) :- strong('L G front sup', m), strong(m, region), (region != 'L G front sup')
 
   # The subcortex: Tian's regions are in the same relations.
   - question: Which cortical parcels is the thalamus structurally connected to, and by how many streamlines?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       thalamus(t) :- tian(t, r), startswith('THA', t)
       ans(region, sum(n)) :- schaefer400_tian_structural_connectivity(t, region, n), thalamus(t), schaefer400(region, r)
 
   - question: What is the structural network among the subcortical regions, its pairs of more than 100 streamlines?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       ans(t1, t2, streamlines) :- schaefer400_tian_structural_connectivity(t1, t2, streamlines), tian(t1, r1), tian(t2, r2), (t1 < t2), (streamlines > 100)
 
   - question: Which subcortical regions are the parcels of the left default mode network structurally connected to, and by how many streamlines?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
       ans(structure, sum(n)) :- schaefer400_tian_structural_connectivity(l, structure, n), default_left(l), tian(structure, r)
@@ -87,16 +98,19 @@ assistant_examples:
   # From counts to probabilities, computed: a fraction of the
   # streamlines, in the body (f == n / t), never in the head.
   - question: What is the probability that a white-matter streamline leaving the left angular gyrus ends in each region?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       strength(l, sum(n)) :- destrieux_tian_structural_connectivity(l, l2, n)
       ans(l2, probability) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l2, n), strength('L G pariet inf Angular', t), (probability == n / t)
 
   - question: What fraction of the white-matter streamlines of the left posterior cingulate (precuneus) parcel go to each other region?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       strength(l, sum(n)) :- schaefer400_tian_structural_connectivity(l, l2, n)
       ans(l2, fraction) :- schaefer400_tian_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l2, n), strength('17Networks LH DefaultA pCunPCC 1', t), (fraction == n / t)
 
   - question: What is the probability that a white-matter streamline, drawn at random, structurally connects each pair of regions?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       total(sum(n)) :- schaefer400_tian_structural_connectivity(l1, l2, n), (l1 < l2)
       ans(l1, l2, probability) :- schaefer400_tian_structural_connectivity(l1, l2, n), (l1 < l2), total(t), (probability == n / t)
@@ -110,6 +124,7 @@ assistant_examples:
   # fewer) left out; PROB gives the probability of a path, of reaching a
   # network.
   - question: If a white-matter streamline is drawn at random from the left posterior cingulate (precuneus) parcel, what is the probability that it ends in the default mode network?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       strength(sum(n)) :- schaefer400_tian_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l, n)
       ends_in(l) ^ (n / t) :- schaefer400_tian_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l, n), strength(t)
@@ -119,6 +134,7 @@ assistant_examples:
       ans(probability) :- PROB[in_default(x)] = probability
 
   - question: Taking each structural connection as present with probability 1 - exp(-n / 500), what is the probability that each region is structurally connected to the left default mode network?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       wired(l1, l2) :: 1 - exp(-n / 500.0) :- schaefer400_tian_structural_connectivity(l1, l2, n), (n > 10)
       default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
@@ -126,6 +142,7 @@ assistant_examples:
       ans(region, probability) :- PROB[to_default(region)] = probability
 
   - question: Taking each structural connection as present with probability 1 - exp(-n / 2000), what is the probability that the left superior frontal gyrus reaches the left angular gyrus in at most two structural steps?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       wired(l1, l2) :: 1 - exp(-n / 2000.0) :- destrieux_tian_structural_connectivity(l1, l2, n), (n > 100)
       reach(l) :- wired('L G front sup', l)
@@ -137,6 +154,7 @@ assistant_examples:
   # streamlines that reach a network, and a probabilistic path through
   # the thalamus (probabilistic facts of the streamlines).
   - question: What fraction of the cortical streamlines of each thalamic region goes to the default mode network?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       default(l) :- schaefer400(l, a), startswith('17Networks LH Default', l)
       default(l) :- schaefer400(l, a), startswith('17Networks RH Default', l)
@@ -145,6 +163,7 @@ assistant_examples:
       ans(region, fraction) :- to_cortex(region, c), to_default(region, d), (fraction == d / c)
 
   - question: Taking each structural connection as present with probability 1 - exp(-n / 500), what is the probability that the left anterior hippocampus reaches each cortical region through the thalamus?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       wired(a, b) :: 1 - exp(-n / 500.0) :- destrieux_tian_structural_connectivity(a, b, n), (n > 10)
       thalamus(t) :- tian(t, x), startswith('THA', t)

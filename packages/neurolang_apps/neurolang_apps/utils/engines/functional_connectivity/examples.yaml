@@ -24,45 +24,55 @@ examples:
 # destrieux_tian_functional_connectivity.
 assistant_examples:
   - question: Which regions are functionally connected at rest with the left posterior cingulate (precuneus)?
+    topic: "Functional connectivity"
     datalog: |-
       ans(region, correlation) :- schaefer400_tian_functional_connectivity('17Networks LH DefaultA pCunPCC 1', region, correlation), (correlation > 0.3)
 
   - question: What is the resting-state functional network of the left default mode network?
+    topic: "Functional connectivity"
     datalog: |-
       default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
       ans(l1, l2, correlation) :- schaefer400_tian_functional_connectivity(l1, l2, correlation), default_left(l1), default_left(l2), (l1 < l2)
 
   - question: Which pairs of parcels are the most strongly functionally connected at rest, with a correlation above 0.7?
+    topic: "Functional connectivity"
     datalog: |-
       ans(l1, l2, correlation) :- schaefer400_tian_functional_connectivity(l1, l2, correlation), schaefer400(l1, r1), schaefer400(l2, r2), (l1 < l2), (correlation > 0.7)
 
   - question: Which cortical regions are anticorrelated at rest with the left default mode network?
+    topic: "Functional connectivity"
     datalog: |-
       default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
       ans(region, correlation) :- schaefer400_tian_functional_connectivity(d, region, correlation), default_left(d), schaefer400(region, r), (correlation < -0.05)
 
   - question: Which cortical regions is the left thalamus functionally connected to at rest?
+    topic: "Functional connectivity"
     datalog: |-
       left_thalamus(t) :- tian(t, x), startswith('THA', t), (t != 'THA DA rh'), (t != 'THA DP rh'), (t != 'THA VA rh'), (t != 'THA VP rh')
       ans(structure, region, correlation) :- schaefer400_tian_functional_connectivity(structure, region, correlation), left_thalamus(structure), schaefer400(region, r), (correlation > 0.2)
 
   - question: What is the resting-state functional connectivity among the subcortical regions, its pairs correlated above 0.2?
+    topic: "Functional connectivity"
     datalog: |-
       ans(t1, t2, correlation) :- schaefer400_tian_functional_connectivity(t1, t2, correlation), tian(t1, r1), tian(t2, r2), (t1 < t2), (correlation > 0.2)
 
   - question: Which gyri and sulci are functionally connected at rest with the left hippocampus?
+    topic: "Functional connectivity"
     datalog: |-
       ans(region, correlation) :- destrieux_tian_functional_connectivity('aHIP lh', region, correlation), destrieux(region, r), (correlation > 0.2)
 
   - question: Which Schaefer parcels have the strongest resting-state functional connectivity, their positive correlations summed?
+    topic: "Functional connectivity"
     datalog: |-
       ans(region, sum(r)) :- schaefer400_tian_functional_connectivity(region, l2, r), schaefer400(region, x), (r > 0)
 
   - question: How much of its resting-state activity does each region share with the left posterior cingulate (precuneus), the square of their correlation?
+    topic: "Functional connectivity"
     datalog: |-
       ans(region, shared_variance) :- schaefer400_tian_functional_connectivity('17Networks LH DefaultA pCunPCC 1', region, r), (shared_variance == r * r)
 
   - question: Taking each positive resting-state correlation above 0.3 as the probability of a coupling, what is the probability that each region is coupled to the left default mode network?
+    topic: "Functional connectivity"
     datalog: |-
       coupled(l1, l2) :: r :- schaefer400_tian_functional_connectivity(l1, l2, r), (r > 0.3)
       default_left(l) :- schaefer400(l, x), startswith('17Networks LH Default', l)
@@ -70,6 +80,7 @@ assistant_examples:
       ans(region, probability) :- PROB[to_default(region)] = probability
 
   - question: If a partner of the left posterior cingulate (precuneus) is drawn in proportion to its positive resting-state correlation, what is the probability that it is in the default mode network?
+    topic: "Functional connectivity"
     datalog: |-
       strength(sum(r)) :- schaefer400_tian_functional_connectivity('17Networks LH DefaultA pCunPCC 1', l, r), (r > 0)
       partner(l) ^ (r / t) :- schaefer400_tian_functional_connectivity('17Networks LH DefaultA pCunPCC 1', l, r), (r > 0), strength(t)
