@@ -179,6 +179,8 @@
   #summary p { margin: .2rem 0 0; }
   #summary p:empty { display: none; }
   #summary-reads { font-style: italic; }
+  #summary.stale { background: var(--sunken); border-color: var(--border); }
+  #summary.stale strong, #summary.stale #summary-text, #summary.stale #summary-reads, #summary.stale #summary-question { color: var(--muted); }
   /* The code box: a transparent textarea over a <pre> with the same text, coloured. */
   .editor { position: relative; }
   .editor pre, .editor textarea { margin: 0; padding: .7rem .85rem; border: 1px solid var(--control); border-radius: var(--radius); font: 13.5px/1.6 var(--mono); tab-size: 4;
@@ -541,6 +543,7 @@
           <p id="summary-text"></p>
           <p id="summary-reads" class="note"></p>
           <p id="summary-warning" class="agent-bad" role="alert"></p>
+          <p id="summary-stale" class="note" role="status" hidden>The query was changed: this describes the earlier one.</p>
         </section>
         <div class="editor">
           <pre id="mirror" aria-hidden="true"></pre>

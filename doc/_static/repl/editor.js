@@ -12,6 +12,7 @@ export class Editor {
     this.textarea = textarea;
     this.mirror = mirror;
     this.isSquall = isSquall;
+    this.onChange = null; // called after the text changed, by the visitor or the page
     textarea.addEventListener("input", () => this.refresh());
     textarea.addEventListener("scroll", () => this.follow());
     new ResizeObserver(() => this.fit()).observe(textarea);
@@ -41,6 +42,7 @@ export class Editor {
     // A last empty line has no height in a <pre>: a space gives it one.
     this.mirror.replaceChildren(...highlightNodes(text, this.isSquall()), text.endsWith("\n") ? " " : "");
     this.fit();
+    this.onChange?.();
   }
 
   fit() {

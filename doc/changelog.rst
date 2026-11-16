@@ -28,6 +28,12 @@ Unreleased
   structural connectivity, atlases...; the ``topic:`` of an entry of the bank
   overrides the one the page derives) and narrowed by a filter. Two new
   decoding examples: the terms of a Schaefer parcel and of a Tian region.
+
+- REPL: the summary of an answered question (what the query does, how it
+  reads back) stays while the Table and Brain tabs, "Brain", "Explain" and the
+  other commands are used, until a new question is asked. When the code in the
+  box is changed it turns grey, and says it describes the earlier query; it
+  is back to normal if the code is put back.
   
 * On an engine of tractography (``neurosynth_iit``…), an uploaded
   tractogram is queried with the rules of the bundles: ``.load_tractogram``
