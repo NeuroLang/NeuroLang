@@ -88,3 +88,34 @@ assistant_examples:
       default(l) :- schaefer400(l, x), startswith('17Networks RH Default', l)
       in_default(y) :- partner(l), default(l), (y == 'default')
       ans(probability) :- PROB[in_default(y)] = probability
+
+  # By condition (IBC): rest, movies and tasks, the condition first; in a
+  # task, the background connectivity (the evoked activity regressed out).
+  - question: How does the functional connectivity of the left posterior cingulate (precuneus) change from rest to watching a movie?
+    topic: "Functional connectivity"
+    datalog: |-
+      ans(region, rest, movie, change) :- ibc_schaefer400_tian_functional_connectivity('rest', '17Networks LH DefaultA pCunPCC 1', region, rest), ibc_schaefer400_tian_functional_connectivity('raiders', '17Networks LH DefaultA pCunPCC 1', region, movie), (change == movie - rest)
+
+  - question: In which condition, at rest, watching movies or doing tasks, is the left thalamus most functionally connected to the cortex?
+    topic: "Functional connectivity"
+    datalog: |-
+      thalamus(t) :- tian(t, x), startswith('THA', t), str_contains(t, ' lh')
+      coupling(c, mean(r)) :- ibc_schaefer400_tian_functional_connectivity(c, t, l, r), thalamus(t), schaefer400(l, a)
+      ans(condition, mean_r) :- coupling(condition, mean_r)
+
+  - question: Does the resting-state functional connectivity of the left anterior hippocampus in the IBC subjects agree with that of the HCP subjects?
+    topic: "Functional connectivity"
+    datalog: |-
+      ans(region, ibc_r, hcp_r) :- ibc_destrieux_tian_functional_connectivity('rest', 'aHIP lh', region, ibc_r), destrieux_tian_functional_connectivity('aHIP lh', region, hcp_r), destrieux(region, x)
+
+  - question: Which parcels of the left default mode network are less connected to the rest of the network while watching a movie than at rest (Student's t-test, FDR 0.05)?
+    topic: "Functional connectivity"
+    datalog: |-
+      default(l) :- schaefer400(l, a), startswith('17Networks LH Default', l)
+      partner(l, g, m, r, one) :- ibc_schaefer400_tian_functional_connectivity(c, l, m, r), default(l), default(m), (c == 'rest'), (g == 'rest'), (one == 1)
+      partner(l, g, m, r, one) :- ibc_schaefer400_tian_functional_connectivity(c, l, m, r), default(l), default(m), (c == 'raiders'), (g == 'movie'), (one == 1)
+      group(l, g, mean(r), std(r), sum(one)) :- partner(l, g, m, r, one)
+      test(l, t, df) :- group(l, 'rest', m1, s1, n1), group(l, 'movie', m2, s2, n2), (df == n1 + n2 - 2), (df > 0), (pooled == (n1 * s1 * s1 + n2 * s2 * s2) / df), (t == (m1 - m2) / (pooled * (1 / n1 + 1 / n2)) ** 0.5)
+      tested(l, t, p) :- test(l, t, df), (p == t_pvalue(t, df))
+      cutoff(fdr_threshold(p, 0.05)) :- tested(l, t, p)
+      ans(parcel, t_value, p_value) :- tested(parcel, t_value, p_value), cutoff(c), (p_value <= c), (t_value > 0)

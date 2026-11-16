@@ -36,3 +36,20 @@ assistant_guidance: >
   weighted by r / sum(r). The correlations of the subcortex are weaker
   (0.3 at most between two subcortical regions, about 0.2 to the
   cortex), so their thresholds are lower, (r > 0.2).
+  The functional connectivity by condition, of the Individual Brain
+  Charting dataset (12 or 13 subjects), is
+  ibc_schaefer400_tian_functional_connectivity(c, l1, l2, r) and
+  ibc_destrieux_tian_functional_connectivity(c, l1, l2, r), the same
+  regions and r with the condition c first: 'rest'; the movies 'raiders',
+  'good_bad_ugly', 'monkey_kingdom', 'clips', and the audiobook
+  'le_petit_prince'; the tasks 'archi', 'hcp', 'language' and 'tasks'
+  (every other task). A question on the connectivity during a task, a
+  movie, naturalistic viewing or listening, or on how the connectivity
+  changes with the state, is answered with them, a condition fixed with
+  (c == 'raiders') or a constant; a question on the connectivity at rest
+  alone with the HCP's, of 964 subjects, unless it names IBC. In a task,
+  the activity the task evokes was regressed out: its r is the
+  background connectivity, not the co-activation by the task (that is
+  the meta-analysis engines'). A change between conditions is the
+  difference of their r for the same pair, joined on l1 and l2, computed
+  in the body, (d == r1 - r2).

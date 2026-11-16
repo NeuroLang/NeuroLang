@@ -64,6 +64,9 @@ def main(argv=None) -> None:
                   "STAGING into OUT", "work", "staging", "out"), False)
     tasks(command("functional", "a task of the functional connectivity of "
                   "the HCP_DIR subjects into OUT", "work", "hcp", "out"), True)
+    tasks(command("ibc", "a task of the functional connectivity of the "
+                  "IBC subjects (IBC_DIR: its derivatives and sourcedata) "
+                  "into OUT, by condition", "work", "ibc", "out"), True)
     command("volume-atlas", "the atlas in MNI space, for tractography "
             "(WORK/atlases; needs the internet)", "work")
     sub = command("tractography", "a task of the tractography of the HCP_DIR "
@@ -79,7 +82,7 @@ def main(argv=None) -> None:
     sub = command("combine", "the group connectivity of the parts of PARTS, "
                   "its tables and gradients, in DATASET")
     sub.add_argument("kind", choices=["structural", "functional",
-                                      "tractography"])
+                                      "tractography", "ibc"])
     for path in ("work", "parts", "dataset"):
         sub.add_argument(path, type=Path)
     sub = command("population", "the connectivity of the cortex and the "
@@ -123,6 +126,9 @@ def main(argv=None) -> None:
     elif args.command == "functional":
         from .functional import run
         run(args.work, args.hcp, args.out, args.task, args.tasks)
+    elif args.command == "ibc":
+        from .ibc import run
+        run(args.work, args.ibc, args.out, args.task, args.tasks)
     elif args.command == "volume-atlas":
         from .tractography import volume_atlas
         volume_atlas(args.work / "atlases")
@@ -136,6 +142,8 @@ def main(argv=None) -> None:
             combine.structural(args.work, args.parts, args.dataset)
         elif args.kind == "tractography":
             combine.tractography(args.work, args.parts, args.dataset)
+        elif args.kind == "ibc":
+            combine.ibc(args.work, args.parts, args.dataset)
         else:
             from .atlases import tian_names
             combine.functional(args.work, tian_names(args.work / "atlases"),
