@@ -10,6 +10,7 @@ import { removedUploads, uploadRows, uploadsSummary } from "./uploads.js";
 import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
+import { keepHistory } from "./undo.js";
 import { layoutQuery } from "./layout.js";
 import { exampleQuestion, renderGroupedQuestions, queryOf, questionOf, filterQuestions, renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
@@ -34,6 +35,9 @@ const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("refine-run"), $("session-open"), $("upload")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
+// Undo and redo that keep what the page writes in the boxes (undo.js).
+keepHistory(input);
+keepHistory(question);
 // A query the page puts in the box, laid out for its width: a long rule a line
 // per atom of its body (layout.js). What the visitor typed is kept as it is.
 const laidOut = (text) => ($("mode").value === "squall" ? text : layoutQuery(text, editor.columns()));
@@ -1105,14 +1109,36 @@ question.addEventListener("keydown", (event) => {
 $("share").addEventListener("click", async (event) => {
   const url = `${location.origin}${location.pathname}${location.search}#${encodeShare(editor.value, $("mode").value)}`;
   window.history.replaceState(null, "", url);
-  try {
-    await navigator.clipboard.writeText(url);
+  if (await copied(url, "Copy this link")) {
     event.target.textContent = "Copied";
     setTimeout(() => { event.target.textContent = "Copy link"; }, 1200);
-  } catch {
-    window.prompt("Copy this link", url); // no clipboard here, e.g. an unsecured address
   }
 });
+// Put *text* on the clipboard; without one (e.g. at an unsecured address) a
+// dialog, titled *title*, offers it to copy.
+async function copied(text, title) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    window.prompt(title, text);
+    return false;
+  }
+}
+// The copy buttons of the boxes, which work while a box waits for a reply.
+for (const [id, box] of [["copy-query", input], ["copy-question", question]]) {
+  const button = $(id);
+  const label = button.title;
+  button.addEventListener("click", async () => {
+    if (!box.value || !(await copied(box.value, label))) return;
+    button.classList.add("copied");
+    button.title = button.ariaLabel = "Copied";
+    setTimeout(() => {
+      button.classList.remove("copied");
+      button.title = button.ariaLabel = label;
+    }, 1200);
+  });
+}
 $("key").addEventListener("click", () => {
   const details = $("llm-details");
   details.open = !details.open;

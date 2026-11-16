@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+- REPL page: the question and query boxes have a copy button at their top
+  right, and keep their own history of edits: Ctrl or Cmd Z undoes a run of
+  typing at a time (the browser's undid a character at a time in Chrome) and
+  also what the page wrote in the box (an example, the History menu, the
+  assistant's query, Format); Shift Ctrl or Cmd Z, and Ctrl Y, redo.
+
 - REPL: the box of the assistant starts with one of the assistant's example
   questions chosen at random: filled in when the assistant can answer, as the
   grey hint otherwise. "Surprise me" picks another. Picking an example, a question or a query, fills

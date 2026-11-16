@@ -27,3 +27,7 @@ guide:
 
 editor:
   max_height_px: 384    # beyond, the code box scrolls
+
+undo:                   # the history of the question and query boxes
+  pause_ms: 1000        # typing paused longer than this starts a new step
+  steps: 200            # the steps kept
