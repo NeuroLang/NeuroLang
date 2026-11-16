@@ -168,20 +168,64 @@ ENGINE_TABLES = {
         ("schaefer400_17_functional_mean", "r", 6),
     "destrieux_tian_functional_connectivity":
         ("destrieux_functional_mean", "r", 6),
+    # IBC's, by condition (ibc.py): a matrix per condition, the table
+    # condition, region1, region2, r
+    "ibc_schaefer400_17_tian_functional_connectivity":
+        ("ibc_schaefer400_17_functional_mean_{condition}", "r", 6),
+    "ibc_destrieux_tian_functional_connectivity":
+        ("ibc_destrieux_functional_mean_{condition}", "r", 6),
 }
 
 
 def engine_tables(dataset: Path) -> None:
     """The tables of ENGINE_TABLES whose matrices DATASET has
     (``tsv/<relation>.tsv.gz``): every pair of distinct regions, both ways
-    round, the NaN and the values rounding to 0 left out."""
+    round, the NaN and the values rounding to 0 left out; a source of
+    ``{condition}``, one matrix per condition, is a table whose first
+    column is the condition."""
     for relation, (source, value, decimals) in ENGINE_TABLES.items():
-        path = dataset / "parquet" / f"{source}.parquet"
-        if path.exists():
+        found = {
+            path.stem[len(source.split("{")[0]):]: path
+            for path in sorted((dataset / "parquet").glob(
+                source.replace("{condition}", "*") + ".parquet"))
+        }
+        tables = []
+        for cond, path in found.items():
             frame = pd.read_parquet(path)
-            write_tsv(pairs(frame, list(frame.index), list(frame.index),
-                            ["region1", "region2"], value, decimals),
+            table = pairs(frame, list(frame.index), list(frame.index),
+                          ["region1", "region2"], value, decimals)
+            if "{condition}" in source:
+                table.insert(0, "condition", cond)
+            tables.append(table)
+        if tables:
+            write_tsv(pd.concat(tables, ignore_index=True),
                       dataset / "tsv" / f"{relation}.tsv.gz")
+
+
+def ibc(work: Path, parts: Path, dataset: Path) -> None:
+    """The group connectivity of IBC's subjects (ibc.py), by condition:
+    ``parquet/ibc_<a>_functional_mean_<condition>.parquet`` (r, the tanh
+    of the mean of the subjects' Fisher z), ``ibc_functional_counts.tsv``
+    (the subjects and runs of each condition), and the engines' tables."""
+    from .atlases import tian_names
+    from .ibc import group
+
+    mean_z, counts = group(parts)
+    for folder in ("parquet", "tsv"):
+        (dataset / folder).mkdir(parents=True, exist_ok=True)
+    tian = tian_names(work / "atlases")
+    regions = cortical(work)
+    for key, z in mean_z.items():
+        atlas, cond = key.split(":")
+        values = np.tanh(z)
+        np.fill_diagonal(values, 1.0)
+        write_matrix(matrix(values, regions[atlas][1] + tian),
+                     dataset / "parquet" /
+                     f"ibc_{atlas}_functional_mean_{cond}.parquet")
+    counts.to_csv(dataset / "ibc_functional_counts.tsv", sep="\t",
+                  index=False)
+    engine_tables(dataset)
+    print(counts.to_string(index=False))
 
 
 def regradient(work: Path, dataset: Path) -> None:
