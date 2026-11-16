@@ -26,6 +26,59 @@ export function suggestedQuestion(questions, current, ready, random = Math.rando
   return questions[Math.min(questions.length - 1, Math.floor(random() * questions.length))];
 }
 
+// The question the box of the assistant shows as its example when it cannot
+// answer: one of *questions* at random, not the *current* one; "" if none.
+export function exampleQuestion(questions, current = "", random = Math.random) {
+  const others = questions.filter((question) => question !== current);
+  return others.length ? others[Math.min(others.length - 1, Math.floor(random() * others.length))] : "";
+}
+
+// The *questions* whose text has all the words of *filter*.
+export function filterQuestions(questions, filter) {
+  const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
+  return questions.filter((question) => words.every((word) => question.toLowerCase().includes(word)));
+}
+
+// The query that answers *question* in the language *mode*, from
+// *queries* ({question: {language: query}}); "" if it has none.
+export const queryOf = (queries, question, mode) => queries[question]?.[mode] ?? "";
+
+// The question that *query* answers in the language *mode*, if any of the
+// *queries* is it (whatever its spaces); "" otherwise.
+export function questionOf(queries, query, mode) {
+  const squeeze = (text) => text.replace(/\s+/g, " ").trim();
+  const wanted = squeeze(query);
+  return Object.keys(queries).find((question) => queries[question][mode] && squeeze(queries[question][mode]) === wanted) ?? "";
+}
+
+// The *questions* in runs of the same topic, in order: [{topic, questions}],
+// the topic of each question being *topics*[question] ("" if unknown).
+export function groupQuestions(questions, topics) {
+  const groups = [];
+  for (const question of questions) {
+    const topic = topics[question] ?? "";
+    if (groups.length && groups[groups.length - 1].topic === topic) groups[groups.length - 1].questions.push(question);
+    else groups.push({ topic, questions: [question] });
+  }
+  return groups;
+}
+
+// Fill *list* with a heading per topic of the *questions* and a button per
+// question; a click gives its text to *pick*.
+export function renderGroupedQuestions(list, questions, topics, pick, title) {
+  const groups = groupQuestions(questions, topics);
+  const rows = [];
+  for (const { topic, questions: grouped } of groups) {
+    if (topic && groups.length > 1) rows.push(element("li", { className: "guide-group" }, `${topic} · ${grouped.length}`));
+    for (const text of grouped) {
+      const button = element("button", { type: "button", className: "guide-item", textContent: text, title });
+      button.addEventListener("click", () => pick(text));
+      rows.push(element("li", {}, button));
+    }
+  }
+  list.replaceChildren(...rows);
+}
+
 // The query a first visit starts with: the first of the *examples* of the
 // language *mode*, when the *box* is empty and the browser has no history of
 // queries run here (*visited*); "" otherwise.

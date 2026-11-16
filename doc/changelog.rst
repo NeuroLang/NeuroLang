@@ -19,6 +19,16 @@ Unreleased
 
 **New features:**
 
+- REPL: the box of the assistant starts with one of the assistant's example
+  questions chosen at random: filled in when the assistant can answer, as the
+  grey hint otherwise. "Surprise me" picks another. Picking an example, a question or a query, fills
+  both boxes, the English one and the query. The Questions list of
+  "Examples and relations" is followed by the rest of the assistant's bank,
+  "More questions", listed under topics (decoding, encoding, functional and
+  structural connectivity, atlases...; the ``topic:`` of an entry of the bank
+  overrides the one the page derives) and narrowed by a filter. Two new
+  decoding examples: the terms of a Schaefer parcel and of a Tian region.
+  
 * On an engine of tractography (``neurosynth_iit``…), an uploaded
   tractogram is queried with the rules of the bundles: ``.load_tractogram``
   reads it by its name, and *Index*, on its row of the uploaded files,

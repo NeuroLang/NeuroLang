@@ -11,7 +11,7 @@ import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
 import { layoutQuery } from "./layout.js";
-import { renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
+import { exampleQuestion, renderGroupedQuestions, queryOf, questionOf, filterQuestions, renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
 import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
@@ -182,20 +182,38 @@ function showHint() {
 }
 ["keyup", "click", "focus"].forEach((type) => input.addEventListener(type, showHint));
 
+// Both boxes get an example: the question in English, and its query in the
+// language chosen, when the bank of the assistant has one.
+function pickQuestion(text) {
+  question.value = text;
+  const query = queryOf(guide.questionQueries, text, $("mode").value);
+  if (query) {
+    putQuery(query);
+    hideSummary();
+  }
+  question.focus();
+}
+
 // The questions and examples of the engine and its predicates, which put their text in a box.
-let guide = { examples: {}, questions: [], predicates: [], commands: [] };
+let guide = { examples: {}, questions: [], moreQuestions: [], questionQueries: {}, questionTopics: {}, predicates: [], commands: [] };
 function showGuide() {
   if (!$("guide").open) return;
   const squall = $("mode").value === "squall";
   $("guide-questions-box").hidden = !guide.questions.length;
-  renderExamples($("guide-questions"), guide.questions, (text) => {
-    question.value = text;
-    question.focus();
-  }, "Put this question in the box of the assistant");
+  const putQuestion = (text) => pickQuestion(text);
+  renderExamples($("guide-questions"), guide.questions, putQuestion, "Put this question in the box of the assistant");
+  const more = filterQuestions(guide.moreQuestions, $("guide-more-filter").value);
+  $("guide-more-box").hidden = !guide.moreQuestions.length;
+  $("guide-more-count").textContent = `${guide.moreQuestions.length} more, of the assistant's examples`;
+  $("guide-more-status").textContent = more.length === guide.moreQuestions.length ? "" : more.length ? `${more.length} of ${guide.moreQuestions.length} questions` : "No question has all these words.";
+  renderGroupedQuestions($("guide-more"), more, guide.questionTopics, putQuestion, "Put this question in the box of the assistant");
   const list = $("guide-examples");
   const width = Math.max(30, Math.floor((list.clientWidth - 24) / 7.5)); // 12.5px monospace
   renderExamples(list, guide.examples[squall ? "squall" : "datalog"], (query) => {
     putQuery(query);
+    // the question this query answers, when the assistant's bank has it
+    const asked = questionOf(guide.questionQueries, query, $("mode").value);
+    if (asked) question.value = asked;
     hideSummary();
     input.focus();
   }, undefined, (query) => (squall || !list.clientWidth ? query : layoutQuery(query, width)));
@@ -245,6 +263,15 @@ builder.addEventListener("submit", (event) => {
 $("guide").addEventListener("toggle", showGuide);
 $("guide-queries").addEventListener("toggle", showGuide); // the examples are laid out for the width of their list
 $("guide-filter").addEventListener("input", showGuide);
+$("guide-more-filter").addEventListener("input", showGuide);
+// Another example question in the box of the assistant, whatever it holds.
+$("guide-shuffle").addEventListener("click", () => {
+  const pick = exampleQuestion([...guide.questions, ...guide.moreQuestions], question.value);
+  if (!pick) return;
+  pickQuestion(pick);
+  suggested = pick;
+  question.select();
+});
 
 // A query shared as a link is put in the box, not run.
 function restoreShared() {
@@ -392,8 +419,17 @@ let suggested = "";
 // An example question of the engine, at random, in the box of the
 // assistant, when the box is empty and the assistant can answer.
 function suggestQuestion() {
-  const pick = suggestedQuestion(guide.questions, question.value, assistantReady);
-  if (pick) suggested = question.value = pick;
+  const pool = [...guide.questions, ...guide.moreQuestions];
+  const pick = suggestedQuestion(pool, question.value, assistantReady);
+  if (pick) {
+    suggested = question.value = pick;
+    return;
+  }
+  // The assistant cannot answer, or the box has text: the example is the
+  // box's hint, in grey.
+  const example = exampleQuestion(pool);
+  askPlaceholder = example ? `Ask in English, e.g. ${example}` : DEFAULT_ASK;
+  placeAsk();
 }
 
 // Whether the page gives a key of its own, rather than the server's, and
@@ -559,7 +595,7 @@ const workerMessages = {
     // This server logs what the user runs (--activity-db).
     $("log-note").textContent = data.logNote ?? "";
     $("log-note").hidden = !data.logNote;
-    guide = { examples: data.examples ?? {}, questions: data.questions ?? [], predicates: data.predicates ?? [], commands: data.commands ?? [] };
+    guide = { examples: data.examples ?? {}, questions: data.questions ?? [], moreQuestions: data.moreQuestions ?? [], questionQueries: data.questionQueries ?? {}, questionTopics: data.questionTopics ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
     suggestQuestion();
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
     $("guide-queries").open = !guide.questions.length; // the queries, when there is no question to start from
@@ -1021,7 +1057,8 @@ system.addEventListener("change", () => applyTheme(chosen()));
 applyTheme(chosen());
 
 // The question box is narrow on a phone: its example is left out there.
-const askPlaceholder = question.placeholder;
+const DEFAULT_ASK = question.placeholder;
+let askPlaceholder = DEFAULT_ASK;
 const narrow = matchMedia("(max-width: 40rem)");
 // The panes of the page side by side (index.html), or one under the other.
 const stacked = matchMedia("(max-width: 71.99rem)");

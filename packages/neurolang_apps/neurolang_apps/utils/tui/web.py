@@ -361,6 +361,47 @@ def _arguments(info, described: dict) -> list:
     ]
 
 
+# The topics the questions of the assistant's bank are listed under, in the
+# order of the page; an entry of the bank can name its own with ``topic:``.
+QUESTION_TOPICS = (
+    "Studies and terms",
+    "Encoding: from a term to the brain",
+    "Decoding: from the brain to terms",
+    "Functional connectivity",
+    "Structural connectivity and tractography",
+    "Atlases and region names",
+)
+
+
+def question_topic(question: str, query: str = "") -> str:
+    """
+    Return the topic of a question of the bank, from its words and the
+    predicates of its query: the connectivity and the tractography first,
+    then the decoding (a term, concept or task asked of a region or an
+    image), then the encoding (a region or voxels asked of a term).
+    """
+    text = f"{question} {query}".lower()
+    if re.search(r"(destrieux|tian|schaefer\w*)_name|atlas_abbreviation",
+                 text):
+        return QUESTION_TOPICS[5]
+    heads = [line for line in query.lower().splitlines()
+             if line.startswith("ans")]
+    asked = f"{question} {heads[-1] if heads else ''}".lower()
+    if re.search(r"functional_connectivity|functionally|resting|at rest",
+                 text):
+        return QUESTION_TOPICS[3]
+    if re.search(r"structural|streamline|tract|bundle|white-matter|"
+                 r"disconnect", text):
+        return QUESTION_TOPICS[4]
+    if (re.search(r"decode|reverse inference|bayes_factor\(|lift", text)
+            and re.search(r"term|concept|task|process", asked)):
+        return QUESTION_TOPICS[2]
+    if re.search(r"activated\(|activation|co-?activat|peak|voxel|"
+                 r"similar_study|image", text):
+        return QUESTION_TOPICS[1]
+    return QUESTION_TOPICS[0]
+
+
 class WebRepl:
     """A REPL on the engine *nl*, which a web page submits input to."""
 
@@ -678,6 +719,57 @@ class WebRepl:
             return []
         config = engine_registry.get_engine_config(engine)
         return list(config.get("questions") or [])
+
+    def question_queries(self) -> dict:
+        """Return the queries of the assistant's bank on the engine, by
+        the question they answer: ``{question: {language: query}}``, for
+        the page to fill both boxes when an example is picked."""
+        return {e["question"]: e["queries"]
+                for e in self._bank() if e["queries"]}
+
+    def _bank(self) -> List[dict]:
+        """Return the entries of the assistant's bank on the engine, each
+        question once: ``question``, ``topic`` and ``queries``."""
+        engine = self.app.settings.engine_name
+        if not engine:
+            return []
+        config = engine_registry.get_engine_config(engine)
+        bank = {}
+        for entry in config.get("assistant_examples") or []:
+            question = (entry.get("question") or "").strip()
+            if not question or question in bank:
+                continue
+            queries = {
+                language: entry[language].strip()
+                for language in ("datalog", "squall") if entry.get(language)
+            }
+            topic = entry.get("topic") or question_topic(
+                question, queries.get("datalog", "")
+            )
+            bank[question] = {
+                "question": question, "topic": topic, "queries": queries
+            }
+        return list(bank.values())
+
+    def more_questions(self) -> List[str]:
+        """Return the other questions of the assistant's bank on the
+        engine, those that :meth:`questions` does not list, each once,
+        grouped by topic, in the order of ``QUESTION_TOPICS``."""
+        engine = self.app.settings.engine_name
+        if not engine:
+            return []
+        shown = set(
+            engine_registry.get_engine_config(engine).get("questions") or []
+        )
+        rank = {topic: i for i, topic in enumerate(QUESTION_TOPICS)}
+        more = [e for e in self._bank() if e["question"] not in shown]
+        more.sort(key=lambda e: rank.get(e["topic"], len(rank)))
+        return [e["question"] for e in more]
+
+    def question_topics(self) -> dict:
+        """Return the topic of each question of the bank, ``{question:
+        topic}``, for the page to list them by topic."""
+        return {e["question"]: e["topic"] for e in self._bank()}
 
     def predicates(self) -> List[dict]:
         """
