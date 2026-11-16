@@ -206,9 +206,10 @@ def ibc(work: Path, parts: Path, dataset: Path) -> None:
     """The group connectivity of IBC's subjects (ibc.py), by condition:
     ``parquet/ibc_<a>_functional_mean_<condition>.parquet`` (r, the tanh
     of the mean of the subjects' Fisher z), ``ibc_functional_counts.tsv``
-    (the subjects and runs of each condition), and the engines' tables."""
+    (the subjects and runs of each condition), the tables of IBC's tasks
+    (ibc.task_tables; needs the internet) and the engines' tables."""
     from .atlases import tian_names
-    from .ibc import group
+    from .ibc import group, task_tables
 
     mean_z, counts = group(parts)
     for folder in ("parquet", "tsv"):
@@ -224,6 +225,7 @@ def ibc(work: Path, parts: Path, dataset: Path) -> None:
                      f"ibc_{atlas}_functional_mean_{cond}.parquet")
     counts.to_csv(dataset / "ibc_functional_counts.tsv", sep="\t",
                   index=False)
+    task_tables(parts, dataset / "tsv")
     engine_tables(dataset)
     print(counts.to_string(index=False))
 

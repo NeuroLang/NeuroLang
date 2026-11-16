@@ -145,3 +145,35 @@ def test_the_ibc_engine_tables_are_every_pair_of_each_condition(tmp_path):
         assert both.sort_index().equals(swapped.sort_index())
     assert not (tmp_path / "tsv" /
                 "ibc_destrieux_tian_functional_connectivity.tsv.gz").exists()
+
+
+def test_the_descriptions_are_plain_text():
+    text = ("The **ArchiStandard** task, described in (`Pinel et al., "
+            "2007 <https://doi.org/10.1186/1471-2202-8-91>`__), see "
+            "`LPPLocalizer`_ and ``mrisync``; *not* a *b")
+    assert ibc.plain(text) == (
+        "The ArchiStandard task, described in (Pinel et al., 2007), see "
+        "LPPLocalizer and mrisync; not a *b")
+
+
+def test_the_tags_are_named_as_the_concepts_of_the_cognitive_atlas():
+    names = ibc.concept_names([{"name": "Response Execution"},
+                               {"name": "theory of mind"}])
+    assert names == {"response execution": "response execution",
+                     "theory of mind": "theory of mind"}
+
+
+def test_the_tasks_of_the_runs(tmp_path):
+    def save(subject, name, empty=False):
+        (tmp_path / subject).mkdir(exist_ok=True)
+        np.savez(tmp_path / subject / f"{name}.npz",
+                 **({} if empty else {"a": np.zeros(1)}))
+
+    save("sub-01", "hcp__wrdcsub-01_ses-01_task-HcpWm_dir-ap_bold")
+    save("sub-01", "hcp__wrdcsub-01_ses-01_task-HcpWm_dir-pa_bold")
+    save("sub-02", "hcp__wrdcsub-02_ses-03_task-HcpWm_dir-ap_bold")
+    save("sub-02", "tasks__wrdcsub-02_ses-03_task-Stroop_dir-ap_bold",
+         empty=True)  # without events
+    tasks = ibc.run_tasks(tmp_path)
+    assert tasks.to_dict("records") == [
+        {"condition": "hcp", "task": "HcpWm", "subjects": 2, "runs": 3}]

@@ -52,6 +52,13 @@ CONDITIONS = {
 WITHOUT_EVENTS = ("rest", "raiders", "good_bad_ugly", "monkey_kingdom",
                   "le_petit_prince", "clips")
 ATLASES = ("schaefer400_17", "destrieux")
+# IBC's descriptions of its tasks and the cognitive components of their
+# contrasts, at a commit of public_analysis_code (BSD), and the concepts
+# of the Cognitive Atlas
+IBC_DATA = ("https://raw.githubusercontent.com/individual-brain-charting/"
+            "public_analysis_code/2d9a6852bc7e3b164adef28b02b4d38d386c53ac/"
+            "ibc_data/")
+COGAT_CONCEPTS = "https://www.cognitiveatlas.org/api/v-alpha/concept"
 HIGH_PASS = 0.01
 COMPCOR = 5
 RUN = re.compile(r"wrdc(sub-\d+)_(ses-\d+)_task-([A-Za-z0-9]+)_"
@@ -288,3 +295,84 @@ def group(folder: Path) -> tuple:
     summary = frame.groupby("condition", sort=False).runs.agg(
         subjects="count", runs="sum").reset_index()
     return {key: total / n for key, (total, n) in sums.items()}, summary
+
+
+def run_tasks(folder: Path):
+    """The tasks of the runs of *folder* (:func:`run`), the subjects and
+    the runs of each, and their condition: a frame (condition, task,
+    subjects, runs); the task runs without events left out."""
+    import pandas as pd
+
+    rows = []
+    for path in Path(folder).glob("sub-*/*__*.npz"):
+        match = RUN.search(path.name.split("__", 1)[1][:-4] + ".nii.gz")
+        if match and not path.name.endswith(".partial.npz") and \
+                np.load(path).files:
+            rows.append((path.name.split("__")[0], match.group(3),
+                         path.parent.name))
+    frame = pd.DataFrame(rows, columns=["condition", "task", "subject"])
+    return (frame.groupby(["condition", "task"])
+            .agg(subjects=("subject", "nunique"), runs=("subject", "size"))
+            .reset_index())
+
+
+def plain(text: str) -> str:
+    """The reStructuredText *text* of IBC's descriptions as plain text:
+    links, emphasis and literals without their markup."""
+    text = re.sub(r"`([^`<]+?)\s*<[^>]*>`_{1,2}", r"\1", text)
+    text = re.sub(r"``([^`]+)``", r"\1", text)
+    text = re.sub(r"`([^`]+)`_{0,2}", r"\1", text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"(?<![\w*])\*([^*\s][^*]*)\*(?![\w*])", r"\1", text)
+    return " ".join(text.split())
+
+
+def concept_names(concepts: list) -> dict:
+    """The name of each concept of the Cognitive Atlas (its API's
+    concepts) in lower case, by its words (``response_execution``)."""
+    def words(name):
+        return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+    return {words(c["name"]): c["name"].lower() for c in concepts}
+
+
+def task_tables(runs_folder: Path, folder: Path) -> None:
+    """The tables of IBC's tasks in *folder* (``ibc_task``: condition,
+    task; ``ibc_task_description``: task, description;
+    ``ibc_task_concept``: task, concept, the concepts of the Cognitive
+    Atlas its contrasts are tagged with), for the tasks of the runs of
+    *runs_folder*; needs the internet."""
+    import ast
+    import io
+    import urllib.request
+
+    import pandas as pd
+
+    from .tables import write_tsv
+
+    def fetch(url):
+        with urllib.request.urlopen(url) as response:
+            return response.read().decode()
+
+    tasks = run_tasks(runs_folder)
+    used = set(tasks.task)
+    write_tsv(tasks[["condition", "task"]], folder / "ibc_task.tsv.gz")
+    described = pd.read_csv(io.StringIO(fetch(IBC_DATA + "ibc_tasks.tsv")),
+                            sep="\t")
+    described = described[described.task.isin(used)]
+    write_tsv(pd.DataFrame({"task": described.task,
+                            "description": described.description.map(plain)}),
+              folder / "ibc_task_description.tsv.gz")
+    contrasts = pd.read_csv(
+        io.StringIO(fetch(IBC_DATA + "all_contrasts.tsv")), sep="\t")
+    names = concept_names(json.loads(fetch(COGAT_CONCEPTS)))
+    pairs = {
+        (task, names[" ".join(re.split(r"[^a-z0-9]+", tag.lower()))])
+        for task, tags in zip(contrasts.task, contrasts.tags)
+        if task in used and isinstance(tags, str)
+        for tag in ast.literal_eval(tags)
+        if " ".join(re.split(r"[^a-z0-9]+", tag.lower())) in names
+    }
+    write_tsv(pd.DataFrame(sorted(pairs), columns=["task", "concept"]),
+              folder / "ibc_task_concept.tsv.gz")
+    print(f"{len(used)} tasks, {len(described)} described, "
+          f"{len(pairs)} task concepts of the Cognitive Atlas")
