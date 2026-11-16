@@ -748,7 +748,7 @@ class TestNeurosynthDeclarations:
             "neurosynth"
         ) == {
             "selected_study", "selected_voxel", "schaefer_covered",
-            "destrieux_covered", "tian_covered",
+            "schaefer400_covered", "destrieux_covered", "tian_covered",
         }
 
 
