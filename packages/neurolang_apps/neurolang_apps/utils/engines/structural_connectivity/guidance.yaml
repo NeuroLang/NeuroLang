@@ -56,3 +56,12 @@ assistant_guidance: >
   startswith('17Networks LH Default', l) selects the left default
   network; Destrieux's start with the hemisphere, as 'L G front sup'.
   The cerebellum has none; say so rather than query it.
+  To test a difference between groups of values (of streamlines or of
+  correlations), compute each group's mean(v), std(v) and size, sum(one)
+  of a column (one == 1) carried by each row (count(x) counts distinct
+  values, not rows; std is the standard deviation of the population, so
+  Student's pooled variance is (n1 s1^2 + n2 s2^2) / (n1 + n2 - 2)), the
+  t in the body, its two-sided p-value t_pvalue(t, df), and, for many
+  tests, the aggregation fdr_threshold(p, alpha), the p-value at or under
+  which they are significant at the false discovery rate alpha
+  (Benjamini-Hochberg).

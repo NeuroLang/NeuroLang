@@ -132,3 +132,21 @@ assistant_examples:
       reach(l) :- wired('L G front sup', m), wired(m, l)
       target(l) :- reach(l), (l == 'L G pariet inf Angular')
       ans(probability) :- PROB[target(l)] = probability
+
+  # The subcortex as a network: the share of a Tian region's cortical
+  # streamlines that reach a network, and a probabilistic path through
+  # the thalamus (probabilistic facts of the streamlines).
+  - question: What fraction of the cortical streamlines of each thalamic region goes to the default mode network?
+    datalog: |-
+      default(l) :- schaefer400(l, a), startswith('17Networks LH Default', l)
+      default(l) :- schaefer400(l, a), startswith('17Networks RH Default', l)
+      to_cortex(t, sum(n)) :- schaefer400_tian_structural_connectivity(t, l, n), tian(t, b), startswith('THA', t), schaefer400(l, a)
+      to_default(t, sum(n)) :- schaefer400_tian_structural_connectivity(t, l, n), tian(t, b), startswith('THA', t), default(l)
+      ans(region, fraction) :- to_cortex(region, c), to_default(region, d), (fraction == d / c)
+
+  - question: Taking each structural connection as present with probability 1 - exp(-n / 500), what is the probability that the left anterior hippocampus reaches each cortical region through the thalamus?
+    datalog: |-
+      wired(a, b) :: 1 - exp(-n / 500.0) :- destrieux_tian_structural_connectivity(a, b, n), (n > 10)
+      thalamus(t) :- tian(t, x), startswith('THA', t)
+      via_thalamus(l) :- wired('aHIP lh', t), thalamus(t), wired(t, l), destrieux(l, y)
+      ans(region, probability) :- PROB[via_thalamus(region)] = probability

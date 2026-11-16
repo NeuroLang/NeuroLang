@@ -755,6 +755,49 @@ assistant_examples:
       co_activation(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
       ans(l1, l2, probability, correlation) :- co_activation(l1, l2, probability), (probability > 0.3), destrieux_tian_functional_connectivity(l1, l2, correlation)
 
+  # Structure and function together, with statistics: a t-test of
+  # Student by parcel (t from mean, std and sum; std is the standard
+  # deviation of the population, so the pooled variance is (n1 s1^2 + n2
+  # s2^2) / (n1 + n2 - 2)), its p-value (t_pvalue) and the parcels
+  # significant at a false discovery rate (fdr_threshold, of
+  # Benjamini-Hochberg, an aggregation of the p-values); hubs; regions
+  # both wired and correlated; a term's activations and the resting state.
+  - question: For each Schaefer parcel, are its strongly wired partners (more than 100 streamlines) more correlated at rest than the parcels no streamline joins it to? Student t-tests, significant at a false discovery rate of 0.05.
+    datalog: |-
+      fc(l1, l2, r) :- schaefer400_tian_functional_connectivity(l1, l2, r), schaefer400(l1, a), schaefer400(l2, b)
+      wired(l1, l2) :- schaefer400_tian_structural_connectivity(l1, l2, n), (n > 100)
+      touched(l1, l2) :- schaefer400_tian_structural_connectivity(l1, l2, n)
+      partner(l, g, m, r, one) :- fc(l, m, r), wired(l, m), (g == 'wired'), (one == 1)
+      partner(l, g, m, r, one) :- fc(l, m, r), ~touched(l, m), (g == 'unwired'), (one == 1)
+      group(l, g, mean(r), std(r), sum(one)) :- partner(l, g, m, r, one)
+      test(l, t, df) :- group(l, 'wired', m1, s1, n1), group(l, 'unwired', m2, s2, n2), (df == n1 + n2 - 2), (df > 0), (pooled == (n1 * s1 * s1 + n2 * s2 * s2) / df), (t == (m1 - m2) / (pooled * (1 / n1 + 1 / n2)) ** 0.5)
+      p_value(l, t, p) :- test(l, t, df), (p == t_pvalue(t, df))
+      cutoff(fdr_threshold(p, 0.05)) :- p_value(l, t, p)
+      ans(parcel, t, p) :- p_value(parcel, t, p), cutoff(c), (p <= c)
+
+  - question: Which Schaefer parcels are structural hubs, the top 5% by their streamlines, and how strongly are they functionally connected at rest?
+    datalog: |-
+      s_strength(l, sum(n)) :- schaefer400_tian_structural_connectivity(l, m, n), schaefer400(l, a)
+      f_strength(l, sum(r)) :- schaefer400_tian_functional_connectivity(l, m, r), schaefer400(l, a), (r > 0)
+      cut(percentile(s, 95)) :- s_strength(l, s)
+      ans(parcel, streamlines, correlation_sum) :- s_strength(parcel, streamlines), cut(c), (streamlines >= c), f_strength(parcel, correlation_sum)
+
+  - question: Which gyri and sulci are both structurally (more than 100 streamlines) and functionally (r above 0.2) connected to the left caudate, by their full names?
+    datalog: |-
+      caudate(t) :- tian(t, b), (t == 'aCAU lh')
+      caudate(t) :- tian(t, b), (t == 'pCAU lh')
+      both(t, l, n, r) :- caudate(t), destrieux_tian_structural_connectivity(t, l, n), destrieux_tian_functional_connectivity(t, l, r), destrieux(l, a), (n > 100), (r > 0.2)
+      ans(structure, region, streamlines, correlation) :- both(t, l, streamlines, correlation), tian_name(t, structure), destrieux_name(l, region)
+
+  - question: Which regions activated by studies about pain are functionally connected at rest to the thalamus, and how strongly?
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      pain(l, p) :- PROB[active(l, s) // term_association(s, 'pain')] = p
+      thalamus(t) :- tian(t, x), startswith('THA', t)
+      strongest(l, max(r)) :- destrieux_tian_functional_connectivity(t, l, r), thalamus(t)
+      ans(region, probability, thalamus_r) :- pain(region, probability), (probability > 0.3), strongest(region, thalamus_r)
+
   # The titles, abstracts and identifiers of the studies: a PubMed id is an
   # integer, a DOI is in lower case without https://doi.org/.
   - question: "List the titles of the studies about fear published in Neuron, with their years."
