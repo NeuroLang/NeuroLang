@@ -117,6 +117,11 @@ Serving
    Leave out the analyses a browser cannot hold, as the page does.
 ``--engine NAME``
    The engines the page offers (repeat it; default: all of them).
+``--default-engine NAME``
+   With ``--local``, the engine the page starts with, one of ``--engine``
+   (default: the bundle's, ``neurosynth_iit``, if offered).  The admin
+   console may turn engines off and choose another (see `The admin
+   console`_).
 ``--host HOST``, ``--port PORT``
    Where it listens: ``127.0.0.1`` by default, this machine only; ``0.0.0.0``
    for the network.  A port below 1024 needs root, which the service does
@@ -283,6 +288,8 @@ log and the dashboard go there too::
    max_uploads_mb: 200
    activity_db: activity.sqlite
    dashboard: true             # needs the dashboard extra
+   engines: [neurosynth_iit, neurostore_iit]  # prepared and offered
+   default_engine: neurostore_iit             # the one the page starts with
 
 Its secrets go in a second YAML file, readable by you only (the server
 refuses it otherwise: ``chmod 600 secrets.yaml``), which ``server.yaml``
@@ -405,6 +412,15 @@ refusal (403).  It shows:
   them (ending their sessions).  The last admin cannot be removed.
 - **Groups**: their members, assistant, variables and own key; it sets or
   removes a group's assistant and own key.
+- **Engines**: with ``--local``, the engines the server prepared
+  (``--engine``), whether its page offers each, and the one it starts with
+  (``--default-engine``).  A change is the page's when it is opened (or
+  reloaded); the sessions running keep their engine, and the server
+  starts none on an engine turned off.  One engine at least stays offered,
+  the default among them.  The choice is kept next to the users file
+  (``users.yaml.engines.json``), and holds over the configuration's at the
+  next start; an engine it does not name (added to ``engines`` since) is
+  offered.  Remove the file to go back to the configuration's.
 - **Sessions**: the user, tab and engine of each, how long it has been
   unused, whether it works, the CPU seconds and the memory of its process
   (see `Activity and usage`_); it ends one.  Above them, the memory of the

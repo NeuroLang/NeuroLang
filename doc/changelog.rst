@@ -19,19 +19,28 @@ Unreleased
 
 **New features:**
 
+* On an engine of tractography (``neurosynth_iit``…), an uploaded
+  tractogram is queried with the rules of the bundles: ``.load_tractogram``
+  reads it by its name, and *Index*, on its row of the uploaded files,
+  indexes it in place of the tractogram indexed before
+  (``.index_tracts(..., replace=1)``, which removes that one from the
+  relations, with a note); one tractogram is indexed at a time.  The
+  engine's own tractogram is listed first, never removed, its *Index*
+  putting it back (:doc:`tutorial_decoding`).
+
+
+v0.1a23 (2026-11-15)
+--------------------
+
+**New features:**
+
 * A tractogram is decoded as an image is, where its streamlines end:
   ``.image`` and **Upload data** take a ``.trk`` or ``.tck`` in MNI mm and
   load the voxels of the brain within 3 mm (``image.endpoint_radius``,
   ``--radius MM``) of the ends of its streamlines, each of probability 1,
   and draw its streamlines in the brain viewer; the page offers the
   decoding query, and the query assistant has an example.  The page's
-  decoding buttons now run the query they put in the box.  On an engine of
-  tractography, ``.load_tractogram`` reads an uploaded tractogram by its
-  name, and *Index*, on its row of the uploaded files, indexes it in place
-  of the engine's tractogram (``.index_tracts(..., replace=1)``, which
-  removes the one indexed before, with a note), for the rules of the
-  bundles to select its streamlines.  The engine's own tractogram is listed
-  first, never removed, its *Index* putting it back.  The left arcuate fasciculus of HCP842 decodes to sentence
+  decoding buttons now run the query they put in the box.  The left arcuate fasciculus of HCP842 decodes to sentence
   comprehension, reading and language (:doc:`tutorial_decoding`).
 
 * ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF

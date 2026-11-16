@@ -64,7 +64,7 @@
     color: var(--text); background: var(--sunken); border: 1px solid var(--control);
     border-radius: var(--radius); transition: border-color .15s, box-shadow .15s;
   }
-  input[type=checkbox] { width: 1.25rem; height: 1.25rem; margin: 0; accent-color: var(--accent); }
+  input[type=checkbox], input[type=radio] { width: 1.25rem; height: 1.25rem; margin: 0; accent-color: var(--accent); }
   label:has(input[type=checkbox]) span { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; font-weight: 400; }
   input:hover, select:hover { border-color: var(--muted); }
   input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
@@ -194,6 +194,18 @@
   <button class="primary">Set the group</button>
 </form>
 <p class="note">The users of a group have its assistant unless they have their own; of several groups, the first by name gives it. A group may forbid its users their own key (a user's own setting wins).</p>
+
+<section id="engines-box" hidden>
+<h2>Engines</h2>
+<form id="engines-form">
+<div class="scroll"><table>
+  <thead><tr><th scope="col">Engine</th><th scope="col">Offered</th><th scope="col">Default</th></tr></thead>
+  <tbody id="engines"></tbody>
+</table></div>
+<p><button type="submit">Save</button></p>
+</form>
+<p class="note" id="engines-note"></p>
+</section>
 
 <h2>Sessions</h2>
 <p class="note" id="builder-note"></p>
@@ -444,6 +456,7 @@ async function show() {
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
   showUploads(state.uploads);
+  showEngines(state.engines);
   $("activity-link").hidden = !state.activity;
   $("update-box").hidden = !state.update;
   sessionCount = sessions ? sessions.length : 0;
@@ -471,6 +484,31 @@ async function show() {
     answer.ratings.map((r) => r.verdict + (r.comment ? `: ${r.comment}` : "")).join("\n"),
   ])));
 }
+
+// The engines the page offers (--engine), and the one it starts with.
+function showEngines(choice) {
+  $("engines-box").hidden = !choice;
+  if (!choice) return;
+  $("engines").replaceChildren(...choice.engines.map((engine) => {
+    const on = Object.assign(document.createElement("input"), { type: "checkbox", name: "on", value: engine.name, checked: engine.on });
+    const start = Object.assign(document.createElement("input"), { type: "radio", name: "default", value: engine.name, checked: engine.name === choice.default });
+    on.setAttribute("aria-label", `Offer ${engine.label}`);
+    start.setAttribute("aria-label", `Start with ${engine.label}`);
+    const name = document.createElement("span");
+    name.append(engine.label, " ", Object.assign(document.createElement("code"), { textContent: engine.name }));
+    return row([name, on, start]);
+  }));
+  $("engines-note").textContent = "The engines the server prepared (--engine), those its page offers and the one it starts with (--default-engine), "
+    + "for the pages opened from now on; the sessions running keep theirs. "
+    + (choice.saved ? `The choice is kept in ${choice.saved}, and holds over the configuration's at the next start.` : "The choice ends with the server.");
+}
+
+$("engines-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const on = form.getAll("on");
+  change("/admin/api/engines", { on, default: form.get("default") }, `The page offers ${on.join(", ")}, starting with ${form.get("default")}.`);
+});
 
 // What each user ran (--activity-db), and their log.
 async function showUsage(logged) {

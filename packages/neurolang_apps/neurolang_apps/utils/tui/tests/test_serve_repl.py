@@ -406,7 +406,7 @@ def _post(port, action, body):
 def test_the_local_site_has_the_page_answered_by_this_machine(
     serve, tmp_path
 ):
-    page = serve.prepare_local_site(tmp_path, ["neurosynth"])
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"]).page
     bundle = json.loads((page.parent / "bundle.json").read_text())
     assert bundle == {
         "backend": "local", "default": "neurosynth",
@@ -418,7 +418,8 @@ def test_the_local_site_has_the_page_answered_by_this_machine(
     assert any("Neurosynth: Yarkoni" in text for text in
                bundle["engines"]["neurosynth"]["acknowledgements"])
     assert (page.parent / "local_worker.js").is_file()
-    page = serve.prepare_local_site(tmp_path, ["neurosynth", "neurosynth_iit"])
+    page = serve.prepare_local_site(
+        tmp_path, ["neurosynth", "neurosynth_iit"]).page
     bundle = json.loads((page.parent / "bundle.json").read_text())
     assert bundle["default"] == getattr(
         serve.bundle_script(), "DEFAULT_ENGINE", "neurosynth"
@@ -898,7 +899,7 @@ def test_every_request_needs_the_password(serve, tmp_path, password):
 def test_the_main_page_leads_to_the_repl_unless_the_site_has_one(
     serve, tmp_path
 ):
-    page = serve.prepare_local_site(tmp_path, ["neurosynth"])
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"]).page
     serve.write_index(tmp_path, page)
     assert 'url=_static/repl/index.html"' in (
         tmp_path / "index.html").read_text()
@@ -1681,10 +1682,93 @@ def test_a_user_changes_their_own_password(console):
 
 
 def test_the_local_site_links_the_account_page_of_its_users(serve, tmp_path):
-    page = serve.prepare_local_site(tmp_path, ["neurosynth"], users=True)
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"],
+                                    users=True).page
     assert json.loads((page.parent / "bundle.json").read_text())["users"]
-    page = serve.prepare_local_site(tmp_path, ["neurosynth"])
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"]).page
     assert "users" not in json.loads((page.parent / "bundle.json").read_text())
+
+
+def test_the_admin_console_chooses_the_engines_of_the_page(serve, tmp_path):
+    """The engines the page offers, and the one it starts with, are those
+    of the configuration unless the admin console chose others, which a
+    restart keeps (next to the users file); no session starts on another."""
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    saved = serve.engines_path(users.path)
+    engines = serve.prepare_local_site(
+        tmp_path, ["neurosynth", "neurostore"], True, "neurostore", saved)
+    bundle = engines.page.parent / "bundle.json"
+    assert json.loads(bundle.read_text())["default"] == "neurostore"
+    sessions = _FakeSessions()
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users, engines=engines)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    change = "/admin/api/engines"
+    try:
+        state = _json_of(port, "/admin/api/state", "ann", "ann-pw")
+        assert state["engines"] == {
+            "engines": [
+                {"name": "neurosynth", "label": "Neurosynth", "on": True},
+                {"name": "neurostore", "label": "NeuroStore", "on": True}],
+            "default": "neurostore", "saved": str(saved)}
+        body = {"on": ["neurosynth"], "default": "neurosynth"}
+        assert _status(port, change, _basic("bob-pw", "bob"), "POST",
+                       body) == 403
+        for wrong in ({"on": [], "default": "neurosynth"},
+                      {"on": ["neurosynth"], "default": "neurostore"},
+                      {"on": ["nowhere"], "default": "nowhere"}):
+            assert _status(port, change, _basic("ann-pw", "ann"), "POST",
+                           wrong) == 400
+        assert _json_of(port, change, "ann", "ann-pw", body) == {"ok": True}
+        page = json.loads(bundle.read_text())
+        assert (list(page["engines"]), page["default"]) == (
+            ["neurosynth"], "neurosynth")
+        start = "/api/start?session=t1"
+        assert _status(port, start, _basic("bob-pw", "bob"), "POST",
+                       {"engine": "neurostore"}) == 403
+        assert _status(port, start, _basic("bob-pw", "bob"), "POST",
+                       {"engine": "neurosynth"}) == 200
+    finally:
+        server.shutdown()
+        server.server_close()
+    # a restart keeps the console's choice over the configuration's, and
+    # offers an engine the console did not know
+    engines = serve.prepare_local_site(
+        tmp_path, ["neurosynth", "neurostore", "neurosynth_iit"], True,
+        "neurostore", saved)
+    assert (engines.on(), engines.default) == (
+        ["neurosynth", "neurosynth_iit"], "neurosynth")
+    # an engine no longer prepared: the configuration's default holds
+    engines = serve.prepare_local_site(tmp_path, ["neurostore"], True,
+                                       "neurostore", saved)
+    assert (engines.on(), engines.default) == (["neurostore"], "neurostore")
+    assert not engines.overrides
+    # a file the console did not write is not its choice
+    for text in ("[]", '{"off": 3}', "nonsense"):
+        saved.write_text(text)
+        engines = serve.prepare_local_site(
+            tmp_path, ["neurosynth", "neurostore"], True, "neurostore", saved)
+        assert (engines.on(), engines.default, engines.overrides) == (
+            ["neurosynth", "neurostore"], "neurostore", False)
+
+
+def test_the_default_engine_of_the_configuration(serve, tmp_path):
+    config = tmp_path / "server.yaml"
+    config.write_text("local: true\nengines: [neurosynth, neurostore]\n"
+                      "default_engine: neurostore\n")
+    args = serve.parse_args(["--config", str(config)])
+    assert args.default_engine == "neurostore"
+    command = serve.service_command(serve.parse_args(
+        ["--local", "--default-engine", "neurostore", "--python",
+         sys.executable, "--daemon", "install"]))
+    assert command[command.index("--default-engine") + 1] == "neurostore"
+    for wrong in (["--default-engine", "neurostore"],  # not --local
+                  ["--local", "--engine", "neurosynth",
+                   "--default-engine", "neurostore"]):
+        with pytest.raises(SystemExit):
+            serve.parse_args(wrong)
 
 
 def test_without_users_there_is_no_account_page(serve, tmp_path):
