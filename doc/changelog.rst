@@ -20,6 +20,13 @@ Unreleased
 **New features:**
 
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
+  examples of graphs of concepts, an edge per pair of concepts of the
+  Cognitive Atlas weighted by the similarity of the abstracts of their
+  studies (the lift of the studies closest to both definitions) or by
+  their co-activations (the correlation, across the Schaefer 400 regions,
+  of the lifts of their activations); the guidance says how to write them.
+
+- Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
   the regions a question lists (which regions, parcels or structures a
   term, a topic or a seed activates or co-activates) are answered with the
   lift of each, P(active | topic) / P(active), or with the Bayes factor
