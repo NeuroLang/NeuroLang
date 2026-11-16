@@ -334,8 +334,8 @@
   #tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); }
   #tabs button { min-height: 2.25rem; margin-bottom: -1px; background: none; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: .35rem .85rem; font-weight: 500; font-size: .875rem; }
   #tabs button:hover { color: var(--text); background: none; }
-  #results[data-tab=table] #tab-table, #results[data-tab=brain] #tab-brain, #results[data-tab=graph] #tab-graph { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-  #results:not([data-tab=table]) #table, #results:not([data-tab=brain]) #brain, #results:not([data-tab=graph]) #graph { display: none; }
+  #results[data-tab=table] #tab-table, #results[data-tab=network] #tab-network, #results[data-tab=brain] #tab-brain, #results[data-tab=graph] #tab-graph { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  #results:not([data-tab=table]) #table, #results:not([data-tab=network]) #network, #results:not([data-tab=brain]) #brain, #results:not([data-tab=graph]) #graph { display: none; }
   #table { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
   /* the answers of a program with several queries (ans[name]), a tab each */
   .answer-tabs { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .6rem; }
@@ -343,6 +343,20 @@
   .answer-tabs button:hover { color: var(--text); background: var(--sunken); }
   .answer-tabs button[aria-selected=true] { color: var(--text); border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
   #graph > .note { margin-bottom: .5rem; font-size: .8125rem; }
+  .networks { display: grid; gap: 1.5rem; }
+  .network { display: grid; gap: .5rem; }
+  .network-title { margin: 0; font-size: .875rem; }
+  .network-svg { width: 100%; max-width: 900px; height: auto; margin: 0 auto; }
+  .network-line { stroke: var(--accent); stroke-opacity: .55; stroke-linecap: round; }
+  .network-negative .network-line { stroke: var(--answer); stroke-dasharray: 5 4; stroke-linecap: butt; }
+  .network-hit { stroke: transparent; stroke-width: 10; }
+  .network-edge:hover .network-line { stroke-opacity: 1; }
+  .network-node circle { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+  .network-node text { fill: var(--text); font-size: 13px; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
+  .network-alone circle { fill: var(--muted); }
+  .network-alone text { fill: var(--muted); }
+  .network-node:hover circle { stroke: var(--text); }
+  .network .plot-controls input[type=range] { width: 12rem; }
   iframe { display: block; width: 100%; height: 34rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); } /* 34rem until the page in it says how tall it is */
   .brain-bar { margin-bottom: .6rem; }
   #rate { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .75rem .9rem; background: var(--sunken); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -662,8 +676,9 @@
     <p id="failed" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg><span id="failed-text"></span></p>
     <div id="out" aria-live="polite"></div>
     <section id="results" data-tab="table">
-      <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button><button id="tab-graph" type="button" role="tab" aria-controls="graph" aria-selected="false" tabindex="-1" hidden title="Where the answer of the query comes from: its data, rules and probabilities">Graph</button></div>
+      <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-network" type="button" role="tab" aria-controls="network" aria-selected="false" tabindex="-1" hidden title="The answer as a network: an edge a row, between its two values of the same sort">Network</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button><button id="tab-graph" type="button" role="tab" aria-controls="graph" aria-selected="false" tabindex="-1" hidden title="Where the answer of the query comes from: its data, rules and probabilities">Graph</button></div>
       <div id="table" role="tabpanel" aria-labelledby="tab-table"></div>
+      <div id="network" role="tabpanel" aria-labelledby="tab-network"></div>
       <div id="brain" role="tabpanel" aria-labelledby="tab-brain"></div>
       <div id="graph" role="tabpanel" aria-labelledby="tab-graph"></div>
     </section>

@@ -242,6 +242,11 @@ Its *Plot* button draws the rows the filter keeps: bars of a column (a
 probability by region, the most probable in red) or of how many rows each
 value has, a histogram of a numeric column, or two numeric columns as
 points or a line; the values of a mark show under the pointer.
+An answer whose rows are edges, two columns of the same sort and a
+weight (``ans(concept_1, concept_2, correlation)``), also shows in the
+*Network* tab: its nodes and edges, the stronger an edge the thicker
+(dashed if negative), from the weight its slider sets; it starts with
+the strongest edges, two per node.
 
 
 The query assistant
