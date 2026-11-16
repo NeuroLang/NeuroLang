@@ -771,9 +771,9 @@ assistant_examples:
       partner(l, g, m, r, one) :- fc(l, m, r), ~touched(l, m), (g == 'unwired'), (one == 1)
       group(l, g, mean(r), std(r), sum(one)) :- partner(l, g, m, r, one)
       test(l, t, df) :- group(l, 'wired', m1, s1, n1), group(l, 'unwired', m2, s2, n2), (df == n1 + n2 - 2), (df > 0), (pooled == (n1 * s1 * s1 + n2 * s2 * s2) / df), (t == (m1 - m2) / (pooled * (1 / n1 + 1 / n2)) ** 0.5)
-      p_value(l, t, p) :- test(l, t, df), (p == t_pvalue(t, df))
-      cutoff(fdr_threshold(p, 0.05)) :- p_value(l, t, p)
-      ans(parcel, t, p) :- p_value(parcel, t, p), cutoff(c), (p <= c)
+      tested(l, t, p) :- test(l, t, df), (p == t_pvalue(t, df))
+      cutoff(fdr_threshold(p, 0.05)) :- tested(l, t, p)
+      ans(parcel, t_value, p_value) :- tested(parcel, t_value, p_value), cutoff(c), (p_value <= c)
 
   - question: Which Schaefer parcels are structural hubs, the top 5% by their streamlines, and how strongly are they functionally connected at rest?
     datalog: |-
