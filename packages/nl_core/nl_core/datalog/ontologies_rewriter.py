@@ -186,6 +186,7 @@ class OntologyRewriter:
         self.holds = holds
         self._null_positions_cache = {}
         self._backward_cache = {}
+        self._moves_cache = {}
         self._sigma_cache = {}
         self._kills_cache = {}
         self._occurrences_cache = {}
@@ -325,13 +326,15 @@ class OntologyRewriter:
 
     def _surely_dead(self, q, S, sigma):
         """
-        Whether rewriting the atom ``S`` of ``q`` with ``sigma`` gives a
-        query :meth:`_dead` drops, told from what is precomputed of
-        ``sigma`` (:meth:`_kills`): the term of ``S`` that its body puts
-        in a position with no values is a constant, a variable of the
-        head or of a negated formula, or occurs in another atom of ``q``
-        from which no rewriting moves it there.  A sufficient condition:
-        :meth:`_builds_dead` tests the others in full.
+        Whether rewriting the atom ``S`` of ``q`` with ``sigma`` is left
+        out, told from what is precomputed of ``sigma`` (:meth:`_kills`):
+        the term of ``S`` that its body puts in a position with no values
+        is a constant, a variable of the head or of a negated formula, or
+        occurs in another atom of ``q`` from which no single step moves it
+        there (:meth:`_moves`).  Steps on distinct atoms commute, so the
+        step waits until each other occurrence is one step away; the
+        rewritings with values are the same (see doc/ontologies.rst).
+        :meth:`_builds_dead` tests the other steps in full.
         """
         kills = self._kills(sigma) if self.holds is not None else None
         if not kills:
@@ -342,7 +345,7 @@ class OntologyRewriter:
             if isinstance(term, Constant) or term in blocked:
                 return True
             if any(
-                (functor, i) not in self._backward(other, k)
+                (functor, i) not in self._moves(other, k)
                 for atom, other, k in occurrences.get(term, ())
                 if atom is not S and atom != S
             ):
@@ -424,21 +427,27 @@ class OntologyRewriter:
         if key not in self._backward_cache:
             reach, todo = {key}, [key]
             while todo:
-                head, j = todo.pop()
-                for sigma in self.union_of_constraints.get(head, ()):
-                    v = sigma.consequent.args[j]
-                    if (
-                        not isinstance(v, Symbol)
-                        or v in _existential_variables(sigma)
-                    ):
-                        continue
-                    for body in extract_logic_atoms(sigma.antecedent):
-                        for k, arg in enumerate(body.args):
-                            if arg == v and (body.functor, k) not in reach:
-                                reach.add((body.functor, k))
-                                todo.append((body.functor, k))
+                for move in self._moves(*todo.pop()) - reach:
+                    reach.add(move)
+                    todo.append(move)
             self._backward_cache[key] = reach
         return self._backward_cache[key]
+
+    def _moves(self, functor, position):
+        """``(functor, position)`` and the positions of the bodies of the
+        constraints deriving ``functor`` one rewriting step moves its term
+        to."""
+        key = (functor, position)
+        if key not in self._moves_cache:
+            self._moves_cache[key] = {key} | {
+                (body.functor, k)
+                for sigma in self.union_of_constraints.get(functor, ())
+                if isinstance(v := sigma.consequent.args[position], Symbol)
+                and v not in _existential_variables(sigma)
+                for body in extract_logic_atoms(sigma.antecedent)
+                for k, arg in enumerate(body.args) if arg == v
+            }
+        return self._moves_cache[key]
 
     def _get_related_sigmas(self, q0, sigma_free_vars):
         new_sigmas = []
