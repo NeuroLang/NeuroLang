@@ -151,7 +151,7 @@ def test_engine_tables_are_every_pair_both_ways(tmp_path):
     table = pd.read_csv(
         tmp_path / "tsv" / "destrieux_tian_structural_connectivity.tsv.gz",
         sep="\t")
-    assert list(table.columns) == ["region1", "region2", "streamlines"]
+    assert list(table.columns) == ["region1", "region2", "streamline_count"]
     pairs = set(zip(table.region1, table.region2))
     assert pairs == {("L a", "R a"), ("R a", "L a"), ("R a", "THA lh"),
                      ("THA lh", "R a")}

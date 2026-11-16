@@ -235,14 +235,14 @@ engines:
       MNI brain. No cerebellum. Structural, not functional.
     requires_mni_mask: true
     use_base_symbols: true
-    builtins: [exp, log, startswith, t_pvalue]
+    builtins: [exp, log, startswith, t_pvalue, fdr_threshold]
     relations:
       schaefer400_tian_structural_connectivity:
-        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.3/tsv/schaefer400_17_tian_structural_connectivity.tsv.gz
-        md5: 9aa288691b6dd15938bc72d6ab6e5e61
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.4/tsv/schaefer400_17_tian_structural_connectivity.tsv.gz
+        md5: 126953160cfafcc3cb5a43b04cd72a70
       destrieux_tian_structural_connectivity:
-        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.3/tsv/destrieux_tian_structural_connectivity.tsv.gz
-        md5: c79ec34d5790d2e87da8bc2dbbee94c4
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.4/tsv/destrieux_tian_structural_connectivity.tsv.gz
+        md5: 125084faf1b5bc76b37d76058a6ce40c
     acknowledgements:
       - >-
         Structural connectivity (schaefer400_tian_structural_connectivity,
@@ -276,11 +276,13 @@ engines:
         the McDonnell Center for Systems Neuroscience at Washington
         University.
     sorts:
-      streamlines:
-        columns: [streamlines]
+      streamline_count:
+        columns: [streamline_count]
         type: float
         description: >-
-          a mean number of streamlines of tractography, over the subjects
+          the mean number of streamlines of tractography joining two
+          regions over 100 HCP subjects (of 5 million streamlines each), a
+          count, not SIFT2 weights
     predicates:
       schaefer400_tian_structural_connectivity:
         description: >-
@@ -301,7 +303,7 @@ engines:
         arguments:
           - schaefer400_tian_label
           - schaefer400_tian_label
-          - streamlines
+          - streamline_count
       destrieux_tian_structural_connectivity:
         description: >-
           Structural connectivity between two regions of the 148 Destrieux
@@ -316,7 +318,7 @@ engines:
         arguments:
           - destrieux_tian_label
           - destrieux_tian_label
-          - streamlines
+          - streamline_count
 
   functional_connectivity:
     extends: connectivity_atlases
@@ -331,13 +333,13 @@ engines:
       MNI brain. Functional, not structural.
     requires_mni_mask: true
     use_base_symbols: true
-    builtins: [exp, log, startswith, t_pvalue]
+    builtins: [exp, log, startswith, t_pvalue, fdr_threshold]
     relations:
       schaefer400_tian_functional_connectivity:
-        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.3/tsv/schaefer400_17_tian_functional_connectivity.tsv.gz
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.4/tsv/schaefer400_17_tian_functional_connectivity.tsv.gz
         md5: e5032f1964a1a2dae4e4365a9c2c3f45
       destrieux_tian_functional_connectivity:
-        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.3/tsv/destrieux_tian_functional_connectivity.tsv.gz
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.4/tsv/destrieux_tian_functional_connectivity.tsv.gz
         md5: 8bb4dfa8856f0639422e72840e30ff3c
     acknowledgements:
       - >-
@@ -416,7 +418,7 @@ engines:
       activates the voxels within {kernel_radius_mm} mm of its peaks.
     requires_mni_mask: true
     use_base_symbols: true
-    builtins: [exp, log, startswith, lcase, t_pvalue]
+    builtins: [exp, log, startswith, lcase, t_pvalue, fdr_threshold]
     python_init_options:
       # Peaks whose coordinate space is neither MNI nor Talairach
       # (Neurosynth's UNKNOWN: 53,878 peaks of 1,832 studies; NeuroStore's

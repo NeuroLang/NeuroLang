@@ -310,9 +310,9 @@ def test_the_schaefer_400_atlas_is_its_own_atlas_of_the_connectivity():
 
 RELATIONS = {
     "schaefer400_tian_structural_connectivity":
-        ("schaefer400_tian_label", "streamlines", "schaefer400", 400),
+        ("schaefer400_tian_label", "streamline_count", "schaefer400", 400),
     "destrieux_tian_structural_connectivity":
-        ("destrieux_tian_label", "streamlines", "destrieux", 148),
+        ("destrieux_tian_label", "streamline_count", "destrieux", 148),
     "schaefer400_tian_functional_connectivity":
         ("schaefer400_tian_label", "correlation", "schaefer400", 400),
     "destrieux_tian_functional_connectivity":
@@ -346,7 +346,7 @@ def test_the_connectivity_is_four_relations_of_cortex_and_subcortex():
             assert "Resting-state functional" in text
             assert "not structural" in text and "co-activation" in text
         entry = get_engine_config("neurosynth")["relations"][name]
-        assert "/-/raw/v2.3/tsv/" in entry["file"] and entry["md5"]
+        assert "/-/raw/v2.4/tsv/" in entry["file"] and entry["md5"]
     guidance = " ".join(
         get_engine_config("neurosynth")["assistant_guidance"].split())
     assert "Three connectivities" in guidance
@@ -369,7 +369,7 @@ def test_the_connectivity_files_are_every_pair_of_engine_regions(
 ):
     _, value, _, cortex = RELATIONS[relation]
     table = _fetched(relation, tmp_path)
-    column = "streamlines" if value == "streamlines" else "r"
+    column = "streamline_count" if value == "streamline_count" else "r"
     assert list(table.columns) == ["region1", "region2", column]
     regions = set(table.region1)
     tian = {r for r in regions if r.endswith((" lh", " rh"))}
@@ -380,7 +380,7 @@ def test_the_connectivity_files_are_every_pair_of_engine_regions(
     if column == "r":
         assert table.r.between(-1, 1).all()
     else:
-        assert (table.streamlines > 0).all()
+        assert (table.streamline_count > 0).all()
     both = table.set_index(["region1", "region2"])[column]
     swapped = table.set_index(["region2", "region1"])[column]
     swapped.index.names = both.index.names

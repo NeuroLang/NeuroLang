@@ -161,9 +161,9 @@ def tractography(work: Path, parts: Path, dataset: Path) -> None:
 # one table each (region1, region2, value), from the matrices of DATASET
 ENGINE_TABLES = {
     "schaefer400_17_tian_structural_connectivity":
-        ("schaefer400_17_tian_count_mean", "streamlines", 3),
+        ("schaefer400_17_tian_count_mean", "streamline_count", 3),
     "destrieux_tian_structural_connectivity":
-        ("destrieux_tian_count_mean", "streamlines", 3),
+        ("destrieux_tian_count_mean", "streamline_count", 3),
     "schaefer400_17_tian_functional_connectivity":
         ("schaefer400_17_functional_mean", "r", 6),
     "destrieux_tian_functional_connectivity":
