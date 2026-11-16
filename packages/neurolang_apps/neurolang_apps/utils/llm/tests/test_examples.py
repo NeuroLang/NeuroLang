@@ -65,8 +65,12 @@ def test_banks_are_inherited():
     shared = load_examples("coordinate_meta_analysis")
     assert load_examples("neurosynth") == shared
     # ...which begins with those of the connectivities it extends
-    connectivity = (load_examples("structural_connectivity")
-                    + load_examples("functional_connectivity"))
+    # (those of the atlases they both extend, connectivity_atlases, once)
+    connectivity = []
+    for example in (load_examples("structural_connectivity")
+                    + load_examples("functional_connectivity")):
+        if example not in connectivity:
+            connectivity.append(example)
     assert shared[:len(connectivity)] == connectivity
     assert len(shared) > len(connectivity)
     neurostore = load_examples("neurostore")

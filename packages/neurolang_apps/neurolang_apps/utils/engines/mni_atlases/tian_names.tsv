@@ -1,0 +1,33 @@
+label	name
+aHIP lh	Anterior hippocampus, left
+pHIP lh	Posterior hippocampus, left
+lAMY lh	Lateral amygdala, left
+mAMY lh	Medial amygdala, left
+THA DP lh	Dorsoposterior thalamus, left
+THA VP lh	Ventroposterior thalamus, left
+THA VA lh	Ventroanterior thalamus, left
+THA DA lh	Dorsoanterior thalamus, left
+NAc shell lh	Nucleus accumbens, shell, left
+NAc core lh	Nucleus accumbens, core, left
+pGP lh	Posterior globus pallidus, left
+aGP lh	Anterior globus pallidus, left
+aPUT lh	Anterior putamen, left
+pPUT lh	Posterior putamen, left
+aCAU lh	Anterior caudate, left
+pCAU lh	Posterior caudate, left
+aHIP rh	Anterior hippocampus, right
+pHIP rh	Posterior hippocampus, right
+lAMY rh	Lateral amygdala, right
+mAMY rh	Medial amygdala, right
+THA DP rh	Dorsoposterior thalamus, right
+THA VP rh	Ventroposterior thalamus, right
+THA VA rh	Ventroanterior thalamus, right
+THA DA rh	Dorsoanterior thalamus, right
+NAc shell rh	Nucleus accumbens, shell, right
+NAc core rh	Nucleus accumbens, core, right
+pGP rh	Posterior globus pallidus, right
+aGP rh	Anterior globus pallidus, right
+aPUT rh	Anterior putamen, right
+pPUT rh	Posterior putamen, right
+aCAU rh	Anterior caudate, right
+pCAU rh	Posterior caudate, right

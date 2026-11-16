@@ -1,0 +1,131 @@
+atlas	abbreviation	meaning
+schaefer	17Networks	the 17-network parcellation of Yeo et al. (2011) the parcels are matched to
+schaefer	LH	left hemisphere
+schaefer	RH	right hemisphere
+schaefer	VisCent	Central visual network
+schaefer	VisPeri	Peripheral visual network
+schaefer	SomMotA	Somatomotor A network
+schaefer	SomMotB	Somatomotor B network
+schaefer	DorsAttnA	Dorsal attention A network
+schaefer	DorsAttnB	Dorsal attention B network
+schaefer	SalVentAttnA	Salience / ventral attention A network
+schaefer	SalVentAttnB	Salience / ventral attention B network
+schaefer	LimbicA	Limbic A network
+schaefer	LimbicB	Limbic B network
+schaefer	ContA	Control A network
+schaefer	ContB	Control B network
+schaefer	ContC	Control C network
+schaefer	DefaultA	Default A network
+schaefer	DefaultB	Default B network
+schaefer	DefaultC	Default C network
+schaefer	TempPar	Temporal parietal network
+schaefer	AntTemp	anterior temporal
+schaefer	Aud	auditory
+schaefer	Cent	central
+schaefer	Cinga	cingulate anterior
+schaefer	Cingm	mid-cingulate
+schaefer	Cingp	cingulate posterior
+schaefer	ExStr	extrastriate cortex
+schaefer	ExStrInf	extra-striate inferior
+schaefer	ExStrSup	extra-striate superior
+schaefer	FEF	frontal eye fields
+schaefer	FPole	frontal pole
+schaefer	FrMed	frontal medial
+schaefer	FrOper	frontal operculum
+schaefer	IFG	inferior frontal gyrus
+schaefer	Ins	insula
+schaefer	IPL	inferior parietal lobule
+schaefer	IPS	intraparietal sulcus
+schaefer	OFC	orbital frontal cortex
+schaefer	ParMed	parietal medial
+schaefer	ParOcc	parietal occipital
+schaefer	ParOper	parietal operculum
+schaefer	pCun	precuneus
+schaefer	pCunPCC	precuneus posterior cingulate cortex
+schaefer	PFCd	dorsal prefrontal cortex
+schaefer	PFCl	lateral prefrontal cortex
+schaefer	PFCld	lateral dorsal prefrontal cortex
+schaefer	PFClv	lateral ventral prefrontal cortex
+schaefer	PFCm	medial prefrontal cortex
+schaefer	PFCmp	medial posterior prefrontal cortex
+schaefer	PFCv	ventral prefrontal cortex
+schaefer	PHC	parahippocampal cortex
+schaefer	PostC	post central
+schaefer	PrC	precentral
+schaefer	PrCd	precentral dorsal
+schaefer	PrCv	precentral ventral
+schaefer	RSC	retrosplenial cortex
+schaefer	Rsp	retrosplenial
+schaefer	S2	S2
+schaefer	SPL	superior parietal lobule
+schaefer	ST	superior temporal
+schaefer	Striate	striate cortex
+schaefer	StriCal	striate calcarine
+schaefer	Temp	temporal
+schaefer	TempOcc	temporal occipital
+schaefer	TempPole	temporal pole
+destrieux	L	left hemisphere
+destrieux	R	right hemisphere
+destrieux	G	gyrus
+destrieux	S	sulcus
+destrieux	ant	anterior
+destrieux	Ant	anterior
+destrieux	post	posterior
+destrieux	Post	posterior
+destrieux	inf	inferior
+destrieux	sup	superior
+destrieux	med	medial
+destrieux	lat	lateral
+destrieux	Lat	lateral
+destrieux	Mid	middle
+destrieux	cent	central
+destrieux	cingul	cingulate
+destrieux	collat	collateral
+destrieux	Fis	fissure (Lat Fis: the lateral sulcus or fissure)
+destrieux	front	frontal
+destrieux	frontomargin	fronto-marginal
+destrieux	frontopol	frontopolar
+destrieux	fusifor	fusiform
+destrieux	Horizont	horizontal
+destrieux	Ins	insular
+destrieux	ins	insula
+destrieux	interm	intermedius (interm prim Jensen: sulcus intermedius primus of Jensen)
+destrieux	prim	primus
+destrieux	intrapariet	intraparietal
+destrieux	lg	long
+destrieux	oc	occipital (oc temp: occipito-temporal)
+destrieux	olfact	olfactory
+destrieux	P	parietal (P trans: transverse parietal sulci)
+destrieux	Parahip	parahippocampal
+destrieux	pariet	parietal
+destrieux	Plan	planum
+destrieux	tempo	temporale (Plan tempo: planum temporale)
+destrieux	Supramar	supramarginal
+destrieux	T	temporal (G T transv: transverse temporal gyrus)
+destrieux	temp	temporal
+destrieux	trans	transverse
+destrieux	transv	transverse
+destrieux	Triangul	triangular
+tian	lh	left hemisphere
+tian	rh	right hemisphere
+tian	HIP	hippocampus
+tian	aHIP	anterior hippocampus
+tian	pHIP	posterior hippocampus
+tian	AMY	amygdala
+tian	lAMY	lateral amygdala
+tian	mAMY	medial amygdala
+tian	THA	thalamus
+tian	DA	dorsoanterior
+tian	VA	ventroanterior
+tian	DP	dorsoposterior
+tian	VP	ventroposterior
+tian	NAc	nucleus accumbens
+tian	GP	globus pallidus
+tian	aGP	anterior globus pallidus
+tian	pGP	posterior globus pallidus
+tian	PUT	putamen
+tian	aPUT	anterior putamen
+tian	pPUT	posterior putamen
+tian	CAU	caudate nucleus
+tian	aCAU	anterior caudate
+tian	pCAU	posterior caudate

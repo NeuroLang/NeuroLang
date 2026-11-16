@@ -337,6 +337,56 @@ def test_sparql_builtins(tmp_path):
     assert set(matched) == {("a",)}
 
 
+def test_t_pvalue_builtin(tmp_path):
+    """t_pvalue(t, df) is the two-sided p-value of Student's t, as scipy's
+    Student test gives it, in a rule."""
+    import numpy as np
+    from scipy import stats
+
+    from neurolang_apps.utils import engine_registry
+
+    config = tmp_path / "engines.yaml"
+    config.write_text("engines:\n  stats:\n    builtins: [t_pvalue]\n")
+    nl = engine_registry.build_engine(
+        "stats", tmp_path / "cache", yaml_path=config
+    )
+    a, b = [0.3, 0.5, 0.4, 0.6], [0.1, 0.2, 0.0, 0.15, 0.25]
+    student = stats.ttest_ind(a, b)
+    nl.add_tuple_set([(student.statistic, len(a) + len(b) - 2)], name="test")
+    (p,), = nl.execute_datalog_program(
+        "ans(p) :- test(t, df), (p == t_pvalue(t, df))")
+    assert np.isclose(p, student.pvalue)
+    assert engine_registry._builtin_t_pvalue(-2.0, 10) == \
+        engine_registry._builtin_t_pvalue(2.0, 10)
+
+
+def test_fdr_threshold_aggregation(tmp_path):
+    """fdr_threshold(p, alpha), in the head of a rule, is the cut-off of
+    Benjamini and Hochberg: the tests under it are those whose q-values
+    are at most alpha."""
+    import numpy as np
+
+    from neurolang_apps.utils import engine_registry
+
+    config = tmp_path / "engines.yaml"
+    config.write_text("engines:\n  stats:\n    builtins: [fdr_threshold]\n")
+    nl = engine_registry.build_engine(
+        "stats", tmp_path / "cache", yaml_path=config
+    )
+    p = [0.001, 0.008, 0.039, 0.041, 0.042, 0.06, 0.074, 0.205, 0.212, 0.216]
+    nl.add_tuple_set([(f"test{i}", v) for i, v in enumerate(p)],
+                     name="p_value")
+    significant = nl.execute_datalog_program(
+        "cutoff(fdr_threshold(p, 0.05)) :- p_value(x, p)\n"
+        "ans(x) :- p_value(x, p), cutoff(c), (p <= c)")
+    m = len(p)
+    q = np.minimum.accumulate(
+        (np.array(p) * m / np.arange(1, m + 1))[::-1])[::-1]
+    assert {x for x, in significant} == {
+        f"test{i}" for i in range(m) if q[i] <= 0.05}
+    assert engine_registry._builtin_fdr_threshold([0.5, 0.9], 0.05) == 0.0
+
+
 class TestNeurosynthEngineVocabulary:
     """Check the vocabulary predicates the neurosynth engine defines."""
 

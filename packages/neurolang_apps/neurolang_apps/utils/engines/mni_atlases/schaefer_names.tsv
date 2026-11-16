@@ -1,0 +1,101 @@
+label	name
+17Networks LH VisCent ExStr 1	Central visual network, extrastriate cortex 1, left
+17Networks LH VisCent ExStr 2	Central visual network, extrastriate cortex 2, left
+17Networks LH VisCent Striate 1	Central visual network, striate cortex 1, left
+17Networks LH VisCent ExStr 3	Central visual network, extrastriate cortex 3, left
+17Networks LH VisPeri ExStrInf 1	Peripheral visual network, extra-striate inferior 1, left
+17Networks LH VisPeri StriCal 1	Peripheral visual network, striate calcarine 1, left
+17Networks LH VisPeri ExStrSup 1	Peripheral visual network, extra-striate superior 1, left
+17Networks LH SomMotA 1	Somatomotor A network 1, left
+17Networks LH SomMotA 2	Somatomotor A network 2, left
+17Networks LH SomMotB Aud 1	Somatomotor B network, auditory 1, left
+17Networks LH SomMotB S2 1	Somatomotor B network, S2 1, left
+17Networks LH SomMotB S2 2	Somatomotor B network, S2 2, left
+17Networks LH SomMotB Cent 1	Somatomotor B network, central 1, left
+17Networks LH DorsAttnA TempOcc 1	Dorsal attention A network, temporal occipital 1, left
+17Networks LH DorsAttnA ParOcc 1	Dorsal attention A network, parietal occipital 1, left
+17Networks LH DorsAttnA SPL 1	Dorsal attention A network, superior parietal lobule 1, left
+17Networks LH DorsAttnB PostC 1	Dorsal attention B network, post central 1, left
+17Networks LH DorsAttnB PostC 2	Dorsal attention B network, post central 2, left
+17Networks LH DorsAttnB PostC 3	Dorsal attention B network, post central 3, left
+17Networks LH DorsAttnB FEF 1	Dorsal attention B network, frontal eye fields 1, left
+17Networks LH SalVentAttnA ParOper 1	Salience / ventral attention A network, parietal operculum 1, left
+17Networks LH SalVentAttnA Ins 1	Salience / ventral attention A network, insula 1, left
+17Networks LH SalVentAttnA Ins 2	Salience / ventral attention A network, insula 2, left
+17Networks LH SalVentAttnA ParMed 1	Salience / ventral attention A network, parietal medial 1, left
+17Networks LH SalVentAttnA FrMed 1	Salience / ventral attention A network, frontal medial 1, left
+17Networks LH SalVentAttnB PFCl 1	Salience / ventral attention B network, lateral prefrontal cortex 1, left
+17Networks LH SalVentAttnB PFCmp 1	Salience / ventral attention B network, medial posterior prefrontal cortex 1, left
+17Networks LH LimbicB OFC 1	Limbic B network, orbital frontal cortex 1, left
+17Networks LH LimbicA TempPole 1	Limbic A network, temporal pole 1, left
+17Networks LH LimbicA TempPole 2	Limbic A network, temporal pole 2, left
+17Networks LH ContA IPS 1	Control A network, intraparietal sulcus 1, left
+17Networks LH ContA PFCl 1	Control A network, lateral prefrontal cortex 1, left
+17Networks LH ContA PFCl 2	Control A network, lateral prefrontal cortex 2, left
+17Networks LH ContB PFClv 1	Control B network, lateral ventral prefrontal cortex 1, left
+17Networks LH ContC pCun 1	Control C network, precuneus 1, left
+17Networks LH ContC pCun 2	Control C network, precuneus 2, left
+17Networks LH ContC Cingp 1	Control C network, cingulate posterior 1, left
+17Networks LH DefaultA PFCd 1	Default A network, dorsal prefrontal cortex 1, left
+17Networks LH DefaultA pCunPCC 1	Default A network, precuneus posterior cingulate cortex 1, left
+17Networks LH DefaultA PFCm 1	Default A network, medial prefrontal cortex 1, left
+17Networks LH DefaultB Temp 1	Default B network, temporal 1, left
+17Networks LH DefaultB Temp 2	Default B network, temporal 2, left
+17Networks LH DefaultB IPL 1	Default B network, inferior parietal lobule 1, left
+17Networks LH DefaultB PFCd 1	Default B network, dorsal prefrontal cortex 1, left
+17Networks LH DefaultB PFCl 1	Default B network, lateral prefrontal cortex 1, left
+17Networks LH DefaultB PFCv 1	Default B network, ventral prefrontal cortex 1, left
+17Networks LH DefaultB PFCv 2	Default B network, ventral prefrontal cortex 2, left
+17Networks LH DefaultC Rsp 1	Default C network, retrosplenial 1, left
+17Networks LH DefaultC PHC 1	Default C network, parahippocampal cortex 1, left
+17Networks LH TempPar 1	Temporal parietal network 1, left
+17Networks RH VisCent ExStr 1	Central visual network, extrastriate cortex 1, right
+17Networks RH VisCent ExStr 2	Central visual network, extrastriate cortex 2, right
+17Networks RH VisCent ExStr 3	Central visual network, extrastriate cortex 3, right
+17Networks RH VisPeri StriCal 1	Peripheral visual network, striate calcarine 1, right
+17Networks RH VisPeri ExStrInf 1	Peripheral visual network, extra-striate inferior 1, right
+17Networks RH VisPeri ExStrSup 1	Peripheral visual network, extra-striate superior 1, right
+17Networks RH SomMotA 1	Somatomotor A network 1, right
+17Networks RH SomMotA 2	Somatomotor A network 2, right
+17Networks RH SomMotA 3	Somatomotor A network 3, right
+17Networks RH SomMotA 4	Somatomotor A network 4, right
+17Networks RH SomMotB Aud 1	Somatomotor B network, auditory 1, right
+17Networks RH SomMotB S2 1	Somatomotor B network, S2 1, right
+17Networks RH SomMotB S2 2	Somatomotor B network, S2 2, right
+17Networks RH SomMotB Cent 1	Somatomotor B network, central 1, right
+17Networks RH DorsAttnA TempOcc 1	Dorsal attention A network, temporal occipital 1, right
+17Networks RH DorsAttnA ParOcc 1	Dorsal attention A network, parietal occipital 1, right
+17Networks RH DorsAttnA SPL 1	Dorsal attention A network, superior parietal lobule 1, right
+17Networks RH DorsAttnB PostC 1	Dorsal attention B network, post central 1, right
+17Networks RH DorsAttnB PostC 2	Dorsal attention B network, post central 2, right
+17Networks RH DorsAttnB FEF 1	Dorsal attention B network, frontal eye fields 1, right
+17Networks RH SalVentAttnA ParOper 1	Salience / ventral attention A network, parietal operculum 1, right
+17Networks RH SalVentAttnA Ins 1	Salience / ventral attention A network, insula 1, right
+17Networks RH SalVentAttnA ParMed 1	Salience / ventral attention A network, parietal medial 1, right
+17Networks RH SalVentAttnA FrMed 1	Salience / ventral attention A network, frontal medial 1, right
+17Networks RH SalVentAttnB IPL 1	Salience / ventral attention B network, inferior parietal lobule 1, right
+17Networks RH SalVentAttnB PFCl 1	Salience / ventral attention B network, lateral prefrontal cortex 1, right
+17Networks RH SalVentAttnB PFCmp 1	Salience / ventral attention B network, medial posterior prefrontal cortex 1, right
+17Networks RH LimbicB OFC 1	Limbic B network, orbital frontal cortex 1, right
+17Networks RH LimbicA TempPole 1	Limbic A network, temporal pole 1, right
+17Networks RH ContA IPS 1	Control A network, intraparietal sulcus 1, right
+17Networks RH ContA PFCl 1	Control A network, lateral prefrontal cortex 1, right
+17Networks RH ContA PFCl 2	Control A network, lateral prefrontal cortex 2, right
+17Networks RH ContB Temp 1	Control B network, temporal 1, right
+17Networks RH ContB IPL 1	Control B network, inferior parietal lobule 1, right
+17Networks RH ContB PFCld 1	Control B network, lateral dorsal prefrontal cortex 1, right
+17Networks RH ContB PFClv 1	Control B network, lateral ventral prefrontal cortex 1, right
+17Networks RH ContC Cingp 1	Control C network, cingulate posterior 1, right
+17Networks RH ContC pCun 1	Control C network, precuneus 1, right
+17Networks RH DefaultA IPL 1	Default A network, inferior parietal lobule 1, right
+17Networks RH DefaultA PFCd 1	Default A network, dorsal prefrontal cortex 1, right
+17Networks RH DefaultA pCunPCC 1	Default A network, precuneus posterior cingulate cortex 1, right
+17Networks RH DefaultA PFCm 1	Default A network, medial prefrontal cortex 1, right
+17Networks RH DefaultB PFCd 1	Default B network, dorsal prefrontal cortex 1, right
+17Networks RH DefaultB PFCv 1	Default B network, ventral prefrontal cortex 1, right
+17Networks RH DefaultB PFCv 2	Default B network, ventral prefrontal cortex 2, right
+17Networks RH DefaultC Rsp 1	Default C network, retrosplenial 1, right
+17Networks RH DefaultC PHC 1	Default C network, parahippocampal cortex 1, right
+17Networks RH TempPar 1	Temporal parietal network 1, right
+17Networks RH TempPar 2	Temporal parietal network 2, right
+17Networks RH TempPar 3	Temporal parietal network 3, right
