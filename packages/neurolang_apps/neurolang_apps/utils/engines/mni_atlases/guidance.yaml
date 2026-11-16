@@ -1,0 +1,19 @@
+# Merged into the entry of mni_atlases in ../engines.yaml (see
+# doc/engine_configuration.rst); the engines extending it add their
+# guidance after it.
+#
+# How the LLM assistant (.ask, neurolang-query --ask) is to name the
+# regions of the atlases: added to its system prompt.
+assistant_guidance: >
+  The labels of the atlases are abbreviations: Destrieux's ('L G front
+  sup'), Tian's ('THA VA lh') and Schaefer's ('17Networks LH DefaultA PFCd
+  1': network, component, number). destrieux_name(l, name),
+  tian_name(t, name), schaefer_name(l, name) (100 parcels) and
+  schaefer400_name(l, name) (400) give their full names ('Superior frontal
+  gyrus (F1), left', 'Ventroanterior thalamus, left', 'Default A network,
+  dorsal prefrontal cortex 1, left'); atlas_abbreviation(atlas,
+  abbreviation, meaning) says what each abbreviation stands for. An answer
+  of regions joins their names to show them beside the labels; a question
+  naming a region or a part of a network in words finds its labels through
+  the names (str_contains(lcase(name), 'prefrontal')) or the abbreviations
+  (str_contains(label, abbreviation)), in each atlas it asks about.

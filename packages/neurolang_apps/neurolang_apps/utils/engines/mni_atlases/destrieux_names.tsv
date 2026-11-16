@@ -1,0 +1,149 @@
+label	name
+L G and S frontomargin	Fronto-marginal gyrus (of Wernicke) and sulcus, left
+L G and S occipital inf	Inferior occipital gyrus (O3) and sulcus, left
+L G and S paracentral	Paracentral lobule and sulcus, left
+L G and S subcentral	Subcentral gyrus (central operculum) and sulci, left
+L G and S transv frontopol	Transverse frontopolar gyri and sulci, left
+L G and S cingul Ant	Anterior part of the cingulate gyrus and sulcus (ACC), left
+L G and S cingul Mid Ant	Middle-anterior part of the cingulate gyrus and sulcus (aMCC), left
+L G and S cingul Mid Post	Middle-posterior part of the cingulate gyrus and sulcus (pMCC), left
+L G cingul Post dorsal	Posterior-dorsal part of the cingulate gyrus (dPCC), left
+L G cingul Post ventral	Posterior-ventral part of the cingulate gyrus (vPCC, isthmus of the cingulate gyrus), left
+L G cuneus	Cuneus (O6), left
+L G front inf Opercular	Opercular part of the inferior frontal gyrus, left
+L G front inf Orbital	Orbital part of the inferior frontal gyrus, left
+L G front inf Triangul	Triangular part of the inferior frontal gyrus, left
+L G front middle	Middle frontal gyrus (F2), left
+L G front sup	Superior frontal gyrus (F1), left
+L G Ins lg and S cent ins	Long insular gyrus and central sulcus of the insula, left
+L G insular short	Short insular gyri, left
+L G occipital middle	Middle occipital gyrus (O2, lateral occipital gyrus), left
+L G occipital sup	Superior occipital gyrus (O1), left
+L G oc temp lat fusifor	Lateral occipito-temporal gyrus (fusiform gyrus, O4-T4), left
+L G oc temp med Lingual	Lingual gyrus, lingual part of the medial occipito-temporal gyrus (O5), left
+L G oc temp med Parahip	Parahippocampal gyrus, parahippocampal part of the medial occipito-temporal gyrus (T5), left
+L G orbital	Orbital gyri, left
+L G pariet inf Angular	Angular gyrus, left
+L G pariet inf Supramar	Supramarginal gyrus, left
+L G parietal sup	Superior parietal lobule (lateral part of P1), left
+L G postcentral	Postcentral gyrus, left
+L G precentral	Precentral gyrus, left
+L G precuneus	Precuneus (medial part of P1), left
+L G rectus	Straight gyrus, Gyrus rectus, left
+L G subcallosal	Subcallosal area, subcallosal gyrus, left
+L G temp sup G T transv	Anterior transverse temporal gyrus (of Heschl), left
+L G temp sup Lateral	Lateral aspect of the superior temporal gyrus, left
+L G temp sup Plan polar	Planum polare of the superior temporal gyrus, left
+L G temp sup Plan tempo	Planum temporale or temporal plane of the superior temporal gyrus, left
+L G temporal inf	Inferior temporal gyrus (T3), left
+L G temporal middle	Middle temporal gyrus (T2), left
+L Lat Fis ant Horizont	Horizontal ramus of the anterior segment of the lateral sulcus (or fissure), left
+L Lat Fis ant Vertical	Vertical ramus of the anterior segment of the lateral sulcus (or fissure), left
+L Lat Fis post	Posterior ramus (or segment) of the lateral sulcus (or fissure), left
+L Pole occipital	Occipital pole, left
+L Pole temporal	Temporal pole, left
+L S calcarine	Calcarine sulcus, left
+L S central	Central sulcus (Rolando's fissure), left
+L S cingul Marginalis	Marginal branch (or part) of the cingulate sulcus, left
+L S circular insula ant	Anterior segment of the circular sulcus of the insula, left
+L S circular insula inf	Inferior segment of the circular sulcus of the insula, left
+L S circular insula sup	Superior segment of the circular sulcus of the insula, left
+L S collat transv ant	Anterior transverse collateral sulcus, left
+L S collat transv post	Posterior transverse collateral sulcus, left
+L S front inf	Inferior frontal sulcus, left
+L S front middle	Middle frontal sulcus, left
+L S front sup	Superior frontal sulcus, left
+L S interm prim Jensen	Sulcus intermedius primus (of Jensen), left
+L S intrapariet and P trans	Intraparietal sulcus (interparietal sulcus) and transverse parietal sulci, left
+L S oc middle and Lunatus	Middle occipital sulcus and lunatus sulcus, left
+L S oc sup and transversal	Superior occipital sulcus and transverse occipital sulcus, left
+L S occipital ant	Anterior occipital sulcus and preoccipital notch (temporo-occipital incisure), left
+L S oc temp lat	Lateral occipito-temporal sulcus, left
+L S oc temp med and Lingual	Medial occipito-temporal sulcus (collateral sulcus) and lingual sulcus, left
+L S orbital lateral	Lateral orbital sulcus, left
+L S orbital med olfact	Medial orbital sulcus (olfactory sulcus), left
+L S orbital H Shaped	Orbital sulci (H-shaped sulci), left
+L S parieto occipital	Parieto-occipital sulcus (or fissure), left
+L S pericallosal	Pericallosal sulcus (S of corpus callosum), left
+L S postcentral	Postcentral sulcus, left
+L S precentral inf part	Inferior part of the precentral sulcus, left
+L S precentral sup part	Superior part of the precentral sulcus, left
+L S suborbital	Suborbital sulcus (sulcus rostrales, supraorbital sulcus), left
+L S subparietal	Subparietal sulcus, left
+L S temporal inf	Inferior temporal sulcus, left
+L S temporal sup	Superior temporal sulcus (parallel sulcus), left
+L S temporal transverse	Transverse temporal sulcus, left
+R G and S frontomargin	Fronto-marginal gyrus (of Wernicke) and sulcus, right
+R G and S occipital inf	Inferior occipital gyrus (O3) and sulcus, right
+R G and S paracentral	Paracentral lobule and sulcus, right
+R G and S subcentral	Subcentral gyrus (central operculum) and sulci, right
+R G and S transv frontopol	Transverse frontopolar gyri and sulci, right
+R G and S cingul Ant	Anterior part of the cingulate gyrus and sulcus (ACC), right
+R G and S cingul Mid Ant	Middle-anterior part of the cingulate gyrus and sulcus (aMCC), right
+R G and S cingul Mid Post	Middle-posterior part of the cingulate gyrus and sulcus (pMCC), right
+R G cingul Post dorsal	Posterior-dorsal part of the cingulate gyrus (dPCC), right
+R G cingul Post ventral	Posterior-ventral part of the cingulate gyrus (vPCC, isthmus of the cingulate gyrus), right
+R G cuneus	Cuneus (O6), right
+R G front inf Opercular	Opercular part of the inferior frontal gyrus, right
+R G front inf Orbital	Orbital part of the inferior frontal gyrus, right
+R G front inf Triangul	Triangular part of the inferior frontal gyrus, right
+R G front middle	Middle frontal gyrus (F2), right
+R G front sup	Superior frontal gyrus (F1), right
+R G Ins lg and S cent ins	Long insular gyrus and central sulcus of the insula, right
+R G insular short	Short insular gyri, right
+R G occipital middle	Middle occipital gyrus (O2, lateral occipital gyrus), right
+R G occipital sup	Superior occipital gyrus (O1), right
+R G oc temp lat fusifor	Lateral occipito-temporal gyrus (fusiform gyrus, O4-T4), right
+R G oc temp med Lingual	Lingual gyrus, lingual part of the medial occipito-temporal gyrus (O5), right
+R G oc temp med Parahip	Parahippocampal gyrus, parahippocampal part of the medial occipito-temporal gyrus (T5), right
+R G orbital	Orbital gyri, right
+R G pariet inf Angular	Angular gyrus, right
+R G pariet inf Supramar	Supramarginal gyrus, right
+R G parietal sup	Superior parietal lobule (lateral part of P1), right
+R G postcentral	Postcentral gyrus, right
+R G precentral	Precentral gyrus, right
+R G precuneus	Precuneus (medial part of P1), right
+R G rectus	Straight gyrus, Gyrus rectus, right
+R G subcallosal	Subcallosal area, subcallosal gyrus, right
+R G temp sup G T transv	Anterior transverse temporal gyrus (of Heschl), right
+R G temp sup Lateral	Lateral aspect of the superior temporal gyrus, right
+R G temp sup Plan polar	Planum polare of the superior temporal gyrus, right
+R G temp sup Plan tempo	Planum temporale or temporal plane of the superior temporal gyrus, right
+R G temporal inf	Inferior temporal gyrus (T3), right
+R G temporal middle	Middle temporal gyrus (T2), right
+R Lat Fis ant Horizont	Horizontal ramus of the anterior segment of the lateral sulcus (or fissure), right
+R Lat Fis ant Vertical	Vertical ramus of the anterior segment of the lateral sulcus (or fissure), right
+R Lat Fis post	Posterior ramus (or segment) of the lateral sulcus (or fissure), right
+R Pole occipital	Occipital pole, right
+R Pole temporal	Temporal pole, right
+R S calcarine	Calcarine sulcus, right
+R S central	Central sulcus (Rolando's fissure), right
+R S cingul Marginalis	Marginal branch (or part) of the cingulate sulcus, right
+R S circular insula ant	Anterior segment of the circular sulcus of the insula, right
+R S circular insula inf	Inferior segment of the circular sulcus of the insula, right
+R S circular insula sup	Superior segment of the circular sulcus of the insula, right
+R S collat transv ant	Anterior transverse collateral sulcus, right
+R S collat transv post	Posterior transverse collateral sulcus, right
+R S front inf	Inferior frontal sulcus, right
+R S front middle	Middle frontal sulcus, right
+R S front sup	Superior frontal sulcus, right
+R S interm prim Jensen	Sulcus intermedius primus (of Jensen), right
+R S intrapariet and P trans	Intraparietal sulcus (interparietal sulcus) and transverse parietal sulci, right
+R S oc middle and Lunatus	Middle occipital sulcus and lunatus sulcus, right
+R S oc sup and transversal	Superior occipital sulcus and transverse occipital sulcus, right
+R S occipital ant	Anterior occipital sulcus and preoccipital notch (temporo-occipital incisure), right
+R S oc temp lat	Lateral occipito-temporal sulcus, right
+R S oc temp med and Lingual	Medial occipito-temporal sulcus (collateral sulcus) and lingual sulcus, right
+R S orbital lateral	Lateral orbital sulcus, right
+R S orbital med olfact	Medial orbital sulcus (olfactory sulcus), right
+R S orbital H Shaped	Orbital sulci (H-shaped sulci), right
+R S parieto occipital	Parieto-occipital sulcus (or fissure), right
+R S pericallosal	Pericallosal sulcus (S of corpus callosum), right
+R S postcentral	Postcentral sulcus, right
+R S precentral inf part	Inferior part of the precentral sulcus, right
+R S precentral sup part	Superior part of the precentral sulcus, right
+R S suborbital	Suborbital sulcus (sulcus rostrales, supraorbital sulcus), right
+R S subparietal	Subparietal sulcus, right
+R S temporal inf	Inferior temporal sulcus, right
+R S temporal sup	Superior temporal sulcus (parallel sulcus), right
+R S temporal transverse	Transverse temporal sulcus, right

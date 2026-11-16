@@ -107,7 +107,8 @@ import re
 import warnings
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple, Optional, Tuple,
+    TYPE_CHECKING, Any, Callable, Dict, Iterable, List, NamedTuple, Optional,
+    Tuple,
 )
 
 import nibabel as nib
@@ -198,8 +199,30 @@ def _builtin_str(x) -> str:
     return str(x)
 
 
+def _builtin_t_pvalue(t, df) -> float:
+    """Return the two-sided p-value of the statistic *t* of Student's t
+    distribution with *df* degrees of freedom (a t-test's, e.g. Student's,
+    of n1 + n2 - 2)."""
+    from scipy.stats import t as student
+
+    return float(2 * student.sf(abs(float(t)), float(df)))
+
+
+def _builtin_fdr_threshold(p_values: Iterable, alpha: float) -> float:
+    """Return the p-value at or under which the tests of *p_values* are
+    significant at the false discovery rate *alpha*, by the procedure of
+    Benjamini and Hochberg: the largest p(i) with p(i) <= alpha i / m, of
+    the m p-values sorted; 0 when none is (an aggregation: in the head of
+    a rule, over a group's p-values)."""
+    p = np.sort(np.asarray(list(p_values), dtype=float))
+    passing = p <= float(alpha) * np.arange(1, len(p) + 1) / len(p)
+    return float(p[passing].max()) if passing.any() else 0.0
+
+
 _BUILTIN_SYMBOLS: Dict[str, object] = {
     "exp": np.exp,
+    "t_pvalue": _builtin_t_pvalue,
+    "fdr_threshold": _builtin_fdr_threshold,
     "log": np.log,
     "startswith": _builtin_startswith,
     # String and numeric functions of SPARQL, e.g. for RDF engines.
@@ -1497,7 +1520,8 @@ def _load_deterministic_atlas(
     fetch_kw = {
         k: v for k, v in params.items()
         if k not in (
-            "predicate_name", "activated", "covered", "points", "kind"
+            "predicate_name", "activated", "covered", "points", "kind",
+            "description",
         )
     }
     fetch_kw["data_dir"] = str(data_dir)

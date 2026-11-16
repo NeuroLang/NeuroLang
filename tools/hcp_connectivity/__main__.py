@@ -64,9 +64,22 @@ def main(argv=None) -> None:
                   "STAGING into OUT", "work", "staging", "out"), False)
     tasks(command("functional", "a task of the functional connectivity of "
                   "the HCP_DIR subjects into OUT", "work", "hcp", "out"), True)
+    command("volume-atlas", "the atlas in MNI space, for tractography "
+            "(WORK/atlases; needs the internet)", "work")
+    sub = command("tractography", "a task of the tractography of the HCP_DIR "
+                  "subjects into OUT", "work", "hcp", "out")
+    tasks(sub, True)
+    sub.add_argument("--streamlines", type=int, default=5_000_000)
+    sub.add_argument("--limit", type=int, help="the first LIMIT subjects "
+                     "with diffusion data")
+    sub.add_argument("--scratch", type=Path, help="the intermediate files "
+                     "(default WORK/tractography)")
+    sub.add_argument("--keep", action="store_true",
+                     help="keep the intermediate files")
     sub = command("combine", "the group connectivity of the parts of PARTS, "
                   "its tables and gradients, in DATASET")
-    sub.add_argument("kind", choices=["structural", "functional"])
+    sub.add_argument("kind", choices=["structural", "functional",
+                                      "tractography"])
     for path in ("work", "parts", "dataset"):
         sub.add_argument(path, type=Path)
     sub = command("population", "the connectivity of the cortex and the "
@@ -74,6 +87,8 @@ def main(argv=None) -> None:
                   "(WORK: its atlases; needs the internet)", "work", "out")
     sub.add_argument("tractograms", nargs="+", type=Path)
     sub.add_argument("--radius", type=float, default=3.0)
+    command("engine-tables", "the engines' connectivity tables, of the "
+            "matrices of DATASET", "dataset")
     command("gradients", "the gradients again, of the matrices of DATASET",
             "work", "dataset")
     args = parser.parse_args(argv)
@@ -108,10 +123,19 @@ def main(argv=None) -> None:
     elif args.command == "functional":
         from .functional import run
         run(args.work, args.hcp, args.out, args.task, args.tasks)
+    elif args.command == "volume-atlas":
+        from .tractography import volume_atlas
+        volume_atlas(args.work / "atlases")
+    elif args.command == "tractography":
+        from .tractography import run
+        run(args.work, args.hcp, args.out, args.task, args.tasks,
+            args.streamlines, args.limit, args.scratch, args.keep)
     elif args.command == "combine":
         from . import combine
         if args.kind == "structural":
             combine.structural(args.work, args.parts, args.dataset)
+        elif args.kind == "tractography":
+            combine.tractography(args.work, args.parts, args.dataset)
         else:
             from .atlases import tian_names
             combine.functional(args.work, tian_names(args.work / "atlases"),
@@ -119,6 +143,9 @@ def main(argv=None) -> None:
     elif args.command == "population":
         from .population import run
         run(args.work, args.out, args.tractograms, args.radius)
+    elif args.command == "engine-tables":
+        from .combine import engine_tables
+        engine_tables(args.dataset)
     elif args.command == "gradients":
         from .combine import regradient
         regradient(args.work, args.dataset)

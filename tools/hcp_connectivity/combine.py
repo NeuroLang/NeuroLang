@@ -124,7 +124,64 @@ def functional(work: Path, tian_names: list, parts: Path,
               "gradients explain " + ", ".join(
                   f"{x:.3f}" for x in variance[variance.hemisphere == "L"]
                   .explained[:3]), flush=True)
+    engine_tables(dataset)
     print(f"{len(subjects)} subjects")
+
+
+def tractography(work: Path, parts: Path, dataset: Path) -> None:
+    """The group tractography connectivity (tractography.py), over the 400
+    Schaefer parcels and Tian's 32 regions, and over Destrieux's 148
+    parcels and Tian's regions: the mean and standard deviation of the
+    SIFT2-weighted streamlines (times mu) between two regions, and of
+    their number; the engines' tables (engine_tables)."""
+    from .atlases import tian_names
+    from .tractography import ATLAS, DESTRIEUX, NAME
+
+    mean, sd, subjects, extra = group(parts)
+    for folder in ("parquet", "tsv"):
+        (dataset / folder).mkdir(parents=True, exist_ok=True)
+    tian = tian_names(work / "atlases")
+    pd.DataFrame({"subject": subjects, "streamlines": extra["total"],
+                  "assigned": extra["assigned"], "mu": extra["mu"]}
+                 ).to_parquet(dataset / "parquet" /
+                              "tractography_subjects.parquet", index=False)
+    for atlas, cortex in ((NAME, ATLAS), (DESTRIEUX, "destrieux")):
+        names = cortical(work)[cortex][1] + tian
+        for key in (atlas, f"{atlas}_count"):
+            write_matrix(matrix(mean[key], names),
+                         dataset / "parquet" / f"{key}_mean.parquet")
+            write_matrix(matrix(sd[key], names),
+                         dataset / "parquet" / f"{key}_sd.parquet")
+    engine_tables(dataset)
+    print(f"{len(subjects)} subjects")
+
+
+# The relations of the engines: the structural and the functional
+# connectivity over the cortical parcels of an atlas and Tian's regions,
+# one table each (region1, region2, value), from the matrices of DATASET
+ENGINE_TABLES = {
+    "schaefer400_17_tian_structural_connectivity":
+        ("schaefer400_17_tian_count_mean", "streamline_count", 3),
+    "destrieux_tian_structural_connectivity":
+        ("destrieux_tian_count_mean", "streamline_count", 3),
+    "schaefer400_17_tian_functional_connectivity":
+        ("schaefer400_17_functional_mean", "r", 6),
+    "destrieux_tian_functional_connectivity":
+        ("destrieux_functional_mean", "r", 6),
+}
+
+
+def engine_tables(dataset: Path) -> None:
+    """The tables of ENGINE_TABLES whose matrices DATASET has
+    (``tsv/<relation>.tsv.gz``): every pair of distinct regions, both ways
+    round, the NaN and the values rounding to 0 left out."""
+    for relation, (source, value, decimals) in ENGINE_TABLES.items():
+        path = dataset / "parquet" / f"{source}.parquet"
+        if path.exists():
+            frame = pd.read_parquet(path)
+            write_tsv(pairs(frame, list(frame.index), list(frame.index),
+                            ["region1", "region2"], value, decimals),
+                      dataset / "tsv" / f"{relation}.tsv.gz")
 
 
 def regradient(work: Path, dataset: Path) -> None:
