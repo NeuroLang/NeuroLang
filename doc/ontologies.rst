@@ -617,8 +617,10 @@ removed and ``cogpo:has_contrast`` and ``cogat:measures`` as empty
 relations: the plain Datalog reading of the same program.  The results
 were computed on 16 November 2026 with NeuroLang ``92e797c4``, master
 with the one-step test of the rewriting (:ref:`ontologies-two-mechanisms`),
-one query at a time, in one process, each stopped after 120 s; each time
-includes the compilation of the query.
+one query at a time, each stopped after 120 s: the queries of the tables
+and the open-world map in one process, the others, on the data and the
+Atlas's triples alone, in another.  Each time includes the compilation of
+the query.
 
 .. list-table:: Our experiments, in the closed and the open world
    :header-rows: 1
@@ -629,7 +631,7 @@ includes the compilation of the query.
      - Open world
      - Why
    * - Which task is each? ``rdf:type(e, t)``
-     - e1 Stroop, e2 stop signal, e3 go/no-go; 0.7 s
+     - e1 Stroop, e2 stop signal, e3 go/no-go; 0.6 s
      - the same; 8.1 s
      - our data
    * - Has a contrast?
