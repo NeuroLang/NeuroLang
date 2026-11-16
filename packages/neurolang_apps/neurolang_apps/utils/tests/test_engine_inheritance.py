@@ -422,6 +422,51 @@ def test_the_destrieux_and_tian_regions_have_their_full_names():
     assert "destrieux_name" in get_predicates("destrieux")
 
 
+
+def test_the_schaefer_parcels_and_the_abbreviations_are_named():
+    """schaefer_name (100 parcels) and schaefer400_name (400) name each
+    parcel by its network and component; atlas_abbreviation says what
+    every abbreviation of the labels of the three atlases stands for."""
+    import pandas as pd
+
+    from neurolang_apps.utils.engine_registry import (
+        _ENGINES_DIR, get_predicates)
+
+    cfg = get_engine_config("neurosynth")
+    for relation, parcels in (("schaefer_name", 100),
+                              ("schaefer400_name", 400)):
+        table = pd.read_csv(_ENGINES_DIR / cfg["relations"][relation]["file"],
+                            sep="\t")
+        assert len(table) == parcels and table.label.is_unique
+        assert table.name.is_unique
+        assert table.name.str.contains(" network").all()
+        assert table.name.str.endswith((", left", ", right")).all()
+    abbreviations = pd.read_csv(
+        _ENGINES_DIR / cfg["relations"]["atlas_abbreviation"]["file"],
+        sep="\t")
+    assert list(abbreviations.columns) == ["atlas", "abbreviation", "meaning"]
+    assert not abbreviations.duplicated(["atlas", "abbreviation"]).any()
+    # every abbreviation of the labels has its meaning
+    for atlas, relation in (("schaefer", "schaefer400_name"),
+                            ("destrieux", "destrieux_name"),
+                            ("tian", "tian_name")):
+        labels = pd.read_csv(
+            _ENGINES_DIR / cfg["relations"][relation]["file"], sep="\t").label
+        known = set(abbreviations[abbreviations.atlas == atlas].abbreviation)
+        tokens = {t for label in labels for t in label.split()
+                  if not t.isdigit()}
+        words = {t for t in tokens if t.islower() and len(t) > 6}
+        assert tokens - known - words <= {
+            "and", "Angular", "Lingual", "Lunatus", "Marginalis",
+            "Opercular", "Orbital", "Pole", "Shaped", "H", "Jensen",
+            "Lateral", "Vertical", "polar", "dorsal", "middle", "part",
+            "short", "shell", "core", "rectus", "cuneus", "ventral",
+            "insula"}, atlas
+    assert {"atlas_abbreviation", "schaefer_name"} <= set(
+        get_predicates("tracts"))
+    assert "schaefer400_name" in get_predicates("neurosynth")
+
+
 @pytest.mark.network
 def test_the_destrieux_engine_has_both_hemispheres_and_their_names(
         tmp_path):

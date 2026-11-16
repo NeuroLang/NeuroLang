@@ -1,0 +1,23 @@
+# The example queries of connectivity_atlases, merged into its entry of
+# ../engines.yaml (see doc/engine_configuration.rst): few-shot examples of
+# the query assistant, which the connectivity engines and the meta-analysis
+# engines inherit. Every query is checked against the engine by the tests
+# (NEUROLANG_TEST_DATA_DIR).
+#
+# The labels of the atlases are abbreviations: their full names
+# (schaefer400_name, destrieux_name, tian_name) and what each abbreviation
+# stands for (atlas_abbreviation) find the regions a question names in
+# words, in each atlas, and show them by name.
+assistant_examples:
+  - question: Which regions of the Schaefer, Destrieux and Tian atlases are hippocampal or parahippocampal, with their full names?
+    datalog: |-
+      named(atlas, label, name) :- schaefer400_name(label, name), str_contains(lcase(name), 'hippocamp'), (atlas == 'schaefer400')
+      named(atlas, label, name) :- destrieux_name(label, name), str_contains(lcase(name), 'hippocamp'), (atlas == 'destrieux')
+      named(atlas, label, name) :- tian_name(label, name), str_contains(lcase(name), 'hippocamp'), (atlas == 'tian')
+      ans(atlas, label, name) :- named(atlas, label, name)
+
+  - question: Which parcels of the dorsal prefrontal cortex (PFCd in Schaefer's labels) are structurally connected to the thalamus (THA in Tian's) by more than 50 streamlines, with their full names?
+    datalog: |-
+      pfcd(l) :- schaefer400(l, r), atlas_abbreviation('schaefer', a, 'dorsal prefrontal cortex'), str_contains(l, a)
+      thalamus(t) :- tian(t, r), atlas_abbreviation('tian', a, 'thalamus'), str_contains(t, a)
+      ans(parcel, structure, streamline_count) :- schaefer400_tian_structural_connectivity(t, l, streamline_count), thalamus(t), pfcd(l), schaefer400_name(l, parcel), tian_name(t, structure), (streamline_count > 50)

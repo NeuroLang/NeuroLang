@@ -30,7 +30,15 @@ v0.1a23 (2026-11-15)
   Destrieux regions (Destrieux et al. 2010, Table 1) and of the 32 regions
   of Tian's subcortex, scale 2 (the atlas's nomenclature), with their
   hemisphere, as 'Superior frontal gyrus (F1), left' or 'Ventroanterior
-  thalamus, left', to join with a result of their labels.
+  thalamus, left', to join with a result of their labels; and
+  ``schaefer_name`` (100 parcels) and ``schaefer400_name`` (400), the network
+  and the component of each Schaefer parcel ('Default A network, dorsal
+  prefrontal cortex 1, left', from the glossary of the atlas's authors), and
+  ``atlas_abbreviation(atlas, abbreviation, meaning)``, what each
+  abbreviation of the labels of the three atlases stands for; with
+  ``lcase`` and ``str_contains`` to find a region by its name or an
+  abbreviation, and examples for the query assistant.
+  ``tools/make_atlas_names.py`` makes the tables from their sources.
 
 * A tractogram is decoded as an image is, where its streamlines end:
   ``.image`` and **Upload data** take a ``.trk`` or ``.tck`` in MNI mm and

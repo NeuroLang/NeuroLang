@@ -70,16 +70,21 @@ engines:
       schaefer_label(l) :- schaefer(l, r)
       labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
     hidden_predicates: [schaefer_voxels]
-    # The full anatomical names of the Destrieux and Tian regions, files of
-    # this package: Destrieux's of Table 1 of Destrieux et al. (2010)
-    # ("ligual" read "lingual"), Tian's of the nomenclature of the atlas
-    # (Nomenclature-subcortex-parcellation-hierarchy-3T.pdf, Table 2, of
-    # https://github.com/yetianmed/subcortex), each with its hemisphere.
+    # The full names of the regions of the atlases, and the abbreviations
+    # of their labels: files of this package, made by
+    # tools/make_atlas_names.py of its sources (Destrieux et al. 2010,
+    # Table 1; Tian's nomenclature, Table 2; the glossary of the CBIG
+    # repository for Schaefer's).
     relations:
       destrieux_name:
         file: mni_atlases/destrieux_names.tsv
       tian_name:
         file: mni_atlases/tian_names.tsv
+      schaefer_name:
+        file: mni_atlases/schaefer_names.tsv
+      atlas_abbreviation:
+        file: mni_atlases/abbreviations.tsv
+    builtins: [lcase, str_contains]
     sorts:
       mni:
         columns: [x, y, z]
@@ -116,8 +121,22 @@ engines:
         type: str
         description: >-
           the full anatomical name of a region, with its hemisphere, as
-          'Superior frontal gyrus (F1), left' or 'Ventroanterior thalamus,
-          right'
+          'Superior frontal gyrus (F1), left', 'Ventroanterior thalamus,
+          right' or 'Default A network, dorsal prefrontal cortex 1, left'
+      atlas_name:
+        columns: [atlas]
+        type: str
+        description: "an atlas: 'schaefer', 'destrieux' or 'tian'"
+      abbreviation:
+        columns: [abbreviation]
+        type: str
+        description: >-
+          an abbreviation of the labels of an atlas, as 'PFCd' (Schaefer),
+          'front' (Destrieux) or 'THA' (Tian)
+      meaning:
+        columns: [meaning]
+        type: str
+        description: "what an abbreviation stands for"
     predicates:
       schaefer:
         description: "Schaefer 2018 parcel label and its region"
@@ -187,6 +206,27 @@ engines:
         arguments:
           - destrieux_label
           - region_name
+      schaefer_name:
+        description: >-
+          The full name of each parcel of the Schaefer atlas of 100
+          parcels, 17 networks (schaefer): its network, its component and
+          its number, with its hemisphere: '17Networks LH DefaultA pCunPCC
+          1' is 'Default A network, precuneus posterior cingulate cortex 1,
+          left' (the glossary of the atlas's authors)
+        arguments:
+          - label
+          - region_name
+      atlas_abbreviation:
+        description: >-
+          The abbreviations of the labels of the atlases and what each
+          stands for: atlas_abbreviation('schaefer', 'PFCd', 'dorsal
+          prefrontal cortex'), ('destrieux', 'G', 'gyrus'), ('tian', 'THA',
+          'thalamus'); a label is its abbreviations separated by spaces, so
+          str_contains(label, abbreviation) finds the labels with one
+        arguments:
+          - atlas_name
+          - abbreviation
+          - meaning
       tian_name:
         description: >-
           The full anatomical name of each region of Tian's subcortex atlas,
@@ -226,6 +266,10 @@ engines:
         n_rois: 400
         resolution_mm: 2
         yeo_networks: 17
+    # The full names of the 400 parcels (tools/make_atlas_names.py).
+    relations:
+      schaefer400_name:
+        file: connectivity_atlases/schaefer400_names.tsv
     sorts:
       schaefer400_label:
         columns: [label]
@@ -256,6 +300,14 @@ engines:
         arguments:
           - schaefer400_label
           - region
+      schaefer400_name:
+        description: >-
+          The full name of each parcel of the Schaefer atlas of 400
+          parcels, 17 networks (schaefer400): '17Networks LH DefaultA PFCd
+          1' is 'Default A network, dorsal prefrontal cortex 1, left'
+        arguments:
+          - schaefer400_label
+          - region_name
 
   structural_connectivity:
     extends: connectivity_atlases
