@@ -279,6 +279,9 @@ engines:
       schaefer400_tian_label:
         columns: [label]
         type: str
+        # .view looks a label up in schaefer400, then in the engine's other
+        # atlases (tian): the regions of both are drawn.
+        atlas: schaefer400
         description: >-
           a region of the connectivity over Schaefer 400 and Tian: a
           parcel of the 400-parcel Schaefer atlas (schaefer400, as
@@ -287,6 +290,9 @@ engines:
       destrieux_tian_label:
         columns: [label]
         type: str
+        # .view looks a label up in destrieux, then in the engine's other
+        # atlases (tian): the regions of both are drawn.
+        atlas: destrieux
         description: >-
           a region of the connectivity over Destrieux and Tian: a
           Destrieux parcel (destrieux, as 'L G and S frontomargin') or a

@@ -480,6 +480,12 @@ v0.1a23 (2026-11-15)
 
 **Bug fixes:**
 
+* ``.view`` draws the regions of a result of the connectivity relations:
+  their labels, of the sorts ``schaefer400_tian_label`` and
+  ``destrieux_tian_label``, are looked up in ``schaefer400`` or ``destrieux``,
+  then in ``tian``; a result of their regions beside names and numbers
+  failed with *The result has no voxel columns*, and a result of pairs of
+  regions is now a network.
 * The engine ``destrieux`` builds: the ``description`` of an atlas of an
   engine is no longer passed to the atlas's fetcher (``fetch_atlas_destrieux_2009``
   refused it), and its ``left_region`` and ``right_region`` hold the
