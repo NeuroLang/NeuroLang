@@ -172,7 +172,7 @@ v0.1a23 (2026-11-15)
   ``combine``, ``engine-tables``; ``--task``/``--tasks`` or a Slurm array)
   and published, with their standard deviations, the SIFT2 weights and a
   per-subject QC, at https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity
-  (tag v2.3), which the engines download, checked by md5. The cortex of
+  (tag v2.4), which the engines download, checked by md5. The cortex of
   the structural connectivity agrees with the connectomes of Mansour et
   al. (2021; Pearson 0.92 of the logarithms).  The guidance and the
   examples of the query assistant tell the three connectivities apart
