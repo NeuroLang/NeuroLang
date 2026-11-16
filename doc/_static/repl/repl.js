@@ -656,7 +656,8 @@ const UPLOAD_ICONS = {
   // a brain with a spark: the image is decoded into the concepts it resembles
   decode: '<path d="M9.5 5a3 3 0 0 0-5.3 1.9A3.6 3.6 0 0 0 2.7 12a3.6 3.6 0 0 0 1.4 5.2A3.2 3.2 0 0 0 9.5 19.3V5"/><path d="M9.5 5a3 3 0 0 1 4.2-1.5M16.3 9a3.6 3.6 0 0 1 .5 5.5 3.6 3.6 0 0 1-1.7 2.7 3.2 3.2 0 0 1-5.6 2.1"/><path d="M5.2 11.5h2.3M9.5 14c1.5 0 2.6-.8 3.2-2.2"/><path fill="currentColor" stroke-width="1" d="M19.6 1.2c.4 2.2 1.1 2.9 3.2 3.3-2.1.4-2.8 1.1-3.2 3.3-.4-2.2-1.1-2.9-3.3-3.3 2.2-.4 2.9-1.1 3.3-3.3z"/>',
   remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
-  index: '<path d="M4 6h16M4 12h10M4 18h7M16 15l3 3-3 3"/>',
+  // a bundle of streamlines whose ends are in regions of the atlas: indexed, each is labelled by them
+  index: '<rect x="2" y="15" width="6" height="6" rx="1.5" fill="currentColor" stroke="none"/><rect x="16" y="3" width="6" height="6" rx="1.5" fill="currentColor" stroke="none"/><path d="M5 15C5 9 13 13 16 7"/><path d="M8 17c4 0 6-6 10-8" opacity=".75"/><path d="M5 12c1-4 6-3 9-6" opacity=".5"/>',
 };
 function iconButton(kind, text, label, action) {
   const button = Object.assign(document.createElement("button"), {
