@@ -306,6 +306,19 @@ assistant_examples:
       correlation(t1, t2, mean(x)) :- z(t1, l, a), z(t2, l, b), (t1 < t2), (x == a * b)
       ans(concept_1, concept_2, correlation) :- correlation(concept_1, concept_2, correlation)
 
+  # The ontology of the Cognitive Atlas as a graph: an edge per concept
+  # and the concept it is a kind of, its direct superclass (rdfs:subClassOf
+  # to a class, not to a restriction), by their labels.
+  - question: Show the Cognitive Atlas ontology, which concept is a kind of which
+    datalog: |-
+      ans(concept, parent) :- rdfs:subClassOf(x, y), startswith('http', y), cogat_term(x, concept), cogat_term(y, parent)
+
+  - question: Show the part of the Cognitive Atlas ontology under memory
+    datalog: |-
+      under(c) :- cogat_term(c, 'memory')
+      under(x) :- cogat_term(c, 'memory'), cogat_subclass_of(x, c)
+      ans(concept, parent) :- under(x), rdfs:subClassOf(x, y), under(y), cogat_term(x, concept), cogat_term(y, parent)
+
   - question: Which cortical regions are co-activated with the left amygdala?
     datalog: |-
       amygdala(s) :- tian_activated('lAMY lh', s)

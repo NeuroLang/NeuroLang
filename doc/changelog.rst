@@ -24,7 +24,9 @@ Unreleased
   Cognitive Atlas weighted by the similarity of the abstracts of their
   studies (the lift of the studies closest to both definitions) or by
   their co-activations (the correlation, across the Schaefer 400 regions,
-  of the lifts of their activations); the guidance says how to write them.
+  of the lifts of their activations), and of the ontology of the Cognitive
+  Atlas, an edge per concept and its superclass (all of it, or the part
+  under a concept); the guidance says how to write them.
 
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
   the regions a question lists (which regions, parcels or structures a
