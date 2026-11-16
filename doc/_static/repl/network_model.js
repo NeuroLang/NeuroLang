@@ -4,7 +4,7 @@
 import { SETTINGS } from "./settings.js";
 
 const NUMERIC = new Set(["int", "float"]);
-const { max_nodes: MAX_NODES, max_edges: MAX_EDGES, edges_per_node: EDGES_PER_NODE, layout_steps: STEPS } = SETTINGS.network;
+const { max_nodes: MAX_NODES, max_edges: MAX_EDGES, edges_per_node: EDGES_PER_NODE, layout_steps: STEPS, labels: LABELS } = SETTINGS.network;
 
 // The columns of the ends of the edges of *payload*, and of their weight (-1
 // without one), or null: the first two columns of the same sort, else named
@@ -68,6 +68,14 @@ export function networkOf(payload, { maxNodes = MAX_NODES, maxEdges = MAX_EDGES 
 export function defaultThreshold({ nodes, edges }) {
   const shown = Math.min(edges.length, Math.max(1, Math.round(EDGES_PER_NODE * nodes.length)));
   return strength(edges[shown - 1]);
+}
+
+// The nodes whose names are written, of their *degree* (a Map): all, or of
+// more than *limit* nodes the *limit* most linked (the others on hover).
+export function labelled(degree, limit = LABELS) {
+  const ids = [...degree.keys()];
+  if (ids.length <= limit) return new Set(ids);
+  return new Set(ids.sort((a, b) => degree.get(b) - degree.get(a) || a.localeCompare(b)).slice(0, limit));
 }
 
 // The positions of the *nodes*, in [0, 1] × [0, 1]: a force layout

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultThreshold, layout, networkColumns, networkOf } from "../../../../../../../doc/_static/repl/network_model.js";
+import { defaultThreshold, labelled, layout, networkColumns, networkOf } from "../../../../../../../doc/_static/repl/network_model.js";
 
 const payload = (columns, kinds, sorts, rows) => ({ columns, kinds, sorts, rows, total: rows.length, truncated: false });
 const concepts = () => payload(
@@ -50,4 +50,10 @@ test("the layout is deterministic, within the square, and pulls the linked nodes
   const distance = (u, v) => Math.hypot(at[u][0] - at[v][0], at[u][1] - at[v][1]);
   assert.ok(distance("a", "b") < distance("a", "e"));
   assert.ok(distance("c", "d") < distance("c", "f"));
+});
+
+test("of many nodes only the most linked are named", () => {
+  const degree = new Map([["a", 1], ["b", 3], ["c", 2], ["d", 3]]);
+  assert.deepEqual([...labelled(degree, 2)].sort(), ["b", "d"]);
+  assert.equal(labelled(degree, 4).size, 4);
 });

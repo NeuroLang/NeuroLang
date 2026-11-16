@@ -1,7 +1,7 @@
 // The network tab: the network of an answer of edges (network_model.js) drawn
 // as nodes and lines, the stronger an edge the thicker, those of a negative
 // weight dashed, with a slider for the weakest edge shown.
-import { defaultThreshold, layout, networkOf } from "./network_model.js";
+import { defaultThreshold, labelled, layout, networkOf } from "./network_model.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const format = new Intl.NumberFormat("en", { maximumSignificantDigits: 3 });
@@ -45,7 +45,8 @@ export function networkView(network, title = "") {
     element("div", { className: "plot-controls" }, label), figure, caption);
 
   const at = layout(network, start);
-  const [width, height, margin] = [900, 600, 180]; // room for the labels at the sides
+  // room for the labels at the sides; a network of many nodes is taller
+  const [width, height, margin] = [900, Math.max(600, 4 * nodes.length), 180];
   const place = ([x, y]) => [margin + x * (width - 2 * margin), 24 + y * (height - 48)];
   const position = new Map(nodes.map((node, i) => [node.id, place(at[i])]));
   const top = Math.max(...edges.map((edge) => Math.abs(edge.weight)));
@@ -66,6 +67,7 @@ export function networkView(network, title = "") {
     const degree = new Map(nodes.map((node) => [node.id, 0]));
     for (const edge of shown) for (const end of [edge.source, edge.target]) degree.set(end, degree.get(end) + 1);
     shownText.textContent = format.format(threshold);
+    const named = labelled(degree);
     const lines = [...shown].reverse().map((edge) => { // the strongest drawn last, on top
       const [[x1, y1], [x2, y2]] = [position.get(edge.source), position.get(edge.target)];
       const width = 0.75 + 4.25 * (Math.abs(edge.weight) / top);
@@ -78,7 +80,7 @@ export function networkView(network, title = "") {
     const dots = nodes.map((node) => {
       const [x, y] = position.get(node.id);
       const right = x >= width / 2;
-      const dot = svg("g", { class: `network-node${degree.get(node.id) ? "" : " network-alone"}` },
+      const dot = svg("g", { class: `network-node${degree.get(node.id) ? "" : " network-alone"}${named.has(node.id) ? "" : " network-unnamed"}` },
         svg("circle", { cx: x, cy: y, r: 5 + Math.min(4, degree.get(node.id) / 2) }),
         svg("text", { x: x + (right ? 10 : -10), y: y + 4, "text-anchor": right ? "start" : "end" }, node.id));
       dot.addEventListener("pointermove", (event) => showTip(event, [[columns.source.replace(/_?1$/, ""), node.id], ["edges shown", String(degree.get(node.id))]]));
@@ -89,6 +91,7 @@ export function networkView(network, title = "") {
     figure.replaceChildren(chart, tip);
     const left = [dropped.edges && `${dropped.edges} weaker edges`, dropped.nodes && `${dropped.nodes} nodes`].filter(Boolean).join(" and ");
     caption.textContent = `${shown.length} of ${edges.length} edges between ${nodes.length} nodes` +
+      `${named.size < nodes.length ? ` (the ${named.size} most linked named, the others under the pointer)` : ""}` +
       `${columns.weight ? `, from ${measure} ${format.format(threshold)}; the thicker, the stronger${signed ? ", dashed if negative" : ""}` : ""}.` +
       `${left ? ` Not drawn: ${left}.` : ""}${network.truncated ? " The answer has more rows than the table holds: the network is of those shown." : ""}`;
   }

@@ -23,7 +23,8 @@ Unreleased
   (two columns of the same sort, such as ``concept_1`` and ``concept_2``,
   and a numeric weight) as a network laid out by force, with a slider for
   the weakest edge shown; it starts with the strongest, two per node, and
-  says which edges and nodes it leaves out. The limits are in
+  says which edges and nodes it leaves out; of more than 40 nodes it names
+  the most linked, the others under the pointer. The limits are in
   ``settings.yaml`` (``network``).
 
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
