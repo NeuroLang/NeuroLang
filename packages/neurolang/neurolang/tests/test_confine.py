@@ -63,8 +63,11 @@ def test_the_commands_of_a_confined_program(confined, tmp_path):
         (f'.import("{tmp_path / "secret.dl"}")', DatalogModuleError),
         (f'.load_atlas(a, "{tmp_path / "secret.nii"}", "{tmp_path / "l.csv"}")',
          InvalidCommandExpression),
+        ('.load_atlas(a, kind="nilearn", fetcher="craddock_2012", '
+         'url="http://127.0.0.1:9/x")', InvalidCommandExpression),
+        ('.load_atlas(a, kind="destrieux")', InvalidCommandExpression),
     ):
-        with pytest.raises(error, match="reads no|fetches no"):
+        with pytest.raises(error, match="reads no|fetches no|downloads no"):
             nl.execute_datalog_program(statement)
 
 
