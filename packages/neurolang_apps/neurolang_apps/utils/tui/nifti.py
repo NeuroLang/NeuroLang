@@ -254,7 +254,7 @@ def _column(df: pd.DataFrame, name: str):
 def _sort_points(sort, columns: tuple) -> PointColumns:
     """Return the *columns* holding the points of *sort*, on its grid."""
     if sort.atlas:
-        return PointColumns(tuple(columns), LABEL_SPACE, sort.atlas)
+        return PointColumns(tuple(columns), LABEL_SPACE, sort.atlas[0])
     return PointColumns(
         tuple(columns), sort.space,
         sort.grid or engine_registry.TEMPLATE_GRID,
@@ -623,15 +623,17 @@ def _region_atlases(nl, sorts: dict, atlas: str) -> list:
     """
     Return the atlases of *nl* to look the labels of a column up in.
 
-    They are the *atlas* of the column's sort, then the others the
-    *sorts* label the regions of: a rule may join the regions of several
-    atlases, ``region(l) :- schaefer(l, r)`` and ``region(l) :- tian(l,
-    r)``, whose column is of the sort of the first.
+    They are the *atlas* of the column's sort, the first it names, then
+    the others it names, ``atlas: [schaefer400, tian]``, then the others
+    the *sorts* label the regions of: a rule may join the regions of
+    several atlases, ``region(l) :- schaefer(l, r)`` and ``region(l) :-
+    tian(l, r)``, whose column is of the sort of the first.
     """
-    atlases = [atlas] + [
-        sort.atlas for sort in sorts.values()
-        if sort.atlas and sort.atlas != atlas
-    ]
+    own = next(
+        (s.atlas for s in sorts.values() if s.atlas[:1] == (atlas,)),
+        (atlas,),
+    )
+    atlases = [*own, *(a for s in sorts.values() for a in s.atlas)]
     return [
         name for n, name in enumerate(atlases)
         if name not in atlases[:n]

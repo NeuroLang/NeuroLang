@@ -319,6 +319,15 @@ no ``space``::
       type: str
       atlas: destrieux
 
+A sort labelling the regions of several atlases names them all, the
+first being the one whose grid they are painted on; a label is looked
+up in each in turn::
+
+    schaefer400_tian_label:
+      columns: [label]
+      type: str
+      atlas: [schaefer400, tian]
+
 A result with a column of such a sort is then a result on the regions of
 the atlas: ``.save out.nii.gz`` and ``.view`` paint each region, on the
 atlas's grid, with the value of its row (``ans(l, p) :- PROB[...]``),

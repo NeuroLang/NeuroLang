@@ -138,11 +138,25 @@ class TestAtlasSorts:
 
     def test_the_atlas_of_a_sort(self, tiny):
         sorts = engine_registry.get_sorts("tiny")
-        assert sorts["cortex_label"].atlas == "cortex"
-        assert sorts["mni"].atlas == ""
+        assert sorts["cortex_label"].atlas == ("cortex",)
+        assert sorts["mni"].atlas == ()
+
+    def test_a_sort_of_the_regions_of_several_atlases(self):
+        """A sort labels the regions of the atlases of its list, the
+        first that whose grid .view paints them on."""
+        sort = engine_registry._declared_sort(
+            "both", {"columns": ["label"], "atlas": ["cortex", "deep"]},
+            ("template", "cortex", "deep"),
+        )
+        assert sort.atlas == ("cortex", "deep")
+        assert nifti._sort_points(sort, ("label",)).grid == "cortex"
 
     @pytest.mark.parametrize("sort, message", [
         ("{columns: [label], type: str, atlas: nowhere}", "the atlases"),
+        (
+            "{columns: [label], type: str, atlas: [cortex, nowhere]}",
+            "atlas nowhere;",
+        ),
         ("{columns: [x, y], type: str, atlas: cortex}", "one column"),
         (
             "{columns: [label], type: str, space: mm, atlas: cortex}",

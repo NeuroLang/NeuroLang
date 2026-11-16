@@ -558,7 +558,8 @@ def _fake_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
         for argument in signatures[name]:
             atlas = sorts.get(argument.sort, {}).get("atlas")
             if atlas:
-                row.append(_FAKE_ATLASES[atlas])
+                first = atlas if isinstance(atlas, str) else atlas[0]
+                row.append(_FAKE_ATLASES[first])
             else:
                 row.append({"int": 1, "float": 0.5}.get(argument.type, "L"))
         nl.add_tuple_set(pd.DataFrame([row]), name=name)
