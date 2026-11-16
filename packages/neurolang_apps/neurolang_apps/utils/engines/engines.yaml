@@ -558,6 +558,11 @@ engines:
       schaefer:
         activated: {predicate_name: schaefer_activated}
         covered: {predicate_name: schaefer_covered}
+      # The 400 parcels of the connectivity engines this one extends
+      # (connectivity_atlases): the Schaefer atlas of the questions.
+      schaefer400:
+        activated: {predicate_name: schaefer400_activated}
+        covered: {predicate_name: schaefer400_covered}
       destrieux:
         activated: {predicate_name: destrieux_activated}
         covered: {predicate_name: destrieux_covered}
@@ -1045,6 +1050,14 @@ engines:
         arguments:
           - label
           - study
+      schaefer400_activated:
+        description: >-
+          Studies activating a parcel of the Schaefer atlas of 400 parcels,
+          17 networks (schaefer400): one of their peaks is within
+          {kernel_radius_mm} mm of a voxel of the parcel
+        arguments:
+          - schaefer400_label
+          - study
       destrieux_activated:
         description: >-
           Studies activating a Destrieux region: one of their peaks is within
@@ -1067,6 +1080,14 @@ engines:
         probability: true
         arguments:
           - label
+          - study
+      schaefer400_covered:
+        description: >-
+          How much a study covers a parcel of the Schaefer atlas of 400
+          parcels, as a probability (see schaefer_covered)
+        probability: true
+        arguments:
+          - schaefer400_label
           - study
       destrieux_covered:
         description: >-
