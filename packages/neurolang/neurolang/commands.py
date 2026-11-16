@@ -18,7 +18,7 @@ from nl_expr.expression_walker import PatternWalker
 from nl_expr.expressions import Command, Constant, Query, Symbol
 from .atlases import FETCHERS, Atlas
 from .regions import ExplicitVBR
-from .confine import ConfinedError, check_read
+from .confine import ConfinedError, check_read, confined_roots
 from .utils.nilearn_compat import fetch_files as _fetch_files
 
 #: The kinds of ``.load_atlas`` that read a label image and a table.
@@ -165,15 +165,19 @@ class CommandsMixin(PatternWalker):
             _unwrap_expr(k): _unwrap_expr(v) for k, v in command.kwargs
         }
         kind = options.pop("kind", "csv")
-        # the files and addresses of the statement, the directory it
-        # downloads to (see neurolang.confine)
-        for value in [*args[1:], options.get("data_dir"),
-                      options.get("data_home")]:
-            if isinstance(value, (str, Path)):
-                try:
+        # the files and addresses of the statement; the kinds but those of
+        # files download, writing outside the data (see neurolang.confine)
+        try:
+            for value in args[1:]:
+                if isinstance(value, (str, Path)):
                     check_read(value, "atlas")
-                except ConfinedError as e:
-                    raise InvalidCommandExpression(str(e)) from e
+            if kind not in ATLAS_FILE_KINDS and confined_roots() is not None:
+                raise ConfinedError(
+                    f'This server downloads no atlas (kind="{kind}") for a '
+                    "statement: load the files of its data, of kind "
+                    f"{', '.join(ATLAS_FILE_KINDS)}")
+        except ConfinedError as e:
+            raise InvalidCommandExpression(str(e)) from e
         if not args:
             raise InvalidCommandExpression(
                 ".load_atlas needs the name of the atlas"

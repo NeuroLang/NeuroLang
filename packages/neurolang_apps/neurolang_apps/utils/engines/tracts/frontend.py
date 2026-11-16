@@ -27,7 +27,9 @@ from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import PatternWalker
 from nl_expr.expressions import Command, Constant, Symbol
 from neurolang.atlases import Atlas, SpaceMismatchError
-from neurolang.confine import ConfinedError, check_read, check_write
+from neurolang.confine import (
+    ConfinedError, check_read, check_write, confined_roots,
+)
 
 from . import vocabulary_predicates
 from .atlas import atlas_term_mapping
@@ -194,6 +196,7 @@ class TractsCommandsMixin(PatternWalker):
             path = names.get("path") or fetch_tractogram(
                 kind, options["bundle"], options["data_dir"],
                 options["url"], options["md5"],
+                download=confined_roots() is None,  # a statement writes none
             )
             tractogram = Tractogram.from_file(
                 ident, path, options["space"], bool(options["drop_short"])

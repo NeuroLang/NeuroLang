@@ -257,6 +257,7 @@ def fetch_tractogram(
     data_dir: Optional[Union[str, os.PathLike]] = None,
     url: Optional[str] = None,
     md5: Optional[str] = None,
+    download: bool = True,
 ) -> Path:
     """The path of a ``.trk`` of an atlas of :data:`ATLASES`, downloaded
     and extracted if it is not in ``data_dir`` yet.
@@ -278,6 +279,8 @@ def fetch_tractogram(
         too); its checksum is then ``md5``.
     md5 : str, optional
         The checksum of the archive of ``url``; not checked if None.
+    download : bool
+        Whether to download and extract it, else it is in ``data_dir``.
 
     Raises
     ------
@@ -309,6 +312,8 @@ def fetch_tractogram(
         f"{stem}.trk" if stem else spec["whole_brain"].rsplit("/", 1)[-1])
     if path.is_file():
         return path
+    if not download:
+        raise OSError(f"{path} is not downloaded, and is not to be")
     if not archive.is_file():
         directory.mkdir(parents=True, exist_ok=True)
         _download(

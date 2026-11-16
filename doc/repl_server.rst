@@ -851,7 +851,10 @@ Security
   ``--uploads-dir``), and no path;
   ``.load_csv``, ``.load_atlas``, ``.import``, ``.load_tractogram`` and
   ``.view`` read the files of the data directory only (``--data-dir``) and
-  fetch no address; ``.save``,
+  fetch no address: ``.load_atlas`` loads the files of an atlas (of kind
+  ``freesurfer``, ``bids`` or ``tsv``), it downloads none, and
+  ``.load_tractogram`` loads a tractogram of Yeh's atlases only if the
+  engine has it already; ``.save``,
   ``.transcript`` and ``index_tracts`` write no file (the page downloads the
   results instead).  The engines themselves are built unconfined (their
   ``datalog_init``), and the modules they ship are still imported.
