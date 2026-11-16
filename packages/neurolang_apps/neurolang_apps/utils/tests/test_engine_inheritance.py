@@ -232,6 +232,21 @@ def test_the_engines_acknowledge_the_hcp_and_their_atlases():
 
 
 @pytest.mark.parametrize("engine", list_engine_names())
+def test_every_sort_of_region_labels_names_its_atlas(engine):
+    """A sort of region labels, named label or ..._label, names the
+    atlases of its regions, ones the engine loads: without it, .view cannot draw
+    a result of its regions (it said "The result has no voxel columns" of
+    the regions of the connectivity relations)."""
+    from neurolang_apps.utils.engine_registry import get_sorts
+
+    atlases = get_engine_config(engine).get("atlases") or {}
+    for sort in get_sorts(engine).values():
+        if sort.name == "label" or sort.name.endswith("_label"):
+            assert sort.atlas, (engine, sort.name)
+            assert set(sort.atlas) <= set(atlases), (engine, sort.name)
+
+
+@pytest.mark.parametrize("engine", list_engine_names())
 def test_every_engine_names_the_sources_of_its_data(engine):
     """.credits and the REPL's credits page have something to say of every
     engine: the template, atlases and databases it loads."""
@@ -507,3 +522,56 @@ def test_disconnectome7t_engines_load_the_files_they_download():
     assert ns["tractogram"]["path"] in files
     texts = " ".join(get_acknowledgements("neurosynth_disconnectome7t"))
     assert "Disconnectome7T" in texts and "Human Connectome" in texts
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("atlas, cortex", [
+    ("schaefer400", "17Networks LH DefaultA PFCd 1"),
+    ("destrieux", "L G front sup"),
+])
+def test_view_draws_the_regions_of_a_connectivity_result(
+        atlas, cortex, tmp_path):
+    """A result whose regions come from a connectivity relation, of the
+    sort schaefer400_tian_label or destrieux_tian_label, beside names
+    and numbers, is drawn on the brain: its cortical parcels in the
+    atlas of the sort, its Tian regions in tian."""
+    from pathlib import Path
+
+    import pandas as pd
+
+    from neurolang_apps.utils.engine_registry import build_engine, get_sorts
+    from neurolang_apps.utils.tui.nifti import (
+        SaveRequest, image_columns, point_columns, regions_to_nifti,
+    )
+    from neurolang_apps.utils.tui.provenance import column_sorts
+
+    try:
+        nl = build_engine("structural_connectivity", tmp_path, resolution=2)
+    except OSError as error:  # offline
+        pytest.skip(f"cannot fetch the atlases: {error!r}")
+    sorts = get_sorts("structural_connectivity")
+    relation = f"{atlas}_tian_structural_connectivity"
+    program = (
+        f"total(l, sum(n)) :- {relation}(l, t, n)\n"
+        f"ans(region, name, streamlines, ratio) :- total(region, s), "
+        f"atlas_abbreviation(a, b, name), (streamlines == s), "
+        f"(ratio == s / 2)"
+    )
+    provenance = column_sorts(nl, "structural_connectivity", program, False)
+    frame = pd.DataFrame({
+        "region": [cortex, "THA DA lh"], "name": ["a", "b"],
+        "streamlines": [10.0, 20.0], "ratio": [5.0, 10.0],
+    })
+    points = point_columns(frame, sorts, provenance[""])
+    assert points.columns == ("region",) and points.grid == atlas
+    block = type("Block", (), {"frame": frame, "sorts": provenance[""]})
+    app = type("App", (), {"settings": type(
+        "Settings", (), {"engine_name": "structural_connectivity"})})
+    assert image_columns(app, block) == ["streamlines", "ratio"]
+    saved = regions_to_nifti(
+        nl, frame, sorts,
+        SaveRequest(Path("r.nii.gz"), value="ratio", points=points),
+        provenance[""],
+    )
+    assert saved.regions == 2 and saved.outside == 0
+    assert set(saved.image.get_fdata().ravel()) == {0.0, 5.0, 10.0}
