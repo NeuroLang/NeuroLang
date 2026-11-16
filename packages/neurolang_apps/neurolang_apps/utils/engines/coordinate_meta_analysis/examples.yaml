@@ -306,12 +306,18 @@ assistant_examples:
       correlation(t1, t2, mean(x)) :- z(t1, l, a), z(t2, l, b), (t1 < t2), (x == a * b)
       ans(concept_1, concept_2, correlation) :- correlation(concept_1, concept_2, correlation)
 
-  # The ontology of the Cognitive Atlas as a graph: an edge per concept
-  # and the concept it is a kind of, its direct superclass (rdfs:subClassOf
-  # to a class, not to a restriction), by their labels.
-  - question: Show the Cognitive Atlas ontology, which concept is a kind of which
+  # The ontology of the Cognitive Atlas as a tree: an edge per concept and
+  # the concept it is a kind of, its direct superclass (rdfs:subClassOf to
+  # a class, not to a restriction), by their labels. The root, the class
+  # of the concepts (a subclass of skos:Concept), has no label: it is
+  # named Concept, and its children are those with kinds of their own
+  # (most of its 451 have none).
+  - question: Show the Cognitive Atlas ontology as a tree, which concept is a kind of which
     datalog: |-
-      ans(concept, parent) :- rdfs:subClassOf(x, y), startswith('http', y), cogat_term(x, concept), cogat_term(y, parent)
+      has_kinds(y) :- rdfs:subClassOf(x, y), cogat_term(x, c), cogat_term(y, p)
+      kind_of(concept, parent) :- rdfs:subClassOf(x, y), startswith('http', y), cogat_term(x, concept), cogat_term(y, parent)
+      kind_of(concept, parent) :- rdfs:subClassOf(x, y), rdfs:subClassOf(y, <http://www.w3.org/2004/02/skos/core#Concept>), has_kinds(x), cogat_term(x, concept), (parent == 'Concept')
+      ans(concept, parent) :- kind_of(concept, parent)
 
   - question: Show the part of the Cognitive Atlas ontology under memory
     datalog: |-
