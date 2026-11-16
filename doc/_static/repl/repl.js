@@ -71,16 +71,29 @@ const liveLog = $("live-log");
 // What the query the assistant wrote does, above the box it is in: the model's
 // explanation, and the query read back in English, with the check's doubts.
 const summary = $("summary");
+// The query the summary describes, without its layout: once the box holds
+// another one, the summary is greyed, and says so, until a new question.
+let summaryFor = null;
+const squeeze = (text) => (text ?? "").replace(/\s+/g, " ").trim();
+function syncSummary() {
+  const stale = summaryFor !== null && squeeze(editor.value) !== summaryFor;
+  summary.classList.toggle("stale", stale);
+  $("summary-stale").hidden = !stale;
+}
+editor.onChange = syncSummary;
 function hideSummary() {
   summary.hidden = true;
+  summaryFor = null;
 }
-function showSummary({ valid, explanation, back_translation: reads, verified, verification }, question = "") {
+function showSummary({ valid, explanation, back_translation: reads, verified, verification }, question = "", query = null) {
   if (!valid || !(explanation || reads || question)) return hideSummary();
+  summaryFor = query === null || query === undefined ? null : squeeze(query);
   $("summary-question").textContent = question ? `Asked: ${question}` : "";
   $("summary-text").textContent = explanation ?? "";
   $("summary-reads").textContent = reads ? `Reads back as: ${reads}` : "";
   $("summary-warning").textContent = verified === false ? `The check found that the query may not answer the question: ${verification}` : "";
   summary.hidden = false;
+  syncSummary();
 }
 
 // Rating the last query, or the assistant's answer: "Yes" sends it at once,
@@ -189,7 +202,6 @@ function pickQuestion(text) {
   const query = queryOf(guide.questionQueries, text, $("mode").value);
   if (query) {
     putQuery(query);
-    hideSummary();
   }
   question.focus();
 }
@@ -214,12 +226,10 @@ function showGuide() {
     // the question this query answers, when the assistant's bank has it
     const asked = questionOf(guide.questionQueries, query, $("mode").value);
     if (asked) question.value = asked;
-    hideSummary();
     input.focus();
   }, undefined, (query) => (squall || !list.clientWidth ? query : layoutQuery(query, width)));
   renderPredicates($("guide-relations"), guide.predicates, $("guide-filter").value, (text) => editor.insert(text), squall, SETTINGS.guide.relations_shown, (query) => {
     putQuery(query);
-    hideSummary();
     input.focus();
   });
   renderCommands($("guide-commands"), guide.commands, $("guide-filter").value, (name) => editor.insert(name), (topic) => run(`.help ${topic}`));
@@ -253,7 +263,6 @@ builder.addEventListener("submit", (event) => {
   try {
     const query = buildQuery(template, Object.fromEntries(new FormData(builder)));
     putQuery(query);
-    hideSummary();
     input.focus();
     $("builder-error").textContent = "";
   } catch (error) {
@@ -308,7 +317,6 @@ $("no-answer-edit").addEventListener("click", (event) => {
 });
 $("no-answer-query").addEventListener("click", () => {
   putQuery(missingQuery);
-  hideSummary();
   input.focus();
 });
 $("no-answer-steps").addEventListener("click", () => {
@@ -363,7 +371,7 @@ function useAsked(entry) {
     run(`.mode ${entry.language}`);
   }
   putQuery(entry.query);
-  showSummary({ valid: true, explanation: entry.explanation }, entry.question);
+  showSummary({ valid: true, explanation: entry.explanation }, entry.question, entry.query);
   input.focus();
 }
 
@@ -626,7 +634,7 @@ const workerMessages = {
     }
     if (data.event === "done") {
       showNoAnswer(noAnswer(data), asking?.question);
-      showSummary(data, asking?.question);
+      showSummary(data, asking?.question, data.query);
       showRating();
       if (asking) asked.add({ ...asking, query: data.query ?? "", valid: data.valid, explanation: data.explanation });
       asking = null;
@@ -930,7 +938,6 @@ let replaying = null; // the statements being run again, silently, and how many 
 let rerun = null; // what runs again once the rules of a session the server ended are back
 function goOn(text) {
   putQuery(text);
-  hideSummary();
   input.focus();
   input.setSelectionRange(editor.value.length, editor.value.length);
 }
@@ -1022,10 +1029,8 @@ function run(text, { remember = false, quiet = null, keepOffer = false } = {}) {
   lastRun = text;
   if (guideForStart) guideForStart = $("guide").open = false;
   setStatus("Running…", "busy");
-  if (!text.startsWith(".ask") && !text.startsWith(".llm")) {
-    hideSummary();
-    showNoAnswer(null); // a query of one's own: the notice is of the past
-  }
+  // A query of one's own: the notice is of the past. The summary stays, greyed if the code changed.
+  if (!text.startsWith(".")) showNoAnswer(null);
   hideRating();
   worker.postMessage({ text });
 }
@@ -1145,7 +1150,6 @@ document.addEventListener("click", (event) => {
 history_.addEventListener("change", () => {
   if (history_.value) {
     editor.value = history_.value;
-    hideSummary();
   }
   history_.value = "";
   input.focus();
