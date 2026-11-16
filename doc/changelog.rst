@@ -19,6 +19,18 @@ Unreleased
 
 **New features:**
 
+- Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
+  the regions a question lists (which regions, parcels or structures a
+  term, a topic or a seed activates or co-activates) are answered with the
+  lift of each, P(active | topic) / P(active), or with the Bayes factor
+  when the question decodes, rather than with the probability of their
+  activation; the guidance and the examples of the assistant say so. The
+  Schaefer atlas of the questions is that of 400 parcels: the engines
+  have ``schaefer400_activated`` and ``schaefer400_covered``, and the
+  assistant uses them unless a question asks for 100 parcels
+  (``schaefer_activated``). They take about 90 s to compute the first
+  time, then are kept with the engine's other tables (8 MB).
+
 - REPL: the box of the assistant starts with one of the assistant's example
   questions chosen at random: filled in when the assistant can answer, as the
   grey hint otherwise. "Surprise me" picks another. Picking an example, a question or a query, fills

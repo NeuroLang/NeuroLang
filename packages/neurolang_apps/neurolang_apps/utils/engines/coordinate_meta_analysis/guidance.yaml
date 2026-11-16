@@ -6,7 +6,8 @@
 assistant_guidance: >
   The meta-analytic co-activation of a region (meta-analytic
   connectivity, MACM) is the probability that the studies activating it
-  activate another, PROB[active(l, s) // seed(s)] over selected_study;
+  activate another, PROB[active(l, s) // seed(s)] over selected_study
+  (and its lift over the regions listed, see below);
   the resting-state functional connectivity, the correlation of activity
   at rest, is *_functional_connectivity; the structural connectivity,
   white-matter streamlines, is *_structural_connectivity: three different
@@ -36,8 +37,14 @@ assistant_guidance: >
   Bayes factor) when it asks for an association: the lift of A given B,
   how much B raises the chance of A, is P(A | B) / P(A), from PROB rules
   of yours (the rules lift and relative_risk are those of a term at
-  every voxel), the probability of each region, voxel or term when
-  they are listed.  A study activates a point when one of its peaks is
+  every voxel).  Regions listed (which regions, parcels, networks or
+  structures a term, a topic or a seed activates or co-activates) get
+  the lift of each, P(active | topic) / P(active): p_active(l, PROB)
+  :- active(l, s), and (lift == p / p0) in the answer, ans(region,
+  lift); or its Bayes factor, P(topic | active) / P(topic | not
+  active), when the question asks for evidence or reverse inference,
+  as the decoding examples do.  Voxels and terms listed get their
+  probability.  A study activates a point when one of its peaks is
   within {kernel_radius_mm} mm of it: peak_mni(x, y, z, s), (euclidean(x, y,
   z, x0, y0, z0) <= {kernel_radius_mm}), with the coordinates of the question as MNI millimetres,
   written as they are, never as the voxel indices (i, j, k) of
@@ -45,7 +52,9 @@ assistant_guidance: >
   (gyri, sulci, lobes) use the Destrieux atlas, destrieux_activated,
   as for brain areas or regions when the question names no atlas;
   for the functional anatomy, the Schaefer networks of the cortex,
-  schaefer_activated, and the Tian atlas of the subcortex,
+  schaefer400_activated (the atlas of 400 parcels, 17 networks, that
+  of a question naming Schaefer; schaefer_activated, of 100 parcels,
+  only when the question asks for 100), and the Tian atlas of the subcortex,
   tian_activated, which also holds the subcortical structures of
   classical anatomy (hippocampus, amygdala, thalamus, nucleus
   accumbens, globus pallidus, putamen, caudate).  Find region names
@@ -59,9 +68,10 @@ assistant_guidance: >
   SomMot (somatomotor), DorsAttn (dorsal attention), SalVentAttn
   (salience, ventral attention), Limbic, Cont (frontoparietal
   control), Default (default mode), TempPar (temporoparietal); match
-  them in a rule of their own, label(l) :- schaefer(l, r),
+  them in a rule of their own, label(l) :- schaefer400(l, r),
   startswith('17Networks LH DorsAttn', l), then joined with
-  schaefer_activated(l, s): startswith on schaefer_activated is slow.
+  schaefer400_activated(l, s): startswith on schaefer400_activated is
+  slow.
   Tian names abbreviate the structure and end with the hemisphere
   (lAMY rh, aHIP lh, NAc core rh): HIP hippocampus, AMY amygdala, THA
   thalamus, NAc nucleus accumbens, GP globus pallidus, PUT putamen,
@@ -70,7 +80,7 @@ assistant_guidance: >
   both hemispheres unless the question names one.
   For how strongly or how much of a region a term or topic engages
   (a graded map over the regions rather than which ones are
-  activated), use schaefer_covered(l, s), destrieux_covered(l, s) or
+  activated), use schaefer400_covered(l, s), destrieux_covered(l, s) or
   tian_covered(l, s) in place of the yes/no _activated: probabilistic
   facts of how much of the region a study's activations cover (a
   Gaussian kernel of 10 mm FWHM around its peaks, averaged over the
@@ -84,7 +94,8 @@ assistant_guidance: >
   study: for a network of pairs, co_active(l1, l2, s) :- active(l1,
   s), active(l2, s) with (l1 < l2) in the answer, conditioned on the
   term if the question names one; for the regions or points
-  co-activated with a seed, PROB[active(l, s) // seed(s)] = p; for
+  co-activated with a seed, PROB[active(l, s) // seed(s)] = p, and
+  for regions its lift, divided by PROB[active(l, s)]; for
   "more than chance", the lift of the pair, P(both) / (P(l1) P(l2)).
   A question naming a cognitive process, task or concept (studies
   about working memory, regions for response inhibition, the n-back
