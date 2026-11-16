@@ -89,26 +89,35 @@ def test_a_run_of_a_subject_end_to_end(tmp_path):
     labels[6:10, 2:6, 2:10] = 3
     assert [r[:2] for r in ibc.runs(root, "sub-01")] == \
         [("hcp", "HcpMotor"), ("rest", "RestingState")]
-    matrices = ibc.subject_connectivity(
-        root, "sub-01", {"atlas": (labels, ["a", "b", "c"])})
-    assert matrices["runs:rest"] == 1 and matrices["runs:hcp"] == 1
-    for cond in ("rest", "hcp"):
-        r = np.tanh(matrices[f"atlas:{cond}"])
-        assert r[0, 1] > 0.5 and abs(r[0, 2]) < 0.3, cond
+    found = ibc.runs(root, "sub-01")
+    for run in found:
+        r = np.tanh(ibc.run_connectivity(
+            root, run, {"atlas": (labels, ["a", "b", "c"])})["atlas"])
+        assert r[0, 1] > 0.5 and abs(r[0, 2]) < 0.3, run[0]
+    (func / "sub-01_ses-01_task-HcpMotor_dir-ap_events.tsv").unlink()
+    assert ibc.run_connectivity(root, found[0], {}) is None  # no events
 
 
-def test_group_averages_the_subjects_of_each_condition(tmp_path):
-    np.savez(tmp_path / "sub-01.npz", **{"a:rest": np.full((2, 2), 0.2),
-                                         "a:hcp": np.full((2, 2), 0.4),
-                                         "runs:rest": 4, "runs:hcp": 7})
-    np.savez(tmp_path / "sub-02.npz", **{"a:hcp": np.full((2, 2), 0.6),
-                                         "runs:hcp": 5})
+def test_group_averages_runs_then_the_subjects_of_each_condition(
+        tmp_path):
+    """A subject's runs of a condition are averaged, then the subjects
+    having the condition; a run without events is left out."""
+    def save(subject, name, value):
+        (tmp_path / subject).mkdir(exist_ok=True)
+        np.savez(tmp_path / subject / f"{name}.npz",
+                 **({} if value is None else {"a": np.full((2, 2), value)}))
+
+    save("sub-01", "rest__run1", 0.1)
+    save("sub-01", "rest__run2", 0.3)
+    save("sub-01", "hcp__run1", 0.4)
+    save("sub-01", "hcp__run2", None)  # without events
+    save("sub-02", "hcp__run1", 0.6)  # no rest
     mean, counts = ibc.group(tmp_path)
-    np.testing.assert_allclose(mean["a:rest"], 0.2)  # sub-02 has no rest
+    np.testing.assert_allclose(mean["a:rest"], 0.2)
     np.testing.assert_allclose(mean["a:hcp"], 0.5)
     counts = counts.set_index("condition")
-    assert counts.loc["rest"].tolist() == [1, 4]
-    assert counts.loc["hcp"].tolist() == [2, 12]
+    assert counts.loc["rest"].tolist() == [1, 2]
+    assert counts.loc["hcp"].tolist() == [2, 2]
 
 
 def test_the_ibc_engine_tables_are_every_pair_of_each_condition(tmp_path):

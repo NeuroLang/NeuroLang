@@ -16,7 +16,8 @@ convolved with the SPM HRF, so that the connectivity of a task is that of
 the activity it does not evoke (background connectivity); rest and the
 movies have none. Their Pearson correlations, Fisher-z transformed
 (functional.connectivity), are averaged over the subject's runs of a
-condition, ``OUT/<subject>.npz``; :func:`group` averages them over the
+condition (:func:`group`; each run is ``OUT/<subject>/<condition>__
+<run>.npz``, so that the workers share the runs), then over the
 subjects of each condition.
 """
 
@@ -201,79 +202,87 @@ def region_means(data: np.ndarray, labels: np.ndarray, n: int):
         return (sums / counts[:, None]).T
 
 
-def subject_connectivity(ibc: Path, subject: str, images: dict) -> dict:
-    """The mean Fisher z of each atlas and condition over the runs of
-    *subject*, ``<atlas>:<condition>``, and the number of runs,
-    ``runs:<condition>``."""
-    sums, counts = {}, {}
-    for cond, task, direction, path in runs(ibc, subject):
-        func = path.parent
-        stem = path.name[len("wrdc"):-len("_bold.nii.gz")]
-        rp = func / f"rp_dc{stem}_bold.txt"
-        events = func / f"{stem}_events.tsv"
-        if cond not in WITHOUT_EVENTS and not events.exists():
-            print(f"{path.name}: no events, left out", flush=True)
-            continue
-        image = nib.load(path)
-        tr = repetition_time(ibc, task, direction)
-        data = np.asarray(image.dataobj, dtype=np.float32)
-        confounds = run_confounds(
-            data, image.affine, rp,
-            None if cond in WITHOUT_EVENTS else events, tr)
-        for atlas, (labels, names) in images.items():
-            means = region_means(data, labels, len(names))
-            empty = np.isnan(means).all(axis=0)
-            means[:, empty] = 0  # a region without voxels: NaN in the end
-            series = clean(means, confounds, tr)
-            key = f"{atlas}:{cond}"
-            sums[key] = sums.get(key, 0.0) + connectivity(series)
-        counts[cond] = counts.get(cond, 0) + 1
-    return {**{k: v / counts[k.split(":")[1]] for k, v in sums.items()},
-            **{f"runs:{c}": n for c, n in counts.items()}}
+def run_connectivity(ibc: Path, run: tuple, images: dict):
+    """The Fisher z of each atlas of *images* over the *run* (condition,
+    task, direction, image), by atlas; None for a task run without
+    events."""
+    cond, task, direction, path = run
+    func = path.parent
+    stem = path.name[len("wrdc"):-len("_bold.nii.gz")]
+    events = func / f"{stem}_events.tsv"
+    if cond not in WITHOUT_EVENTS and not events.exists():
+        return None
+    image = nib.load(path)
+    tr = repetition_time(ibc, task, direction)
+    data = np.asarray(image.dataobj, dtype=np.float32)
+    confounds = run_confounds(
+        data, image.affine, func / f"rp_dc{stem}_bold.txt",
+        None if cond in WITHOUT_EVENTS else events, tr)
+    z = {}
+    for atlas, (labels, names) in images.items():
+        means = region_means(data, labels, len(names))
+        empty = np.isnan(means).all(axis=0)
+        means[:, empty] = 0  # a region without voxels: NaN in the end
+        z[atlas] = connectivity(clean(means, confounds, tr))
+    return z
+
+
+def all_runs(ibc: Path) -> list:
+    """Every run of every subject: (subject, run), in a fixed order."""
+    return [(subject, run) for subject in subjects(ibc)
+            for run in runs(ibc, subject)]
 
 
 def run(work: Path, ibc: Path, out: Path, task: int, tasks: int) -> None:
-    """The connectivity of the share *task* of *tasks* of the subjects,
-    ``OUT/<subject>.npz``, those already there skipped."""
-    out.mkdir(parents=True, exist_ok=True)
+    """The connectivity of the share *task* of *tasks* of the runs of
+    every subject, ``OUT/<subject>/<condition>__<run>.npz``, those
+    already there skipped (a run without events: an empty file)."""
     images = None
-    for subject in subjects(ibc)[task::tasks]:
-        path = out / f"{subject}.npz"
-        if path.exists():
+    for subject, found in all_runs(ibc)[task::tasks]:
+        cond, path = found[0], found[3]
+        folder = out / subject
+        target = folder / f"{cond}__{path.name[:-len('.nii.gz')]}.npz"
+        if target.exists():
             continue
+        folder.mkdir(parents=True, exist_ok=True)
         start = time.time()
         if images is None:
-            images = label_images(work, nib.load(runs(ibc, subject)[0][3]))
-        matrices = subject_connectivity(ibc, subject, images)
-        partial = out / f"{subject}.partial.npz"
-        np.savez(partial, **matrices)
-        partial.rename(path)
-        print(f"{subject}: {time.time() - start:.0f} s, " + ", ".join(
-            f"{k[5:]} {int(v)}" for k, v in matrices.items()
-            if k.startswith("runs:")), flush=True)
+            images = label_images(work, nib.load(path))
+        z = run_connectivity(ibc, found, images)
+        partial = target.with_name(target.stem + ".partial.npz")
+        np.savez(partial, **(z or {}))
+        partial.rename(target)
+        print(f"{path.name}: {cond}, {time.time() - start:.0f} s"
+              + ("" if z else ", no events: left out"), flush=True)
 
 
 def group(folder: Path) -> tuple:
-    """The mean Fisher z over the subjects of *folder* of each
-    ``<atlas>:<condition>``, and the subjects and runs of each condition
-    (a frame: condition, subjects, runs)."""
+    """The mean Fisher z of each ``<atlas>:<condition>``: over the runs of
+    a subject of the condition, then over its subjects; and the subjects
+    and runs of each condition (a frame: condition, subjects, runs)."""
     import pandas as pd
 
-    sums, subjects_of, runs_of = {}, {}, {}
-    for path in sorted(Path(folder).glob("sub-*.npz")):
-        if path.name.endswith(".partial.npz"):
-            continue
-        stored = np.load(path)
-        for key in stored.files:
-            kind, _, cond = key.partition(":")
-            if kind == "runs":
-                subjects_of[cond] = subjects_of.get(cond, 0) + 1
-                runs_of[cond] = runs_of.get(cond, 0) + int(stored[key])
-            else:
-                total, n = sums.get(key, (0.0, 0))
-                sums[key] = (total + stored[key], n + 1)
-    mean = {key: total / n for key, (total, n) in sums.items()}
-    counts = pd.DataFrame({"condition": list(subjects_of),
-                           "subjects": list(subjects_of.values()),
-                           "runs": [runs_of[c] for c in subjects_of]})
-    return mean, counts
+    sums, counts = {}, []
+    for subject in sorted(p for p in Path(folder).glob("sub-*")
+                          if p.is_dir()):
+        runs_of, own = {}, {}
+        for path in sorted(subject.glob("*__*.npz")):
+            if path.name.endswith(".partial.npz"):
+                continue
+            stored = np.load(path)
+            if not stored.files:  # a task run without events
+                continue
+            cond = path.name.split("__")[0]
+            runs_of[cond] = runs_of.get(cond, 0) + 1
+            for atlas in stored.files:
+                key = f"{atlas}:{cond}"
+                own[key] = own.get(key, 0.0) + stored[atlas]
+        for key, total in own.items():
+            mean = total / runs_of[key.split(":")[1]]
+            previous, n = sums.get(key, (0.0, 0))
+            sums[key] = (previous + mean, n + 1)
+        counts += [(cond, n) for cond, n in runs_of.items()]
+    frame = pd.DataFrame(counts, columns=["condition", "runs"])
+    summary = frame.groupby("condition", sort=False).runs.agg(
+        subjects="count", runs="sum").reset_index()
+    return {key: total / n for key, (total, n) in sums.items()}, summary
