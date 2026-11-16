@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultThreshold, hierarchy, labelled, layout, networkColumns, networkOf, nodeMeasures, treeLayout } from "../../../../../../../doc/_static/repl/network_model.js";
+import { ZOOM, centreOn, defaultThreshold, findNodes, hierarchy, labelled, layout, neighbours, networkColumns, networkOf, nodeMeasures, treeLayout, zoomAt } from "../../../../../../../doc/_static/repl/network_model.js";
 
 const payload = (columns, kinds, sorts, rows) => ({ columns, kinds, sorts, rows, total: rows.length, truncated: false });
 const concepts = () => payload(
@@ -91,4 +91,29 @@ test("the measures of the nodes count their links, their rows in each column and
   assert.equal(measures["rows as parent"].get("memory"), 2); // its children
   assert.equal(measures.links.get("memory"), 3);
   assert.equal(measures["nodes under it"].get("memory"), 3);
+});
+
+test("the neighbours of a node are listed the strongest first", () => {
+  const network = networkOf(concepts());
+  assert.deepEqual(neighbours(network.edges, "reward"), [
+    { id: "memory", weight: 0.5 }, { id: "fear", weight: -0.3 }, { id: "pain", weight: 0.1 },
+  ]);
+  assert.deepEqual(neighbours(network.edges, "nothing"), []);
+});
+
+test("a node is found by a part of its name, those it starts first", () => {
+  const nodes = ["visual memory", "memory", "working memory", "attention"].map((id) => ({ id }));
+  assert.deepEqual(findNodes(nodes, "Mem"), ["memory", "visual memory", "working memory"]);
+  assert.deepEqual(findNodes(nodes, "  "), []);
+  assert.deepEqual(findNodes(nodes, "xyz"), []);
+});
+
+test("the zoom keeps the point under the pointer in place, within its limits", () => {
+  const view = zoomAt({ k: 1, x: 0, y: 0 }, 2, [100, 50]);
+  assert.deepEqual(view, { k: 2, x: -100, y: -50 });
+  const at = (v, [x, y]) => [v.k * x + v.x, v.k * y + v.y];
+  assert.deepEqual(at(view, [100, 50]), [100, 50]);
+  assert.equal(zoomAt({ k: 10, x: 0, y: 0 }, 100, [0, 0]).k, ZOOM.max);
+  assert.equal(zoomAt({ k: 1, x: 0, y: 0 }, 0.01, [0, 0]).k, ZOOM.min);
+  assert.deepEqual(at(centreOn([30, 40], [900, 640], 3), [30, 40]), [450, 320]);
 });

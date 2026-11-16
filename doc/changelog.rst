@@ -28,6 +28,9 @@ Unreleased
   the nodes show a measure chosen (links, rows in a column, such as the
   children of a parent, or the nodes under it in a hierarchy), the shade
   of the edges their weight; a hierarchy can be drawn as a radial tree.
+  It zooms (Ctrl or ⌘ and the wheel, a pinch, buttons) and pans, naming
+  more nodes the closer; a node found by name or clicked is focused, with
+  its neighbours, and a panel lists them to go from one to the next.
   The limits are in ``settings.yaml`` (``network``).
 
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):

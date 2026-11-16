@@ -213,3 +213,37 @@ export function nodeMeasures({ nodes, columns }, shown, tree) {
     ...(tree ? [{ name: "nodes under it", values: tree.descendants }] : []),
   ];
 }
+
+// The nodes linked to *id* by the *edges*, the strongest first: each
+// { id, weight }.
+export function neighbours(edges, id) {
+  return edges
+    .filter((edge) => edge.source === id || edge.target === id)
+    .map((edge) => ({ id: edge.source === id ? edge.target : edge.source, weight: edge.weight }))
+    .sort((a, b) => strength(b) - strength(a) || a.id.localeCompare(b.id));
+}
+
+// The names of the *nodes* matching *text*, those it starts first, at most *limit*.
+export function findNodes(nodes, text, limit = 20) {
+  const wanted = text.trim().toLowerCase();
+  if (!wanted) return [];
+  const ids = nodes.map((node) => node.id).filter((id) => id.toLowerCase().includes(wanted));
+  const starts = (id) => (id.toLowerCase().startsWith(wanted) ? 0 : 1);
+  return ids.sort((a, b) => starts(a) - starts(b) || a.localeCompare(b)).slice(0, limit);
+}
+
+export const ZOOM = { min: 0.5, max: 16 };
+
+// The view *view* ({ k, x, y }: a point p of the drawing is at k p + (x, y))
+// zoomed by *factor* about the point *at* of the figure, which stays put.
+export function zoomAt(view, factor, [px, py]) {
+  const k = Math.min(ZOOM.max, Math.max(ZOOM.min, view.k * factor));
+  const ratio = k / view.k;
+  return { k, x: px - (px - view.x) * ratio, y: py - (py - view.y) * ratio };
+}
+
+// The view that puts the point *point* of the drawing at the centre of a
+// figure of *size* [width, height], at the zoom *k*.
+export function centreOn([x, y], [width, height], k) {
+  return { k, x: width / 2 - k * x, y: height / 2 - k * y };
+}
