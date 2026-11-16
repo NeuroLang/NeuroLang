@@ -330,7 +330,8 @@ def test_the_connectivity_is_four_relations_of_cortex_and_subcortex():
     for engine in ("structural_connectivity", "functional_connectivity"):
         cfg = get_engine_config(engine)
         kind = engine.split("_")[0]
-        assert set(cfg["relations"]) == {
+        assert {r for r in cfg["relations"]
+                if r.endswith("_connectivity")} == {
             r for r in RELATIONS if f"_{kind}_" in r}
     predicates = get_predicates("neurosynth")
     connectivity = {p for p in predicates if p.endswith("_connectivity")}
@@ -385,6 +386,60 @@ def test_the_connectivity_files_are_every_pair_of_engine_regions(
     swapped = table.set_index(["region2", "region1"])[column]
     swapped.index.names = both.index.names
     assert both.sort_index().equals(swapped.sort_index())
+
+
+def test_the_destrieux_and_tian_regions_have_their_full_names():
+    """destrieux_name and tian_name, files of the package, name each of the
+    148 Destrieux and 32 Tian regions once, by the labels of the engines,
+    with the hemisphere; every engine of the MNI atlases has them."""
+    import pandas as pd
+
+    from neurolang_apps.utils.engine_registry import (
+        _ENGINES_DIR, get_predicates)
+
+    for relation, regions, sides in (
+            ("destrieux_name", 148, ("L ", "R ")),
+            ("tian_name", 32, (" lh", " rh"))):
+        entry = get_engine_config("neurosynth")["relations"][relation]
+        table = pd.read_csv(_ENGINES_DIR / entry["file"], sep="\t")
+        assert list(table.columns) == ["label", "name"]
+        assert table.label.is_unique and len(table) == regions
+        assert table.name.is_unique
+        for side, word in zip(sides, ("left", "right")):
+            mine = table[table.label.str.startswith(side)
+                         | table.label.str.endswith(side)]
+            assert len(mine) == regions // 2
+            assert mine.name.str.endswith(f", {word}").all()
+        assert not table.label.str.contains("[-_]").any()
+        for engine in ("neurosynth", "structural_connectivity", "tracts"):
+            assert relation in get_predicates(engine)
+            guidance = get_engine_config(engine)["assistant_guidance"]
+            assert relation in guidance, engine
+    names = pd.read_csv(_ENGINES_DIR / "mni_atlases/destrieux_names.tsv",
+                        sep="\t").set_index("label").name
+    assert names["L G front sup"] == "Superior frontal gyrus (F1), left"
+    # the engine of Destrieux alone has its names too
+    assert "destrieux_name" in get_predicates("destrieux")
+
+
+@pytest.mark.network
+def test_the_destrieux_engine_has_both_hemispheres_and_their_names(
+        tmp_path):
+    """The engine destrieux builds (its atlas's description is not an
+    argument of the fetcher), left_region and right_region hold the 74
+    regions of each hemisphere, and every region has its full name."""
+    from neurolang_apps.utils.engine_registry import build_engine
+
+    try:
+        nl = build_engine("destrieux", tmp_path, resolution=2)
+    except OSError as error:  # offline
+        pytest.skip(f"cannot fetch the atlas: {error!r}")
+    for side in ("left_region", "right_region"):
+        assert len(nl.execute_datalog_program(
+            f"ans(n) :- {side}(n, r)")) == 74
+    named = nl.execute_datalog_program(
+        "ans(n, m) :- destrieux(n, r), destrieux_name(n, m)")
+    assert len(named) == 148
 
 
 def test_disconnectome7t_engines_load_the_files_they_download():

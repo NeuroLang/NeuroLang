@@ -1,0 +1,13 @@
+# Merged into the entry of mni_atlases in ../engines.yaml (see
+# doc/engine_configuration.rst); the engines extending it add their
+# guidance after it.
+#
+# How the LLM assistant (.ask, neurolang-query --ask) is to name the
+# regions of the atlases: added to its system prompt.
+assistant_guidance: >
+  The labels of Destrieux and Tian are abbreviations ('L G front sup',
+  'THA VA lh'); destrieux_name(l, name) and tian_name(t, name) give their
+  full anatomical names ('Superior frontal gyrus (F1), left',
+  'Ventroanterior thalamus, left'). An answer of Destrieux or Tian regions
+  joins them to show the names beside the labels, and a question naming a
+  region in words finds its label through them.

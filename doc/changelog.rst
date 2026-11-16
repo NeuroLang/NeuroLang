@@ -25,6 +25,13 @@ v0.1a23 (2026-11-15)
 
 **New features:**
 
+* ``destrieux_name(label, name)`` and ``tian_name(label, name)``, in every
+  engine of the MNI atlases (and ``destrieux_name`` in ``destrieux``): the full anatomical names of the 148
+  Destrieux regions (Destrieux et al. 2010, Table 1) and of the 32 regions
+  of Tian's subcortex, scale 2 (the atlas's nomenclature), with their
+  hemisphere, as 'Superior frontal gyrus (F1), left' or 'Ventroanterior
+  thalamus, left', to join with a result of their labels.
+
 * A tractogram is decoded as an image is, where its streamlines end:
   ``.image`` and **Upload data** take a ``.trk`` or ``.tck`` in MNI mm and
   load the voxels of the brain within 3 mm (``image.endpoint_radius``,
@@ -446,6 +453,11 @@ v0.1a23 (2026-11-15)
 
 **Bug fixes:**
 
+* The engine ``destrieux`` builds: the ``description`` of an atlas of an
+  engine is no longer passed to the atlas's fetcher (``fetch_atlas_destrieux_2009``
+  refused it), and its ``left_region`` and ``right_region`` hold the
+  regions of each hemisphere (they selected labels starting with ``lh`` and
+  ``rh``, which none does: Destrieux's start with ``L`` and ``R``).
 * ``exists(t; ...)`` in the rule of a query, ``ans(s) :- study(s),
   exists(t; mentions(s, t))``, failed in the probabilistic frontend, which
   the engines use ("Not a Datalog function application", or no

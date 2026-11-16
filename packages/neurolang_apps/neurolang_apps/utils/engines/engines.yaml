@@ -70,6 +70,16 @@ engines:
       schaefer_label(l) :- schaefer(l, r)
       labels(l, i, j, k) :- schaefer_voxels(i, j, k, l)
     hidden_predicates: [schaefer_voxels]
+    # The full anatomical names of the Destrieux and Tian regions, files of
+    # this package: Destrieux's of Table 1 of Destrieux et al. (2010)
+    # ("ligual" read "lingual"), Tian's of the nomenclature of the atlas
+    # (Nomenclature-subcortex-parcellation-hierarchy-3T.pdf, Table 2, of
+    # https://github.com/yetianmed/subcortex), each with its hemisphere.
+    relations:
+      destrieux_name:
+        file: mni_atlases/destrieux_names.tsv
+      tian_name:
+        file: mni_atlases/tian_names.tsv
     sorts:
       mni:
         columns: [x, y, z]
@@ -101,6 +111,13 @@ engines:
         columns: [region]
         type: ExplicitVBR
         description: "a brain region"
+      region_name:
+        columns: [name]
+        type: str
+        description: >-
+          the full anatomical name of a region, with its hemisphere, as
+          'Superior frontal gyrus (F1), left' or 'Ventroanterior thalamus,
+          right'
     predicates:
       schaefer:
         description: "Schaefer 2018 parcel label and its region"
@@ -161,6 +178,25 @@ engines:
         arguments:
           - mni
           - tian_label
+      destrieux_name:
+        description: >-
+          The full anatomical name of each Destrieux region (Destrieux et
+          al. 2010, Table 1), with its hemisphere: 'L G front sup' is
+          'Superior frontal gyrus (F1), left'. Join it with a result of
+          Destrieux labels to show their names
+        arguments:
+          - destrieux_label
+          - region_name
+      tian_name:
+        description: >-
+          The full anatomical name of each region of Tian's subcortex atlas,
+          scale 2 (Tian et al. 2020, the atlas's nomenclature), with its
+          hemisphere: 'THA VA lh' is 'Ventroanterior thalamus, left',
+          'NAc shell rh' 'Nucleus accumbens, shell, right'. Join it with a
+          result of Tian labels to show their names
+        arguments:
+          - tian_label
+          - region_name
 
   # The connectivity of the brain from the Human Connectome Project, in
   # two small engines the meta-analysis engines (coordinate_meta_analysis:
@@ -1094,14 +1130,24 @@ engines:
         predicate_name: destrieux
         description: "Cortical region name and ExplicitVBR geometry"
     datalog_init: |
-      left_region(N, R) :- destrieux(N, R), startswith('lh', N)
-      right_region(N, R) :- destrieux(N, R), startswith('rh', N)
+      left_region(N, R) :- destrieux(N, R), startswith('L ', N)
+      right_region(N, R) :- destrieux(N, R), startswith('R ', N)
+    # The full anatomical names of its regions (see mni_atlases).
+    relations:
+      destrieux_name:
+        file: mni_atlases/destrieux_names.tsv
     sorts:
       label:
         columns: [name]
         type: str
         atlas: destrieux
         description: "a Destrieux region name"
+      region_name:
+        columns: [name]
+        type: str
+        description: >-
+          the full anatomical name of a region, with its hemisphere, as
+          'Superior frontal gyrus (F1), left'
       region:
         columns: [region]
         type: ExplicitVBR
@@ -1122,6 +1168,14 @@ engines:
         arguments:
           - label
           - region
+      destrieux_name:
+        description: >-
+          The full anatomical name of each Destrieux region (Destrieux et
+          al. 2010, Table 1), with its hemisphere: 'L G front sup' is
+          'Superior frontal gyrus (F1), left'
+        arguments:
+          - label
+          - region_name
 
   tracts:
     extends: mni_atlases
