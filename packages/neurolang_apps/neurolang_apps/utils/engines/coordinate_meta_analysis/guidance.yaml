@@ -97,6 +97,15 @@ assistant_guidance: >
   co-activated with a seed, PROB[active(l, s) // seed(s)] = p, and
   for regions its lift, divided by PROB[active(l, s)]; for
   "more than chance", the lift of the pair, P(both) / (P(l1) P(l2)).
+  A graph of concepts or terms is their pairs, concept_1 < concept_2,
+  with the weight of the edge: by text (abstracts, SPECTER), the lift
+  of the studies close to both, P(both) / (P(t1) P(t2)); by
+  co-activation, the correlation across the regions of the lifts of
+  their activations (mean and std of each, then the mean of the
+  products of the z-scores). Bind the definitions in close itself,
+  close(t, s) :- node(t, d), similar_study(d, s), selected_study(s):
+  a rule over two texts, PROB of close(t1, s), close(t2, s), does not
+  get them from the answer.
   A question naming a cognitive process, task or concept (studies
   about working memory, regions for response inhibition, the n-back
   task) without saying mention, term or word: look it up with
