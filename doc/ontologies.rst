@@ -253,6 +253,23 @@ the constraint has a constant or a repeated variable, its unifier binds
 terms of the query: that step is built and tested as before.  The
 rewritings are the same, their variable names included.
 
+A step into a position with no values is also left for later.  When a step
+moves the term ``t`` of an atom into position ``i`` of an atom over ``P``,
+each other occurrence of ``t`` must, in every rewriting that is evaluated,
+reach that position and be factorised with it.  Steps on distinct atoms
+commute: a step depends on the rest of the query only through the terms
+it shares and those of the head, and it keeps every term it shares, so a
+step left for later changes neither for the others.  NeuroLang therefore
+takes the step only once each other occurrence of ``t`` is one step from
+position ``i`` of ``P``, by the constraints deriving its atom's predicate.
+The step is then the last, in some order, of every rewriting with values
+it leads to, and the rewritings evaluated are the same; those left out
+have an atom over ``P``, which has no values.  On (III), rewriting
+``measures(s, c)`` of ``measures(s, c), CAO_00587(c)`` into ``aux_i(s,
+c)`` waits until ``CAO_00587(c)`` is rewritten into an atom one step from
+``aux_i``; on (IV), ``ans(s) :- inhibition_study(s)`` takes 3.8 s instead
+of 31.9 s.
+
 The rules of the program that define a predicate in the body of a
 constraint are solved with the query, even when the query names only what
 the constraint derives: the code a query needs is followed through the
@@ -421,7 +438,7 @@ cogat:measures(x, c), cogat:CAO_00487(c)`` (the tasks with a contrast
 that measures some response inhibition), did not end within 16 minutes
 when its dead rewritings were built and then dropped, 146,000 of them in
 its first 210 s; with the tests, (IV) asks it of the Stroop studies in
-31.0 s.
+3.8 s.
 
 Outside these assumptions the answers stay sound.  On 480 more random
 queries, of up to 4 atoms, over ontologies with ``hasValue`` and, for half
@@ -598,9 +615,10 @@ checked with rdflib on the engine's copy of the file.
 The closed world is computed on the same engine with the constraints
 removed and ``cogpo:has_contrast`` and ``cogat:measures`` as empty
 relations: the plain Datalog reading of the same program.  The results
-were computed on 15 November 2026 with NeuroLang master ``167e48b0`` and the
-reading of ``rdf:type`` this section describes, one query at a time, each
-stopped after 1,500 s; each time includes the compilation of the query.
+were computed on 16 November 2026 with NeuroLang ``92e797c4``, master
+with the one-step test of the rewriting (:ref:`ontologies-two-mechanisms`),
+one query at a time, in one process, each stopped after 120 s; each time
+includes the compilation of the query.
 
 .. list-table:: Our experiments, in the closed and the open world
    :header-rows: 1
@@ -612,19 +630,19 @@ stopped after 1,500 s; each time includes the compilation of the query.
      - Why
    * - Which task is each? ``rdf:type(e, t)``
      - e1 Stroop, e2 stop signal, e3 go/no-go; 0.7 s
-     - the same; 8.0 s
+     - the same; 8.1 s
      - our data
    * - Has a contrast?
-     - none; 0.3 s
-     - e1, e2, e3; 2.8 s
+     - none; 0.4 s
+     - e1, e2, e3; 3.0 s
      - every one of these tasks has some contrast
    * - … one that measures response inhibition?
      - none; 0.8 s
-     - e1, e3; 33.3 s
+     - e1, e3; 3.9 s
      - the Stroop and go/no-go contrasts measure some response inhibition
    * - Which contrast?
      - none; 0.3 s
-     - none; 2.0 s
+     - none; 2.2 s
      - the Atlas says that one exists, not which
 
 Nobody recorded a contrast for these experiments, so the closed world
@@ -656,29 +674,89 @@ and the condition is kept in a rule of its own:
      - Why
    * - ``ans(s) :- exists(x; cogpo:has_contrast(s, x))``
      - none; 0.3 s
-     - 139 studies; 8.5 s
+     - 139 studies; 8.7 s
      - every Stroop task has some contrast
    * - … ``rdf:type(x, k), cogat_term(k, 'stroop_task-incongruent_minus_congruent')``
-     - none; 1.0 s
-     - 139 studies; 3.3 s
+     - none; 0.8 s
+     - 139 studies; 3.2 s
      - that contrast is an incongruent − congruent one
    * - ``ans(s) :- inhibition_study(s)``
-     - none; 1.4 s
-     - 139 studies; 31.0 s
+     - none; 1.0 s
+     - 139 studies; 3.8 s
      - and it measures some response inhibition
    * - ``ans(s, c)``, the response inhibition each measured
-     - none; 1.1 s
-     - none; 4.4 s
+     - none; 0.8 s
+     - none; 3.0 s
      - it is an unnamed value
 
 The curators stated one axiom; they did not enter 139 contrasts.  The same
 139 studies mention the Stroop task, ``mentions(s, 'stroop task')``, in
-1.4 s.  The question, however, is about a concept, and the
+1.6 s.  The question, however, is about a concept, and the
 ontology decides which tasks count: a curator who gives another task a
 contrast that measures response inhibition changes the answer without
 changing the query.  Of the tasks of the Atlas with a contrast that
 measures response inhibition, only ``'stroop task'`` is a term of
 Neurosynth; the vocabulary of the ``neurostore`` engine has five of them.
+
+**Five tasks on NeuroStore.**  On the ``neurostore`` engine, one rule types
+the studies that mention any of the five, each by the name the Atlas gives
+its task, and the question is the same:
+
+.. code-block:: neurolang
+
+   % each task: its name in the Atlas, and its term in NeuroStore
+   task_term('stroop task', 'stroop task')
+   task_term('color-word stroop task', 'color word stroop')
+   task_term('simon task', 'simon task')
+   task_term('go-no-go task', 'nogo task')
+   task_term('choice reaction time task', 'choice reaction time')
+   rdf:type(s, t) :- task_term(n, m), mentions(s, m), cogat_term(t, n)
+   inhibition_study(s) :- exists(x, c, k; cogpo:has_contrast(s, x),
+       cogat:measures(x, c), rdf:type(c, k), cogat_term(k, 'response inhibition'))
+   ans(s) :- inhibition_study(s)
+
+The names are those of ``cogat:CAO_00872`` (Stroop task),
+``cogat:CAO_00707`` (colour-word Stroop task), ``cogat:CAO_00864`` (Simon
+task), ``cogat:CAO_00827`` (go/no-go task) and ``cogat:CAO_00810`` (choice
+reaction time task); each has, in the Atlas, a contrast that measures
+response inhibition.
+
+.. list-table:: NeuroStore: one question on a concept against the mentions of each task
+   :header-rows: 1
+   :widths: 50 25 25
+
+   * - Query
+     - Studies
+     - Time
+   * - ``mentions(s, 'stroop task')``
+     - 444
+     - 5.1 s
+   * - ``mentions(s, 'color word stroop')``
+     - 57
+     - 5.1 s
+   * - ``mentions(s, 'simon task')``
+     - 62
+     - 4.8 s
+   * - ``mentions(s, 'nogo task')``
+     - 196
+     - 5.0 s
+   * - ``mentions(s, 'choice reaction time')``
+     - 41
+     - 4.9 s
+   * - the union of the five, ``task_term(n, m), mentions(s, m)``
+     - 742
+     - 4.8 s
+   * - open world, ``ans(s) :- inhibition_study(s)``
+     - 742
+     - 29.5 s
+
+The open-world query returns, as a set, the union of the five mentions:
+298 studies more than ``'stroop task'`` alone.  Nothing in the question
+names a task; the Atlas chose the five.  Its time includes the
+preparation of the constraints, as it was the first query on the ontology
+of its session; asked again, it takes 22.2 s.  These results were
+computed on 16 November 2026 with NeuroLang ``92e797c4``, one query at a
+time, in one process.
 
 **The Atlas, twice.**  Once loaded, the Atlas is in the engine in two
 forms.  Its axioms are constraints over one predicate per class and per
@@ -698,12 +776,12 @@ response inhibition, or one of its subclasses:
    inhibition_task(t, c) :- has_contrast_class(t, k), cogat_measures(k, c), inhibition(c)
    ans(t, n, m) :- inhibition_task(t, c), cogat_term(t, n), cogat_term(c, m)
 
-It returns 7 tasks in 4.1 s: the colour-word Stroop, the
+It returns 7 tasks in 4.4 s: the colour-word Stroop, the
 conditional stop signal, the choice reaction time, the go/no-go, the
 Simon and the Stroop tasks, and the Hayling sentence completion test, each
 with response inhibition.  With the same first four rules, ``ans(s, n) :-
 inhibition_task(t, c), cogat_term(t, n), mentions(s, n)`` returns the 139
-studies in 4.5 s.  This
+studies in 5.1 s.  This
 reading needs no instance, but it finds only what the axioms say of the
 classes as written: it reaches a study through the name of its task, and
 never through a contrast of the study itself.
@@ -721,12 +799,12 @@ never through a contrast of the study itself.
 Here ``p`` is the probability that a study, among those that measure
 response inhibition, reports a peak within 6 mm of the voxel
 ``(i, j, k)``.  In the closed world the condition holds of no study, and
-the query returns none, in 2.2 s.  In the open world it returns
-1,296,985 voxels with ``p > 0`` in 84.4 s, with the highest ``p`` 0.180:
+the query returns none, in 1.6 s.  In the open world it returns
+1,296,985 voxels with ``p > 0`` in 19.0 s, with the highest ``p`` 0.180:
 the map conditioned on the 139 Stroop studies, as
 ``p_active_given_stroop(i, j, k, PROB) :- (activated(i, j, k, s) &
 selected_study(s)) // (mentions(s, 'stroop task') & selected_study(s))``
-gives in 12.8 s.  The highest ``p`` of that map in each region of the
+gives in 12.9 s.  The highest ``p`` of that map in each region of the
 Destrieux atlas, with the MNI coordinates of the voxel that reaches it,
 are:
 
@@ -806,7 +884,8 @@ does.
 
 In short, the open world lets the curators of an ontology be
 non-exhaustive.  On (IV), one axiom stated once gave our experiments and
-139 studies a contrast that no one entered, and only what was never stated
+139 studies a contrast that no one entered; on NeuroStore, the same
+question over five tasks returned 742 studies.  Only what was never stated
 stayed out of reach.
 
 What would confirm and what limits this
