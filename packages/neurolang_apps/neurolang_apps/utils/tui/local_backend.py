@@ -238,6 +238,7 @@ class LocalBackend:
             "providers": providers_for_form(),
             "examples": repl.examples(),
             "questions": repl.questions(),
+            "moreQuestions": repl.more_questions(),
             "predicates": repl.predicates(),
             "commands": repl.commands(),
             "canRate": can_rate,

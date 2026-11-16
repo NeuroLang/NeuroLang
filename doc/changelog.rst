@@ -17,7 +17,13 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
-Nothing yet.
+**New features:**
+
+- REPL: the box of the assistant starts with one of the assistant's example
+  questions chosen at random: filled in when the assistant can answer, as the
+  grey hint otherwise. "Surprise me" picks another. The Questions list of
+  "Examples and relations" is followed by the rest of the assistant's bank,
+  "More questions", which a filter narrows.
 
 
 v0.1a23 (2026-11-15)

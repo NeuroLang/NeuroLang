@@ -26,6 +26,19 @@ export function suggestedQuestion(questions, current, ready, random = Math.rando
   return questions[Math.min(questions.length - 1, Math.floor(random() * questions.length))];
 }
 
+// The question the box of the assistant shows as its example when it cannot
+// answer: one of *questions* at random, not the *current* one; "" if none.
+export function exampleQuestion(questions, current = "", random = Math.random) {
+  const others = questions.filter((question) => question !== current);
+  return others.length ? others[Math.min(others.length - 1, Math.floor(random() * others.length))] : "";
+}
+
+// The *questions* whose text has all the words of *filter*.
+export function filterQuestions(questions, filter) {
+  const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
+  return questions.filter((question) => words.every((word) => question.toLowerCase().includes(word)));
+}
+
 // The query a first visit starts with: the first of the *examples* of the
 // language *mode*, when the *box* is empty and the browser has no history of
 // queries run here (*visited*); "" otherwise.

@@ -245,6 +245,13 @@
   .guide-cols h3 { margin: 0 0 .4rem; font-size: .9375rem; font-weight: 600; color: var(--text); }
   .guide-cols h3 .note { font-weight: 400; margin-left: .3rem; font-size: .75rem; }
   #guide-questions .guide-item { font-family: var(--sans); font-size: 13px; }
+  #guide-questions-box h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: .15rem .3rem; }
+  #guide-shuffle { margin-left: auto; min-height: 1.75rem; padding: .15rem .65rem; font-size: .75rem; }
+  #guide-more-box { margin-top: .6rem; }
+  #guide-more-box > summary h3 { display: inline; margin: 0; }
+  #guide-more-box[open] > summary { margin-bottom: .5rem; }
+  #guide-more-filter { width: 100%; box-sizing: border-box; margin: 0 0 .5rem; }
+  #guide-more .guide-item { font-family: var(--sans); font-size: 13px; }
   #guide-queries > summary h3 { display: inline; margin: 0; }
   #guide-queries[open] > summary { margin-bottom: .5rem; }
   #guide-commands-box > summary h3 { display: inline; margin: 0; }
@@ -583,7 +590,16 @@
       <details id="guide" class="disclosure">
         <summary><h2>Examples and relations</h2></summary>
         <div class="guide-cols">
-          <div id="guide-questions-box"><h3>Questions <span class="note">click one to put it in the box of the assistant, above</span></h3><ul id="guide-questions" class="guide-list"></ul></div>
+          <div id="guide-questions-box">
+            <h3>Questions <span class="note">click one to put it in the box of the assistant, above</span> <button type="button" id="guide-shuffle" class="ghost" title="Put another example question in the box of the assistant">Surprise me</button></h3>
+            <ul id="guide-questions" class="guide-list"></ul>
+            <details id="guide-more-box" class="disclosure" hidden>
+              <summary><h3>More questions <span class="note" id="guide-more-count"></span></h3></summary>
+              <input id="guide-more-filter" type="search" placeholder="Filter the questions…" aria-label="Filter the questions" spellcheck="false" autocomplete="off">
+              <ul id="guide-more" class="guide-list"></ul>
+              <p id="guide-more-none" class="note" hidden>No question has all these words.</p>
+            </details>
+          </div>
           <details id="guide-queries" class="disclosure"><summary><h3>Queries <span class="note">click one to put it in the box</span></h3></summary>
             <form id="builder" hidden>
               <strong>Build a query</strong>

@@ -292,6 +292,7 @@ def upload(name, data):
   const providers = JSON.parse(pyodide.runPython("llm_providers()"));
   const examples = JSON.parse(pyodide.runPython("json.dumps(repl.examples() if hasattr(repl, 'examples') else {})"));
   const questions = JSON.parse(pyodide.runPython("json.dumps(repl.questions() if hasattr(repl, 'questions') else [])"));
+  const moreQuestions = JSON.parse(pyodide.runPython("json.dumps(repl.more_questions() if hasattr(repl, 'more_questions') else [])"));
   const predicates = JSON.parse(pyodide.runPython("json.dumps(repl.predicates() if hasattr(repl, 'predicates') else [])"));
   const commands = JSON.parse(pyodide.runPython("json.dumps(repl.commands() if hasattr(repl, 'commands') else [])"));
   const assistant = pyodide.runPython("repl.assistant_ready() if hasattr(repl, 'assistant_ready') else False");
@@ -306,7 +307,7 @@ def upload(name, data):
   } catch {
     // the page works without ratings
   }
-  postMessage({ type: "ready", banner, source, providers, examples, questions, predicates, commands, canRate, assistant });
+  postMessage({ type: "ready", banner, source, providers, examples, questions, moreQuestions, predicates, commands, canRate, assistant });
   repl = pyodide.globals.get("repl");
   makeFile = pyodide.globals.get("download");
   rateAnswer = pyodide.globals.get("rate");

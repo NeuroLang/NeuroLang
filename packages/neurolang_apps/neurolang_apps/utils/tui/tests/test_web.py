@@ -1001,3 +1001,13 @@ def test_a_reply_tells_the_uploads_of_the_session(repl):
     assert reply.uploads["used"] == 19
     assert reply.uploads["most"] == repl.app.uploads.most_all
     assert reply_payload(reply)["uploads"] == reply.uploads
+
+
+def test_more_questions_are_those_of_the_bank_the_page_does_not_list(repl):
+    """The REPL lists some questions first; the rest of the assistant's
+    bank on the engine follows, each once."""
+    first = repl.questions()
+    more = repl.more_questions()
+    assert first and more
+    assert not set(first) & set(more)
+    assert len(more) == len(set(more))

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { columnDocs, matchesCommand, showAllQuery, startingQuery, suggestedQuestion } from "../../../../../../../doc/_static/repl/guide.js";
+import { columnDocs, exampleQuestion, filterQuestions, matchesCommand, showAllQuery, startingQuery, suggestedQuestion } from "../../../../../../../doc/_static/repl/guide.js";
 
 const peaks = {
   name: "peak_reported", signature: "peak_reported(voxel(i, j, k), study(study_id))", kind: "stored",
@@ -51,4 +51,20 @@ test("a first visit starts with the first example of the language in the box", (
   assert.equal(startingQuery(examples, "datalog", { box: "ans(x) :- y(x)", visited: false }), "");
   assert.equal(startingQuery(examples, "datalog", { box: "", visited: true }), "");
   assert.equal(startingQuery({}, "datalog", { box: "", visited: false }), "");
+});
+
+test("the example of the box of the assistant is another question, at random", () => {
+  const questions = ["a", "b", "c"];
+  assert.equal(exampleQuestion(questions, "", () => 0), "a");
+  assert.equal(exampleQuestion(questions, "a", () => 0), "b");
+  assert.equal(exampleQuestion(questions, "", () => 0.999), "c");
+  assert.equal(exampleQuestion(["a"], "a"), "");
+  assert.equal(exampleQuestion([], ""), "");
+});
+
+test("the questions are filtered by all the words typed, in any case", () => {
+  const questions = ["Which studies mention pain?", "Which regions are active in memory?", "How many studies?"];
+  assert.deepEqual(filterQuestions(questions, "STUDIES which"), [questions[0]]);
+  assert.deepEqual(filterQuestions(questions, "  "), questions);
+  assert.deepEqual(filterQuestions(questions, "fear"), []);
 });

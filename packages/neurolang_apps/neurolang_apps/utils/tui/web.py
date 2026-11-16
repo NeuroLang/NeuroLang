@@ -667,6 +667,22 @@ class WebRepl:
         config = engine_registry.get_engine_config(engine)
         return list(config.get("questions") or [])
 
+    def more_questions(self) -> List[str]:
+        """Return the other questions of the assistant's bank on the
+        engine, those that :meth:`questions` does not list, each once."""
+        engine = self.app.settings.engine_name
+        if not engine:
+            return []
+        config = engine_registry.get_engine_config(engine)
+        shown = set(config.get("questions") or [])
+        more = []
+        for entry in config.get("assistant_examples") or []:
+            question = (entry.get("question") or "").strip()
+            if question and question not in shown:
+                shown.add(question)
+                more.append(question)
+        return more
+
     def predicates(self) -> List[dict]:
         """
         Return the predicates of the engine and of the session, for the
