@@ -10,6 +10,7 @@
 # words, in each atlas, and show them by name.
 assistant_examples:
   - question: Which regions of the Schaefer, Destrieux and Tian atlases are hippocampal or parahippocampal, with their full names?
+    topic: "Atlases and region names"
     datalog: |-
       named(atlas, label, name) :- schaefer400_name(label, name), str_contains(lcase(name), 'hippocamp'), (atlas == 'schaefer400')
       named(atlas, label, name) :- destrieux_name(label, name), str_contains(lcase(name), 'hippocamp'), (atlas == 'destrieux')
