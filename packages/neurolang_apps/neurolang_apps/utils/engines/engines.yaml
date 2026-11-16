@@ -247,12 +247,26 @@ engines:
       - >-
         Structural connectivity (schaefer400_tian_structural_connectivity,
         destrieux_tian_structural_connectivity): the mean over 100 HCP
-        Young Adult subjects of their own tractography between the regions
-        of the Schaefer 400 and Tian S2 atlases and of the Destrieux
-        parcels (each subject's FreeSurfer aparc.a2009s) and Tian's, by
-        NeuroLang (tools/hcp_connectivity/tractography.py; the dataset:
-        https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity) with
-        MRtrix3: Tournier J-D, Smith R, Raffelt D, et al. MRtrix3: a fast,
+        Young Adult subjects of the number of streamlines joining two
+        regions of the Schaefer 400 and Tian S2 atlases, and of the
+        Destrieux parcels and Tian's, computed by NeuroLang
+        (tools/hcp_connectivity/tractography.py; the dataset:
+        https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity) as
+        follows. For each subject, from the HCP's minimally preprocessed
+        diffusion MRI in its T1w space: response functions (dwi2response
+        dhollander) and multi-shell multi-tissue constrained spherical
+        deconvolution (dwi2fod msmt_csd); the five-tissue-type image of
+        its FreeSurfer segmentation (5ttgen freesurfer); 5 million
+        streamlines of anatomically constrained probabilistic tractography
+        (tckgen iFOD2, ACT, backtracking, cropped at the grey/white matter
+        interface, dynamic seeding); SIFT2 weights (tcksift2); Schaefer's
+        and Tian's atlases brought from MNI space to the subject through
+        the HCP's warp (nearest neighbour), and Destrieux's parcels of the
+        subject's own FreeSurfer segmentation (aparc.a2009s); the
+        streamlines whose two ends lie within 2 mm of two regions counted
+        (tck2connectome -symmetric -zero_diagonal
+        -assignment_radial_search 2). The counts are then averaged over
+        the subjects. With MRtrix3: Tournier J-D, Smith R, Raffelt D, et al. MRtrix3: a fast,
         flexible and open software framework for medical image processing
         and visualisation. NeuroImage 202:116137 (2019).
         doi:10.1016/j.neuroimage.2019.116137; anatomically constrained:
@@ -346,10 +360,17 @@ engines:
         Resting-state functional connectivity
         (schaefer400_tian_functional_connectivity,
         destrieux_tian_functional_connectivity): the HCP Young Adult
-        resting-state fMRI of
-        964 subjects (four runs, ICA-FIX cleaned, MSMAll aligned),
-        parcellated and averaged by NeuroLang (tools/hcp_connectivity; the
-        dataset: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity).
+        resting-state fMRI of 964 subjects, computed by NeuroLang
+        (tools/hcp_connectivity/functional.py; the dataset:
+        https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity) as
+        follows. For each subject, each of its four runs of rest
+        (rfMRI_REST1/2, LR and RL; ICA-FIX cleaned, MSMAll aligned, 91,282
+        grayordinates, no global signal regression): the time series
+        averaged within each region (the cortical parcels of the atlas,
+        Tian's subcortical regions); the Pearson correlation of each pair
+        of regions (a full correlation, not a partial one); its Fisher z,
+        averaged over the four runs. The z are then averaged over the
+        subjects and turned back into a correlation (tanh).
         Smith SM et al. Resting-state fMRI in the Human Connectome Project.
         NeuroImage 80:144-168 (2013). doi:10.1016/j.neuroimage.2013.05.039.
         Glasser MF et al. The minimal preprocessing pipelines for the Human
@@ -378,9 +399,10 @@ engines:
         description: >-
           Resting-state functional connectivity between two regions of the
           Schaefer 400 parcels (17 networks) and Tian's 32 subcortical
-          regions: the correlation r (-1 to 1) of their spontaneous fMRI
-          activity at rest, over 964 HCP subjects (the tanh of the mean of
-          their Fisher z; .credits), every pair of distinct regions both
+          regions: the Pearson correlation r (-1 to 1; a full correlation,
+          not a partial one) of their spontaneous fMRI activity at rest,
+          over 964 HCP subjects (the tanh of the mean of their Fisher z;
+          .credits), every pair of distinct regions both
           ways round. A region is a parcel (schaefer400(l, r)) or a Tian
           region (tian(t, r)), so the relation holds the cortex, the
           subcortex and between them. Functional, not structural (no
@@ -395,8 +417,9 @@ engines:
         description: >-
           Resting-state functional connectivity between two regions of the
           148 Destrieux parcels and Tian's 32 subcortical regions: the
-          correlation r (-1 to 1) of their spontaneous fMRI activity at
-          rest, over 964 HCP subjects (.credits), every pair of distinct
+          Pearson correlation r (-1 to 1; a full correlation, not a partial
+          one) of their spontaneous fMRI activity at rest, over 964 HCP
+          subjects (.credits), every pair of distinct
           regions both ways round. A region is a Destrieux parcel
           (destrieux(l, r)) or a Tian region (tian(t, r)). Functional, not
           structural nor the co-activation of task studies

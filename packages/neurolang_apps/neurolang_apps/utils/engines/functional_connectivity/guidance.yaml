@@ -7,9 +7,10 @@
 # questions on the resting-state functional connectivity: added to its
 # system prompt.
 assistant_guidance: >
-  The resting-state functional connectivity is the correlation r (-1 to
-  1) of the spontaneous fMRI activity of two regions at rest, over 964
-  HCP subjects: schaefer400_tian_functional_connectivity(l1, l2, r) over
+  The resting-state functional connectivity is the Pearson correlation r
+  (-1 to 1; a full correlation, not a partial one, so it includes the
+  shared, indirect influences) of the spontaneous fMRI activity of two
+  regions at rest, over 964 HCP subjects: schaefer400_tian_functional_connectivity(l1, l2, r) over
   the 400 Schaefer parcels and Tian's subcortical regions, and
   destrieux_tian_functional_connectivity(l1, l2, r) over the Destrieux
   parcels and Tian's regions. Each relation has the cortex, the subcortex
