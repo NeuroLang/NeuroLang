@@ -19,7 +19,7 @@ from neurolang.atlases import Atlas
 from .atlas import (
     label_extent_relation, label_relation, label_term_relation,
 )
-from .ids import encode
+from .ids import decode, encode
 from .terms import load_term_mapping
 from .tractogram import Tractogram
 
@@ -468,6 +468,25 @@ class RelationStore:
             self._append(
                 name, _by_streamline(relation(tractogram, params), index)
             )
+
+    def remove_tractogram(self, ident: str) -> None:
+        """Remove the tractogram ``ident`` and the rows of its streamlines
+        from every relation. Its index in the ids ``x`` is not reused: its
+        place in ``tractograms`` is kept, as None, so that the ids of the
+        others do not change."""
+        index = self.tractograms.index(ident)
+        self.tractograms[index] = None
+        for name, frame in self.relations.items():
+            if "x" in frame.columns:
+                keep = decode(frame["x"].to_numpy())[0] != index
+            elif name == "tractogram":
+                keep = (frame["t"] != ident).to_numpy()
+            else:
+                continue
+            self.relations[name] = frame[keep].reset_index(drop=True)
+        self._indexed = {
+            pair for pair in self._indexed if pair[1] != ident
+        }
 
     def add_index(
         self,

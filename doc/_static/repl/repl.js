@@ -656,6 +656,8 @@ const UPLOAD_ICONS = {
   // a brain with a spark: the image is decoded into the concepts it resembles
   decode: '<path d="M9.5 5a3 3 0 0 0-5.3 1.9A3.6 3.6 0 0 0 2.7 12a3.6 3.6 0 0 0 1.4 5.2A3.2 3.2 0 0 0 9.5 19.3V5"/><path d="M9.5 5a3 3 0 0 1 4.2-1.5M16.3 9a3.6 3.6 0 0 1 .5 5.5 3.6 3.6 0 0 1-1.7 2.7 3.2 3.2 0 0 1-5.6 2.1"/><path d="M5.2 11.5h2.3M9.5 14c1.5 0 2.6-.8 3.2-2.2"/><path fill="currentColor" stroke-width="1" d="M19.6 1.2c.4 2.2 1.1 2.9 3.2 3.3-2.1.4-2.8 1.1-3.2 3.3-.4-2.2-1.1-2.9-3.3-3.3 2.2-.4 2.9-1.1 3.3-3.3z"/>',
   remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  // a bundle of streamlines whose ends are in regions of the atlas: indexed, each is labelled by them
+  index: '<rect x="2" y="15" width="6" height="6" rx="1.5" fill="currentColor" stroke="none"/><rect x="16" y="3" width="6" height="6" rx="1.5" fill="currentColor" stroke="none"/><path d="M5 15C5 9 13 13 16 7"/><path d="M8 17c4 0 6-6 10-8" opacity=".75"/><path d="M5 12c1-4 6-3 9-6" opacity=".5"/>',
 };
 function iconButton(kind, text, label, action) {
   const button = Object.assign(document.createElement("button"), {
@@ -725,24 +727,37 @@ function showUploads(listed) {
   const summary = uploadsSummary(listed);
   $("uploaded").hidden = !summary;
   $("uploaded-summary").textContent = summary;
-  $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells) => {
+  $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells, n) => {
+    const file = listed.files[n];
     const row = document.createElement("tr");
     for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text, title: text }));
     const name = cells[0];
     const actions = document.createElement("td");
     actions.className = "upload-actions";
-    if (uploads.has(name)) { // the page has its bytes (it uploaded it)
+    if (!file.engine && uploads.has(name)) { // the page has its bytes (it uploaded it)
       actions.append(iconButton("download", "Download", `Download ${name}`,
         () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) })));
     }
     const decoding = decodings.get(name); // an image: its decoding query may be offered again
     if (decoding) {
       actions.append(iconButton("decode", "Decode", `Decode ${name}`, () => {
-        offerDecoding(name, decoding.query, decoding.kind, decoding.threshold, decoding.cortex_query, decoding.relation);
+        offerDecoding(name, decoding.query, decoding.kind, decoding.threshold, decoding.cortex_query, decoding.relation, decoding.radius, decoding.index);
         $("decode-offer").scrollIntoView({ block: "nearest" });
       }));
     }
-    actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
+    // A tractogram, on an engine of tractography: one is indexed at a time.
+    if (file.index) {
+      actions.append(iconButton("index", "Index", file.engine
+        ? `Index the engine's tractogram ${name} again, for the rules of the bundles`
+        : `Index ${name} for the rules of the bundles, in place of the tractogram indexed`,
+        () => indexTractogram(name, file.index, file.engine)));
+    } else if (file.indexed) {
+      const button = iconButton("index", "Indexed", `${name} is the tractogram the rules of the bundles select from, as ${file.indexed}`, () => {});
+      button.disabled = true;
+      actions.append(button);
+    }
+    // The engine's tractogram is listed to be indexed again, never removed.
+    if (!file.engine) actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
     row.append(actions);
     return row;
   }));
@@ -1166,7 +1181,7 @@ $("upload-file").addEventListener("change", async (event) => {
   run(answer.statement, { remember: true });
   // An image comes with the query decoding it: the visitor is asked
   // whether it goes in the box, where it replaces what they wrote.
-  if (answer.query) offerDecoding(answer.name, answer.query, answer.kind, answer.threshold, answer.cortex_query, answer.relation, answer.radius);
+  if (answer.query || answer.index) offerDecoding(answer.name, answer.query, answer.kind, answer.threshold, answer.cortex_query, answer.relation, answer.radius, answer.index);
   $("uploaded").open = true; // the file is listed, with its buttons
 });
 
@@ -1181,7 +1196,7 @@ let cortexQuery = "";
 let replacedQuery = "";
 let decodedMap = ""; // the map of values to load again, decoded so
 let decodedRelation = ""; // the relation it is loaded as
-function offerDecoding(name, query, kind, threshold = 3.1, cortex = "", relation = "image", radius = 3) {
+function offerDecoding(name, query, kind, threshold = 3.1, cortex = "", relation = "image", radius = 3, index = "") {
   decodingQuery = query;
   decodedRelation = relation;
   cortexQuery = cortex;
@@ -1194,17 +1209,28 @@ function offerDecoding(name, query, kind, threshold = 3.1, cortex = "", relation
     ? `${name} is uploaded, a tractogram. A query can decode the voxels within ${radius} mm of the ends of its streamlines: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit them, a comment explaining each line.`
     : `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`;
   const where = cortex ? " Only the cortex decodes the voxels of the image in the cortex alone." : "";
-  $("decode-offer-text").textContent = what + where + (editor.value.trim() ? " It replaces the query in the box." : "");
+  const indexed = index ? " Index, on its row of the uploaded files, puts its streamlines in place of the engine's tractogram, for the rules of the bundles (uf(x, \"left\")…) to select them." : "";
+  $("decode-offer-text").textContent = (query ? what + where + (editor.value.trim() ? " It replaces the query in the box." : "") : `${name} is uploaded, a tractogram.`) + indexed;
   $("decode-offer-yes").textContent = kind === "map" ? "Decode as z-scores" : "Run the decoding query";
   $("decode-offer-mask").textContent = `Decode as a mask (from ${threshold})`;
   $("decode-offer-mask").hidden = kind !== "map";
-  $("decode-offer-yes").hidden = $("decode-offer-no").hidden = false;
+  $("decode-offer-yes").hidden = !query;
+  $("decode-offer-no").hidden = false;
   $("decode-offer-back").hidden = true;
   $("decode-offer").hidden = false;
 }
 function closeDecodingOffer() {
   $("decode-offer").hidden = true;
   decodingQuery = cortexQuery = replacedQuery = decodedMap = "";
+}
+// Index the uploaded tractogram *name* in place of the engine's (the
+// statements of its row), and say how its streamlines are queried.
+function indexTractogram(name, statements, engine = false) {
+  const ident = /index_tracts\("([^"]+)"/.exec(statements)?.[1] ?? name;
+  whenReady(() => run(statements, { remember: true, keepOffer: true }));
+  setUploadsStatus(engine
+    ? `The engine's tractogram ${ident} is indexed again: the rules of the bundles select its streamlines.`
+    : `${name} is indexed as the tractogram ${ident}, in place of the one indexed before: the rules of the bundles select its streamlines, e.g. ans(x) :- uf(x, "left"), and .view draws them.`);
 }
 // Put the decoding query in the box and run it, a map loaded again as
 // *flag* says first; once the statement running (the upload's .image)

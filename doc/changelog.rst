@@ -17,7 +17,16 @@ format below, then move it to the appropriate version section when releasing.
 Unreleased
 ----------
 
-Nothing yet.
+**New features:**
+
+* On an engine of tractography (``neurosynth_iit``…), an uploaded
+  tractogram is queried with the rules of the bundles: ``.load_tractogram``
+  reads it by its name, and *Index*, on its row of the uploaded files,
+  indexes it in place of the tractogram indexed before
+  (``.index_tracts(..., replace=1)``, which removes that one from the
+  relations, with a note); one tractogram is indexed at a time.  The
+  engine's own tractogram is listed first, never removed, its *Index*
+  putting it back (:doc:`tutorial_decoding`).
 
 
 v0.1a23 (2026-11-15)

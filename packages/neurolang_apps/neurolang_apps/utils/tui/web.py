@@ -585,9 +585,21 @@ class WebRepl:
 
     def uploads(self) -> dict:
         """Return the files the page uploaded in the session, as a reply
-        carries them (see :class:`Reply`)."""
+        carries them (see :class:`Reply`), after the tractograms of the
+        engine (``engine``), which the page lists to index them again."""
         uploads = self.app.uploads
-        return {"files": uploads.listing(), "used": uploads.used(),
+        files = uploads.listing()
+        for upload in files:  # a tractogram, indexed or not (index)
+            if session.is_tractogram(upload["name"]):
+                upload.update(
+                    nifti.tractogram_index(self.app, upload["name"]))
+        # the engine's tractograms, first, which are not removed
+        files[:0] = [
+            {"name": ident, "size": 0, "age": 0, "loaded": [ident],
+             "engine": True, **nifti.tractogram_index(self.app, "", ident)}
+            for ident in getattr(self.app, "engine_tractograms", ())
+        ]
+        return {"files": files, "used": uploads.used(),
                 "most": uploads.most_all}
 
     def _show_graph(self, page: str) -> None:
@@ -742,8 +754,10 @@ class WebRepl:
         can, the ``cortex_query`` decoding its cortex only (``--cortex``),
         and its ``kind``: ``mask``, ``map`` (of values: decoded once
         loaded with ``--zscore``), or ``tractogram`` (decoded on the voxels
-        within ``radius`` mm of the ends of its streamlines). A ValueError
-        tells why it is refused.
+        within ``radius`` mm of the ends of its streamlines; the uploads
+        of a reply tell how it is indexed for the rules of the bundles,
+        :func:`.nifti.tractogram_index`). A ValueError tells why it is
+        refused.
         """
         replaced = next((upload["loaded"] for upload in
                          self.app.uploads.listing()
@@ -769,6 +783,9 @@ class WebRepl:
             # a map, decoded as a mask, keeps its voxels from it (--mask)
             "threshold": nifti.IMAGE_DEFAULTS["threshold"],
             "radius": nifti.IMAGE_DEFAULTS["endpoint_radius"],
+            # a tractogram the engine can index (its row's Index)
+            "index": nifti.tractogram_index(self.app, name)["index"]
+            if kind == "tractogram" else "",
         }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:

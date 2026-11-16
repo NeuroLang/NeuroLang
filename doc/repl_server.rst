@@ -846,11 +846,11 @@ Security
 
 - With ``--local``, anyone who logs in runs queries and commands in the
   server's Python.  With users or a password, their statements are *confined*
-  (``neurolang.confine``): ``.load`` and ``.image`` load the files they
-  upload (**Upload data**, kept in the session's folder of
-  ``--uploads-dir``), and no path;
-  ``.load_csv``, ``.load_atlas``, ``.import``, ``.load_tractogram`` and
-  ``.view`` read the files of the data directory only (``--data-dir``) and
+  (``neurolang.confine``): ``.load``, ``.image`` and ``.load_tractogram``
+  load the files they upload (**Upload data**, kept in the session's folder
+  of ``--uploads-dir``), and no other path;
+  ``.load_csv``, ``.load_atlas``, ``.import``, ``.load_tractogram`` (a file
+  not uploaded) and ``.view`` read the files of the data directory only (``--data-dir``) and
   fetch no address; ``.save``,
   ``.transcript`` and ``index_tracts`` write no file (the page downloads the
   results instead).  The engines themselves are built unconfined (their
