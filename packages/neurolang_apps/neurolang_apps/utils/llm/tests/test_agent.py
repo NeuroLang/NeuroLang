@@ -436,6 +436,71 @@ def test_empty_final_answer_recalls_the_query_with_rows(nl):
     assert result.query == "ans(s) :- mentions(s, 'pain')"
 
 
+def count_previews(monkeypatch):
+    """Count the queries run by the agents' tools."""
+    from .. import agent as agent_module
+
+    runs = []
+    run_preview = agent_module.run_preview
+
+    def counted(nl, text, *args, **kwargs):
+        runs.append(text)
+        return run_preview(nl, text, *args, **kwargs)
+
+    monkeypatch.setattr(agent_module, "run_preview", counted)
+    return runs
+
+
+def final(query):
+    return (
+        'Action: final_answer\nAction Input: {"query": "' + query + '"}'
+    )
+
+
+def run(query):
+    return (
+        'Action: run_query\nAction Input: {"query": "' + query + '"}'
+    )
+
+
+def test_final_answer_reuses_the_preview_of_run_query(nl, monkeypatch):
+    runs = count_previews(monkeypatch)
+    replies = [run(PAIN_DATALOG), final(PAIN_DATALOG.replace(" :- ", "  :-  "))]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    result = react.run("Which studies mention pain?")
+    assert result.valid and steps[1].observation == "Accepted."
+    assert len(runs) == 1  # 2 without the reuse
+
+
+def test_confirming_an_empty_answer_reuses_its_preview(nl, monkeypatch):
+    runs = count_previews(monkeypatch)
+    zzz = "ans(s) :- mentions(s, 'zzz')"
+    replies = [run(zzz), final(zzz), final(zzz)]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    result = react.run("Which studies mention zzz?")
+    assert "gives no rows" in steps[1].observation
+    assert result.valid and steps[2].observation == "Accepted."
+    assert len(runs) == 1  # 3 without the reuse
+
+
+def test_a_failed_preview_is_run_again(nl, monkeypatch):
+    from .. import agent as agent_module
+    from ..validation import Preview
+
+    runs = []
+
+    monkeypatch.setattr(
+        agent_module, "run_preview",
+        lambda *a, **k: runs.append(1) or Preview(False, "timeout"),
+    )
+    replies = [run(PAIN_DATALOG), final(PAIN_DATALOG)]
+    react, steps = agent(
+        nl, ReactAgent, replies, language="datalog", max_steps=2,
+    )
+    react.run("Which studies mention pain?")
+    assert len(runs) == 2  # a failed preview is not kept
+
+
 def test_repeated_call_is_not_run_again(nl):
     search = 'Action: search_values\nAction Input: {"pattern": "pain"}'
     replies = [

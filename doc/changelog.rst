@@ -88,6 +88,13 @@ Unreleased
   engine's own tractogram is listed first, never removed, its *Index*
   putting it back (:doc:`tutorial_decoding`).
 
+**Performance:**
+
+- Query assistant: a query is run once per question for its preview.
+  ``final_answer`` and the confirmation of an empty answer reuse the
+  preview of the identical (whitespace-normalised) query run before by
+  ``run_query`` or ``final_answer``, instead of running it again.
+
 **Bug fixes:**
 
 - The relational-algebra chase no longer keeps every chase that ran: three
