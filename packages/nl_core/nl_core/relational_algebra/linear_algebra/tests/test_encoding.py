@@ -126,6 +126,19 @@ def test_entity_index_signed_and_unsigned_integers():
     ]
 
 
+def test_entity_index_dense_unsigned_integers_above_int64():
+    values = np.tile(np.uint64(2 ** 63) + np.arange(10, dtype=np.uint64), 3)
+    index = EntityIndex([pd.DataFrame({"i": values})])
+    codes = index.encode(pd.DataFrame({"i": values}))
+    assert list(codes[:10]) == list(range(10))
+    np.testing.assert_array_equal(index.decode(codes)[0], values)
+    others = np.array([2 ** 63 + 3, 2 ** 64 - 1, 0, 2 ** 63 + 3] * 5,
+                      dtype=np.uint64)
+    assert list(index.encode(pd.DataFrame({"i": others}))[:4]) == [
+        3, -1, -1, 3
+    ]
+
+
 def test_entity_index_small_integers_spanning_more_than_their_dtype():
     small = pd.DataFrame({"i": np.array([-100, 100, 0], dtype=np.int8)})
     index = EntityIndex(
