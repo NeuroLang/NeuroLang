@@ -12,6 +12,7 @@ relation, and its stored entries are the relation's tuples.
 Which columns are an entity, and of which sort, is not known here: it is
 given by the caller (an engine's declaration of its sorts).
 """
+import sys
 import weakref
 from collections import Counter
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple
@@ -497,4 +498,9 @@ def build_sparse_views(
             None if value is None else positions[value],
             (codes[name, 0], codes[name, 1]),
         )
+    # Hashing Arrow strings leaves their buffers in Arrow's memory pool,
+    # which keeps them from the system (0.8 GiB for activated of
+    # neurostore_iit) unless told otherwise.
+    if "pyarrow" in sys.modules:
+        sys.modules["pyarrow"].default_memory_pool().release_unused()
     return views
