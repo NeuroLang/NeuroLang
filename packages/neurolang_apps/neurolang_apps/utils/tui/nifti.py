@@ -1492,6 +1492,14 @@ def render_png(image, title: str = "", threshold=VIEW_THRESHOLD) -> bytes:
     nonzero values, as the viewer starts; for the clients that show
     images but not pages, such as those of the MCP server.
     """
+    import sys
+
+    import matplotlib
+
+    if "matplotlib.pyplot" not in sys.modules:
+        # No window: nilearn's pyplot would load the macOS backend, whose
+        # AppKit aborts a forked process (a session of the REPL server).
+        matplotlib.use("Agg")
     from matplotlib.figure import Figure
     from nilearn import plotting
 

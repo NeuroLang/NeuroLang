@@ -102,6 +102,8 @@
   main > .card, main > .note { margin-top: 1rem; }
   form > button, .actions { justify-self: start; }
   .actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+  #mcp-command { margin: .75rem 0 0; padding: .6rem .75rem; font-size: .8rem; white-space: pre-wrap; word-break: break-all;
+    border: 1px solid var(--border); border-radius: var(--radius); }
   .card form + .note { margin-top: 1rem; }
 </style>
 </head>
@@ -165,6 +167,19 @@
 <p id="orcid-message" role="status"></p>
 </section>
 
+<section class="card" id="mcp-box" hidden>
+<h2>Your AI assistant's access (MCP)</h2>
+<p>An MCP client, such as Claude Code, asks NeuroLang on this server with your token, in a session of yours: your assistant writes the queries, and the answers, their maps and their viewer links come back to it. The files of its answers open here, logged in.</p>
+<p id="mcp-state"></p>
+<div class="actions">
+  <button type="button" class="primary" id="mcp-new">Create a token</button>
+  <button type="button" id="mcp-revoke">Revoke it</button>
+</div>
+<p id="mcp-message" role="status"></p>
+<pre id="mcp-command" hidden></pre>
+<p class="note">The token is shown once: a new one replaces it, and revoking it closes this server to your client. Keep it as a password.</p>
+</section>
+
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -189,6 +204,11 @@ function showMe() {
     $("orcid-merge").hidden = !me.orcid_only;
     if (me.orcid) Object.assign($("orcid-id"), { textContent: me.orcid, href: `https://orcid.org/${me.orcid}` });
     $("admin").hidden = !me.admin;
+    // the MCP endpoint (--mcp): one's token
+    $("mcp-box").hidden = !me.mcp;
+    $("mcp-state").textContent = me.mcp_token ? "You have a token." : "You have no token yet.";
+    $("mcp-revoke").hidden = !me.mcp_token;
+    $("mcp-new").textContent = me.mcp_token ? "Replace my token" : "Create a token";
     const a = me.assistant;
     const whose = a.assistant === "group" ? `the key of your group ${a.group}` : WHOSE[a.assistant] ?? a.assistant;
     $("assistant").textContent = `Your assistant answers with ${whose}${a.provider ? `: ${a.provider}` : ""}.`
@@ -219,6 +239,25 @@ async function post(path, body) {
   });
   return [response.ok, await response.json().catch(() => ({ error: response.statusText }))];
 }
+function mcpSay(text, ok) {
+  $("mcp-message").textContent = text;
+  $("mcp-message").className = ok ? "ok" : "error";
+}
+$("mcp-new").addEventListener("click", async () => {
+  const [ok, answer] = await post("/account/api/mcp-token", {});
+  if (!ok) return mcpSay(answer.error, false);
+  $("mcp-command").textContent = `claude mcp add --scope user --transport http neurolang ${answer.url} --header "Authorization: Bearer ${answer.token}"`;
+  $("mcp-command").hidden = false;
+  mcpSay("Your token is created: add this server to your client with the command below (shown once).", true);
+  showMe();
+});
+$("mcp-revoke").addEventListener("click", async () => {
+  if (!confirm("Revoke your MCP token? Your client then cannot ask this server.")) return;
+  const [ok, answer] = await post("/account/api/mcp-token", { revoke: true });
+  $("mcp-command").hidden = true;
+  mcpSay(ok ? "Your token is revoked." : answer.error, ok);
+  showMe();
+});
 $("orcid-unlink").addEventListener("click", async () => {
   if (!confirm("Unlink your ORCID iD? You then log in with your password only.")) return;
   const [ok, answer] = await post("/account/api/unlink-orcid", {});
