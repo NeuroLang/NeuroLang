@@ -27,12 +27,13 @@ Unreleased
   with int32 indices, under set semantics, built once for the frame of
   its rows (``sparse_view``). An engine declares the views it builds with
   it, before the REPL server forks its sessions, which share them, in
-  ``sparse_views`` of ``engines.yaml``: the coordinate meta-analysis
-  engines hold ``activated`` as a voxel x study matrix and the
-  activations of their atlases as region x study matrices, the studies
-  numbered alike in all. ``SparseView.weighted()`` gives the matrix with
-  float64 entries over the same indices, for products of views. Reading
-  the rows of an empty relation of no columns no longer fails.
+  ``sparse_views`` of ``engines.yaml`` (``activated: [voxel, study]``),
+  the entities of a sort numbered alike in all; the views of predicates
+  the engine does not define (left out of a lightweight engine) are not
+  built. The engines of the registry declare none yet, as no query reads
+  them. ``SparseView.weighted()`` gives the matrix with float64 entries
+  over the same indices, for products of views. Reading the rows of an
+  empty relation of no columns no longer fails.
 
 - REPL server (``--users --local``): with ``--mcp``, it answers MCP
   clients, LLM agents such as Claude Code, at ``/mcp``, each user with a

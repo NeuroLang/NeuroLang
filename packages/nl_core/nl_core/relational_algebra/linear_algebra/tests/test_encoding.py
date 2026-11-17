@@ -74,6 +74,67 @@ def test_integers_outside_the_dictionary_are_unknown():
     assert list(codes) == [-1, -1, 0, -1, 2, -1, -1, 1]
 
 
+INT64 = np.iinfo(np.int64)
+
+
+@pytest.mark.parametrize("values", [
+    [INT64.min, INT64.max],
+    [-(2 ** 62) - 1, 2 ** 62 + 1],
+    np.random.default_rng(0).integers(INT64.min, INT64.max, 1000),
+])
+def test_entity_index_integers_of_any_span(values):
+    """Integers spanning more than an int64 are numbered exactly."""
+    frame = pd.DataFrame({"i": np.asarray(values, dtype=np.int64)})
+    index = EntityIndex([frame])
+    codes = index.encode(frame)
+    assert list(codes) == list(np.argsort(np.argsort(frame["i"])))
+    np.testing.assert_array_equal(index.decode(codes)[0], frame["i"])
+    view = SparseView(
+        RelationalAlgebraFrozenSet(
+            [(int(v), str(n)) for n, v in enumerate(values[:2])]
+        ),
+        [0], [1], index, EntityIndex([pd.DataFrame({0: ["0", "1"]})]),
+    )
+    pd.testing.assert_frame_equal(
+        _sorted(view.to_frame()),
+        _sorted(pd.DataFrame({0: values[:2], 1: ["0", "1"]})),
+        check_dtype=False,
+    )
+
+
+def test_entity_index_signed_and_unsigned_integers():
+    """A sort of int64 and uint64 columns has an exact dictionary, and a
+    uint64 value never matches the int64 it wraps to."""
+    signed = pd.DataFrame({"i": np.array([-1, 0, 1, 1, 1, 1])})
+    large = pd.DataFrame({"i": np.array([2 ** 63 + 1, 5], dtype=np.uint64)})
+    for frames, dtype in (
+        ([signed, pd.DataFrame({"i": np.array([5], dtype=np.uint64)})],
+         np.int64),
+        ([large, pd.DataFrame({"i": np.array([7])})], np.uint64),
+        ([large, signed], object),
+    ):
+        index = EntityIndex(frames)
+        assert index._dictionaries[0].dtype == dtype
+        for frame in frames:
+            assert list(index.decode(index.encode(frame))[0]) == list(
+                frame["i"]
+            )
+    index = EntityIndex([signed])
+    wraps = np.array([2 ** 64 - 1, 0, 1, 1, 1, 1], dtype=np.uint64)
+    assert list(index.encode(pd.DataFrame({"i": wraps}))) == [
+        -1, 1, 2, 2, 2, 2
+    ]
+
+
+def test_entity_index_small_integers_spanning_more_than_their_dtype():
+    small = pd.DataFrame({"i": np.array([-100, 100, 0], dtype=np.int8)})
+    index = EntityIndex(
+        [small, pd.DataFrame({"i": np.arange(-100, 101, dtype=np.int8)})]
+    )
+    assert list(index.encode(small)) == [0, 200, 100]
+    assert list(index.decode([0, 200, 100])[0]) == [-100, 100, 0]
+
+
 def test_entity_index_empty():
     index = EntityIndex([pd.DataFrame(columns=["i", "j"])])
     assert len(index) == 0

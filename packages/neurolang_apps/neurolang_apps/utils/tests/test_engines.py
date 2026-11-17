@@ -592,9 +592,27 @@ def small_neurosynth():
     return _build_small_neurosynth()
 
 
-def _build_small_neurosynth(free_text=True):
+# The sparse views of the coordinate meta-analysis engines, those of the
+# comment of ``engines.yaml``.
+COORDINATE_VIEWS = {
+    "activated": ["voxel", "study"],
+    "schaefer_activated": ["label", "study"],
+    "schaefer400_activated": ["schaefer400_label", "study"],
+    "destrieux_activated": ["destrieux_label", "study"],
+    "tian_activated": ["tian_label", "study"],
+}
+
+
+@pytest.fixture(scope="module")
+def small_neurosynth_views():
+    """Build the neurosynth engine on tiny mock data, with the sparse
+    views of :data:`COORDINATE_VIEWS`."""
+    return _build_small_neurosynth(sparse_views=COORDINATE_VIEWS)
+
+
+def _build_small_neurosynth(free_text=True, sparse_views=None):
     """Build the neurosynth engine on tiny data, with the free-text rules
-    of its configuration or without."""
+    of its configuration or without, and the *sparse_views*, if any."""
     import nibabel as nib
 
     from neurolang_apps.utils import engine_registry
@@ -628,12 +646,15 @@ def _build_small_neurosynth(free_text=True):
             patch.object(engine_registry, "_phase_relations",
                          _fake_relations), \
             patch(f"{init}.fetch_pubmed_abstracts", _fake_abstracts):
-        if free_text:
+        if free_text and not sparse_views:
             return engine_registry.build_engine("neurosynth", DATA_DIR)
         config = engine_registry.get_engine_config
 
         def get_config(name, yaml_path=None):
-            return _without_free_text_rules(config(name, yaml_path))
+            cfg = config(name, yaml_path)
+            if not free_text:
+                cfg = _without_free_text_rules(cfg)
+            return {**cfg, "sparse_views": sparse_views or {}}
 
         with patch.object(engine_registry, "get_engine_config", get_config):
             return engine_registry.build_engine("neurosynth", DATA_DIR)
@@ -1423,10 +1444,12 @@ def test_the_kernel_radius_is_written_in_the_atlases_and_the_guidance():
 class TestSparseViews:
     """Check the engine builds the sparse views it declares."""
 
-    def test_activated_is_a_voxel_by_study_view(self, small_neurosynth):
+    def test_activated_is_a_voxel_by_study_view(
+        self, small_neurosynth_views
+    ):
         """Check the view of ``activated`` holds its tuples, its voxels
         and studies numbered by the view's entity indices."""
-        nl = small_neurosynth
+        nl = small_neurosynth_views
         view = nl.sparse_views["activated"]
         with nl.scope as e:
             rows = nl.query(
@@ -1445,12 +1468,13 @@ class TestSparseViews:
         } == expected
 
     def test_the_atlases_share_the_studies_of_activated(
-        self, small_neurosynth
+        self, small_neurosynth_views
     ):
         """Check the region x study views of the atlases number the
         studies as ``activated`` does, and hold their relation's tuples."""
         from nl_expr.expressions import Symbol
 
+        small_neurosynth = small_neurosynth_views
         views = small_neurosynth.sparse_views
         for name in (
             "schaefer_activated", "schaefer400_activated",
@@ -1495,6 +1519,18 @@ class TestSparseViews:
             view.matrix.toarray(), [[0.5, 0], [0, 0.25]]
         )
         assert view.matrix.nnz == 3  # the explicit zero of ('u', 2)
+
+    def test_the_engines_declare_no_views(self, small_neurosynth):
+        """Check the engines of the registry build no view: no query
+        reads them yet."""
+        assert small_neurosynth.sparse_views == {}
+
+    def test_no_view_of_a_predicate_the_engine_lacks(self, tmp_path):
+        """Check the view of a predicate the engine does not define (left
+        out of a lightweight engine, of an atlas not loaded) is not built,
+        and the others are."""
+        nl = self._engine(tmp_path, "{p: [b, a, w], absent: [a, b]}")
+        assert set(nl.sparse_views) == {"p"}
 
     def test_no_views_declared(self, tmp_path):
         """Check an engine without ``sparse_views`` has none."""

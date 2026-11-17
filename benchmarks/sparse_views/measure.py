@@ -3,10 +3,13 @@ Measure the sparse views an engine builds, and the answers of queries,
 for comparing a branch with master (Linux: reads /proc).
 
     python measure.py ENGINE OUT.json [--queries QUERY.dl ...]
-        [--examples] [--answers DIR]
+        [--examples] [--answers DIR] [--views] [--light]
 
 Builds ENGINE at 2 mm from ~/neurolang_data and records the build time
-and peak memory; when the engine has ``sparse_views`` (the branch), the
+and peak memory; with --views, the engine declares the sparse views of
+the comment of ``engines.yaml`` (activated, the atlas activations), and
+with --light it is the lightweight engine of the browser REPL. When the
+engine has ``sparse_views`` (the branch), the
 time, peak memory and bytes of building them, an exact check of the
 round trip of each view to its relation's rows, and the private memory a
 session forked from the built engine adds while it reads a whole view.
@@ -23,6 +26,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+
+# The views of the comment of the coordinate meta-analysis in engines.yaml.
+VIEWS = {
+    "activated": ["voxel", "study"],
+    "schaefer_activated": ["label", "study"],
+    "schaefer400_activated": ["schaefer400_label", "study"],
+    "destrieux_activated": ["destrieux_label", "study"],
+    "tian_activated": ["tian_label", "study"],
+}
 
 
 def status(field):
@@ -189,11 +202,30 @@ def main():
     parser.add_argument("--examples", action="store_true")
     parser.add_argument("--answers")
     parser.add_argument("--coactivation", help="a region x study view")
+    parser.add_argument("--views", action="store_true")
+    parser.add_argument("--light", action="store_true")
     args = parser.parse_args()
 
     from neurolang_apps.utils import engine_registry
 
-    record = {"engine": args.engine}
+    record = {
+        "engine": args.engine, "declared_views": args.views,
+        "light": args.light,
+    }
+    yaml_path = None
+    if args.light:
+        import tempfile
+
+        from neurolang_apps.utils.tui.web import lightweight_engines_yaml
+
+        yaml_path = lightweight_engines_yaml(tempfile.mkdtemp())
+    if args.views:
+        config = engine_registry.get_engine_config
+
+        def get_config(name, yaml_path=None):
+            return {**config(name, yaml_path), "sparse_views": VIEWS}
+
+        engine_registry.get_engine_config = get_config
     views_phase = getattr(engine_registry, "_phase_sparse_views", None)
     if views_phase is not None:
         def timed_views(nl, cfg):
@@ -212,7 +244,8 @@ def main():
         engine_registry._phase_sparse_views = timed_views
     began = time.perf_counter()
     nl = engine_registry.build_engine(
-        args.engine, Path.home() / "neurolang_data", resolution=2
+        args.engine, Path.home() / "neurolang_data", resolution=2,
+        yaml_path=yaml_path,
     )
     record["build_seconds"] = round(time.perf_counter() - began, 1)
     record["build_peak_mib"] = status("VmHWM")

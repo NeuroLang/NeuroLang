@@ -1970,9 +1970,17 @@ def _phase_sparse_views(nl, cfg):
     Build the ``sparse_views`` of the engine, before any session is forked
     from it, as the engine's ``sparse_views``: by predicate, its
     :class:`~nl_core.relational_algebra.linear_algebra.SparseView`,
-    one numbering of the entities of each sort shared by all.
+    one numbering of the entities of each sort shared by all. The views
+    of the predicates the engine does not define (those a lightweight
+    engine leaves out, the activations of atlases it does not load) are
+    not built.
     """
-    declared = cfg.get("sparse_views") or {}
+    symbol_table = nl.program_ir.symbol_table
+    declared = {
+        name: sorts
+        for name, sorts in (cfg.get("sparse_views") or {}).items()
+        if name in symbol_table
+    }
     nl.sparse_views = {}
     if not declared:
         return
@@ -1980,19 +1988,12 @@ def _phase_sparse_views(nl, cfg):
 
     predicates = _declared_predicates(cfg)
     nl.sparse_views = build_sparse_views(
-        nl.program_ir.symbol_table,
+        symbol_table,
         {
             name: _view_declaration(name, sorts, predicates)
             for name, sorts in declared.items()
         },
     )
-    # Hashing the string columns leaves Arrow's pool holding the memory it
-    # freed (780 MiB for 10^8 study ids), which the sessions would inherit.
-    try:
-        import pyarrow
-    except ImportError:
-        return
-    pyarrow.default_memory_pool().release_unused()
 
 
 _ONTOLOGY_OPTIONS = ("format", "individuals", "names", "prefixes")

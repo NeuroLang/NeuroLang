@@ -164,10 +164,10 @@ may specify the following keys, all of them optional:
   predicate, a ``scipy.sparse`` CSR matrix with int32 indices, of
   booleans when there is no value (its ``weighted()`` matrix, of
   float64 entries over the same indices, is the one to multiply: ``R @
-  R.T`` counts the studies two regions share).  The coordinate
-  meta-analysis engines declare ``activated`` (voxel x study) and the
-  activations of their atlases (``schaefer400_activated``... region x
-  study)
+  R.T`` counts the studies two regions share).  A view of a predicate
+  the engine does not define (one a lightweight engine leaves out) is
+  not built.  The engines of the registry declare no view yet: no query
+  reads them, and they cost each build their memory and time
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of

@@ -34,6 +34,14 @@ def _integers(values):
     return None
 
 
+def _offsets(values, low):
+    """Return *values* minus *low*, none below it, in 64 bits of their
+    signedness."""
+    return np.subtract(
+        values, low, dtype=np.uint64 if values.dtype.kind == "u" else np.int64
+    )
+
+
 def _positions(values, dictionary):
     """
     Return the position of each of *values* in *dictionary*, -1 if absent.
@@ -50,13 +58,19 @@ def _positions(values, dictionary):
         integers is not None and len(dictionary)
         and pd.api.types.is_integer_dtype(dictionary.dtype)
     ):
-        low, span = int(dictionary[0]), int(dictionary[-1] - dictionary[0])
-        if span < len(integers):
-            lookup = np.full(span + 2, -1, dtype=np.int64)
-            lookup[dictionary.to_numpy() - low] = np.arange(len(dictionary))
-            shifted = integers.astype(np.int64) - low
-            shifted[(shifted < 0) | (shifted > span)] = span + 1
-            return lookup[shifted]
+        low, high = int(dictionary[0]), int(dictionary[-1])
+        limits = np.iinfo(integers.dtype)
+        if high - low < len(integers) and limits.min <= low <= high <= (
+            limits.max
+        ):  # offsets from low, in the dtype of each, of no more than span
+            lookup = np.full(high - low + 1, -1, dtype=np.int64)
+            lookup[_offsets(dictionary.to_numpy(), low)] = np.arange(
+                len(dictionary)
+            )
+            positions = np.full(len(integers), -1, dtype=np.int64)
+            inside = (integers >= low) & (integers <= high)
+            positions[inside] = lookup[_offsets(integers[inside], low)]
+            return positions
     codes, uniques = pd.factorize(values)
     lookup = np.append(dictionary.get_indexer(uniques), -1)
     return lookup[codes]
@@ -78,17 +92,26 @@ def _dictionary(series_list):
     if rows and all(values is not None for values in integers):
         low = min(int(values.min()) for values in integers if len(values))
         high = max(int(values.max()) for values in integers if len(values))
-        if high - low < rows:
+        dtype = np.result_type(*(values.dtype for values in integers))
+        if dtype.kind == "f":  # signed and unsigned 64-bit integers
+            dtype = np.dtype(
+                np.int64 if high <= np.iinfo(np.int64).max
+                else np.uint64 if low >= 0 else object
+            )
+        integers = [values.astype(dtype, copy=False) for values in integers]
+        if high - low < rows:  # offsets from low, of no more than rows
             present = np.zeros(high - low + 1, dtype=bool)
             for values in integers:
-                present[np.subtract(values, low, dtype=np.int64)] = True
+                present[_offsets(values, low)] = True
             lookup = (np.cumsum(present) - 1).astype(np.int32)
-            dtype = np.result_type(*(values.dtype for values in integers))
-            dictionary = (np.flatnonzero(present) + low).astype(dtype)
-            return pd.Index(dictionary), [
-                lookup[np.subtract(values, low, dtype=np.int64)]
-                for values in integers
+            wide = np.uint64 if dtype.kind == "u" else np.int64
+            dictionary = (np.flatnonzero(present).astype(wide) + low).astype(
+                dtype
+            )
+            return pd.Index(dictionary, dtype=dtype), [
+                lookup[_offsets(values, low)] for values in integers
             ]
+        series_list = [pd.Series(values, copy=False) for values in integers]
     factorized = [pd.factorize(series) for series in series_list]
     uniques = [pd.Series(values) for _, values in factorized]
     dictionary = pd.Index(
