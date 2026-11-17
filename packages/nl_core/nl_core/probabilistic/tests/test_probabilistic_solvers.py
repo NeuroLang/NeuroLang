@@ -2125,3 +2125,24 @@ def test_variable_of_deterministic_atoms_only_random(seed):
             small_dichotomy_theorem_based_solver.solve_succ_query(query, cpl),
             weighted_model_counting.solve_succ_query(query, cpl),
         )
+
+
+def test_self_join_of_a_fact_split_by_a_constant(solver):
+    """F(x, a) ∧ F(x, y) ∧ C(y) has the tuple F(x, a) twice when the choice
+    gives y = a. Shattering splits F(x, y) on y = a, a disjunction, which
+    the first solver declines."""
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        F, [(0.5, 1, "a"), (0.4, 1, "b"), (0.3, 2, "a")]
+    )
+    cpl.add_probabilistic_choice_from_tuples(C, [(0.6, "a"), (0.4, "b")])
+    query = Implication(ans(x), Conjunction((F(x, a), F(x, y), C(y))))
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+    with context:
+        result = solver.solve_succ_query(query, cpl)
+        assert testing.eq_prov_relations(result, testing.make_prov_set(
+            [(0.6 * 0.5 + 0.4 * 0.5 * 0.4, 1), (0.6 * 0.3, 2)], ("_p_", "x")
+        ))

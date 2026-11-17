@@ -1639,9 +1639,12 @@ Conjunctive queries summed on probabilistic choices
    F(a)`, of probability :math:`P[C_1(a)]\, P[C_2(a)]\, p`, :math:`p`
    being that of :math:`F(a)`, while the join would multiply by
    :math:`p^2`. The atoms of a single choice are made one before
-   (`Preparing the query`_), and constants shattered so that the atoms
-   of a relation with different constants are of different relations
-   with disjoint tuples (`The Dalvi–Suciu algorithm`_).
+   (`Preparing the query`_). Shattering the constants (`The Dalvi–Suciu
+   algorithm`_) makes the atoms of a relation with different constants
+   atoms of different relations, of disjoint tuples, and splits an atom
+   such as :math:`F(x, y)` beside :math:`F(x, a)` on :math:`y = a`, a
+   disjunction which the solver declines: the atoms of one relation it
+   accepts are on disjoint sets of tuples.
 
 Sums pushed through joins
    In the plan above, a projection is computed as the sum of the

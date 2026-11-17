@@ -2400,6 +2400,35 @@ def test_existential_variable_of_deterministic_relation_only(
     assert_almost_equal(sol, {(1, 0.5), (2, 0.5)})
 
 
+def test_small_dichotomy_projects_a_variable_of_a_builtin():
+    """A variable of a deterministic atom and of a builtin known by its
+    name: the study is counted once whatever its labels."""
+    nl = NeurolangPDL(
+        probabilistic_solvers=(
+            small_dichotomy_theorem_based_solver.solve_succ_query,
+        ),
+        probabilistic_marg_solvers=(
+            small_dichotomy_theorem_based_solver.solve_marg_query,
+        ),
+    )
+    nl.add_tuple_set(
+        [("xa", 0), ("xb", 0), ("ya", 1), ("xc", 2)], name="act"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(0,), (1,), (2,)], name="sel"
+    )
+
+    @nl.add_symbol
+    def starts_with(prefix: str, label: str) -> bool:
+        return label.startswith(prefix)
+
+    res = nl.execute_datalog_program(
+        "ans(s, PROB) :- act(l, s) & sel(s) & starts_with('x', l)"
+    )
+    assert len(res) == 2
+    assert_almost_equal(res, {(0, 1 / 3), (2, 1 / 3)})
+
+
 def test_predicate_with_a_deterministic_and_a_choice_rule():
     """
     A predicate with a rule joining a probabilistic choice and a

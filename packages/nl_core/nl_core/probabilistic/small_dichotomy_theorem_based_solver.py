@@ -17,6 +17,14 @@ pages 144–155, New York, NY, USA, 2014. ACM.
 
 [^2]: Nilesh N. Dalvi and Dan Suciu. Efficient query evaluation on
 probabilistic databases. VLDB J., 16(4):523–544, 2007.
+
+Despite its name, `solve_succ_query` does not apply the theorem: it sums
+the join of a conjunctive query without negation nor self-join on the
+tuples of its probabilistic choices, which needs every existential
+variable in a choice but not a hierarchical query, the variables of
+deterministic atoms only being projected out first (see
+doc/probabilistic_lifting.rst, "Conjunctive queries summed on
+probabilistic choices").
 """
 
 import logging
