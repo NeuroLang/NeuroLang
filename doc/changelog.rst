@@ -19,6 +19,21 @@ Unreleased
 
 **New features:**
 
+- ``neurolang-query --mcp`` serves a session of the interactive REPL to an
+  MCP client, such as Claude Code, over stdin and stdout (extra ``mcp``).
+  The client's model answers questions as the query assistant does, in
+  Datalog: ``ask`` gives the assistant's prompt for a question, the
+  assistant's tools find the predicates and values and run queries, and
+  ``final_answer`` checks the answer as the assistant's, then returns its
+  explanation, the query with a comment on each rule, its first rows, glass
+  brains of its images and the links to its viewer, images, rows, query and
+  graph (``--results-dir``). ``--build-on-first-call`` builds the engine at
+  the first tool call, and ``--log FILE`` writes the build and each tool
+  call, with its time and outcome, to a file. ``ask`` with ``refine``
+  changes an answer, or the last query run, for a new question; ``repl``
+  runs statements and dot-commands in the session. See *From an MCP
+  client* in the LLM Query Assistant documentation.
+
 - REPL server (``--users --local``): the builder builds the engines the
   page offers when the server starts, the default first, and an engine
   the admin console turns on when it does, so that no session waits for
