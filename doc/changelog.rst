@@ -31,8 +31,8 @@ Unreleased
   the first tool call, and ``--log FILE`` writes the build and each tool
   call, with its time and outcome, to a file. ``ask`` with ``refine``
   changes an answer, or the last query run, for a new question; ``repl``
-  runs statements and dot-commands in the session. See *From an MCP client* in the LLM Query
-  Assistant documentation.
+  runs statements and dot-commands in the session. See *From an MCP
+  client* in the LLM Query Assistant documentation.
 
 - REPL server (``--users --local``): the builder builds the engines the
   page offers when the server starts, the default first, and an engine
