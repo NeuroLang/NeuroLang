@@ -7,9 +7,9 @@ const MAX_TEXT = 20000;
 const MODES = new Set(["datalog", "squall"]);
 
 // A statement that loads a file as a relation (an uploaded one, on the page),
-// a table (.load) or an image (.image), or describes a relation for the
-// query assistant (.document).
-const LOAD = /^\.(load\s|image\s|document\s*\()/;
+// a table (.load), an image (.image) or an ontology (.ontology), or describes
+// a relation for the query assistant (.document).
+const LOAD = /^\.(load\s|image\s|ontology\s|document\s*\()/;
 
 // Whether *text* defines a rule, whose head is not the answer, or loads a
 // relation: the statements that leave something in the session. A query only asks.
@@ -22,9 +22,9 @@ export function definesRules(text, mode = "datalog") {
   });
 }
 
-// The file a statement loads (.load NAME, .image NAME), or null.
+// The file a statement loads (.load NAME, .image NAME, .ontology NAME), or null.
 function loadedFile(text) {
-  const match = /^\.(?:load|image)\s+(?:'([^']*)'|"([^"]*)"|(\S+))/.exec(text);
+  const match = /^\.(?:load|image|ontology)\s+(?:'([^']*)'|"([^"]*)"|(\S+))/.exec(text);
   return match ? match[1] ?? match[2] ?? match[3] : null;
 }
 

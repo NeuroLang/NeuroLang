@@ -867,6 +867,13 @@ def test_the_page_uploads_a_file_that_load_loads(repl, monkeypatch, tmp_path):
             repl.upload(name, data)
 
 
+def test_the_page_uploads_an_ontology_that_ontology_loads(repl):
+    answer = repl.upload("my staff.owl", b"<rdf:RDF/>")
+    assert answer == {
+        "name": "my staff.owl", "statement": ".ontology 'my staff.owl'"
+    }
+
+
 def test_the_page_uploads_an_image_that_image_loads(repl):
     """A NIfTI image the page uploads is loaded by .image, replacing the
     image of the session; an engine that cannot decode it gives no query."""

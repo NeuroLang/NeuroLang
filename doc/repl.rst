@@ -210,6 +210,31 @@ The page keeps the descriptions with the rules of the session, after
 terms of the studies, a comment explaining each line, goes in the box and
 runs (:doc:`tutorial_decoding`).
 
+Ontologies
+..........
+
+``.ontology`` loads an OWL or RDF ontology into the session, as the
+``ontologies`` of an engine are (:doc:`engine_configuration`): its classes
+and properties are predicates, and its axioms constraints that the
+queries are answered under (:doc:`concepts`).  In a terminal it reads a
+file, or downloads an address into the engines' data directory:
+
+.. code-block:: text
+
+   nl(neurosynth:DL)> .ontology staff.ttl
+   loaded the ontology staff.ttl: 2 predicates (Employee, neurolang:subClassOf)
+
+``--individuals`` also loads every triple as a fact, ``--names prefixed``
+names the predicates by the prefixes of the file (``pv:Employee``) rather
+than by their local name, and ``--format`` gives the format of the file
+(``turtle``, ``xml``...) when its extension does not.  On the page,
+**Upload data** takes an ontology (``.owl``, ``.rdf``, ``.ttl``, ``.nt``,
+``.n3``, ``.jsonld``) and loads it with ``.ontology NAME``: a server loads
+the ontologies you upload, and no address or path of its own.  An
+ontology is loaded once, the engine's included; ``.clear`` removes the
+ontologies of the session with its other predicates, and its predicates
+cannot be dropped one by one.
+
 
 Results
 -------
@@ -312,6 +337,10 @@ Every command
        the cortex only (``--cortex``); a tractogram (``.trk``, ``.tck``),
        as the voxels within 3 mm (``--radius``) of the ends of its
        streamlines (see :doc:`tutorial_decoding`)
+     - both
+   * - ``.ontology URL|PATH|UPLOADED [--individuals] [--names local|prefixed] [--format FORMAT]``
+     - an OWL or RDF ontology, its classes and properties as predicates
+       and its axioms as constraints (see `Ontologies`_)
      - both
    * - ``.uploads [remove NAME | restore NAME]``
      - the files the page uploaded in the session: their kind, size, age,

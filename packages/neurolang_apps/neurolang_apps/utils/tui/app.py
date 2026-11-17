@@ -192,6 +192,8 @@ class InteractiveTuiApp:
         )
         # The columns of the relations loaded with .load, by name.
         self.loaded_relations: dict = {}
+        # The predicates of the ontologies loaded with .ontology, by source.
+        self.loaded_ontologies: dict = {}
         # The files the page uploaded, by name (.load NAME, .image NAME).
         self.uploads = Uploads()
         # On an engine of tractography (engines/tracts), .load_tractogram

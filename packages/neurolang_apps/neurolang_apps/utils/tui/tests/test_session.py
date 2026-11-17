@@ -932,3 +932,112 @@ def test_rewritten_shows_a_squall_query_on_a_rule(studies, capsys):
     assert "── rewritten program ──" in out
     assert "ment^bf" in out or "ment^fb" in out
     assert "error" not in out.lower()
+
+
+ONTOLOGY = """
+@prefix ex: <http://example.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+ex:Employee a owl:Class .
+ex:Manager a owl:Class ; rdfs:subClassOf ex:Employee .
+"""
+
+
+@pytest.fixture
+def ontology(app, tmp_path):
+    """Return the path of a small ontology, its managers in the engine."""
+    path = tmp_path / "staff.ttl"
+    path.write_text(ONTOLOGY)
+    app._nl.add_tuple_set([("alice",)], name="Manager")
+    return path
+
+
+def _said(app):
+    """The output of *app*, its lines joined (the console wraps them)."""
+    return _output(app).replace("\n", "")
+
+
+def _employees(app):
+    return set(app._nl.execute_datalog_program("ans(x) :- Employee(x)"))
+
+
+def test_ontology_loads_a_file_into_the_session(app, ontology):
+    app._handle_dot_command(f".ontology {ontology}")
+    assert f"loaded the ontology {ontology}: 2 predicates (Employee" in (
+        _said(app)
+    )
+    assert "Employee" in app._nl.ontology_predicates
+    assert _employees(app) == {("alice",)}
+    # the ontology's predicates are not those the session defined
+    before = len(_output(app))
+    app._handle_dot_command(".idb")
+    assert "Employee" not in _output(app)[before:]
+
+
+def test_an_ontology_is_loaded_once(app, ontology):
+    app._handle_dot_command(f".ontology {ontology}")
+    app._handle_dot_command(f".ontology {ontology}")
+    assert f"The ontology {ontology} is already loaded." in _said(app)
+    cogat = (
+        "https://raw.githubusercontent.com/CognitiveAtlas/cogat-ontology/"
+        "master/ontology/cogat.v2.owl"
+    )
+    app._handle_dot_command(f".ontology {cogat}")  # neurosynth loads it
+    assert "is already loaded, by the engine." in _said(app)
+
+
+def test_clear_removes_the_ontologies_of_the_session(app, ontology):
+    for _ in range(2):  # loaded again, as the first time
+        app._handle_dot_command(f".ontology {ontology}")
+        assert _employees(app) == {("alice",)}
+        app._handle_dot_command(".clear")
+        assert f"removed ontology {ontology}" in _said(app)
+        assert app._nl.ontology_predicates == frozenset()
+        assert app._nl.program_ir.get_constraints() == {}
+        assert app.loaded_ontologies == {}
+        # .clear removed the session's facts too
+        app._nl.add_tuple_set([("alice",)], name="Manager")
+
+
+def test_drop_refuses_a_predicate_of_an_ontology(app, ontology):
+    app._handle_dot_command(f".ontology {ontology}")
+    app._handle_dot_command(".drop Employee")
+    assert "is a predicate of an ontology the session loaded" in _said(app)
+    assert _employees(app) == {("alice",)}
+
+
+@pytest.mark.parametrize(
+    "arguments, message",
+    [
+        ("", "Usage: .ontology"),
+        ("a.ttl --names iri", "Usage: .ontology"),
+        ("a.ttl --zoom 2", "Unknown option --zoom"),
+        ("no_such_file.ttl", "Cannot load the ontology no_such_file.ttl"),
+    ],
+)
+def test_ontology_tells_what_is_wrong(app, arguments, message):
+    app._handle_dot_command(f".ontology {arguments}")
+    assert message in _said(app) and app.failed
+    assert app.loaded_ontologies == {}
+
+
+def test_an_uploaded_ontology_is_loaded_on_a_server(
+    app, monkeypatch, tmp_path
+):
+    """A server fetches no address and reads none of its files for a
+    statement: it loads the ontologies the page uploads, by their
+    name."""
+    from neurolang.confine import CONFINE_ENV
+    from neurolang_apps.utils.tui.session import store_upload
+
+    monkeypatch.setenv(CONFINE_ENV, str(tmp_path / "data"))
+    app._handle_dot_command(".ontology https://example.org/staff.owl")
+    assert "fetches no address" in _said(app)
+    assert "upload the ontology" in _said(app)
+    store_upload(app, "staff.ttl", ONTOLOGY.encode())
+    app._nl.add_tuple_set([("alice",)], name="Manager")
+    app._handle_dot_command(".ontology staff.ttl --names local")
+    assert "loaded the ontology staff.ttl: 2 predicates" in _said(app)
+    assert _employees(app) == {("alice",)}
+    assert app.uploads.listing()[0]["loaded"] == ["ontology"]

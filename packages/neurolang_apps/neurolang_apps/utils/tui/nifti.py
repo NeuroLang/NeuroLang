@@ -165,6 +165,8 @@ _OPTION_FORMS = {
     "--one-sided": "--one-sided", "--fill": "--fill V",
     "--name": "--name NAME", "--zscore": "--zscore", "--mask": "--mask",
     "--cortex": "--cortex", "--radius": "--radius MM",
+    "--individuals": "--individuals", "--names": "--names local|prefixed",
+    "--format": "--format FORMAT",
 }
 
 

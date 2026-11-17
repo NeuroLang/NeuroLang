@@ -840,7 +840,8 @@ class WebRepl:
         """
         Keep the file *name* of the bytes *data* the page uploaded, in the
         memory of the session, and return the statement that loads it
-        (``.load NAME``, or ``.image NAME --name RELATION``, the
+        (``.load NAME``, ``.ontology NAME`` for an ontology, or
+        ``.image NAME --name RELATION``, the
         ``relation`` of the file's name, which an upload of the same file
         replaces) and for an image the ``query`` decoding it, if the engine
         can, the ``cortex_query`` decoding its cortex only (``--cortex``),
@@ -855,6 +856,9 @@ class WebRepl:
                          self.app.uploads.listing()
                          if upload["name"] == name), ())
         session.store_upload(self.app, name, data)
+        if session.is_ontology(name):
+            return {"name": name,
+                    "statement": f".ontology {shlex.quote(name)}"}
         if not session.is_image(name):
             return {"name": name, "statement": f".load {shlex.quote(name)}"}
         relation = nifti.image_relation_name(self.app, name, replaced)

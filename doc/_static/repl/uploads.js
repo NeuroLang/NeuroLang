@@ -25,7 +25,8 @@ export function uploadRows(uploads) {
   return (uploads?.files ?? []).map((file) => [
     file.name,
     file.engine || /\.(trk|tck)$/i.test(file.name) ? "tractogram"
-      : /\.nii(\.gz)?$/i.test(file.name) ? "image" : "table",
+      : /\.nii(\.gz)?$/i.test(file.name) ? "image"
+      : /\.(owl|rdf|ttl|nt|n3|jsonld)$/i.test(file.name) ? "ontology" : "table",
     file.engine ? "the engine's" : bytes(file.size),
     file.loaded.length ? file.loaded.join(", ") : "not loaded",
   ]);
