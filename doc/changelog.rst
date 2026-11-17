@@ -88,6 +88,14 @@ Unreleased
   engine's own tractogram is listed first, never removed, its *Index*
   putting it back (:doc:`tutorial_decoding`).
 
+**Performance:**
+
+- The REPL server's notes on constants take the distinct values of a
+  relation column straight from its container
+  (``RelationalAlgebraFrozenSet.unique_values``), without deduplicating
+  the whole relation first: the values of a column do not depend on
+  duplicate rows. Same notes.
+
 **Bug fixes:**
 
 - The relational-algebra chase no longer keeps every chase that ran: three

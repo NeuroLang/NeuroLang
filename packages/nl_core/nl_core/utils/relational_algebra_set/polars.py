@@ -430,6 +430,16 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             import pandas as pd
             return pd.DataFrame(c.to_numpy(), columns=c.columns)
 
+    def unique_values(self, position):
+        if self._container is None:
+            return []
+        column = _strip_sentinel(self._container).select(pl.nth(position))
+        try:
+            return column.unique().collect().to_series().to_list()
+        except Exception:
+            # Object columns cannot be row-encoded
+            return list(dict.fromkeys(column.collect().to_series().to_list()))
+
     def _empty_set_same_structure(self):
         return type(self)()
 

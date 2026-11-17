@@ -244,6 +244,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         self._drop_duplicates_if_needed()
         return self._container
 
+    def unique_values(self, position):
+        if self._container is None:
+            return []
+        return self._container.iloc[:, position].unique().tolist()
+
     def _empty_set_same_structure(self):
         return type(self)()
 

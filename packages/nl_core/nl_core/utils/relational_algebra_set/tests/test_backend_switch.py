@@ -51,3 +51,17 @@ def test_backend_dependent_modules_registered_for_reload():
     assert modules.index("nl_core.utils.relational_algebra_set") < (
         modules.index("nl_core.probabilistic.weighted_model_counting")
     )
+
+
+@pytest.mark.parametrize("backend", [pandas, polars])
+def test_unique_values_without_deduplicating(backend):
+    if backend is None:
+        pytest.skip("polars is not installed")
+    ras = backend.RelationalAlgebraFrozenSet(
+        [("a", 1), ("b", 1), ("a", 1), ("a", 2)]
+    )
+    assert ras.might_have_duplicates
+    assert sorted(ras.unique_values(0)) == ["a", "b"]
+    assert sorted(ras.unique_values(1)) == [1, 2]
+    assert ras.might_have_duplicates
+    assert backend.RelationalAlgebraFrozenSet().unique_values(0) == []

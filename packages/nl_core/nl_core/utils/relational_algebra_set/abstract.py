@@ -128,6 +128,15 @@ class RelationalAlgebraFrozenSet(Set):
     def as_numpy_array(self):
         pass
 
+    def unique_values(self, position):
+        """
+        Return the distinct values of the column at *position* as a list.
+
+        Duplicate rows do not change them, so a backend overrides this to
+        skip the deduplication of the whole set.
+        """
+        return self.as_pandas_dataframe().iloc[:, position].unique().tolist()
+
     def row_count_estimate(self):
         """
         Return a cheap upper bound of the number of rows of the set.
