@@ -191,9 +191,10 @@ def run_queries(nl, queries, out_dir: Path, timeout: int) -> dict:
         began = time.perf_counter()
         signal.alarm(timeout)
         try:
-            result = nl.execute_datalog_program(program)
-            frame = result.as_pandas_dataframe() if result is not None \
-                else pd.DataFrame()
+            with nl.scope:  # each query its own rules
+                result = nl.execute_datalog_program(program)
+                frame = result.as_pandas_dataframe() if result is not None \
+                    else pd.DataFrame()
             frame = frame.set_axis([str(c) for c in frame.columns], axis=1)
             frame.reset_index(drop=True).to_parquet(
                 out_dir / f"q-{name}.parquet")
