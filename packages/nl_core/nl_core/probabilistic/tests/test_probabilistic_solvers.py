@@ -2097,7 +2097,9 @@ def test_variable_of_deterministic_atoms_only_compared_to_another(solver):
 @pytest.mark.parametrize("seed", range(5))
 def test_variable_of_deterministic_atoms_only_random(seed):
     """On random programs, the first solver gives the probabilities of
-    weighted model counting."""
+    weighted model counting, also on the non-hierarchical bodies of the
+    choice of a pair (s, u), F(s) and G(u)."""
+    G, Pair = Symbol("G"), Symbol("Pair")
     rng = np.random.default_rng(seed)
     weights = rng.random(5)
     weights /= weights.sum()
@@ -2114,7 +2116,17 @@ def test_variable_of_deterministic_atoms_only_random(seed):
     cpl.add_extensional_predicate_from_tuples(
         Label, [(int(i),) for i in rng.integers(0, 5, size=2)]
     )
+    pairs = rng.random(6)
+    pairs /= pairs.sum()
+    cpl.add_probabilistic_choice_from_tuples(Pair, [
+        (float(p), i // 3, i % 3) for i, p in enumerate(pairs)
+    ])
+    cpl.add_probabilistic_facts_from_tuples(
+        G, [(float(rng.random()), i) for i in range(5)]
+    )
     for head, body in (
+        ((), (Pair(s, u), F(s), G(u))),
+        ((s,), (Pair(s, u), Label(l), Act(l, u), F(s), G(u))),
         ((s,), (Label(l), Act(l, s), Sel(s))),
         ((), (Label(l), Act(l, s), Sel(s), F(s))),
         ((s,), (Act(l, s), Act(l, u), Sel(u), F(u))),
