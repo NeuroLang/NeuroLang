@@ -1511,6 +1511,10 @@ def _run_interactive(args, argv=()) -> None:
         sys.exit(status)
 
 
+# The MNI grid of the MCP server's engine unless --resolution gives one.
+MCP_RESOLUTION = 2.0
+
+
 def _run_mcp(args) -> None:
     """Build the engine and serve the REPL on it to an MCP client."""
     for flag, dest in (
@@ -1531,6 +1535,10 @@ def _run_mcp(args) -> None:
             exc, dependencies, "the MCP server needs the optional "
             f"dependencies {', '.join(dependencies)}", "mcp",
         )
+    if args.resolution is None:
+        # A grid of 2 mm, as the REPL server's: a session of a quarter of the
+        # memory (3 GB for neurosynth, not 12) and maps quicker to answer.
+        args.resolution = MCP_RESOLUTION
     mcp_server.main(args, _program_argument(args))
 
 

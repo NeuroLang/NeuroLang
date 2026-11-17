@@ -538,3 +538,15 @@ class TestLimits:
         result = _answer(session)
         assert "too large to show here" in result.content[0].text
         assert not session.answers
+
+
+@pytest.mark.parametrize("given, built", [([], 2.0), (["-r", "1"], 1.0)])
+def test_the_engine_of_mcp_is_on_a_grid_of_2_mm(given, built, monkeypatch):
+    from neurolang_apps.utils import mcp_server
+
+    seen = []
+    monkeypatch.setattr(
+        mcp_server, "main", lambda args, program: seen.append(args.resolution)
+    )
+    main(["--mcp", "--engine", "neurosynth", *given])
+    assert seen == [built]

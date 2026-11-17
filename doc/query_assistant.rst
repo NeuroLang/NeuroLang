@@ -455,6 +455,10 @@ The time and memory a query may take are those of the ``assistant``
 settings of ``llm.yaml`` (``query_timeout``, ``query_memory_mb``): a query
 of every voxel of the brain may need more than their default 4 GB.
 
+The engine's MNI grid is of 2 mm unless ``--resolution`` gives another,
+as the REPL server's: at its native 1 mm, ``neurosynth`` takes 12 GB instead
+of 3, and a whole-brain map 76 s to answer instead of 9.
+
 The engine is built when the server starts, so that it is ready at the
 first call; ``--build-on-first-call`` builds it at the first tool call
 instead, which then waits for it. ``--log FILE`` writes what the server
