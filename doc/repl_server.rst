@@ -651,11 +651,10 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   The sessions share the memory of the engine's data, as forked processes
   do until they write it.  A *coordinator* process, started anew before
   the server answers, starts the builder of an engine, anew too, at its
-  first request, and passes the requests on.  One engine
-  builds at a time, in the order asked (the builds' memory does not add
-  up); a session of an engine built starts at once, whatever builds
-  meanwhile, rather than wait for that build (up to 90 s for
-  ``neurostore_iit``).
+  first request, and passes the requests on.  One engine builds at a
+  time, in the order asked (the builds' memory does not add up); a
+  session of an engine built starts at once, whatever builds meanwhile,
+  rather than wait for that build (up to 90 s for ``neurostore_iit``).
 - A builder that dies (out of memory, most often) ends its engine only:
   the starts it had not answered fail, which their pages tell, the log
   says *The builder of the engine NAME ended*, and the sessions it forked,
@@ -734,8 +733,8 @@ which the console shows.  A session's memory is its own, *private* memory:
 what it adds to the machine's beyond the engine's data, which it shares
 with its engine's builder (its resident memory, ``rss``, counts those
 shared pages, and so overstates it).  The builders' resident memory is
-that of the engines' data.  This is read
-from :file:`/proc` and so on Linux only; elsewhere the console shows ``-``.
+that of the engines' data.  This is read from :file:`/proc` and so on
+Linux only; elsewhere the console shows ``-``.
 Together they tell how many sessions a machine holds: about (its memory −
 the builders') / a session's own, at its most.
 
