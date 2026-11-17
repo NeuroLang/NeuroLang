@@ -27,7 +27,10 @@ Unreleased
   engine to its first session, as before. The builder also finds the
   names the notes on a query's constants look up, once, rather than each
   session at its first query: that of ``neurostore_iit`` takes 6 s
-  instead of 18 s.
+  instead of 18 s. After each query, once it has replied, a session frees
+  what the query left (``gc.collect`` and, on Linux, ``malloc_trim``,
+  13 ms): with the chase fix of #1335, a session that decoded an image
+  keeps 90 MB of its own instead of 0.8 GB.
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
   the regions a question lists (which regions, parcels or structures a
   term, a topic or a seed activates or co-activates) are answered with the

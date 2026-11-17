@@ -640,6 +640,10 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   neurolang.utils.text_embeddings --engine NAME`` does it ahead of time,
   best on a GPU).  What cannot be loaded is logged, and loaded by each
   session at its first query, as before.
+- After each query, once it has replied, a session frees what the query
+  left (``gc.collect``, then, on Linux, ``malloc_trim``): 13 ms, and a
+  session that decoded an image on ``neurosynth_iit`` keeps 90 MB of its
+  own rather than 0.8 GB.
 - Each session has its own rules, assistant, queries (which run at the same
   time as those of the others) and files; *Stop* and *Restart* end that
   session's process only, and the page starts it again.

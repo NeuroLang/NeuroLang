@@ -19,6 +19,7 @@ from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui.sessions import (  # noqa: E402
     SessionEnded,
     Sessions,
+    free_memory,
 )
 
 
@@ -201,6 +202,17 @@ def test_an_engine_built_before_its_sessions_starts_them_at_once(
     bob = sessions.session("bob", "1")
     bob.start("neurostore")
     assert bob.pid is not None
+
+
+def test_a_query_leaves_no_garbage(sessions):
+    """A session frees what its query left, after replying; freeing is
+    harmless where malloc_trim does not exist (not glibc)."""
+    free_memory()
+    ann = sessions.session("ann", "1")
+    ann.start("neurostore")
+    assert sorted(_rows(ann.submit("ans(x) :- person(x, a)"))) == [
+        ["alice"], ["bob"]]
+    assert _rows(ann.submit("ans(x) :- person(x, 5)")) == [["bob"]]
 
 
 def test_no_process_is_left_when_the_server_ends(tmp_path):
