@@ -33,7 +33,7 @@ Unreleased
   command adding the server to Claude Code; the data directory is
   ``~/neurolang_data`` by default. On the REPL server, each user's answers
   are in a folder of their own. The meta-analysis engines answer "where in
-  the brain is X reported" with the lift of each voxel.
+  the brain is X reported" with the lift of each voxel of the cortex.
 
 - REPL server (``--users --local``): with ``--mcp``, it answers MCP
   clients, LLM agents such as Claude Code, at ``/mcp``, each user with a

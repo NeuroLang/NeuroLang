@@ -94,7 +94,7 @@ assistant_examples:
 
   - question: Where in the brain is pain reported?
     datalog: |-
-      ans(i, j, k, lift) :- lift('pain', i, j, k, lift)
+      ans(i, j, k, lift) :- lift('pain', i, j, k, lift), cortical_mask(i, j, k)
 
   - question: Which voxels are activated by studies that mention pain?
     datalog: |-
