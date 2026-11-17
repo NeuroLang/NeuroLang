@@ -816,7 +816,9 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(Constant[str])
     def process_constant_str(self, cst):
-        value = cst.value.replace('"', r'\"')
+        # A Python string literal of the value: its backslashes escaped
+        # first, else one ending it (``'a\'``) would escape its quote.
+        value = cst.value.replace("\\", "\\\\").replace('"', r'\"')
         value = f'"{value}"'
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(value),
