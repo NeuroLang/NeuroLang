@@ -50,6 +50,15 @@ Unreleased
   engine's own tractogram is listed first, never removed, its *Index*
   putting it back (:doc:`tutorial_decoding`).
 
+**Bug fixes:**
+
+- The relational-algebra chase no longer keeps every chase that ran: three
+  of its rewritings were cached with ``lru_cache`` on the method, a cache
+  of the class whose keys held the chase, its program and the relations
+  of its query. A REPL session kept 0.6 GB more after each query decoding
+  an image on ``neurosynth_iit``; the caches are now each chase's own
+  (the same hits), and that session keeps 0.18 GB, however many queries.
+
 
 v0.1a23 (2026-11-15)
 --------------------
