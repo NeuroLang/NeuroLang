@@ -1340,9 +1340,11 @@ def atlas_coverage(
 def cached_atlas_activation(
     cache_dir, img, label_names: dict, peaks_mm: np.ndarray,
     studies: np.ndarray, radius_mm: float = 3.0,
-) -> List[Tuple[str, Any]]:
+):
     """
-    Return the pairs of :func:`atlas_activation`, kept in *cache_dir*.
+    Return the pairs of :func:`atlas_activation`, kept in *cache_dir*, as
+    a frame of ``label`` and ``study`` (read as arrays, not rebuilt as
+    a list of tuples).
 
     They take about 15 s per atlas to find and depend only on the atlas
     image, its labels, the peaks, their studies and the radius, which
@@ -1369,8 +1371,12 @@ def cached_atlas_activation(
         }
 
     arrays = engine_cache.keep_arrays(cache_dir, "atlas_activation", key, find)
-    names = arrays["names"][arrays["codes"]].tolist()
-    return list(zip(names, arrays["studies"].tolist()))
+    import pandas as pd
+
+    return pd.DataFrame({
+        "label": arrays["names"][arrays["codes"]],
+        "study": arrays["studies"],
+    })
 
 
 def cached_atlas_coverage(

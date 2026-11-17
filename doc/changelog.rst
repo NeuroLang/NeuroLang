@@ -88,6 +88,13 @@ Unreleased
   engine's own tractogram is listed first, never removed, its *Index*
   putting it back (:doc:`tutorial_decoding`).
 
+**Performance:**
+
+- Engine builds read the cached atlas activations as arrays instead of
+  rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
+  arrays as fixed-width bytes instead of through ``repr``; the cache
+  ``VERSION`` is 2, so caches kept by earlier versions are found again once.
+
 **Bug fixes:**
 
 - The relational-algebra chase no longer keeps every chase that ran: three

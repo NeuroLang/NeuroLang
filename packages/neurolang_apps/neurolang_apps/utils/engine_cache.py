@@ -45,7 +45,7 @@ import numpy as np
 # version of what they are made of: raise it when the way they are found
 # changes.
 DIRECTORY = "engine_cache"
-VERSION = 1
+VERSION = 2
 
 
 def cache_dir(data_dir, engine_name: str) -> Path:
@@ -77,9 +77,9 @@ def digest(*parts) -> str:
             elif part.dtype.kind == "f":
                 part = np.round(part * 1000).astype("<i8")
             else:
-                part = np.array([str(item) for item in part.ravel()])
-                hasher.update(repr(part.tolist()).encode())
-                continue
+                # fixed-width UTF-32 little-endian: the same bytes anywhere
+                part = part.astype(str)
+                part = part.astype(f"<U{max(part.dtype.itemsize // 4, 1)}")
             hasher.update(f"{part.shape}".encode() + part.tobytes())
         else:
             hasher.update(repr(part).encode())
