@@ -386,26 +386,56 @@ From an MCP client
 
 ``neurolang-query --mcp`` serves a session of the interactive REPL to an
 MCP client, such as Claude Code or Claude Desktop, over its standard input
-and output: the client's model is then the assistant, with the tools of
-the ReAct agent on the engine and the REPL itself. It needs the ``mcp``
-extra (see :doc:`install`). The engine is built while the client starts,
-and the first tool call waits for it; a query given as argument or with
-``--file`` runs first, in the session, and ``--squall`` makes it a
-session of SQUALL.
+and output. The client's model answers questions as the assistant does,
+with the ReAct agent's instructions and tools (see *Strategies*), in
+Datalog: the server pays for no model, and no ``llm.yaml`` provider is
+needed. It needs the ``mcp`` extra (see :doc:`install`). The engine is built
+while the client starts, and the first tool call waits for it; a query
+given as argument or with ``--file`` runs first, in the session.
 
+``ask``
+    starts answering a question: it returns the assistant's prompt for it,
+    with the Datalog syntax, the guidance of the engine and the examples
+    closest to the question. The predicates are left to
+    ``list_predicates``: with them, the prompt would be longer than what
+    clients take of a tool's result (80,000 characters on ``neurosynth``). With ``refine`` set to the id
+    of an answer (``a1``, ``a2``, ...) the task is to change that answer for
+    the new question, from its query and the rows it gave; with
+    ``refine`` set to ``last``, it is the last query run, such as one the
+    user corrected and ran with ``repl``, as ``.ask --refine`` does.
+``list_predicates``, ``describe_predicate``, ``search_values``, ``check_query``, ``run_query``
+    are the tools of the ReAct agent.
+``final_answer``
+    takes the query, a one-sentence explanation and a comment for each rule
+    of the query. It checks the answer as the agent's final answer is
+    checked: a query that fails, gives no rows or has constants not in the
+    data is sent back once, and comments that are not one per rule are sent
+    back before the query runs. An accepted answer gets an id and runs in
+    the session, without running again, and the client receives:
+
+    - the explanation and the query with a ``%`` comment above each rule;
+    - the first 20 rows of each result;
+    - a glass brain (PNG) of each of its first two images, for a result of
+      voxels or of regions with a value;
+    - the same as structured content (``structuredContent``: its id,
+      query, explanation, first rows and links), which some clients, such
+      as Claude Code, show in place of the text;
+    - the links to its files, kept in a folder of ``--results-dir``
+      (``~/.cache/neurolang/mcp`` by default): the interactive viewer of
+      ``.view`` (``view.html``), the images (``result.nii.gz``), all the
+      rows (``rows.csv``), the query (``query.dl``) and its graph
+      (``graph.html``, as ``.graph``).
 ``repl``
     runs what is typed at the prompt, statements and dot-commands, and
     returns the output and the first rows of each result (50 by default),
     tab-separated. The relations and the rules it defines alone stay in
     the session (those given with a query are local to it, see
     ``.scope``). ``.save`` and ``.load`` write and read files on the
-    server's machine, relative to its working directory; the pages of
-    ``.view`` and ``.graph`` are saved in files whose paths it returns.
-``guide``
-    gives the syntax of the language, the guidance of the engine and its
-    examples closest to a question, as the assistant's prompt has them.
-``list_predicates``, ``describe_predicate``, ``search_values``, ``check_query``
-    are the tools of the ReAct agent (see *Strategies*).
+    server's machine, relative to its working directory.
+
+The time and memory a query may take are those of the ``assistant``
+settings of ``llm.yaml`` (``query_timeout``, ``query_memory_mb``): a query
+of every voxel of the brain may need more than their default 4 GB.
 
 For Claude Code, from the clone of the repository:
 

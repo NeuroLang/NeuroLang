@@ -617,9 +617,18 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Serve a session of the interactive REPL on the engine to an "
         "MCP client (an LLM such as Claude) over stdin and stdout: its "
-        "tools run statements and dot-commands, list the predicates, find "
-        "values and check queries. A query given as argument or with "
+        "model answers questions in Datalog as the query assistant does, "
+        "with the assistant's instructions and tools, and gets the "
+        "explanation, the commented query, rows, images and the links to "
+        "the viewer of each answer. A query given as argument or with "
         "--file is run first.",
+    )
+    parser.add_argument(
+        "--results-dir",
+        default=None,
+        help="With --mcp, the folder where the files of the answers are "
+        "kept: the viewer, the images, the rows, the query and its graph "
+        "(default: ~/.cache/neurolang/mcp).",
     )
     parser.add_argument(
         "--ask",
@@ -1482,7 +1491,10 @@ def _run_interactive(args, argv=()) -> None:
 
 def _run_mcp(args) -> None:
     """Build the engine and serve the REPL on it to an MCP client."""
-    for flag, dest in (("--interactive", "interactive"), ("--ask", "ask")):
+    for flag, dest in (
+        ("--interactive", "interactive"), ("--ask", "ask"),
+        ("--squall", "squall"),
+    ):
         if getattr(args, dest):
             print(f"Error: --mcp cannot be used with {flag}.", file=sys.stderr)
             sys.exit(1)

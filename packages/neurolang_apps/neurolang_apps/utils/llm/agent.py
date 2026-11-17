@@ -498,8 +498,12 @@ class Agent:
         self.guidance = guidance
         self.previous = None
 
-    def system_prompt(self, question: str, text_tools: bool = False) -> str:
-        """Return the system prompt for *question*."""
+    def system_prompt(
+        self, question: str, text_tools: bool = False,
+        schema: Optional[str] = None,
+    ) -> str:
+        """Return the system prompt for *question*, with the predicates of
+        the engine, or *schema* in their place if given."""
         bank = self.examples
         if bank is None:
             bank = load_examples(self.engine_name)
@@ -508,7 +512,9 @@ class Agent:
             exclude=self.exclude_question,
         )
         return prompts.system_prompt(
-            self.language, self.context.schema_summary(), examples,
+            self.language,
+            self.context.schema_summary() if schema is None else schema,
+            examples,
             self.strategy, text_tools,
             self._engine_text(self.description, "description"),
             self._engine_text(self.guidance, "assistant_guidance"),

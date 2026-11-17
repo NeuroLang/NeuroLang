@@ -1485,6 +1485,32 @@ def _open_in_browser(console, html: Path) -> None:
         console.print("Open it in a browser to see the image.", style="dim")
 
 
+def render_png(image, title: str = "", threshold=VIEW_THRESHOLD) -> bytes:
+    """
+    Return a PNG of the NIfTI *image*, a glass brain of its voxels from
+    the *threshold* on, a value or a percentile such as ``"95%"`` of its
+    nonzero values, as the viewer starts; for the clients that show
+    images but not pages, such as those of the MCP server.
+    """
+    from matplotlib.figure import Figure
+    from nilearn import plotting
+
+    data = np.asarray(image.dataobj, dtype=float)
+    shown = brain_viewer.edge_threshold(data[data != 0], threshold)
+    figure = Figure(figsize=(8, 3), dpi=100)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        plotting.plot_glass_brain(
+            image, figure=figure, title=title or None, colorbar=True,
+            threshold=shown or None, plot_abs=False,
+            # one-sided as the viewer's, unless the image has negatives
+            cmap="cold_hot" if (data < 0).any() else "plasma",
+        )
+    png = io.BytesIO()
+    figure.savefig(png, format="png")
+    return png.getvalue()
+
+
 _COMPOUND_SUFFIXES = (".nii.gz", ".csv.gz", ".tsv.gz")
 
 

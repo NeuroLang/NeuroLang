@@ -1,80 +1,169 @@
 """
 The interactive REPL as an MCP server: ``neurolang-query --mcp``.
 
-An MCP client, an LLM such as Claude, queries the engine in a session of
-the REPL (see :class:`~neurolang_apps.utils.tui.web.WebRepl`), over the
-standard input and output: the ``repl`` tool runs what would be typed at
-its prompt, statements and dot-commands, and the rules and relations they
-define stay in the session. The tools of the LLM assistant on the engine
-(see :class:`~neurolang_apps.utils.llm.agent.Toolbox`) tell it the
-predicates, find the values to write as constants and check a query, and
-``guide`` gives the syntax, the guidance of the engine and the example
-queries closest to a question.
+An MCP client, an LLM such as Claude, answers questions on the engine
+as the query assistant does (see :class:`~.llm.agent.ReactAgent`), the
+client's model doing the reasoning: ``ask`` gives it the assistant's
+instructions for a question, with the syntax, the predicates and the
+examples closest to it; the assistant's tools
+(:class:`~.llm.agent.Toolbox`) find the predicates and values and check
+and run queries; ``final_answer`` checks the answer as the assistant's,
+then runs it in the session of the REPL (see
+:class:`~.tui.web.WebRepl`) and returns the explanation, the query with
+a comment on each rule, its first rows, glass brains of its images and
+the links to its files: the viewer, the images, the rows, the query and
+its graph. ``ask`` with ``refine`` changes an answer, or the last query
+run, for a new question. ``repl`` runs what would be typed at the
+prompt, statements and dot-commands, whose rules stay in the session.
 
 The engine is built while the client starts; a tool called meanwhile
 waits for it. The calls run one at a time, on the one session.
 """
 
+import base64
+import secrets
+import shutil
 import threading
+import time
 from concurrent.futures import Future
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
+import mcp.types as types
+import yaml
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from neurolang_apps.utils import engine_registry
-from neurolang_apps.utils.llm import prompts
+from neurolang_apps.utils.llm import (
+    AgentResult, AssistantConfig, Previous, ProviderConfig, make_agent,
+    prompts,
+)
 from neurolang_apps.utils.llm.agent import Toolbox
-from neurolang_apps.utils.llm.context import EngineContext
-from neurolang_apps.utils.llm.examples import load_examples, select_examples
+from neurolang_apps.utils.llm.comments import commented_query, split_rules
+from neurolang_apps.utils.llm.config import _assistant, config_path
+from neurolang_apps.utils.tui import nifti, query_graph
+from neurolang_apps.utils.tui.app import AgentRun
+from neurolang_apps.utils.tui.assistant import (
+    _previous, _run_outcome, _without_left_out,
+)
 from neurolang_apps.utils.tui.web import WebRepl
 
 # The rows of each result the ``repl`` tool returns, by default.
 MAX_ROWS = 50
-# The examples ``guide`` returns.
-GUIDE_EXAMPLES = 8
+# The rows of each result an answer returns, and its glass brains at most.
+ANSWER_ROWS = 20
+ANSWER_IMAGES = 2
+# Where the files of the answers are kept, by default.
+RESULTS_DIR = Path("~/.cache/neurolang/mcp")
+LANGUAGE = "datalog"
 
 INSTRUCTIONS = """\
 NeuroLang is a probabilistic logic programming language for neuroimaging.
-This server is a session of its interactive REPL on the engine {engine}.
-Call `guide` with the question first: it gives the syntax, how to answer
-on this engine and the examples closest to the question. Then find the
-predicates (`list_predicates`, `describe_predicate`) and the values to
-write as constants (`search_values`), check the query (`check_query`)
-and run it with `repl`, which also runs dot-commands (`.help` lists
-them). The rules sent alone stay in the session; those sent with a query
-are local to it. `.save` writes a result to a file and `.load` reads a
-relation, with paths on the server's machine, relative to its working
-directory."""
+This server answers questions on the engine {engine} as its query assistant
+does, with you doing the reasoning. Call `ask` with the question first: it
+gives the instructions, the Datalog syntax and examples close to the
+question; `list_predicates` gives the predicates. Then follow the
+instructions with the tools (`search_values`,
+`describe_predicate`, `run_query`, ...) and give the query with
+`final_answer`, with a comment on each rule: it returns the explanation,
+the commented query, its first rows, images and links to the interactive
+viewer and the files of the result; show them to the user, the query with
+its comments. To change an
+answer for a new question, call `ask` with `refine` set to the answer's id
+(`a1`, ...) or to `last`, the last query run, such as one the user changed
+and ran with `repl`. `repl` runs statements and dot-commands (`.help`) in
+the session: the rules sent alone stay in it."""
+
+# In place of the predicates in the prompt of ``ask``: they would make it
+# longer than what clients take of a tool's result (55,000 characters on
+# neurosynth), and list_predicates gives them.
+SCHEMA_POINTER = """\
+(Call list_predicates for them: their columns, descriptions and sizes.)"""
+
+MCP_NOTE = """\
+Call the tools of this server. In final_answer give, besides the query and
+its explanation, `comments`: one short line (at most 15 words) for each rule
+of the query, in order, saying what it computes."""
+
+
+class _NoModel:
+    """The assistant's model, which is the MCP client's: never called."""
+
+    def complete(self, *args, **kwargs):
+        raise RuntimeError("The MCP client's model does the reasoning.")
+
+
+@dataclass
+class Answer:
+    """An answer the session accepted, kept to refine it and for its files."""
+
+    id: str
+    question: str
+    query: str
+    commented: str
+    explanation: str
+    outcome: str = ""
+    links: dict = field(default_factory=dict)
+
+
+class ResultStore:
+    """
+    Where the files of the answers of a session are kept, a folder each,
+    and the links to them: ``file://`` URIs, the server and its client
+    being on the same machine.
+    """
+
+    def __init__(self, root: Path):
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        self.root = Path(root).expanduser() / f"{stamp}-{secrets.token_hex(4)}"
+
+    def folder(self, answer: str) -> Path:
+        folder = self.root / answer
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+
+    def link(self, path: Path) -> str:
+        return path.resolve().as_uri()
 
 
 class McpSession:
     """
     The REPL session on the engine the server builds, its tools as
-    functions returning text, run one at a time.
+    functions, run one at a time.
     """
 
     def __init__(
-        self, engine: str, build, initial_program: str = "",
-        squall: bool = False,
+        self, engine: str, build=None, initial_program: str = "",
+        repl: Optional[WebRepl] = None, results_dir: Path = RESULTS_DIR,
+        config: Optional[AssistantConfig] = None,
     ):
         """
         Build the engine with *build* in the background, then run the
-        *initial_program* in the session of the REPL on it, in SQUALL if
-        *squall*.
+        *initial_program* in the session of the REPL on it; or serve the
+        session *repl*, as given. The assistant's settings *config*, such
+        as the time and memory a query may take, are the defaults if None.
         """
         self.engine = engine
-        self._squall = squall
+        self.config = config or AssistantConfig()
+        self.store = ResultStore(results_dir)
+        self.answers: dict = {}
+        self._question = ""
+        self._toolbox: Optional[Toolbox] = None
         self._lock = threading.Lock()
         self._repl = Future()
-        threading.Thread(
-            target=self._start, args=(build, initial_program), daemon=True
-        ).start()
+        if repl is not None:
+            self._repl.set_result(repl)
+        else:
+            threading.Thread(
+                target=self._start, args=(build, initial_program),
+                daemon=True,
+            ).start()
 
     def _start(self, build, initial_program: str) -> None:
         try:
             repl = WebRepl(build(), self.engine, html=False)
-            repl.app.settings.squall = self._squall
             if initial_program:
                 repl.submit(initial_program)
             self._repl.set_result(repl)
@@ -91,21 +180,65 @@ class McpSession:
                 f"{error}"
             ) from error
 
-    def _language(self, repl) -> str:
-        return "squall" if repl.app.settings.squall else "datalog"
-
-    def _toolbox(self, repl) -> Toolbox:
-        """The assistant's tools, on the relations the session loaded."""
-        context = EngineContext(
-            repl.app._nl, self.engine, repl.app.loaded_relations
+    def _agent(self, repl):
+        """The assistant on the session, for its prompt and its context."""
+        app = repl.app
+        return make_agent(
+            app._nl, ProviderConfig("mcp", "command", "client"),
+            self.config, LANGUAGE, "react", client=_NoModel(),
+            engine_name=self.engine, loaded=app.loaded_relations,
+            **_without_left_out(app),
         )
-        return Toolbox(context, self._language(repl))
+
+    def _tools(self, repl) -> Toolbox:
+        """The assistant's tools of the question, or new ones if none was
+        asked."""
+        if self._toolbox is None:
+            config = self.config
+            self._toolbox = Toolbox(
+                self._agent(repl).context, LANGUAGE, config.preview_rows,
+                config.query_timeout, config.query_memory_mb,
+            )
+        return self._toolbox
+
+    def ask(self, question: str, refine: str = "") -> str:
+        """
+        Return the assistant's instructions for *question*, and start its
+        tools anew; with *refine*, an answer's id or ``last``, the task
+        is to change that answer, or the last query run, for *question*.
+        """
+        with self._lock:
+            repl = self._session()
+            previous = None
+            if refine == "last":
+                previous = _previous(repl.app)
+                if previous is None:
+                    raise ToolError("Nothing to refine: no query ran yet.")
+            elif refine:
+                answer = self.answers.get(refine)
+                if answer is None:
+                    raise ToolError(
+                        f"No answer {refine!r}: the answers are "
+                        f"{', '.join(self.answers) or 'none yet'}."
+                    )
+                previous = Previous(
+                    answer.question, answer.query, answer.outcome
+                )
+            agent = self._agent(repl)
+            self._toolbox = None
+            self._question = question
+            task = prompts.refinement_request(
+                question, previous, LANGUAGE
+            ) if previous else f"# Question\n{question}"
+            prompt = agent.system_prompt(question, schema=SCHEMA_POINTER)
+            return f"{prompt}\n\n{MCP_NOTE}\n\n{task}"
 
     def call(self, name: str, /, **arguments) -> str:
         """Return the text of the assistant's tool *name* on *arguments*."""
         with self._lock:
-            repl = self._session()
-            observation, _ = self._toolbox(repl).call(name, arguments)
+            observation, _ = self._tools(self._session()).call(
+                name, arguments
+            )
             return observation
 
     def repl(self, text: str, max_rows: int = MAX_ROWS) -> str:
@@ -117,42 +250,178 @@ class McpSession:
             repl = self._session()
             repl.max_rows = max_rows
             reply = repl.submit(text)
+            self._toolbox = None  # the session may have changed
         parts = [reply.html.rstrip(), *map(_tsv, reply.tables)]
         if reply.failed:
             parts.insert(0, "FAILED")
         return "\n\n".join(part for part in parts if part)
 
-    def guide(self, question: str = "") -> str:
+    def final_answer(
+        self, query: str, explanation: str, comments: list
+    ) -> types.CallToolResult:
         """
-        Return the syntax of the language of the session, the guidance
-        of the engine and its examples closest to *question*.
+        Check the answer *query* as the assistant's final answer; once
+        accepted, run it in the session and return what it gives, else
+        why it is rejected.
         """
+        rules = split_rules(query, LANGUAGE)
+        if len(comments) != len(rules):
+            numbered = "\n".join(
+                f"{n}. {rule}" for n, rule in enumerate(rules, 1)
+            )
+            return _text(
+                f"The answer is rejected: the query has {len(rules)} rules "
+                f"and {len(comments)} comments. Give one comment for each "
+                f"rule, in this order:\n{numbered}"
+            )
         with self._lock:
-            language = self._language(self._session())
-        config = (
-            engine_registry.get_engine_config(self.engine)
-            if self.engine in engine_registry.list_engine_names() else {}
+            repl = self._session()
+            tools = self._tools(repl)
+            observation, final = tools.call(
+                "final_answer", {"query": query, "explanation": explanation}
+            )
+            if final is None:
+                return _text(observation)
+            commented = commented_query(
+                rules, [" ".join(str(c).split()) for c in comments]
+            )
+            return self._accept(repl, tools, commented, explanation)
+
+    def _accept(self, repl, tools, commented: str, explanation: str):
+        """Show the accepted answer in the session, keep it, and return
+        what it gives."""
+        app = repl.app
+        if tools.answer_frames is not None:  # shown, not run again
+            app.agent_run = AgentRun(commented, False, tools.answer_frames)
+        repl.max_rows = ANSWER_ROWS
+        reply = repl.submit(commented)
+        answer = Answer(
+            f"a{len(self.answers) + 1}", self._question,
+            commented, commented, explanation,
         )
-        examples = select_examples(
-            load_examples(self.engine), question, language, GUIDE_EXAMPLES
+        result = AgentResult(
+            query=commented, language=LANGUAGE, explanation=explanation,
+            valid=True, commented=commented, frames=tools.answer_frames,
         )
-        name = prompts.LANGUAGE_NAMES[language]
-        description = " ".join(config.get("description", "").split())
-        parts = [f"The engine: {description}"] if description else []
-        parts += [
-            f"# {name} syntax\n{prompts.reference(language)}",
-            f"# Predicates of the engine\n{prompts.SCHEMA_NOTE}",
+        app.assistant.last_run = (
+            self._question, result, ProviderConfig("mcp", "command", "client"),
+            "react",
+        )
+        app.assistant.last_ran = app.last_query
+        answer.outcome = _run_outcome(app)
+        self.answers[answer.id] = answer
+        self._toolbox = None
+        self._question = ""  # that of the next ask
+        images = self._files(repl, answer)
+        text = [
+            f"Answer {answer.id}" + (
+                f" to: {answer.question}" if answer.question else ""
+            ),
+            explanation,
+            f"```datalog\n{commented}\n```",
+            *map(_tsv, reply.tables),
         ]
-        guidance = config.get("assistant_guidance", "")
-        if guidance:
-            parts.append(
-                f"# How to answer on this engine\n{' '.join(guidance.split())}"
+        if reply.failed:
+            text.append(f"Running it failed:\n{reply.html.strip()}")
+        text.append("\n".join(
+            f"{name}: {link}" for name, link in answer.links.items()
+        ))
+        return types.CallToolResult(
+            content=[_content("\n\n".join(part for part in text if part))]
+            + images,
+            structured_content={
+                "id": answer.id, "question": answer.question,
+                "query": commented, "explanation": explanation,
+                # clients showing it in place of the text see the rows too
+                "tables": [
+                    {key: table[key] for key in (
+                        "title", "columns", "rows", "total"
+                    )}
+                    for table in reply.tables
+                ],
+                "links": answer.links,
+            },
+        )
+
+    def _files(self, repl, answer: Answer):
+        """
+        Write the files of the result of *answer* in its folder and keep
+        their links: the query, its rows, its images and their viewer, and
+        its graph; return the glass brains of its first images.
+        """
+        app = repl.app
+        folder = self.store.folder(answer.id)
+        links = answer.links
+        query = folder / "query.dl"
+        query.write_text(answer.commented + "\n", encoding="utf-8")
+        links["query"] = self.store.link(query)
+        for n, block in enumerate(app.results):
+            name = "rows" if len(app.results) == 1 else (
+                f"rows-{_file_name(block.title) or n + 1}"
             )
-        if examples:
-            parts.append(
-                f"# Examples\n{prompts.format_examples(examples, language)}"
+            path = folder / f"{name}.csv"
+            block.frame.to_csv(path, index=False)
+            links[name] = self.store.link(path)
+        images = []
+        request = nifti.parse_view_args("")
+        shown = app.results and nifti.last_results_layers(app, request)
+        if shown:
+            layers, extra, request, titles = shown
+            try:
+                page = nifti._viewer_page(
+                    app, layers, request,
+                    nifti._view_title(request, layers[0][1], titles), **extra
+                )
+                view = folder / "view.html"
+                view.write_text(page, encoding="utf-8")
+                links["viewer"] = self.store.link(view)
+            except Exception:  # the answer stands without its viewer
+                pass
+            for n, (name, path) in enumerate(layers):
+                stem = "result" if len(layers) == 1 else (
+                    f"result-{_file_name(name) or n + 1}"
+                )
+                image = folder / f"{stem}.nii.gz"
+                try:
+                    shutil.move(path, image)
+                    links[stem] = self.store.link(image)
+                    if n < ANSWER_IMAGES:
+                        images.append(types.ImageContent(
+                            type="image", mime_type="image/png",
+                            data=_base64(nifti.render_png(
+                                nifti.read_nifti(image),
+                                f"{answer.id}: {name}", request.threshold,
+                            )),
+                        ))
+                except Exception:  # the answer stands without its image
+                    pass
+        try:
+            graph = folder / "graph.html"
+            graph.write_text(
+                query_graph.last_query_page(app), encoding="utf-8"
             )
-        return "\n\n".join(parts)
+            links["graph"] = self.store.link(graph)
+        except Exception:  # a query without a graph
+            pass
+        repl._output()  # what making them said, of files moved since
+        return images
+
+
+def _text(text: str) -> types.CallToolResult:
+    return types.CallToolResult(content=[_content(text)])
+
+
+def _content(text: str) -> types.TextContent:
+    return types.TextContent(type="text", text=text)
+
+
+def _base64(data: bytes) -> str:
+    return base64.b64encode(data).decode("ascii")
+
+
+def _file_name(title: str) -> str:
+    """The *title* of a result, as a part of a file's name."""
+    return "".join(c if c.isalnum() or c in "-_" else "_" for c in title)
 
 
 def _tsv(table: dict) -> str:
@@ -172,6 +441,21 @@ def _tsv(table: dict) -> str:
     return "\n".join(lines)
 
 
+def assistant_settings(path=None) -> AssistantConfig:
+    """
+    Return the assistant settings of the LLM configuration (see
+    :func:`~.llm.config.config_path`), such as the time and memory a query
+    may take: its ``assistant`` section, which needs no provider here, the
+    client's model answering; the defaults without one.
+    """
+    try:
+        with open(config_path(path), encoding="utf-8") as stream:
+            data = yaml.safe_load(stream) or {}
+    except (OSError, yaml.YAMLError):
+        return AssistantConfig()
+    return _assistant(data.get("assistant"))
+
+
 def server(session: McpSession):
     """Return the MCP server of *session*, with its tools."""
     mcp = MCPServer(
@@ -180,22 +464,14 @@ def server(session: McpSession):
     )
 
     @mcp.tool()
-    def repl(text: str, max_rows: int = MAX_ROWS) -> str:
+    def ask(question: str, refine: str = "") -> str:
         """
-        Run text in the NeuroLang REPL session, as typed at its prompt:
-        statements (rules, facts, queries) and dot-commands (`.help`).
-        Returns the output and the first max_rows rows of each result,
-        tab-separated; `.view` and `.graph` save their pages in files.
+        Start answering a question on the engine: returns the instructions,
+        the syntax, the predicates and examples close to the question. Set
+        refine to an answer's id (a1, ...) or to `last` (the last query
+        run) to change it for the question instead.
         """
-        return session.repl(text, max_rows)
-
-    @mcp.tool()
-    def guide(question: str = "") -> str:
-        """
-        The syntax of the language, how to answer on the engine and the
-        example queries closest to the question: read it first.
-        """
-        return session.guide(question)
+        return session.ask(question, refine)
 
     described = {tool["name"]: tool["description"] for tool in prompts.TOOLS}
 
@@ -220,6 +496,31 @@ def server(session: McpSession):
     def check_query(query: str) -> str:
         return session.call("check_query", query=query)
 
+    @mcp.tool(description=described["run_query"])
+    def run_query(query: str) -> str:
+        return session.call("run_query", query=query)
+
+    @mcp.tool(
+        description=described["final_answer"] + " With a comment, one "
+        "short line, for each rule of the query, in order. Once accepted, "
+        "returns the commented query, its rows, images and links to the "
+        "viewer and the files of the result: show them to the user."
+    )
+    def final_answer(
+        query: str, explanation: str, comments: list[str]
+    ) -> types.CallToolResult:
+        return session.final_answer(query, explanation, comments)
+
+    @mcp.tool()
+    def repl(text: str, max_rows: int = MAX_ROWS) -> str:
+        """
+        Run text in the NeuroLang REPL session, as typed at its prompt:
+        statements (rules, facts, queries) and dot-commands (`.help`).
+        Returns the output and the first max_rows rows of each result,
+        tab-separated.
+        """
+        return session.repl(text, max_rows)
+
     return mcp
 
 
@@ -231,5 +532,9 @@ def main(args, initial_program: str = "") -> None:
             use_cache=not args.no_engine_cache,
         )
 
-    session = McpSession(args.engine, build, initial_program, args.squall)
+    session = McpSession(
+        args.engine, build, initial_program,
+        results_dir=Path(args.results_dir or RESULTS_DIR),
+        config=assistant_settings(),
+    )
     server(session).run("stdio")
