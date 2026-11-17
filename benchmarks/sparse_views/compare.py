@@ -30,7 +30,7 @@ def main():
     master, branch = map(Path, sys.argv[1:3])
     names = sorted({p.name for p in master.glob("*.pkl")} |
                    {p.name for p in branch.glob("*.pkl")})
-    ok = True
+    ok = bool(names)
     for name in names:
         if not (master / name).exists() or not (branch / name).exists():
             print(name, "missing on one side")
