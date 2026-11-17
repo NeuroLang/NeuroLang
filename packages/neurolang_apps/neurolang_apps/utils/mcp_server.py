@@ -389,8 +389,13 @@ class McpSession:
         app = repl.app
         folder = self.store.folder(answer.id)
         links = answer.links
+        # the question the answer is for heads its pages, images and query
+        heading = f"{answer.id}: {answer.question}" if answer.question else ""
         query = folder / "query.dl"
-        query.write_text(answer.commented + "\n", encoding="utf-8")
+        query.write_text("".join(
+            f"% {_one_line(line, 1000)}\n"
+            for line in (heading, answer.explanation) if line
+        ) + answer.commented + "\n", encoding="utf-8")
         links["query"] = self.store.link(query)
         for n, block in enumerate(app.results):
             name = "rows" if len(app.results) == 1 else (
@@ -406,8 +411,9 @@ class McpSession:
             layers, extra, request, titles = shown
             try:
                 page = nifti._viewer_page(
-                    app, layers, request,
-                    nifti._view_title(request, layers[0][1], titles), **extra
+                    app, layers, request, heading or nifti._view_title(
+                        request, layers[0][1], titles
+                    ), **extra
                 )
                 view = folder / "view.html"
                 view.write_text(page, encoding="utf-8")
@@ -427,7 +433,9 @@ class McpSession:
                             type="image", mime_type="image/png",
                             data=_base64(nifti.render_png(
                                 nifti.read_nifti(image),
-                                f"{answer.id}: {name}", request.threshold,
+                                _image_title(heading, answer.id, name,
+                                             len(layers) > 1),
+                                request.threshold,
                             )),
                         ))
                 except Exception:  # the answer stands without its image
@@ -435,7 +443,8 @@ class McpSession:
         try:
             graph = folder / "graph.html"
             graph.write_text(
-                query_graph.last_query_page(app), encoding="utf-8"
+                query_graph.last_query_page(app, heading or "The query"),
+                encoding="utf-8",
             )
             links["graph"] = self.store.link(graph)
         except Exception:  # a query without a graph
@@ -453,6 +462,15 @@ LINKS = {
     "graph": ("graph of the query", "text/html"),
     "query": ("query (Datalog)", "text/plain"),
 }
+
+
+def _image_title(heading: str, answer: str, layer: str, several: bool) -> str:
+    """The title of a glass brain of the image *layer* of an answer: its
+    *heading*, the question, short enough to fit, and the layer's name if
+    there are *several*; else the answer's id and the layer's name."""
+    if not heading:
+        return f"{answer}: {layer}"
+    return _one_line(heading, 85) + (f" ({layer})" if several else "")
 
 
 def _link_kind(name: str) -> str:

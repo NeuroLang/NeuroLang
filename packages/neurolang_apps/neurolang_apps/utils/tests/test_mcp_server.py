@@ -284,6 +284,7 @@ def test_an_answer_of_voxels_has_its_glass_brain_and_viewer(
         return nl
 
     session = McpSession("tiny", build, results_dir=tmp_path / "results")
+    session.ask("Which voxels have a weight?")
     result = session.final_answer(
         "ans(i, j, k, v) :- weight(i, j, k, v)", "The weights.",
         ["the weight of each voxel"],
@@ -304,6 +305,12 @@ def test_an_answer_of_voxels_has_its_glass_brain_and_viewer(
     folder = next((tmp_path / "results").glob("*/a1"))
     assert (folder / "result.nii.gz").exists()
     assert "<html" in (folder / "view.html").read_text().lower()
+    heading = "a1: Which voxels have a weight?"
+    assert f"<h1>{heading}</h1>" in (folder / "graph.html").read_text()
+    assert heading in (folder / "view.html").read_text()
+    assert (folder / "query.dl").read_text().startswith(
+        f"% {heading}\n% The weights.\n% the weight of each voxel\n"
+    )
 
     def failing(*args, **kwargs):
         raise ValueError("no glass brain")
@@ -383,3 +390,12 @@ def test_the_log_tells_the_build_and_each_call(session, caplog):
         "-> The answer is rejected: the query has 1 rules and 0 comments"
         in line for line in lines
     )
+
+
+def test_a_glass_brain_is_entitled_with_the_question():
+    from neurolang_apps.utils.mcp_server import _image_title
+
+    assert _image_title("", "a1", "lift", False) == "a1: lift"
+    assert _image_title("a1: Where?", "a1", "lift", False) == "a1: Where?"
+    assert _image_title("a1: Where?", "a1", "p", True) == "a1: Where? (p)"
+    assert _image_title("a1: " + "x" * 90, "a1", "p", False).endswith("...")

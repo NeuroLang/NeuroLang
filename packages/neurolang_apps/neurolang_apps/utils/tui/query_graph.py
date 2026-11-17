@@ -1499,9 +1499,10 @@ def graph_page(graph: QueryGraph, title: str, frame=None) -> str:
     )
 
 
-def last_query_page(app) -> str:
-    """Return the page of the graph of the last query of *app*, with the
-    distribution of the probabilities of its result when it has one."""
+def last_query_page(app, title: str = "The last query") -> str:
+    """Return the page, entitled *title*, of the graph of the last query of
+    *app*, with the distribution of the probabilities of its result when it
+    has one."""
     program, squall = app.last_query
     engine = app.settings.engine_name
     graph = query_graph(
@@ -1512,7 +1513,7 @@ def last_query_page(app) -> str:
     frame = results[0].frame if len(results) == 1 and (
         app.results_query is app.last_query
     ) else None
-    return graph_page(graph, "The last query", frame)
+    return graph_page(graph, title, frame)
 
 
 @command(

@@ -1500,12 +1500,14 @@ def render_png(image, title: str = "", threshold=VIEW_THRESHOLD) -> bytes:
     figure = Figure(figsize=(8, 3), dpi=100)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        plotting.plot_glass_brain(
-            image, figure=figure, title=title or None, colorbar=True,
+        display = plotting.plot_glass_brain(
+            image, figure=figure, colorbar=True,
             threshold=shown or None, plot_abs=False,
             # one-sided as the viewer's, unless the image has negatives
             cmap="cold_hot" if (data < 0).any() else "plasma",
         )
+        if title:  # small enough for a question of a line
+            display.title(title, size=11)
     png = io.BytesIO()
     figure.savefig(png, format="png")
     return png.getvalue()
