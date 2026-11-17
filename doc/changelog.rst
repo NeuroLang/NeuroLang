@@ -90,6 +90,15 @@ Unreleased
 
 **Bug fixes:**
 
+- REPL server (``--users --local``): each engine has a builder process of
+  its own, forked by a coordinator, rather than one builder for all: a
+  session of an engine built starts at once while another engine builds,
+  rather than after that build (up to 90 s for ``neurostore_iit``), and a
+  builder that dies fails the starts of its engine only, is told in the
+  log, and the next session of its engine builds it again, rather than no
+  session starting until a restart. One engine still builds at a time, in
+  the order asked.
+
 - The relational-algebra chase no longer keeps every chase that ran: three
   of its rewritings were cached with ``lru_cache`` on the method, a cache
   of the class whose keys held the chase, its program and the relations

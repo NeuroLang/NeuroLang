@@ -116,7 +116,7 @@ def _builder(conn, address, authkey, options: dict, build,
     forks another; the others go on. End, with the builders, when the
     server does. With *preload_embeddings*, an engine's text embeddings
     are loaded before its first fork, for its sessions to share them."""
-    signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the builders reap
     _headless()
     backend = LocalBackend(build=build,
                            preload_embeddings=preload_embeddings, **options)
@@ -248,6 +248,8 @@ def _engine_builder(conn, engine: str, backend, address, authkey,
     where its ratings go); for a ``("build", None, None, engine, None,
     None)``, build it only, and tell it (``built`` or ``failed``, without
     a key); end when the coordinator does."""
+    # Its sessions reap: set again, as macOS does not keep it in a fork.
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
     nl = None
     while True:
         try:
