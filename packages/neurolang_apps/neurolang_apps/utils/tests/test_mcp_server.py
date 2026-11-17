@@ -680,3 +680,58 @@ def test_a_markdown_cell_is_short_and_one_line():
     assert _cell(0.123456789) == "0.1235"
     assert _cell("a|b\nc") == "a\\|b c"
     assert _cell(None) == "" and _cell(7) == "7"
+
+
+class TestHttp:
+    HEADERS = {
+        "content-type": "application/json",
+        "accept": "application/json, text/event-stream",
+        "host": "repl.example.org", "mcp-protocol-version": "2025-06-18",
+    }
+
+    def _rpc(self, bridge, method, params=None):
+        import json
+
+        status, headers, body = bridge.call(
+            "POST", "/mcp", self.HEADERS, json.dumps({
+                "jsonrpc": "2.0", "id": 1, "method": method,
+                "params": params or {},
+            }).encode(),
+        )
+        return status, json.loads(body)
+
+    def test_the_http_app_answers_through_the_bridge(self, session):
+        from neurolang_apps.utils.mcp_server import HttpBridge, http_app
+
+        bridge = HttpBridge(http_app(session))
+        status, answer = self._rpc(bridge, "initialize", {
+            "protocolVersion": "2025-06-18", "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1"},
+        })
+        assert status == 200 and "NeuroLang" in (
+            answer["result"]["instructions"]
+        )
+        status, answer = self._rpc(bridge, "tools/call", {
+            "name": "run_query",
+            "arguments": {"query": "ans(n) :- person(n, 5)"},
+        })
+        assert status == 200
+        assert "bob" in answer["result"]["content"][0]["text"]
+
+    def test_links_under_a_base_url(self, tmp_path):
+        from neurolang_apps.utils.mcp_server import ResultStore
+
+        store = ResultStore(tmp_path, token_bytes=16,
+                            base_url="https://repl.example.org/mcp/files/")
+        assert len(store.root.name.rsplit("-", 1)[1]) == 32
+        path = store.folder("a1") / "view.html"
+        path.write_text("x")
+        assert store.link(path) == (
+            "https://repl.example.org/mcp/files/"
+            f"{store.root.name}/a1/view.html"
+        )
+
+    def test_a_new_conversation_gets_the_whole_prompt(self, session):
+        session.ask("who?")
+        session.new_conversation()
+        assert "# Datalog syntax" in session.ask("who else?")

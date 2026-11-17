@@ -209,6 +209,17 @@ REQUEST_COOKIE = "neurolang_request"
 ORCID_MINUTES = 15
 # Whether the server serves, for a monitor, without a login.
 HEALTH_PATH = "/health"
+# The MCP endpoint (--mcp): an MCP client's requests, with the user's token
+# (Authorization: Bearer), to their own session, the tab MCP_TAB; and the
+# files of its answers, for the users logged in.
+MCP_PATH = "/mcp"
+MCP_FILES = "/mcp/files/"
+MCP_TAB = "mcp"
+MCP_FILE_TYPES = {
+    ".html": "text/html; charset=utf-8", ".csv": "text/csv; charset=utf-8",
+    ".dl": "text/plain; charset=utf-8", ".nii.gz": "application/gzip",
+    ".png": "image/png",
+}
 # The dashboard (--dashboard), Datasette, for the admins:
 # neurolang_apps.utils.tui.dashboard.PREFIX.
 DASHBOARD_PREFIX = "/admin/logs/"
@@ -233,6 +244,7 @@ DEFAULT_EMBEDDINGS = Path(DEFAULTS["embeddings"]).expanduser()
 # stops no rebuild.
 DEFAULT_DOWNLOADS = Path(DEFAULTS["downloads"]).expanduser()
 DEFAULT_UPLOADS = Path(DEFAULTS["uploads_dir"]).expanduser()
+DEFAULT_MCP_RESULTS = Path(DEFAULTS["mcp_results_dir"]).expanduser()
 # The repository whose CI uploads the site of each pull request, and the
 # artifacts holding it (.github/workflows/docs.yml).
 REPOSITORY = "NeuroLang/NeuroLang"
@@ -681,6 +693,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return True  # open to all, monitors: it tells nothing of users
         if self.users is not None and path in LOGIN_PATHS:
             return True  # open to all; a POST is checked there
+        if self.mcp and path == MCP_PATH:
+            # An MCP client: the user's token, no cookie (so no request of
+            # another site's page), whatever the method.
+            return self._mcp_authorised()
         if self.password is None and self.users is None:
             try:
                 host = urllib.parse.urlsplit(
@@ -720,6 +736,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return False
         return True
 
+    def _mcp_authorised(self) -> bool:
+        """Whether the request has a user's MCP token (Authorization:
+        Bearer), who is then its user; else answer 401."""
+        given = self.headers.get("Authorization") or ""
+        scheme, _, token = given.partition(" ")
+        user = self.users.mcp_user(token.strip()) \
+            if scheme.lower() == "bearer" and token.strip() else None
+        if user is None:
+            self._reply_json(
+                {"error": "an MCP token is needed: create yours on your "
+                 "account page (/account)"}, 401,
+                [("WWW-Authenticate", 'Bearer realm="NeuroLang MCP"')])
+            return False
+        self.user = user
+        return True
+
     def _same_site(self) -> bool:
         """Whether a POST comes from this site's page: in JSON, which
         another site's form cannot send without asking first, and from
@@ -741,6 +773,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     dashboard = None
     #: When the server started (time.monotonic), for /health.
     started = 0.0
+    #: Whether MCP clients are answered (--mcp), and where the files of
+    #: their answers go.
+    mcp = False
+    mcp_results = None
 
     def do_GET(self):
         path = urllib.parse.urlsplit(self.path).path
@@ -810,6 +846,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "admin": self.users.is_admin(self.user),
                 "assistant": self.users.status(self.user),
                 "providers": _providers(),
+                "mcp": bool(self.mcp),
+                "mcp_token": self.users.has_mcp_token(self.user),
+            })
+        if path == "/account/api/mcp-token" and self.command == "POST":
+            if not self.mcp:
+                return self._reply_json({"error": "no MCP here"}, 404)
+            if self._body().get("revoke"):
+                self.users.revoke_mcp_token(self.user)
+                return self._reply_json({"ok": True})
+            return self._reply_json({
+                "token": self.users.new_mcp_token(self.user),
+                "url": f"{self._scheme()}://{self.headers.get('Host')}"
+                       f"{MCP_PATH}",
             })
         if path == "/account/api/llm" and self.command == "POST":
             if not self.users.own_key(self.user):
@@ -1187,7 +1236,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._guest()
         if path == "/login/options" and self.command == "GET":
             return self._reply_json({"guests": self.guests,
-                                     "orcid": self.orcid is not None})
+                                     "orcid": self.orcid is not None,
+                                     "mcp": bool(self.mcp)})
         if path.startswith(("/login/orcid", "/login/request")):
             if self.orcid is None:
                 return self._reply_json({"error": "no ORCID here"}, 404)
@@ -1271,13 +1321,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return value
         return None
 
+    def _scheme(self) -> str:
+        """The scheme of the addresses of this server, as browsers see it."""
+        return "https" if self.secure else "http"
+
     def _redirect_uri(self) -> str:
         """Where ORCID sends the visitor back: the client's, else this
         server's ``/login/orcid/callback`` at the address of the request."""
         if self.orcid.redirect_uri:
             return self.orcid.redirect_uri
-        scheme = "https" if self.secure else "http"
-        return f"{scheme}://{self.headers.get('Host')}/login/orcid/callback"
+        return (f"{self._scheme()}://{self.headers.get('Host')}"
+                "/login/orcid/callback")
 
     def _orcid_start(self):
         """``/login/orcid?next=PAGE``: off to ORCID's page, with a state
@@ -1503,7 +1557,12 @@ class LocalHandler(Handler):
         return self.backend.session(self.user, tab)
 
     def do_GET(self):
-        if urllib.parse.urlsplit(self.path).path != "/api/events":
+        path = urllib.parse.urlsplit(self.path).path
+        if self.mcp and path.startswith(MCP_FILES):
+            return self._mcp_file(path[len(MCP_FILES):])
+        if self.mcp and path == MCP_PATH:  # JSON answers, no event stream
+            return self._send(405, b"", "text/plain", [("Allow", "POST")])
+        if path != "/api/events":
             return super().do_GET()
         try:
             backend = self._backend()
@@ -1530,6 +1589,8 @@ class LocalHandler(Handler):
         path = urllib.parse.urlsplit(self.path).path
         if path.startswith(("/admin/", "/account/")) or path in LOGIN_PATHS:
             return super().do_POST()
+        if self.mcp and path == MCP_PATH:
+            return self._mcp_request()
         if not path.startswith("/api/"):
             return self._json({"error": "not found"}, 404)
         action = path[len("/api/"):]
@@ -1553,6 +1614,76 @@ class LocalHandler(Handler):
                 return self._json({"error": str(error), "ended": True}, 409)
             traceback.print_exc()
             self._json({"error": f"{type(error).__name__}: {error}"}, 500)
+
+    def _mcp_request(self):
+        """
+        Answer an MCP client's request with the MCP server of its user's
+        own session (MCP_TAB), on the engine of ``?engine=`` (the default
+        one by default), in plain text: started, or started again if it
+        ended (idle) or has another engine.
+        """
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        offered = self.engines.on() if self.engines else []
+        engine = query.get("engine", [""])[0] or (
+            self.engines.default if self.engines else "")
+        if offered and engine not in offered:
+            return self._json({"error": f"The engine {engine} is not "
+                               f"offered: one of {', '.join(offered)}"}, 404)
+        try:
+            body = self._bytes(self.MAX_BODY)
+        except ValueError as error:
+            return self._json({"error": str(error)},
+                              413 if isinstance(error, TooLarge) else 400)
+        # Neither the token nor a cookie goes to the session.
+        headers = {name: value for name, value in self.headers.items()
+                   if name.lower() not in ("authorization", "cookie")}
+        request = {
+            "verb": "POST", "path": MCP_PATH, "headers": headers,
+            "body": body, "results_dir": str(self.mcp_results),
+            "base_url": f"{self._scheme()}://{self.headers.get('Host')}"
+                        f"{MCP_FILES}",
+        }
+        session = self.backend.session(self.user, MCP_TAB)
+        try:
+            for attempt in (1, 2):  # once more if it ended meanwhile
+                try:
+                    if attempt == 2 or session.pid is None or \
+                            session.engine != engine:
+                        session.start(engine, text=True)
+                    status, answer_headers, answer = session.mcp(**request)
+                    break
+                except Exception as error:
+                    if type(error).__name__ != "SessionEnded" or attempt == 2:
+                        raise
+        except Exception as error:  # told to the client, and in the log
+            traceback.print_exc()
+            return self._json({"error": f"{type(error).__name__}: {error}"},
+                              500)
+        kept = [(name, value) for name, value in answer_headers
+                if name.lower() not in ("content-length", "content-type")]
+        mime = dict((n.lower(), v) for n, v in answer_headers).get(
+            "content-type", "application/json")
+        self._send(status, answer, mime, kept)
+
+    def _mcp_file(self, relative: str):
+        """Serve a file of an MCP answer, to the users logged in: a page (the
+        viewer, the graph) sandboxed, away from this site's cookies, the
+        others to download."""
+        root = Path(self.mcp_results).resolve()
+        target = (root / urllib.parse.unquote(relative)).resolve()
+        if not target.is_relative_to(root) or not target.is_file():
+            return self._json({"error": "not found"}, 404)
+        mime = MCP_FILE_TYPES.get(
+            "".join(target.suffixes[-2:]) if target.name.endswith(".nii.gz")
+            else target.suffix, "application/octet-stream")
+        headers = [("X-Content-Type-Options", "nosniff")]
+        if mime.startswith("text/html"):
+            headers.append(
+                ("Content-Security-Policy", "sandbox allow-scripts"))
+        else:
+            headers.append(("Content-Disposition",
+                            f'attachment; filename="{target.name}"'))
+        self._send(200, target.read_bytes(), mime, headers)
 
     def _answer(self, action: str, body: dict):
         backend = self._backend()
@@ -1666,7 +1797,8 @@ def make_server(site: Path, host: str, port: int, backend=None,
                 tls=None, password=None, names=(), users=None,
                 feedback_db=None, guests: bool = False,
                 max_guest_sessions: int = 2, secure_cookie: bool = False,
-                orcid_client=None, dashboard=None, engines=None):
+                orcid_client=None, dashboard=None, engines=None,
+                mcp_results=None):
     """Return the HTTP server of *site* on *host*:*port*, answering the
     page with the REPL of *backend* if given, over HTTPS with the TLS
     context *tls* if given, to the requests giving the *password* (a str)
@@ -1677,7 +1809,9 @@ def make_server(site: Path, host: str, port: int, backend=None,
     too, and an iD of no user may ask for an account, in a file next to the
     users file (:func:`~serve_repl.orcid.requests_path`). *engines*, an
     :class:`EngineChoice`, are those the page may start, which the admin
-    console chooses."""
+    console chooses. With *mcp_results*, a folder, MCP clients are
+    answered (``/mcp``) with the sessions of *backend*, the files of their
+    answers kept there."""
     base = Handler if backend is None else LocalHandler
     names = {*LOCAL_NAMES, *names, host} - {"0.0.0.0", "::", ""}
     handler = type("Handler", (base,), {
@@ -1696,6 +1830,8 @@ def make_server(site: Path, host: str, port: int, backend=None,
         if users is not None and orcid_client is not None else None,
         "dashboard": dashboard, "started": time.monotonic(),
         "engines": engines,
+        "mcp": mcp_results is not None and hasattr(backend, "session"),
+        "mcp_results": mcp_results,
     })
     server = Server(
         (host, port),
@@ -2121,6 +2257,41 @@ class Users:
             self._keep_an_admin(users)
             self._write(users)
 
+    def mcp_user(self, token: str):
+        """Return the user whose MCP token is *token*, or None: its hash is
+        kept (mcp_token), compared in constant time."""
+        digest = _mcp_digest(token)
+        found = None
+        for name, entry in self.current().items():
+            if hmac.compare_digest(str(entry.get("mcp_token", "")), digest):
+                found = name
+        return found
+
+    def has_mcp_token(self, name: str) -> bool:
+        return bool(self.current().get(name, {}).get("mcp_token"))
+
+    def new_mcp_token(self, name: str) -> str:
+        """Give *name* a new MCP token, in place of theirs if any, and
+        return it: only its hash is kept."""
+        token = "nlmcp_" + secrets.token_urlsafe(32)
+        self._set_mcp_token(name, _mcp_digest(token))
+        return token
+
+    def revoke_mcp_token(self, name: str) -> None:
+        self._set_mcp_token(name, None)
+
+    def _set_mcp_token(self, name: str, digest) -> None:
+        with self._changing():
+            users = {n: dict(e, env=dict(e["env"]))
+                     for n, e in self._users.items()}
+            if name not in users:
+                raise ValueError(f"The user {name} does not exist")
+            if digest:
+                users[name]["mcp_token"] = digest
+            else:
+                users[name].pop("mcp_token", None)
+            self._write(users)
+
     def by_orcid(self, orcid_id: str):
         """Return the user who signs in with the ORCID iD *orcid_id*: the
         one it names, or the one it was merged into (``orcid``); None."""
@@ -2284,6 +2455,11 @@ class Users:
             raise
         self._users, self._groups = written
         self._seen = stamp
+
+
+def _mcp_digest(token: str) -> str:
+    """The hash of an MCP token kept in the users file."""
+    return hashlib.sha256(str(token).encode()).hexdigest()
 
 
 def _change_assistant(entry: dict, llm, own_key) -> None:
@@ -2849,6 +3025,9 @@ def service_command(args) -> list:
                     "--idle-minutes", str(args.idle_minutes),
                     "--query-minutes", str(args.query_minutes),
                     "--uploads-dir", str(args.uploads_dir.resolve())]
+        if args.mcp:
+            command += ["--mcp", "--mcp-results-dir",
+                        str(args.mcp_results_dir.resolve())]
         if args.max_running:
             command += ["--max-running", str(args.max_running)]
     if args.secure_cookie:
@@ -3161,6 +3340,20 @@ def parse_args(argv=None):
         "(default: %(default)s)",
     )
     parser.add_argument(
+        "--mcp", action="store_true", default=DEFAULTS["mcp"],
+        help="with --users and --local, answer MCP clients (an LLM agent "
+        "such as Claude Code) at /mcp, each user with the token their "
+        "account page gives, in a session of their own: the assistant's "
+        "tools on the engines, the client's model answering",
+    )
+    parser.add_argument(
+        "--mcp-results-dir", type=Path, default=DEFAULT_MCP_RESULTS,
+        metavar="DIR",
+        help="with --mcp, the directory of the files of the MCP answers (the "
+        "viewer, the images, the rows), served to the users logged in; a "
+        "session's older than 7 days are removed (default: %(default)s)",
+    )
+    parser.add_argument(
         "--uploads-dir", type=Path, default=DEFAULT_UPLOADS,
         metavar="DIR",
         help="with --users and --local, the directory of the files the "
@@ -3389,6 +3582,8 @@ def parse_args(argv=None):
         parser.error("--orcid signs in the users of --users")
     if args.guests and not (args.users and args.local):
         parser.error("--guests needs --users and --local")
+    if args.mcp and not (args.users and args.local):
+        parser.error("--mcp needs --users and --local")
     if args.feedback_db and not args.local:
         parser.error("--feedback-db stores the ratings of --local")
     if args.default_engine and not args.local:
@@ -3707,7 +3902,9 @@ def main(argv=None) -> None:
                          password, args.server_names or (), users,
                          args.feedback_db, args.guests,
                          args.max_guest_sessions, args.secure_cookie,
-                         orcid_client, board, engines)
+                         orcid_client, board, engines,
+                         args.mcp_results_dir.expanduser()
+                         if args.mcp else None)
     host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
     scheme = "https" if tls else "http"
     url = (f"{scheme}://{host}:{server.server_address[1]}/"

@@ -209,6 +209,10 @@ Who may use it
    starts, and removes the folders of the sessions whose process died.  A
    file takes at most MB megabytes (50), all those of a session together
    at most MB (200).
+``--mcp``, ``--mcp-results-dir DIR``
+   With ``--users`` and ``--local``: answer MCP clients at ``/mcp``, each
+   user with the token of their account page, the files of the answers in
+   DIR (``~/.cache/neurolang/repl-mcp``); see `MCP clients`_.
 ``--guests``, ``--max-guest-sessions N``
    With ``--users`` and ``--local``: let visitors in as guests, without an
    account, at most N sessions of guests at once (2); see `Guests`_.
@@ -292,6 +296,7 @@ log and the dashboard go there too::
    max_uploads_mb: 200
    activity_db: activity.sqlite
    dashboard: true             # needs the dashboard extra
+   mcp: true                   # MCP clients at /mcp, with the users' tokens
    engines: [neurosynth_iit, neurostore_iit]  # prepared and offered
    default_engine: neurostore_iit             # the one the page starts with
 
@@ -564,6 +569,41 @@ guest's name and the group ``guest``.  The guests have at most
 those of the users.  A guest's login ends when they log out, after 7
 days, and when the server restarts; a guest who logs in again is another
 guest, with sessions of their own.
+
+MCP clients
+-----------
+
+With ``--mcp``, the server answers MCP clients, LLM agents such as Claude
+Code, at ``/mcp``: the client's model answers questions on the engines as
+the query assistant does, with its tools, in a session of the user's own
+(see *From an MCP client* in :doc:`query_assistant`, the same server over
+the network). The login page says so, and each user creates their token on
+their account page, which also gives the command that adds the server to
+Claude Code::
+
+   claude mcp add --scope user --transport http neurolang \
+       https://repl.example.org/mcp --header "Authorization: Bearer nlmcp_..."
+
+- **The token** is the user's, shown once; only its hash is kept, in the
+  users file (``mcp_token``), so it outlives the server's restarts. A new
+  one replaces it, and *Revoke it* removes it. ``/mcp`` takes no cookie,
+  only the token; neither goes to the session.
+- **The session** is a session of the user's like a tab's (it counts in
+  ``--max-sessions`` and ends unused after ``--idle-minutes``), on the
+  default engine, or another of the page's with ``/mcp?engine=NAME``; its
+  REPL answers in plain text. A session that ended starts again at the
+  next request, and its first ``ask`` gives the whole prompt again.
+- **The files** of the answers (the viewer, the images, the rows, the query
+  and its graph) are kept in ``--mcp-results-dir``, a folder per session
+  with a random name, removed after 7 days, and linked as
+  ``https://HOST/mcp/files/...``: they open for the users logged in. The
+  pages (the viewer, the graph) are sandboxed, away from the site's cookies;
+  the other files are downloaded.
+- **Limits**: a session's statements are confined as a tab's, and its
+  queries run within the assistant's time and memory limits
+  (``llm.yaml``) and the server's ``--query-minutes``. The answers are
+  JSON, without event streams: a client's cancel does not stop a query
+  that runs.
 
 Accounts
 --------

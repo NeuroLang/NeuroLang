@@ -86,6 +86,18 @@ def process_usage(pid: int, memory: bool = True) -> Optional[dict]:
 
 # -- In the builder's process ---------------------------------------------
 
+def _headless() -> None:
+    """Draw with matplotlib without a window, in the builder and so in the
+    sessions forked from it: on macOS its default backend loads AppKit,
+    which aborts a forked process (a session drawing a glass brain)."""
+    os.environ["MPLBACKEND"] = "Agg"
+    try:
+        import matplotlib
+    except ImportError:
+        return
+    matplotlib.use("Agg")
+
+
 def _builder(conn, address, authkey, options: dict, build,
              preload_embeddings: bool = True) -> None:
     """Build the engines asked for, once each, and fork a session's
@@ -98,6 +110,7 @@ def _builder(conn, address, authkey, options: dict, build,
     engine's text embeddings are loaded before its first fork, for its
     sessions to share them."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
+    _headless()
     backend = LocalBackend(build=build,
                            preload_embeddings=preload_embeddings, **options)
     engines = {}
@@ -290,8 +303,9 @@ class Session:
 
     # The requests of the page.
 
-    def start(self, engine: str) -> dict:
-        """Start the session anew, in a new process, on *engine*."""
+    def start(self, engine: str, text: bool = False) -> dict:
+        """Start the session anew, in a new process, on *engine*; with
+        *text*, its REPL answers in plain text (an MCP client's)."""
         with self._starting:
             self.end("restarted")
             self.engine = engine
@@ -311,7 +325,9 @@ class Session:
                     self._call("use_identity", env=identity[0],
                                groups=identity[1])
                     self.identity = identity
-                ready = self._call("start", engine=engine)
+                ready = self._call(
+                    "start", engine=engine, **({"text": True} if text else {})
+                )
                 self.sessions._log(self, "start", text=engine)
                 if self.sessions.activity is not None:
                     from neurolang_apps.utils.tui.activity import LOG_NOTE
@@ -380,6 +396,11 @@ class Session:
 
     def download(self, **options):
         return self._run("download", **options)
+
+    def mcp(self, **request) -> tuple:
+        """Answer the HTTP request of an MCP client (LocalBackend.mcp),
+        as a query: once a slot is free, within the server's time."""
+        return self._run("mcp", **request)
 
     def _run(self, method: str, **arguments):
         """Return what the session's process answers to *method*, a query,

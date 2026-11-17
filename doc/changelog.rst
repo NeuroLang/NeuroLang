@@ -19,6 +19,17 @@ Unreleased
 
 **New features:**
 
+- REPL server (``--users --local``): with ``--mcp``, it answers MCP
+  clients, LLM agents such as Claude Code, at ``/mcp``, each user with a
+  personal token of their account page (only its hash kept, in the users
+  file), in a session of their own whose REPL answers in plain text: the
+  tools of ``neurolang-query --mcp`` over the network. The login page tells
+  how to add the server to a client; the files of the answers (viewer,
+  images, rows, query, graph) are kept in ``--mcp-results-dir`` and served
+  to the users logged in, the pages sandboxed. The server's builder and
+  sessions draw with matplotlib without a window: on macOS its default
+  backend aborted a forked session drawing a glass brain.
+
 - ``neurolang-query --mcp`` serves a session of the interactive REPL to an
   MCP client, such as Claude Code, over stdin and stdout (extra ``mcp``).
   The client's model answers questions as the query assistant does, in

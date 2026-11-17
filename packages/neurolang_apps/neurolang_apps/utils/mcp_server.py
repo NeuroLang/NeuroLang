@@ -20,6 +20,7 @@ The engine is built while the client starts; a tool called meanwhile
 waits for it. The calls run one at a time, on the one session.
 """
 
+import asyncio
 import base64
 import logging
 import os
@@ -159,21 +160,27 @@ class Answer:
 
 
 # The name of the folder of a session's answers: its start, and a token.
-SESSION_FOLDER = re.compile(r"\d{8}-\d{6}-[0-9a-f]{8}")
+SESSION_FOLDER = re.compile(r"\d{8}-\d{6}-[0-9a-f]{8,}")
 
 
 class ResultStore:
     """
     Where the files of the answers of a session are kept, a folder each,
     and the links to them: ``file://`` URIs, the server and its client
-    being on the same machine. The folders of the sessions older than
+    being on the same machine, or under *base_url* when a server serves
+    them (the session's folder's name, of *token_bytes* random bytes, is
+    then part of their address). The folders of the sessions older than
     *keep_days* days are removed (none if 0).
     """
 
-    def __init__(self, root: Path, keep_days: float = KEEP_RESULTS_DAYS):
+    def __init__(
+        self, root: Path, keep_days: float = KEEP_RESULTS_DAYS,
+        token_bytes: int = 4, base_url: str = "",
+    ):
         stamp = time.strftime("%Y%m%d-%H%M%S")
         root = Path(root).expanduser()
-        self.root = root / f"{stamp}-{secrets.token_hex(4)}"
+        self.root = root / f"{stamp}-{secrets.token_hex(token_bytes)}"
+        self.base_url = base_url
         if keep_days and root.is_dir():
             self._prune(root, time.time() - keep_days * 86400)
 
@@ -194,6 +201,9 @@ class ResultStore:
         return folder
 
     def link(self, path: Path) -> str:
+        if self.base_url:
+            relative = path.resolve().relative_to(self.root.parent.resolve())
+            return self.base_url + relative.as_posix()
         return path.resolve().as_uri()
 
 
@@ -207,7 +217,7 @@ class McpSession:
         self, engine: str, build=None, initial_program: str = "",
         repl: Optional[WebRepl] = None, results_dir: Path = RESULTS_DIR,
         config: Optional[AssistantConfig] = None, lazy: bool = False,
-        keep_days: float = KEEP_RESULTS_DAYS,
+        keep_days: float = KEEP_RESULTS_DAYS, token_bytes: int = 4,
     ):
         """
         Build the engine with *build* in the background, from the start or,
@@ -218,7 +228,7 @@ class McpSession:
         """
         self.engine = engine
         self.config = config or AssistantConfig()
-        self.store = ResultStore(results_dir, keep_days)
+        self.store = ResultStore(results_dir, keep_days, token_bytes)
         self.answers: dict = {}
         self._question = ""
         self._prompted = False  # whether an ask gave the whole prompt
@@ -330,6 +340,11 @@ class McpSession:
             self._prompted = True
             prompt = agent.system_prompt(question, schema=SCHEMA_POINTER)
             return f"{prompt}\n\n{MCP_NOTE}\n\n{task}"
+
+    def new_conversation(self) -> None:
+        """A client starts a conversation: its first ask gives the whole
+        prompt again, as it has none of it."""
+        self._prompted = False
 
     def _examples(self, agent, question: str) -> str:
         """The examples of the assistant's bank closest to *question*, as
@@ -781,6 +796,112 @@ def assistant_settings(path=None) -> AssistantConfig:
     except (OSError, yaml.YAMLError):
         return AssistantConfig()
     return _assistant(data.get("assistant"))
+
+
+class HttpBridge:
+    """
+    The MCP server's HTTP app (``streamable_http_app``, an ASGI app) run
+    without an HTTP server of its own, for one that has its own, as the
+    REPL server does: an event loop in a thread runs the app's lifespan,
+    and :meth:`call` runs one HTTP request through the app.
+    """
+
+    def __init__(self, app, start_seconds: float = 30):
+        self.app = app
+        self.loop = asyncio.new_event_loop()
+        threading.Thread(target=self.loop.run_forever, daemon=True).start()
+        self._started = threading.Event()
+        self._failed: Optional[BaseException] = None
+        asyncio.run_coroutine_threadsafe(self._lifespan(), self.loop)
+        if not self._started.wait(start_seconds) or self._failed:
+            raise RuntimeError(
+                f"The MCP app did not start: {self._failed or 'timed out'}"
+            )
+
+    async def _lifespan(self) -> None:
+        asked = False
+
+        async def receive():
+            nonlocal asked
+            if not asked:
+                asked = True
+                return {"type": "lifespan.startup"}
+            await asyncio.Event().wait()  # until the loop ends
+
+        async def send(message):
+            if message["type"] == "lifespan.startup.complete":
+                self._started.set()
+            elif message["type"] == "lifespan.startup.failed":
+                self._failed = RuntimeError(message.get("message", ""))
+                self._started.set()
+
+        try:
+            await self.app(
+                {"type": "lifespan", "asgi": {"version": "3.0"}}, receive,
+                send,
+            )
+        except BaseException as error:  # told by __init__
+            self._failed = error
+            self._started.set()
+
+    def call(self, method: str, path: str, headers: dict, body: bytes):
+        """Return the app's answer to an HTTP request: (status, headers,
+        body), its headers a list of (name, value)."""
+        return asyncio.run_coroutine_threadsafe(
+            self._call(method, path, headers, body), self.loop
+        ).result()
+
+    async def _call(self, method, path, headers, body):
+        path, _, query = path.partition("?")
+        scope = {
+            "type": "http", "asgi": {"version": "3.0"},
+            "http_version": "1.1", "method": method, "scheme": "http",
+            "path": path, "raw_path": path.encode(),
+            "query_string": query.encode(), "root_path": "",
+            "headers": [
+                (name.lower().encode("latin-1"), value.encode("latin-1"))
+                for name, value in headers.items()
+            ],
+            "server": ("127.0.0.1", 0), "client": ("127.0.0.1", 0),
+        }
+        sent = False
+
+        async def receive():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {"type": "http.request", "body": body,
+                        "more_body": False}
+            await asyncio.Event().wait()  # the client does not disconnect
+
+        answer = {"status": 500, "headers": [], "body": b""}
+
+        async def send(message):
+            if message["type"] == "http.response.start":
+                answer["status"] = int(message["status"])
+                answer["headers"] = [
+                    (name.decode("latin-1"), value.decode("latin-1"))
+                    for name, value in message.get("headers", [])
+                ]
+            elif message["type"] == "http.response.body":
+                answer["body"] += message.get("body", b"")
+
+        await self.app(scope, receive, send)
+        return answer["status"], answer["headers"], answer["body"]
+
+
+def http_app(session: McpSession):
+    """The HTTP app of the MCP server of *session*, stateless, answering in
+    JSON (no event streams), for a server that authenticates its clients
+    itself, as the REPL server does: its Host is not checked."""
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    return server(session).streamable_http_app(
+        stateless_http=True, json_response=True,
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        ),
+    )
 
 
 def server(session: McpSession):

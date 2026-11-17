@@ -1,5 +1,6 @@
 """Tests of the sessions of the REPL page, each in a process of its own."""
 
+import json
 import os
 import signal
 import subprocess
@@ -895,3 +896,44 @@ def test_the_text_embeddings_may_be_left_to_the_sessions(tmp_path):
             "ans(n) :- engine(e), (n == loads(e))")) == [[0]]
     finally:
         sessions.close()
+
+
+def _mcp(session, tmp_path, method, params=None):
+    """The answer of the MCP server of *session* to a JSON-RPC request."""
+    status, headers, body = session.mcp(
+        verb="POST", path="/mcp", headers={
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "host": "repl.example.org",
+            "mcp-protocol-version": "2025-06-18",
+        },
+        body=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method,
+                         "params": params or {}}).encode(),
+        base_url="https://repl.example.org/mcp/files/",
+        results_dir=str(tmp_path / "mcp"),
+    )
+    assert status == 200, body
+    return json.loads(body)["result"]
+
+
+def test_an_mcp_client_has_a_session_in_plain_text(sessions, tmp_path):
+    pytest.importorskip("mcp")
+    session = sessions.session("ann", "mcp")
+    session.start("neurostore", text=True)
+    assert "NeuroLang" in _mcp(session, tmp_path, "initialize", {
+        "protocolVersion": "2025-06-18", "capabilities": {},
+        "clientInfo": {"name": "test", "version": "1"},
+    })["instructions"]
+    text = _mcp(session, tmp_path, "tools/call", {
+        "name": "repl", "arguments": {"text": "ans(x) :- person(x, 5)"},
+    })["content"][0]["text"]
+    assert "bob" in text and "<span" not in text  # text, not HTML
+    answer = _mcp(session, tmp_path, "tools/call", {
+        "name": "final_answer", "arguments": {
+            "query": "ans(x) :- person(x, 5)", "explanation": "Bob.",
+            "comments": ["the person of 5"],
+        },
+    })
+    links = answer["structuredContent"]["links"]
+    assert links["rows"].startswith("https://repl.example.org/mcp/files/")
+    assert list((tmp_path / "mcp").glob("*/a1/rows.csv"))
