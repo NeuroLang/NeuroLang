@@ -26,7 +26,7 @@ from typing import Callable, Optional
 
 from neurolang.confine import lifted
 from neurolang_apps.utils import engine_registry
-from neurolang_apps.utils.tui import session, web
+from neurolang_apps.utils.tui import constant_notes, session, web
 from neurolang_apps.utils.tui.interrupt import _raise_in_thread
 
 
@@ -149,7 +149,9 @@ class LocalBackend:
         from their cache or computed into it, and the query model), so
         that its first query of them does not, nor do the sessions forked
         from this process (see
-        :func:`~neurolang_apps.utils.text_embeddings.preload`)."""
+        :func:`~neurolang_apps.utils.text_embeddings.preload`); and find the
+        values of its string sorts, which the notes of a query look up
+        (:func:`~neurolang_apps.utils.tui.constant_notes.prepare`)."""
         nl = self._build(name, say)
         if self.preload_embeddings and \
                 getattr(nl, "text_embedding_indexes", None):
@@ -157,6 +159,8 @@ class LocalBackend:
 
             say("Loading the text embeddings")
             text_embeddings.preload(nl)
+        say("Finding the names of the engine")
+        constant_notes.prepare(nl, name)
         return nl
 
     def _build_engine(self, name: str, say: Callable):
