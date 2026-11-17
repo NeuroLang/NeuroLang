@@ -77,9 +77,19 @@ def digest(*parts) -> str:
             elif part.dtype.kind == "f":
                 part = np.round(part * 1000).astype("<i8")
             else:
-                # fixed-width UTF-32 little-endian: the same bytes anywhere
-                part = part.astype(str)
-                part = part.astype(f"<U{max(part.dtype.itemsize // 4, 1)}")
+                # the distinct items, in order, as fixed-width UTF-32 little
+                # endian, and the position of each: the same bytes anywhere,
+                # without a Python string for each of millions of items
+                import pandas as pd
+
+                codes, items = pd.factorize(
+                    part.ravel(), use_na_sentinel=False
+                )
+                items = np.asarray(items).astype(str)
+                hasher.update(items.astype(
+                    f"<U{max(items.dtype.itemsize // 4, 1)}"
+                ).tobytes() + f"{part.shape}".encode())
+                part = codes.astype("<i8")
             hasher.update(f"{part.shape}".encode() + part.tobytes())
         else:
             hasher.update(repr(part).encode())
