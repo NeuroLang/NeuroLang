@@ -227,7 +227,14 @@ file, or downloads an address into the engines' data directory:
 ``--individuals`` also loads every triple as a fact, ``--names prefixed``
 names the predicates by the prefixes of the file (``pv:Employee``) rather
 than by their local name, and ``--format`` gives the format of the file
-(``turtle``, ``xml``...) when its extension does not.  On the page,
+(``turtle``, ``xml``...) when its extension does not.  With ``--query
+CONSTRUCT``, ``--graph IRI`` or ``--classes-under IRI``, the address is a
+SPARQL endpoint, of which only these triples are read
+(:ref:`ontologies-from-an-endpoint`)::
+
+   .ontology https://ubergraph.apps.renci.org/sparql --classes-under http://purl.obolibrary.org/obo/UBERON_0002616
+
+On the page,
 **Upload data** takes an ontology (``.owl``, ``.rdf``, ``.ttl``, ``.nt``,
 ``.n3``, ``.jsonld``) and loads it with ``.ontology NAME``: a server loads
 the ontologies you upload, and no address or path of its own.  An
@@ -340,7 +347,8 @@ Every command
      - both
    * - ``.ontology URL|PATH|UPLOADED [--individuals] [--names local|prefixed] [--format FORMAT]``
      - an OWL or RDF ontology, its classes and properties as predicates
-       and its axioms as constraints (see `Ontologies`_)
+       and its axioms as constraints, or the triples of a SPARQL endpoint
+       (``--query``, ``--graph``, ``--classes-under``; see `Ontologies`_)
      - both
    * - ``.uploads [remove NAME | restore NAME]``
      - the files the page uploaded in the session: their kind, size, age,

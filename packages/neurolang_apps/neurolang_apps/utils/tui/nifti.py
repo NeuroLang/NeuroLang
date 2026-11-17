@@ -166,7 +166,8 @@ _OPTION_FORMS = {
     "--name": "--name NAME", "--zscore": "--zscore", "--mask": "--mask",
     "--cortex": "--cortex", "--radius": "--radius MM",
     "--individuals": "--individuals", "--names": "--names local|prefixed",
-    "--format": "--format FORMAT",
+    "--format": "--format FORMAT", "--query": "--query CONSTRUCT",
+    "--graph": "--graph IRI", "--classes-under": "--classes-under IRI",
 }
 
 

@@ -1041,3 +1041,36 @@ def test_an_uploaded_ontology_is_loaded_on_a_server(
     assert "loaded the ontology staff.ttl: 2 predicates" in _said(app)
     assert _employees(app) == {("alice",)}
     assert app.uploads.listing()[0]["loaded"] == ["ontology"]
+
+
+def test_ontology_reads_the_triples_of_a_sparql_endpoint(
+    app, monkeypatch, tmp_path
+):
+    """With --classes-under (--query, --graph), the address is that of a
+    SPARQL endpoint, of which only these triples are read, once."""
+    from neurolang_apps.utils import sparql_endpoint
+    from neurolang_apps.utils.tests.test_sparql_endpoint import (
+        EX, TRIPLES, Reply,
+    )
+
+    queries = []
+
+    def urlopen(request, timeout):
+        queries.append(request.data.decode())
+        return Reply(TRIPLES, "application/n-triples")
+
+    monkeypatch.setattr(sparql_endpoint, "urlopen", urlopen)
+    app.settings.data_dir = str(tmp_path)
+    app._nl.add_tuple_set([(f"{EX}m1",)], name="Manager")
+    command = (
+        f".ontology https://example.org/sparql --classes-under {EX}Employee"
+    )
+    app._handle_dot_command(command)
+    source = f"https://example.org/sparql (classes_under: {EX}Employee)"
+    assert f"loaded the ontology {source}" in _said(app)
+    assert _employees(app) == {(f"{EX}m1",)}
+    app._handle_dot_command(command)
+    assert "is already loaded." in _said(app) and len(queries) == 1
+    app._handle_dot_command(".clear")
+    app._handle_dot_command(command)  # from the cache
+    assert len(queries) == 1 and list((tmp_path / "ontologies").iterdir())

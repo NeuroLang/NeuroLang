@@ -1950,11 +1950,20 @@ def load_ontology_entry(nl, entry, data_dir, engine_name, base_dir=None):
     (or of the REPL's ``.ontology``).
 
     It gives a file with ``url`` (a URL, a local path, or a file object),
-    or several, loaded together, with ``urls``. ``format``,
-    ``individuals``, ``names`` and ``prefixes`` are passed to
+    or several, loaded together, with ``urls``, or the triples of a SPARQL
+    endpoint with ``endpoint`` and ``query``, ``graph`` or
+    ``classes_under`` (see :mod:`~neurolang_apps.utils.sparql_endpoint`).
+    ``format``, ``individuals``, ``names`` and ``prefixes`` are passed to
     :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`.
     """
-    sources = entry.get("urls") or [entry["url"]]
+    if entry.get("endpoint"):
+        from . import sparql_endpoint
+
+        sources = [str(sparql_endpoint.fetch_triples(
+            entry, Path(data_dir) / engine_name / "sparql"
+        ))]
+    else:
+        sources = entry.get("urls") or [entry["url"]]
     paths = [
         _ontology_file(source, engine_name, data_dir, base_dir)
         if isinstance(source, str) else source
@@ -1966,10 +1975,16 @@ def load_ontology_entry(nl, entry, data_dir, engine_name, base_dir=None):
 
 def ontology_sources(entries) -> List[str]:
     """The URLs and paths of the ontologies of *entries*, those of an
-    engine's ``ontologies``."""
+    engine's ``ontologies``; for an endpoint, its address and what is read
+    of it (:func:`~neurolang_apps.utils.sparql_endpoint.describe`)."""
+    from . import sparql_endpoint
+
     return [
         source for entry in entries or ()
-        for source in entry.get("urls") or [entry["url"]]
+        for source in (
+            [sparql_endpoint.describe(entry)] if entry.get("endpoint")
+            else entry.get("urls") or [entry["url"]]
+        )
     ]
 
 

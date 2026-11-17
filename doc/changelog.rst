@@ -19,6 +19,17 @@ Unreleased
 
 **New features:**
 
+- Ontologies from a SPARQL endpoint: an entry of an engine's
+  ``ontologies`` with ``endpoint`` reads the triples of a ``CONSTRUCT``
+  ``query``, of a named ``graph``, or of a class and its subclasses with
+  their labels (``classes_under``), and the REPL's ``.ontology ENDPOINT
+  --query|--graph|--classes-under`` does the same in a session. An endpoint
+  is never read whole: a reply over ``max_triples`` or ``max_megabytes`` is
+  refused, and the endpoint has ``timeout`` seconds to answer, defaults of
+  ``neurolang_apps/utils/sparql_endpoint.yaml`` that an entry may change.
+  The reply is kept in the engine's data directory. The 727 regional parts
+  of the brain of UBERON, from Ubergraph, load in about 15 s.
+
 - REPL: ``.ontology URL|PATH|UPLOADED`` loads an OWL or RDF ontology into
   the session, as the ``ontologies`` of an engine are (the same loader,
   ``engine_registry.load_ontology_entry``), with ``--individuals``,

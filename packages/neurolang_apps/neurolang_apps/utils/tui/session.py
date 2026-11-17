@@ -702,14 +702,21 @@ def cmd_load(app, arg: str) -> None:
 
 ONTOLOGY_USAGE = (
     ".ontology URL|PATH|UPLOADED [--individuals] [--names local|prefixed] "
-    "[--format FORMAT]"
+    "[--format FORMAT] | .ontology ENDPOINT --query CONSTRUCT|--graph IRI|"
+    "--classes-under IRI [--individuals] [--names local|prefixed]"
 )
+
+# The options of .ontology reading a SPARQL endpoint, by the key of its
+# entry (see sparql_endpoint).
+_ENDPOINT_OPTIONS = {
+    "--query": "query", "--graph": "graph", "--classes-under": "classes_under",
+}
 
 
 @command(
-    ".ontology", "Load an OWL or RDF ontology, from an address, a file, or "
-    "one the page uploaded: its classes and properties are predicates, its "
-    "axioms constraints of the queries",
+    ".ontology", "Load an OWL or RDF ontology, from an address, a file, one "
+    "the page uploaded, or a SPARQL endpoint: its classes and properties are "
+    "predicates, its axioms constraints of the queries",
     ONTOLOGY_USAGE,
 )
 def cmd_ontology(app, arg: str) -> None:
@@ -717,12 +724,17 @@ def cmd_ontology(app, arg: str) -> None:
     of an engine are (:func:`engine_registry.load_ontology_entry`): one
     the page uploaded, by its name, or an address or a path; on a server,
     which fetches no address and reads none of its files for a statement
-    (neurolang.confine), an uploaded one only. ``.clear`` removes it."""
+    (neurolang.confine), an uploaded one only. With ``--query``,
+    ``--graph`` or ``--classes-under``, the address is that of a SPARQL
+    endpoint (:mod:`~neurolang_apps.utils.sparql_endpoint`). ``.clear``
+    removes it."""
     from .nifti import SaveError, split_args
+    from .. import sparql_endpoint
 
     try:
         words, options = split_args(
-            arg, {"--individuals": 0, "--names": 1, "--format": 1},
+            arg, {"--individuals": 0, "--names": 1, "--format": 1,
+                  **dict.fromkeys(_ENDPOINT_OPTIONS, 1)},
             ONTOLOGY_USAGE,
         )
     except SaveError as exc:
@@ -732,17 +744,25 @@ def cmd_ontology(app, arg: str) -> None:
     if len(words) != 1 or names not in ("local", "prefixed"):
         _load_failed(app, f"Usage: {ONTOLOGY_USAGE}")
         return
-    source = words[0]
+    entry = {"url": words[0], "names": names,
+             "individuals": "--individuals" in options}
+    if "--format" in options:
+        entry["format"] = options["--format"][0]
+    for option, key in _ENDPOINT_OPTIONS.items():
+        if option in options:
+            entry[key] = options[option][0]
+    if any(key in entry for key in _ENDPOINT_OPTIONS.values()):
+        entry["endpoint"] = entry.pop("url")
+        source = sparql_endpoint.describe(entry)
+    else:
+        source = words[0]
     if source in app.loaded_ontologies or source in _engine_ontologies(app):
         _load_failed(app, f"The ontology {source} is already loaded"
                      + ("." if source in app.loaded_ontologies else
                         ", by the engine."))
         return
-    entry = {"url": source, "names": names,
-             "individuals": "--individuals" in options}
-    if "--format" in options:
-        entry["format"] = options["--format"][0]
-    data = app._read_upload(source, "ontology")
+    data = None if "endpoint" in entry else \
+        app._read_upload(source, "ontology")
     if data is not None:
         from rdflib.util import guess_format
 
@@ -750,7 +770,7 @@ def cmd_ontology(app, arg: str) -> None:
         entry.setdefault("format", guess_format(source) or "xml")
     else:
         try:
-            check_read(source, "ontology")
+            check_read(words[0], "ontology")
         except ConfinedError as exc:
             _load_failed(app, f"{exc}; upload the ontology (Upload data), "
                          "then .ontology NAME loads it")

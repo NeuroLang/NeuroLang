@@ -149,8 +149,9 @@ may specify the following keys, all of them optional:
   seed: 0}``, queried with ``RESAMPLE[name](pred(x)) = b`` (see the
   tutorial :doc:`tutorial_datalog`, section 10.7)
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
-  a local path) or ``urls`` (several files loaded together), and the
-  ``format``, ``individuals`` and ``names`` options of
+  a local path), ``urls`` (several files loaded together), or the triples
+  of a SPARQL endpoint (see :ref:`ontologies-from-an-endpoint` below), and
+  the ``format``, ``individuals`` and ``names`` options of
   :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`
 - ``text_embeddings`` — semantic search over document texts, registered as
   a similarity function (see :ref:`text-embeddings-section` below)
@@ -642,6 +643,47 @@ facts and constraints that queries use with the engine's data, in the
 open-world manner of NeuroLang.  Because ``ontologies`` is loaded before
 ``datalog_init``, the rules of an engine can use the ontology's predicates,
 as ``cogat_subclass_of`` and ``cogat_measures`` do.
+
+.. _ontologies-from-an-endpoint:
+
+Ontologies from a SPARQL endpoint
+---------------------------------
+
+An entry of ``ontologies`` may read its triples from a SPARQL endpoint,
+its ``endpoint``, rather than from a file.  An endpoint is never read whole:
+the entry says which triples with one of
+
+- ``query``: a ``CONSTRUCT`` query of the endpoint;
+- ``graph``: the IRI of a named graph, all of its triples;
+- ``classes_under``: the IRI of a class, it and its subclasses at any
+  depth, with their ``rdfs:subClassOf`` and labels.
+
+.. code-block:: yaml
+
+   ontologies:
+     # the 727 regional parts of the brain of UBERON, with their labels
+     - endpoint: https://ubergraph.apps.renci.org/sparql
+       classes_under: http://purl.obolibrary.org/obo/UBERON_0002616
+     - endpoint: https://example.org/sparql
+       query: |
+         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+         CONSTRUCT { ?c rdfs:subClassOf ?d } WHERE { ?c rdfs:subClassOf ?d }
+       max_triples: 100000
+
+The reply is kept in ``<data_dir>/<engine>/sparql/``, named by the endpoint
+and its query, and read from there on the next builds; deleting it fetches
+it again.  A reply is refused when it is too large, and the endpoint has a
+time to answer; an entry may change these limits, whose defaults are those
+of ``neurolang_apps/utils/sparql_endpoint.yaml``:
+
+.. code-block:: yaml
+
+   max_triples: 500000     # the most triples of a reply, else it is refused
+   max_megabytes: 200      # the most megabytes of a reply, else it is refused
+   timeout: 120            # seconds to wait for the endpoint
+
+In the REPL, ``.ontology ENDPOINT --query CONSTRUCT``, ``--graph IRI`` or
+``--classes-under IRI`` loads the same into a session (see :doc:`repl`).
 
 The ``tracts`` engine
 ---------------------
