@@ -88,6 +88,15 @@ Unreleased
   engine's own tractogram is listed first, never removed, its *Index*
   putting it back (:doc:`tutorial_decoding`).
 
+**Performance:**
+
+- The pandas relational-algebra sets share the columns of the frames they
+  are made from, or copy, under copy-on-write (pandas 3): ``copy()``, the
+  named set made from a data frame, ``extended_projection``, the left
+  join without common columns and ``|=`` onto an empty set no longer copy
+  the rows when no write reaches them (a write copies the column it
+  changes). Before pandas 3, the copies are deep as before.
+
 **Bug fixes:**
 
 - The relational-algebra chase no longer keeps every chase that ran: three
