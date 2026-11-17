@@ -19,6 +19,28 @@ Unreleased
 
 **New features:**
 
+- Ontologies from a SPARQL endpoint: an entry of an engine's
+  ``ontologies`` with ``endpoint`` reads the triples of a ``CONSTRUCT``
+  ``query``, of a named ``graph``, or of a class and its subclasses with
+  their labels (``classes_under``), and the REPL's ``.ontology ENDPOINT
+  --query|--graph|--classes-under`` does the same in a session. An endpoint
+  is never read whole: a reply over ``max_triples`` or ``max_megabytes`` is
+  refused, and the endpoint has ``timeout`` seconds to answer, defaults of
+  ``neurolang_apps/utils/sparql_endpoint.yaml`` that an entry may change.
+  The reply is kept in the engine's data directory. The 727 regional parts
+  of the brain of UBERON, from Ubergraph, load in about 15 s.
+
+- REPL: ``.ontology URL|PATH|UPLOADED`` loads an OWL or RDF ontology into
+  the session, as the ``ontologies`` of an engine are (the same loader,
+  ``engine_registry.load_ontology_entry``), with ``--individuals``,
+  ``--names local|prefixed`` and ``--format``. **Upload data** takes an
+  ontology (``.owl``, ``.rdf``, ``.ttl``, ``.nt``, ``.n3``, ``.jsonld``) and
+  loads it with ``.ontology NAME``; on a server, which fetches no address
+  for a statement, only uploaded ones. An ontology is loaded once, the
+  engine's included; ``.clear`` removes the session's, and ``.drop`` refuses
+  their predicates. The page runs the statement again with the session's
+  rules.
+
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
   the regions a question lists (which regions, parcels or structures a
   term, a topic or a seed activates or co-activates) are answered with the
@@ -491,6 +513,20 @@ v0.1a23 (2026-11-15)
   j, k, u)`` on ``neurostore`` spends 1 s instead of 15 s on it.
 
 **Bug fixes:**
+
+* REPL: an unknown option of ``.image`` lists the options of the
+  command; it failed with *Cannot load ...: '--name'*.
+
+* Ontologies loaded one after the other, with ``load_ontology``, add up:
+  the constraints, rules, facts and labels of a later one are added to those
+  of the earlier ones, as if they had been loaded together. A second
+  ontology replaced the constraints of the first, and the labels of its
+  connector symbol. The constraints of a program were also seen by every
+  other program built after it (a dictionary of the class, not of the
+  program). What the ontologies loaded follows the scopes of the program:
+  popping a scope, as ``.clear`` does in the REPL, takes away the
+  ontologies loaded in it, constraints included, and the rewritings
+  cached with them.
 
 * ``.view`` draws the regions of a result of the connectivity relations:
   their labels, of the sorts ``schaefer400_tian_label`` and

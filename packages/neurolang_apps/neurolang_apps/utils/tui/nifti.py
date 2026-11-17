@@ -163,6 +163,11 @@ _OPTION_FORMS = {
     "--mm": "--mm X Y Z", "--threshold": "--threshold T",
     "--cmap": "--cmap NAME", "--symmetric": "--symmetric",
     "--one-sided": "--one-sided", "--fill": "--fill V",
+    "--name": "--name NAME", "--zscore": "--zscore", "--mask": "--mask",
+    "--cortex": "--cortex", "--radius": "--radius MM",
+    "--individuals": "--individuals", "--names": "--names local|prefixed",
+    "--format": "--format FORMAT", "--query": "--query CONSTRUCT",
+    "--graph": "--graph IRI", "--classes-under": "--classes-under IRI",
 }
 
 

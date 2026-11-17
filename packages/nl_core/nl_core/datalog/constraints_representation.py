@@ -6,7 +6,7 @@ the extensional, intentional, and builtin
 sets and has support for constraints.
 """
 
-from typing import Iterable
+from typing import Iterable, Tuple
 
 from .expression_processing import extract_logic_atoms
 from .basic_representation import DatalogProgramMixin
@@ -37,9 +37,13 @@ class RightImplication(LogicOperator):
 
 
 class DatalogConstraintsMixin(PatternWalker):
-    protected_keywords = {"__constraints__"}
-    categorized_constraints = {}
-    existential_rules = {}
+    """
+    The constraints of a program, and its existential rules, are in its
+    symbol table, under ``__constraints__`` and ``__existential_rules__``:
+    they follow its scopes, as its rules and facts do.
+    """
+
+    protected_keywords = {"__constraints__", "__existential_rules__"}
 
     @add_match(RightImplication)
     def add_logic_constraint(self, expression):
@@ -67,11 +71,9 @@ class DatalogConstraintsMixin(PatternWalker):
         sym_constraints = Symbol("__constraints__")
         return self.symbol_table.get(sym_constraints, Union(()))
 
-    def set_constraints(self, categorized_constraints):
-        '''This function receives a dictionary with the constraints organized
-        according to the functor of its consequent and is in charge of setting
-        it both in the symbol table and in the global variable
-        `categorized_contraints`, useful for XRewriter optimizations.
+    def add_constraints(self, categorized_constraints):
+        '''Add constraints, organised by the functor of their consequent,
+        to those of the program.
 
         Parameters
         ----------
@@ -81,12 +83,32 @@ class DatalogConstraintsMixin(PatternWalker):
             and the values are lists of constraints with
             each rule associated to the corresponding functor.
         '''
-        sym_constraints = Symbol("__constraints__")
-        if isinstance(categorized_constraints, dict):
-            cons = [b for a in list(categorized_constraints.values()) for b in a]
-            self.symbol_table[sym_constraints] = Union(cons)
+        known = set(self.constraints().formulas)
+        added = tuple(
+            c for formulas in categorized_constraints.values()
+            for c in formulas if c not in known
+        )
+        self.symbol_table[Symbol("__constraints__")] = Union(
+            self.constraints().formulas + added
+        )
 
-            self.categorized_constraints = categorized_constraints
+    @property
+    def categorized_constraints(self):
+        '''The constraints of the program in a dictionary, where the key
+        is the functor of the consequent of each of them, useful for
+        XRewriter optimizations.'''
+        constraints = self.symbol_table.get(Symbol("__constraints__"))
+        cached = self.__dict__.get("_categorized_constraints")
+        if cached is None or cached[0] is not constraints:
+            categorized = {}
+            for sigma in getattr(constraints, "formulas", ()):
+                categorized.setdefault(
+                    sigma.consequent.functor.name, set()
+                ).add(sigma)
+            cached = self._categorized_constraints = (
+                constraints, categorized
+            )
+        return cached[1]
 
     def get_constraints(self):
         '''Returns the constraints in a dictionary, where the key is the functor
@@ -97,40 +119,25 @@ class DatalogConstraintsMixin(PatternWalker):
         Dictionary containing all constraints loaded in the datalog program,
         indexed according to the functor of the rule consequent.
         '''
-        sym_constraints = Symbol("__constraints__")
-        if not self.categorized_constraints:
-            constraints = self.symbol_table.get(sym_constraints, Union(()))
-            for f in constraints.formulas:
-                self._categorize_constraints(f)
-
         return self.categorized_constraints
 
+    @property
+    def existential_rules(self):
+        """The existential rules of the program, by entity."""
+        rules = self.symbol_table.get(Symbol("__existential_rules__"))
+        return {} if rules is None else dict(rules.value)
+
     def add_existential_rules(self, rules):
-        self.existential_rules = rules
-
-    def _categorize_constraints(self, sigma):
-        '''Function in charge of sorting the constraints in a dictionary
-        using the consequent functor as an index.
-
-        This indexing is useful to obtain the constraints in the
-        way they are needed for the rewriting algorithm.
-
-        Parameters
-        ----------
-        sigma : RightImplication
-            constraint to be categorized.
-        '''
-        sigma_functor = sigma.consequent.functor.name
-        if (
-            self.categorized_constraints
-            and sigma_functor in self.categorized_constraints
-        ):
-            cons_set = self.categorized_constraints[sigma_functor]
-            if sigma not in cons_set:
-                cons_set.add(sigma)
-                self.categorized_constraints[sigma_functor] = cons_set
-        else:
-            self.categorized_constraints[sigma_functor] = set([sigma])
+        """Add existential rules, by entity, to those of the program."""
+        merged = {
+            entity: tuple(entity_rules)
+            for entity, entity_rules in self.existential_rules.items()
+        }
+        for entity, entity_rules in rules.items():
+            merged[entity] = merged.get(entity, ()) + tuple(entity_rules)
+        self.symbol_table[Symbol("__existential_rules__")] = Constant[Tuple](
+            tuple(merged.items()), auto_infer_type=False, verify_type=False
+        )
 
 
 def iter_implications(expression):

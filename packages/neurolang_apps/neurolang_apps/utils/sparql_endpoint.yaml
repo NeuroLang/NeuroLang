@@ -1,0 +1,8 @@
+# The limits of the ontologies read from a SPARQL endpoint (an entry of an
+# engine's ontologies with `endpoint`, or the REPL's .ontology ENDPOINT
+# --query/--graph/--classes-under). They are read by sparql_endpoint.py,
+# the one place they are written; an entry may change them, and
+# doc/engine_configuration.rst quotes them, which the tests check.
+max_triples: 500000     # the most triples of a reply, else it is refused
+max_megabytes: 200      # the most megabytes of a reply, else it is refused
+timeout: 120            # seconds to wait for the endpoint

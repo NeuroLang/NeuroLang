@@ -1944,25 +1944,54 @@ def _ontology_file(source: str, engine_name, data_dir, base_dir) -> str:
     return str((base_dir or _ENGINES_DIR) / Path(source).expanduser())
 
 
-def _phase_ontologies(nl, cfg, data_dir, engine_name, base_dir=None):
+def load_ontology_entry(nl, entry, data_dir, engine_name, base_dir=None):
     """
-    Load the engine's ``ontologies``.
+    Load the ontology of *entry*, an entry of an engine's ``ontologies``
+    (or of the REPL's ``.ontology``).
 
-    Each entry gives a file with ``url`` (a URL or a local path), or
-    several, loaded together, with ``urls``. ``format``, ``individuals``,
-    ``names`` and ``prefixes`` are passed to
+    It gives a file with ``url`` (a URL, a local path, or a file object),
+    or several, loaded together, with ``urls``, or the triples of a SPARQL
+    endpoint with ``endpoint`` and ``query``, ``graph`` or
+    ``classes_under`` (see :mod:`~neurolang_apps.utils.sparql_endpoint`).
+    ``format``, ``individuals``, ``names`` and ``prefixes`` are passed to
     :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`.
     """
-    for onto_cfg in cfg.get("ontologies", []):
-        sources = onto_cfg.get("urls") or [onto_cfg["url"]]
-        paths = [
-            _ontology_file(source, engine_name, data_dir, base_dir)
-            for source in sources
-        ]
-        options = {
-            key: onto_cfg[key] for key in _ONTOLOGY_OPTIONS if key in onto_cfg
-        }
-        nl.load_ontology(paths if len(paths) > 1 else paths[0], **options)
+    if entry.get("endpoint"):
+        from . import sparql_endpoint
+
+        sources = [str(sparql_endpoint.fetch_triples(
+            entry, Path(data_dir) / engine_name / "sparql"
+        ))]
+    else:
+        sources = entry.get("urls") or [entry["url"]]
+    paths = [
+        _ontology_file(source, engine_name, data_dir, base_dir)
+        if isinstance(source, str) else source
+        for source in sources
+    ]
+    options = {key: entry[key] for key in _ONTOLOGY_OPTIONS if key in entry}
+    nl.load_ontology(paths if len(paths) > 1 else paths[0], **options)
+
+
+def ontology_sources(entries) -> List[str]:
+    """The URLs and paths of the ontologies of *entries*, those of an
+    engine's ``ontologies``; for an endpoint, its address and what is read
+    of it (:func:`~neurolang_apps.utils.sparql_endpoint.describe`)."""
+    from . import sparql_endpoint
+
+    return [
+        source for entry in entries or ()
+        for source in (
+            [sparql_endpoint.describe(entry)] if entry.get("endpoint")
+            else entry.get("urls") or [entry["url"]]
+        )
+    ]
+
+
+def _phase_ontologies(nl, cfg, data_dir, engine_name, base_dir=None):
+    """Load the engine's ``ontologies`` (see :func:`load_ontology_entry`)."""
+    for entry in cfg.get("ontologies", []):
+        load_ontology_entry(nl, entry, data_dir, engine_name, base_dir)
 
 
 def _phase_text_embeddings(
