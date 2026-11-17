@@ -410,8 +410,10 @@ given as argument or with ``--file`` runs first, in the session.
     of the query. It checks the answer as the agent's final answer is
     checked: a query that fails, gives no rows or has constants not in the
     data is sent back once, and comments that are not one per rule are sent
-    back before the query runs. An accepted answer gets an id and runs in
-    the session, without running again, and the client receives:
+    back before the query runs. An accepted answer gets an id and is shown
+    in the session from the rows its check gave, without running again; a
+    result of more than 20 million cells (a whole-brain map at 1 mm is 7
+    million) is sent back to be restricted. The client receives:
 
     - the explanation and the query with a ``%`` comment above each rule;
     - the first 20 rows of each result;
@@ -433,11 +435,12 @@ given as argument or with ``--file`` runs first, in the session.
       ``.credits`` gives them).
 ``repl``
     runs what is typed at the prompt, statements and dot-commands, and
-    returns the output and the first rows of each result (50 by default),
-    tab-separated. The relations and the rules it defines alone stay in
-    the session (those given with a query are local to it, see
-    ``.scope``). ``.save`` and ``.load`` write and read files on the
-    server's machine, relative to its working directory.
+    returns the output and the first rows of each result (50 by default,
+    500 at most), tab-separated. A query runs within the same limits of
+    time and memory as the tools', in a process of its own, then is shown
+    from the rows it gave. The relations and the rules it defines alone
+    stay in the session (those given with a query are local to it, see
+    ``.scope``).
 
 The statements of the session are confined, as those of the users of the
 REPL server: they read the engine's data and the answers' files only

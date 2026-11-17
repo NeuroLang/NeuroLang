@@ -488,3 +488,53 @@ def test_the_session_is_confined_unless_unconfined(monkeypatch, tmp_path):
     roots = confine(args)
     assert roots == [(tmp_path / "d").resolve(), (tmp_path / "r").resolve()]
     assert os.environ[CONFINE_ENV].split(os.pathsep) == list(map(str, roots))
+
+
+class TestLimits:
+    def test_a_repl_query_runs_within_the_limits(self, tmp_path, monkeypatch):
+        from neurolang_apps.utils import mcp_server
+        from neurolang_apps.utils.llm.validation import Preview
+
+        calls = []
+
+        def stopped(nl, text, language, rows, engine, timeout, memory, cells):
+            calls.append((text, timeout, memory, cells))
+            return Preview(False, "The query ran for more than 7 s and was "
+                           "stopped: restrict it.")
+
+        monkeypatch.setattr(mcp_server, "run_preview", stopped)
+        session = McpSession(
+            "", _engine, results_dir=tmp_path,
+            config=AssistantConfig(query_timeout=7, query_memory_mb=99),
+        )
+        text = session.repl("ans(n) :- person(n, a)")
+        assert text.startswith("FAILED") and "was stopped" in text
+        assert calls == [
+            ("ans(n) :- person(n, a)", 7, 99, mcp_server.MAX_CELLS)
+        ]
+        text = session.repl("older(n) :- person(n, a), (a > 4)\n.predicates")
+        assert "older" in text and len(calls) == 1  # no query: no preview
+
+    def test_a_repl_query_is_shown_not_run_again(self, session):
+        text = session.repl("ans(n) :- person(n, a), (a > 4)")
+        assert "not run again" in text and "bob\ncarol" in text
+
+    def test_the_rows_of_repl_are_capped(self, tmp_path):
+        def build():
+            nl = _engine()
+            nl.add_tuple_set([(i,) for i in range(600)], name="number")
+            return nl
+
+        session = McpSession("", build, results_dir=tmp_path)
+        text = session.repl("ans(i) :- number(i)", max_rows=10_000)
+        assert "(500 of 600 rows" in text
+
+    def test_an_answer_too_large_to_keep_is_refused(
+        self, session, monkeypatch
+    ):
+        from neurolang_apps.utils import mcp_server
+
+        monkeypatch.setattr(mcp_server, "MAX_CELLS", 1)
+        result = _answer(session)
+        assert "too large to show here" in result.content[0].text
+        assert not session.answers

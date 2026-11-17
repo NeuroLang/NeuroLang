@@ -46,12 +46,14 @@ from neurolang_apps.utils.llm import (
 from neurolang_apps.utils.llm.agent import Toolbox
 from neurolang_apps.utils.llm.comments import commented_query, split_rules
 from neurolang_apps.utils.llm.config import _assistant, config_path
+from neurolang_apps.utils.llm.validation import run_preview
 from neurolang_apps.utils.tui import nifti, query_graph
 from neurolang_apps.utils.tui.app import AgentRun
 from neurolang_apps.utils.tui.assistant import (
     _previous, _run_outcome, _without_left_out,
 )
 from neurolang_apps.utils.tui.statements import split_at_commands
+from neurolang_apps.utils.tui.submission import submission_outline
 from neurolang_apps.utils.tui.web import WebRepl
 
 # How to cite NeuroLang, at the end of each answer with the sources of the
@@ -73,8 +75,13 @@ log = logging.getLogger("neurolang_apps.mcp")
 # model being the assistant.
 REFUSED_COMMANDS = frozenset({".ask", ".llm", ".explain", ".rate", ".refine"})
 
-# The rows of each result the ``repl`` tool returns, by default.
+# The rows of each result the ``repl`` tool returns, by default and at most.
 MAX_ROWS = 50
+MAX_REPL_ROWS = 500
+# The most cells of a result kept from the process its query ran in, to
+# show it in the session without running it again (a whole-brain map at
+# 1 mm is 7 million): a larger one is refused, not run again unlimited.
+MAX_CELLS = 20_000_000
 # The rows of each result an answer returns, and its glass brains at most.
 ANSWER_ROWS = 20
 ANSWER_IMAGES = 2
@@ -242,7 +249,7 @@ class McpSession:
             config = self.config
             self._toolbox = Toolbox(
                 self._agent(repl).context, LANGUAGE, config.preview_rows,
-                config.query_timeout, config.query_memory_mb,
+                config.query_timeout, config.query_memory_mb, MAX_CELLS,
             )
         return self._toolbox
 
@@ -302,13 +309,47 @@ class McpSession:
             )
         with self._lock:
             repl = self._session()
-            repl.max_rows = max_rows
-            reply = repl.submit(text)
+            repl.max_rows = min(max_rows, MAX_REPL_ROWS)
+            parts, failed = [], False
+            for part in split_at_commands(text):
+                reply = self._submit(repl, part)
+                parts += [reply.html.rstrip(), *map(_tsv, reply.tables)]
+                if reply.failed:
+                    failed = True
+                    break
             self._toolbox = None  # the session may have changed
-        parts = [reply.html.rstrip(), *map(_tsv, reply.tables)]
-        if reply.failed:
+        if failed:
             parts.insert(0, "FAILED")
         return "\n\n".join(part for part in parts if part)
+
+    def _submit(self, repl, part: str):
+        """
+        Submit *part*, a dot-command or a program, to the session; a query
+        first runs within the assistant's limits of time and memory, in
+        its own process, then is shown from the rows it gave, not run
+        again (or, its rules staying in the session, run again).
+        """
+        app = repl.app
+        if part.startswith(".") or not submission_outline(
+            app._nl, part, False
+        )[0]:
+            return repl.submit(part)
+        config = self.config
+        preview = run_preview(
+            app._nl, part, LANGUAGE, 0, self.engine, config.query_timeout,
+            config.query_memory_mb, MAX_CELLS,
+        )
+        if not preview.ok or (
+            preview.frames is None and preview.frame is not None
+        ):
+            return _Failed(
+                preview.text if not preview.ok else
+                f"Its result, {preview.rows} rows, is more than "
+                f"{MAX_CELLS:,} cells: restrict it."
+            )
+        if preview.frames is not None and app.settings.scope_queries:
+            app.agent_run = AgentRun(part, False, preview.frames)
+        return repl.submit(part)
 
     def final_answer(
         self, query: str, explanation: str, comments: list
@@ -336,6 +377,14 @@ class McpSession:
             )
             if final is None:
                 return _text(observation)
+            preview = tools.answer_preview
+            if preview.frames is None and preview.frame is not None:
+                return _text(
+                    f"The answer is rejected: its result, {preview.rows} "
+                    f"rows, is more than {MAX_CELLS:,} cells, too large to "
+                    "show here. Restrict it, with a threshold on its values "
+                    "or fewer columns, and call final_answer again."
+                )
             commented = commented_query(
                 rules, [" ".join(str(c).split()) for c in comments]
             )
@@ -523,6 +572,15 @@ def _link_kind(name: str) -> str:
 
 def _link_rank(name: str) -> int:
     return list(LINKS).index(_link_kind(name))
+
+
+@dataclass
+class _Failed:
+    """The reply to a query refused before it ran in the session."""
+
+    html: str
+    tables: list = field(default_factory=list)
+    failed: bool = True
 
 
 def _text(text: str) -> types.CallToolResult:

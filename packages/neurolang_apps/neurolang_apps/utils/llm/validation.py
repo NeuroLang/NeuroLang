@@ -492,21 +492,24 @@ def _accelerate() -> bool:
 def run_preview(
     nl, text: str, language: str, rows: int = 10, engine_name: str = "",
     timeout: Optional[float] = None, memory_mb: Optional[float] = None,
+    max_cells: Optional[int] = None,
 ) -> Preview:
     """
-    Run the query *text* and return the first *rows* rows of its result.
+    Run the query *text* and return the first *rows* rows of its result,
+    and all of them if they are no more than *max_cells* cells
+    (:data:`MAX_KEPT_CELLS` if None).
 
     The rules it defines are discarded with the scope it runs in. With a
     *timeout* (seconds) or a *memory_mb* limit, the query runs in a child
     process stopped when it exceeds them.
     """
+    def preview():
+        return _preview(nl, text, language, rows, engine_name, max_cells)
+
     if not (timeout or memory_mb):
-        return _preview(nl, text, language, rows, engine_name)
+        return preview()
     try:
-        return _in_child(
-            lambda: _preview(nl, text, language, rows, engine_name),
-            timeout, memory_mb,
-        )
+        return _in_child(preview, timeout, memory_mb)
     except QueryTimeout:
         return Preview(
             False,
@@ -542,7 +545,7 @@ def _notes(nl, engine_name, text, language) -> str:
     )
 
 
-def _preview(nl, text, language, rows, engine_name) -> Preview:
+def _preview(nl, text, language, rows, engine_name, max_cells=None) -> Preview:
     """
     Run the query *text* and return its preview (see run_preview), after
     the notes on its constants.
@@ -573,7 +576,9 @@ def _preview(nl, text, language, rows, engine_name) -> Preview:
                 f"{', '.join(map(str, frame.columns))}\n"
                 + frame.head(rows).to_string(index=False)
             )
-    kept = frames if sum(f.size for _, f in frames) <= MAX_KEPT_CELLS else None
+    if max_cells is None:
+        max_cells = MAX_KEPT_CELLS
+    kept = frames if sum(f.size for _, f in frames) <= max_cells else None
     notes = _notes(nl, engine_name, text, language)
     shown = "\n".join(filter(None, [notes, *parts]))
     return Preview(True, shown, total, first, kept)
