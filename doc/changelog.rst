@@ -19,6 +19,20 @@ Unreleased
 
 **New features:**
 
+- REPL server (``--local``): the results of the queries that read nothing
+  of their session, the same in every session (the examples of the page,
+  the queries of its example questions: 1.6 to 5.2 s each on
+  ``neurosynth_iit``), are kept as Arrow files in ``--result-cache-dir``,
+  at most ``--result-cache-mb`` megabytes, the least recently used going
+  first, and shown to the sessions of every user that run them again,
+  tables, downloads and viewers included
+  (``neurolang_apps.utils.result_cache``). A file is named by the engine
+  (name, resolution, configuration, the files of its data and of
+  NeuroLang, the versions of the libraries), the program as parsed and the
+  query backend. A query that reads a rule, relation, fact or upload of its
+  session, has a command, or runs in a session that ran one, is never
+  shared. See *Results shared by the sessions* in :doc:`repl_server`.
+
 - REPL server (``--users --local``): with ``--mcp``, it answers MCP
   clients, LLM agents such as Claude Code, at ``/mcp``, each user with a
   personal token of their account page (only its hash kept, in the users

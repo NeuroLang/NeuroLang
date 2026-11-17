@@ -22,3 +22,5 @@ mcp: false                    # --users --local: answer MCP clients at /mcp, wit
 mcp_results_dir: ~/.cache/neurolang/repl-mcp  # --mcp: the files of the MCP answers, a folder per session
 max_upload_mb: 50             # --local: a file a page uploads, at most
 max_uploads_mb: 200           # --local: all those of a session, at most
+result_cache_dir: ~/.cache/neurolang/repl-results  # --local: the results the same in every session, kept
+result_cache_mb: 1024         # --local: those kept, at most (0: none)
