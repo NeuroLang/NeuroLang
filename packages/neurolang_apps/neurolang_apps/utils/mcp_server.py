@@ -107,9 +107,9 @@ instructions with the tools (`search_values`,
 `describe_predicate`, `run_query`, ...) and give the query with
 `final_answer`, with a comment on each rule: it returns the explanation,
 the commented query, its first rows, images and links to the interactive
-viewer and the files of the result; show them to the user: the query with
-its comments, and always the links, the viewer's first, and the references
-to cite NeuroLang. To change an
+viewer and the files of the result, in Markdown; show it to the user as it
+is: the query with its comments, and always the links, the viewer's first,
+and the references to cite NeuroLang. To change an
 answer for a new question, call `ask` with `refine` set to the answer's id
 (`a1`, ...) or to `last`, the last query run, such as one the user changed
 and ran with `repl`. `repl` runs statements and dot-commands (`.help`) in
@@ -448,28 +448,30 @@ class McpSession:
         answer.links = links = dict(sorted(
             answer.links.items(), key=lambda item: _link_rank(item[0])
         ))
+        citations = list(NEUROLANG_REFERENCES)
         text = [
-            f"Answer {answer.id}" + (
-                f" to: {answer.question}" if answer.question else ""
+            f"## Answer {answer.id}" + (
+                f": {answer.question}" if answer.question else ""
             ),
-            f"Interactive viewer: {links['viewer']}"
+            f"**[Open the interactive viewer]({links['viewer']})**"
             if "viewer" in links else "",
             explanation,
-            f"```datalog\n{commented}\n```",
-            *map(_tsv, reply.tables),
+            f"### Query\n```datalog\n{commented}\n```",
+            *map(_markdown_table, reply.tables),
         ]
         if reply.failed:
-            text.append(f"Running it failed:\n{reply.html.strip()}")
-        text.append("Links to give the user:\n" + "\n".join(
-            f"{name}: {link}" for name, link in links.items()
+            text.append(
+                f"**Running it failed:**\n```\n{reply.html.strip()}\n```"
+            )
+        text.append("### Files\n" + "\n".join(
+            f"- [{_link_title(name)}]({link})" for name, link in links.items()
         ))
-        citations = list(NEUROLANG_REFERENCES)
-        text.append("To cite NeuroLang:\n" + "\n".join(
-            f"- {citation}" for citation in citations
+        text.append("### How to cite NeuroLang\n" + "\n".join(
+            f"{n}. {citation}" for n, citation in enumerate(citations, 1)
         ))
+        markdown = "\n\n".join(part for part in text if part)
         return types.CallToolResult(
-            content=[_content("\n\n".join(part for part in text if part))]
-            + images + [
+            content=[_content(markdown)] + images + [
                 types.ResourceLink(
                     name=f"{answer.id} {name}", uri=link,
                     title=f"{answer.id}: {LINKS[_link_kind(name)][0]}",
@@ -479,6 +481,9 @@ class McpSession:
             ],
             structured_content={
                 "id": answer.id, "question": answer.question,
+                # the answer as the text has it, to show as it is, for the
+                # clients giving their model this in place of the text
+                "markdown": markdown,
                 "viewer": links.get("viewer"), "links": links,
                 "query": commented, "explanation": explanation,
                 # clients showing it in place of the text see the rows too
@@ -583,6 +588,44 @@ def _image_title(heading: str, answer: str, layer: str, several: bool) -> str:
     if not heading:
         return f"{answer}: {layer}"
     return _one_line(heading, 85) + (f" ({layer})" if several else "")
+
+
+def _link_title(name: str) -> str:
+    """The title of the file *name* of an answer in its list of files:
+    ``rows-ans`` is "Rows (CSV): ans"."""
+    kind, _, part = name.partition("-")
+    title = LINKS[kind][0]
+    return title[0].upper() + title[1:] + (f": {part}" if part else "")
+
+
+def _markdown_table(table: dict) -> str:
+    """Return the rows of a result of the REPL as a Markdown table, after
+    a heading with its name and number of rows; numbers to 4 significant
+    digits."""
+    shown, total = len(table["rows"]), table["total"]
+    count = f"{total} row{'s' * (total != 1)}" + (
+        f", the first {shown}" if table["truncated"] else ""
+    )
+    title = f"### Result{': ' + table['title'] if table['title'] else ''}"
+    lines = [
+        f"{title} ({count})",
+        "| " + " | ".join(map(_cell, table["columns"])) + " |",
+        "|" + "---|" * len(table["columns"]),
+    ]
+    lines.extend(
+        "| " + " | ".join(_cell(cell) for cell in row) + " |"
+        for row in table["rows"]
+    )
+    return "\n".join(lines)
+
+
+def _cell(value) -> str:
+    """A value in a cell of a Markdown table."""
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        return f"{value:.4g}"
+    return str(value).replace("|", "\\|").replace("\n", " ")
 
 
 def _link_kind(name: str) -> str:

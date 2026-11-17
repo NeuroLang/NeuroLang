@@ -173,11 +173,14 @@ class TestFinalAnswer:
         session.ask("who is over 4?")
         result = _answer(session)
         text = result.content[0].text
-        assert text.startswith("Answer a1 to: who is over 4?")
-        assert "Who is over 4." in text
-        assert "% over 4\nolder(n) :- person(n, a), (a > 4)" in text
-        assert "% the older\nans(n) :- older(n)" in text
-        assert "n\nbob\ncarol" in text
+        assert text.startswith(
+            "## Answer a1: who is over 4?\n\nWho is over 4."
+        )
+        assert "### Query\n```datalog\n% over 4\nolder(n) :- person(n, a), " \
+            "(a > 4)\n% the older\nans(n) :- older(n)\n```" in text
+        assert "### Result (2 rows)\n| n |\n|---|\n| bob |\n| carol |" in text
+        assert "### Files\n- [Rows (CSV)](file://" in text
+        assert result.structured_content["markdown"] == text
         [table] = result.structured_content["tables"]
         assert table["columns"] == ["n"] and table["total"] == 2
         assert table["rows"] == [["bob"], ["carol"]]
@@ -193,7 +196,7 @@ class TestFinalAnswer:
         first = session.final_answer(query, "None.", ["none"])
         assert "gives no rows" in first.content[0].text
         second = session.final_answer(query, "None.", ["none"])
-        assert second.content[0].text.startswith("Answer a1")
+        assert second.content[0].text.startswith("## Answer a1")
 
     def test_an_accepted_answer_is_shown_not_run_again(self, session):
         repl = session._session()
@@ -214,7 +217,7 @@ class TestFinalAnswer:
         result = session.final_answer(
             "ans(n) :- person(n, 3)", "Who is 3.", ["three"]
         )
-        assert result.content[0].text.startswith("Answer a2\n")
+        assert result.content[0].text.startswith("## Answer a2\n")
 
     def test_each_answer_has_its_id(self, session):
         _answer(session)
@@ -296,8 +299,9 @@ def test_an_answer_of_voxels_has_its_glass_brain_and_viewer(
     assert list(links) == ["viewer", "result", "rows", "graph", "query"]
     assert result.structured_content["viewer"] == links["viewer"]
     assert result.content[0].text.split("\n\n")[1] == (
-        f"Interactive viewer: {links['viewer']}"
+        f"**[Open the interactive viewer]({links['viewer']})**"
     )
+    assert "| 0 | 0 | 0 | 0.5 |" in result.content[0].text
     resources = [c for c in result.content if c.type == "resource_link"]
     assert [(c.uri, c.title, c.mime_type) for c in resources[:2]] == [
         (links["viewer"], "a1: interactive viewer", "text/html"),
@@ -406,9 +410,9 @@ def test_an_answer_ends_with_the_references_of_neurolang(tmp_path):
     session = McpSession("neurosynth", _engine, results_dir=tmp_path)
     result = _answer(session)
     text = result.content[0].text
-    references = text.split("To cite NeuroLang:\n")[1].splitlines()
+    references = text.split("### How to cite NeuroLang\n")[1].splitlines()
     assert [line[:16] for line in references] == [
-        "- Zanitti GE, So", "- Iovene V, Zani",
+        "1. Zanitti GE, S", "2. Iovene V, Zan",
     ]
     assert "Yarkoni" not in text  # the data's sources: .credits
     assert len(result.structured_content["citations"]) == 2
@@ -653,3 +657,11 @@ def test_stop_queries_stops_a_running_query(monkeypatch):
     thread.join(10)
     assert raised == [True] and time.monotonic() - start < 10
     assert not validation._RUNNING and not validation._STOPPED
+
+
+def test_a_markdown_cell_is_short_and_one_line():
+    from neurolang_apps.utils.mcp_server import _cell
+
+    assert _cell(0.123456789) == "0.1235"
+    assert _cell("a|b\nc") == "a\\|b c"
+    assert _cell(None) == "" and _cell(7) == "7"

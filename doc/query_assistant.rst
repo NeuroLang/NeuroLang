@@ -410,7 +410,11 @@ given as argument or with ``--file`` runs first, in the session.
     of the query. It checks the answer as the agent's final answer is
     checked: a query that fails, gives no rows or has constants not in the
     data is sent back once, and comments that are not one per rule are sent
-    back before the query runs. An accepted answer gets an id and is shown
+    back before the query runs. The answer is in Markdown, for the client
+    to render: a heading with the question, the link to the viewer, the
+    commented query in a ``datalog`` block, each result as a table, the
+    links to the files and the references. An accepted answer gets an id
+    and is shown
     in the session from the rows its check gave, without running again; a
     result of more than 20 million cells (a whole-brain map at 1 mm is 7
     million) is sent back to be restricted. The client receives:
