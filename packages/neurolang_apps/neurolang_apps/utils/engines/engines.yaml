@@ -1142,6 +1142,11 @@ engines:
       abstracts, plus the abstracts, titles and LLM-extracted cognitive
       concepts and domains of the studies.
     python_init: "neurolang_apps.utils.engines.neurostore.init"
+    python_init_options:
+      # How long a build uses the kept listing of NeuroStore's releases
+      # before asking the network again (NEUROLANG_NEUROSTORE_UPDATE=1
+      # lists them at once).
+      release_listing_ttl_hours: 24
     acknowledgements:
       - >-
         NeuroStore (https://neurostore.org), the database of Neurosynth

@@ -19,6 +19,15 @@ Unreleased
 
 **New features:**
 
+- NeuroStore engine: a build no longer depends on the network when it has
+  what it needs.  The listing of the releases is kept in the data directory
+  for ``release_listing_ttl_hours`` (24, in ``engines.yaml``), a downloaded
+  release is used as it is, a nightly release is downloaded again (and the
+  old copy replaced only once the new one is there) when a fresh listing
+  says it was rebuilt, and without the network the newest downloaded
+  release is used with a logged message.  ``NEUROLANG_NEUROSTORE_UPDATE=1``
+  lists the releases again.
+
 - REPL server (``--users --local``): with ``--mcp``, it answers MCP
   clients, LLM agents such as Claude Code, at ``/mcp``, each user with a
   personal token of their account page (only its hash kept, in the users

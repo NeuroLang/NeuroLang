@@ -1,4 +1,7 @@
 import json
+import os
+import shutil
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -301,3 +304,119 @@ def test_the_tfidf_table_is_that_of_the_vectorizer(tmp_path, monkeypatch):
     assert got.keys() == expected.keys()
     for key, value in expected.items():
         assert got[key] == pytest.approx(value, abs=1e-6)
+
+
+def _releases(built_at="2026-11-01"):
+    return [
+        {"version": "2026-10", "release_type": "monthly",
+         "built_at": "2026-10-01", "download_path": "/m"},
+        {"version": "nightly", "release_type": "nightly",
+         "built_at": built_at, "download_path": "/n"},
+    ]
+
+
+@pytest.fixture
+def network(monkeypatch):
+    """A mocked network: the calls of the listing and of the downloads."""
+    calls = {"listing": 0, "download": [], "releases": _releases(),
+             "offline": False}
+
+    def listing():
+        calls["listing"] += 1
+        if calls["offline"]:
+            raise OSError("offline")
+        return calls["releases"]
+
+    def download(release, target):
+        if calls["offline"]:
+            raise OSError("offline")
+        calls["download"].append(release["version"])
+        shutil.rmtree(target, ignore_errors=True)
+        target.mkdir(parents=True)
+        (target / "coordinates.parquet").write_bytes(b"")
+
+    monkeypatch.setattr(neurostore_init, "_fetch_releases", listing)
+    monkeypatch.setattr(neurostore_init, "_download_release", download)
+    monkeypatch.delenv(neurostore_init.RELEASE_ENV_VAR, raising=False)
+    monkeypatch.delenv(neurostore_init.UPDATE_ENV_VAR, raising=False)
+    return calls
+
+
+def test_a_fresh_listing_and_a_downloaded_release_need_no_network(
+    tmp_path, network
+):
+    first = neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    second = neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    assert first == second == tmp_path / "neurostore" / "2026-10"
+    assert network["listing"] == 1
+    assert network["download"] == ["2026-10"]
+
+
+def test_an_expired_listing_is_fetched_again(tmp_path, network):
+    neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    old = time.time() - 25 * 3600
+    os.utime(tmp_path / "neurostore" / neurostore_init.LISTING_FILE, (old, old))
+    neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    assert network["listing"] == 2
+    assert network["download"] == ["2026-10"]
+
+
+def test_without_a_ttl_the_listing_is_always_fetched(tmp_path, network):
+    neurostore_init.fetch_neurostore_dir(tmp_path)
+    neurostore_init.fetch_neurostore_dir(tmp_path)
+    assert network["listing"] == 2
+
+
+def test_the_update_variable_ignores_the_kept_listing(
+    tmp_path, network, monkeypatch
+):
+    neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    monkeypatch.setenv(neurostore_init.UPDATE_ENV_VAR, "1")
+    neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    assert network["listing"] == 2
+
+
+def test_offline_the_downloaded_release_is_used_with_a_message(
+    tmp_path, network, caplog
+):
+    release = neurostore_init.fetch_neurostore_dir(tmp_path, 0)
+    network["offline"] = True
+    with caplog.at_level("WARNING"):
+        assert neurostore_init.fetch_neurostore_dir(tmp_path, 0) == release
+    assert "could not be reached" in caplog.text
+
+
+def test_offline_without_a_downloaded_release_the_error_is_raised(
+    tmp_path, network
+):
+    network["offline"] = True
+    with pytest.raises(OSError):
+        neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+
+
+def test_a_nightly_is_downloaded_again_only_when_rebuilt(
+    tmp_path, network, monkeypatch
+):
+    monkeypatch.setenv(neurostore_init.RELEASE_ENV_VAR, "nightly")
+    neurostore_init.fetch_neurostore_dir(tmp_path, 0)
+    neurostore_init.fetch_neurostore_dir(tmp_path, 0)
+    assert network["download"] == ["nightly"]
+    network["releases"] = _releases(built_at="2026-11-02")
+    neurostore_init.fetch_neurostore_dir(tmp_path, 0)
+    assert network["download"] == ["nightly", "nightly"]
+
+
+def test_a_failed_nightly_download_keeps_the_old_copy(
+    tmp_path, network, monkeypatch
+):
+    monkeypatch.setenv(neurostore_init.RELEASE_ENV_VAR, "nightly")
+    nightly = neurostore_init.fetch_neurostore_dir(tmp_path, 0)
+    network["releases"] = _releases(built_at="2026-11-02")
+    network["offline"] = False
+
+    def failing(release, target):
+        raise OSError("connection reset")
+
+    monkeypatch.setattr(neurostore_init, "_download_release", failing)
+    assert neurostore_init.fetch_neurostore_dir(tmp_path, 0) == nightly
+    assert (nightly / "coordinates.parquet").exists()
