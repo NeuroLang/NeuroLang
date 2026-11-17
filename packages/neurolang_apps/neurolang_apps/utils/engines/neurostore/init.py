@@ -146,20 +146,28 @@ def _cached_release(root: Path, version: str):
     return cached[-1].parent if cached else None
 
 
-def _release_listing(root: Path, ttl_hours: float):
+def _release_listing(root: Path, ttl_hours: float, refresh=False):
     """The releases listing and whether it was just fetched.
 
-    The listing kept in *root* is used for *ttl_hours* unless the
-    ``UPDATE_ENV_VAR`` environment variable is set.
+    The listing kept in *root* is used for *ttl_hours* unless *refresh* or
+    the ``UPDATE_ENV_VAR`` environment variable is set; an unreadable kept
+    listing is listed again.
     """
     path = root / LISTING_FILE
-    update = os.environ.get(UPDATE_ENV_VAR, "") not in ("", "0")
+    update = refresh or os.environ.get(UPDATE_ENV_VAR, "") not in ("", "0")
     if not update and path.exists():
         if time.time() - path.stat().st_mtime < ttl_hours * 3600:
-            return json.loads(path.read_text()), False
+            try:
+                return json.loads(path.read_text()), False
+            except ValueError:
+                LOG.warning("Ignoring the unreadable listing %s", path)
     releases = _fetch_releases()
     root.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(releases))
+    with tempfile.NamedTemporaryFile(
+        "w", dir=root, suffix=".tmp", delete=False
+    ) as f:
+        json.dump(releases, f)
+    os.replace(f.name, path)
     return releases, True
 
 
@@ -179,7 +187,14 @@ def fetch_neurostore_dir(data_dir: Path, release_listing_ttl_hours=0) -> Path:
             return bundled
     try:
         releases, listed = _release_listing(root, release_listing_ttl_hours)
-        release = _select_release(releases, version)
+        try:
+            release = _select_release(releases, version)
+        except ValueError:
+            if listed:
+                raise
+            # A release published since the kept listing was fetched.
+            releases, listed = _release_listing(root, 0, refresh=True)
+            release = _select_release(releases, version)
         target = root / release["version"]
         # Nightly builds change under the same name.
         built_at = str(release["built_at"])

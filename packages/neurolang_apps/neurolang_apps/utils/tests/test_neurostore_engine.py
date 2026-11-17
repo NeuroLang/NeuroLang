@@ -420,3 +420,36 @@ def test_a_failed_nightly_download_keeps_the_old_copy(
     monkeypatch.setattr(neurostore_init, "_download_release", failing)
     assert neurostore_init.fetch_neurostore_dir(tmp_path, 0) == nightly
     assert (nightly / "coordinates.parquet").exists()
+
+
+def test_an_unreadable_kept_listing_is_fetched_again(tmp_path, network):
+    root = tmp_path / "neurostore"
+    root.mkdir()
+    (root / neurostore_init.LISTING_FILE).write_text("{trunc")
+    release = neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    assert release == root / "2026-10"
+    assert network["listing"] == 1
+    assert json.loads((root / neurostore_init.LISTING_FILE).read_text())
+
+
+def test_a_pinned_release_missing_from_the_kept_listing_lists_again(
+    tmp_path, network, monkeypatch
+):
+    neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    network["releases"] = _releases() + [
+        {"version": "2026-11", "release_type": "monthly",
+         "built_at": "2026-11-01", "download_path": "/m2"},
+    ]
+    monkeypatch.setenv(neurostore_init.RELEASE_ENV_VAR, "2026-11")
+    release = neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    assert release == tmp_path / "neurostore" / "2026-11"
+    assert network["listing"] == 2
+
+
+def test_an_unknown_release_is_an_error_after_one_new_listing(
+    tmp_path, network, monkeypatch
+):
+    monkeypatch.setenv(neurostore_init.RELEASE_ENV_VAR, "2099-01")
+    with pytest.raises(ValueError, match="Unknown NeuroStore release"):
+        neurostore_init.fetch_neurostore_dir(tmp_path, 24)
+    assert network["listing"] == 1
