@@ -437,6 +437,22 @@ The time and memory a query may take are those of the ``assistant``
 settings of ``llm.yaml`` (``query_timeout``, ``query_memory_mb``): a query
 of every voxel of the brain may need more than their default 4 GB.
 
+The engine is built when the server starts, so that it is ready at the
+first call; ``--build-on-first-call`` builds it at the first tool call
+instead, which then waits for it. ``--log FILE`` writes what the server
+does to *FILE*, to follow with ``tail -f`` (MCP clients do not show what a
+server prints): the build of the engine, with its time, and each tool call,
+with its arguments, time and outcome, such as an answer rejected and why or
+accepted with its rows, images and folder::
+
+    12:16:40 engine neurosynth: built in 56.3 s; the answers' files in ...
+    12:16:54 final_answer query=active(l, s) :- ... -> accepted a1 (ans: 400 rows; 1 images) in file:///.../a1 (13.7 s)
+
+The `MCP Inspector <https://github.com/modelcontextprotocol/inspector>`_
+runs the server and calls its tools by hand, in the browser:
+``npx @modelcontextprotocol/inspector neurolang-query --mcp --engine
+neurosynth``.
+
 For Claude Code, from the clone of the repository:
 
 .. code-block:: bash

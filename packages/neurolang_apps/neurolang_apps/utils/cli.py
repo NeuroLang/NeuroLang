@@ -631,6 +631,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "(default: ~/.cache/neurolang/mcp).",
     )
     parser.add_argument(
+        "--build-on-first-call",
+        action="store_true",
+        help="With --mcp, build the engine at the first tool call instead of "
+        "when the server starts (the call then waits for the build).",
+    )
+    parser.add_argument(
+        "--log",
+        metavar="FILE",
+        default=None,
+        help="With --mcp, write what the server does to FILE: the build of "
+        "the engine, and each tool call with its arguments, time and "
+        "outcome (follow it with tail -f).",
+    )
+    parser.add_argument(
         "--ask",
         metavar="QUESTION",
         default=None,

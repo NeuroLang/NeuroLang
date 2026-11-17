@@ -27,9 +27,11 @@ Unreleased
   ``final_answer`` checks the answer as the assistant's, then returns its
   explanation, the query with a comment on each rule, its first rows, glass
   brains of its images and the links to its viewer, images, rows, query and
-  graph (``--results-dir``). ``ask`` with ``refine`` changes an answer, or
-  the last query run, for a new question; ``repl`` runs statements and
-  dot-commands in the session. See *From an MCP client* in the LLM Query
+  graph (``--results-dir``). ``--build-on-first-call`` builds the engine at
+  the first tool call, and ``--log FILE`` writes the build and each tool
+  call, with its time and outcome, to a file. ``ask`` with ``refine``
+  changes an answer, or the last query run, for a new question; ``repl``
+  runs statements and dot-commands in the session. See *From an MCP client* in the LLM Query
   Assistant documentation.
 
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):

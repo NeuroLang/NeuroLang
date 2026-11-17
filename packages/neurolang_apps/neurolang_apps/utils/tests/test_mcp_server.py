@@ -327,3 +327,50 @@ def test_the_client_gets_text_images_and_structured_content(session):
     assert not result.is_error
     assert "bob" in result.content[0].text
     assert result.structured_content["id"] == "a1"
+
+
+def test_a_lazy_engine_is_built_at_the_first_call(tmp_path):
+    built = []
+
+    def build():
+        built.append(True)
+        return _engine()
+
+    session = McpSession("", build, results_dir=tmp_path, lazy=True)
+    assert not built
+    assert "bob" in session.repl("ans(n) :- person(n, 5)")
+    assert built == [True]
+    session.repl("ans(n) :- person(n, 3)")
+    assert built == [True]
+
+
+def test_the_log_tells_the_build_and_each_call(session, caplog):
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="neurolang_apps.mcp"):
+        _client(
+            session,
+            ("run_query", {"query": "ans(n) :- person(n, 5)"}),
+            ("final_answer", {
+                "query": "ans(n) :- person(n, 5)", "explanation": "Bob.",
+                "comments": ["the person of 5"],
+            }),
+            ("final_answer", {
+                "query": "ans(n) :- person(n, 5)", "explanation": "Bob.",
+                "comments": [],
+            }),
+        )
+    lines = [record.getMessage() for record in caplog.records]
+    assert any(line.startswith("engine : built in") for line in lines)
+    assert any(
+        line.startswith("run_query query=ans(n) :- person(n, 5) -> ")
+        for line in lines
+    )
+    assert any(
+        "final_answer" in line and "-> accepted a1 (ans: 1 rows; 0 images)"
+        in line for line in lines
+    )
+    assert any(
+        "-> The answer is rejected: the query has 1 rules and 0 comments"
+        in line for line in lines
+    )

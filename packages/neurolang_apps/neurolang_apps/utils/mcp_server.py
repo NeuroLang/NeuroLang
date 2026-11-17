@@ -21,6 +21,7 @@ waits for it. The calls run one at a time, on the one session.
 """
 
 import base64
+import logging
 import secrets
 import shutil
 import threading
@@ -49,6 +50,11 @@ from neurolang_apps.utils.tui.assistant import (
     _previous, _run_outcome, _without_left_out,
 )
 from neurolang_apps.utils.tui.web import WebRepl
+
+# What the server does, with --log: the build of the engine, each tool
+# call with its arguments, time and outcome. Its own logger, to a file:
+# the engine's would log every rewrite, and clients hide stderr.
+log = logging.getLogger("neurolang_apps.mcp")
 
 # The rows of each result the ``repl`` tool returns, by default.
 MAX_ROWS = 50
@@ -137,13 +143,14 @@ class McpSession:
     def __init__(
         self, engine: str, build=None, initial_program: str = "",
         repl: Optional[WebRepl] = None, results_dir: Path = RESULTS_DIR,
-        config: Optional[AssistantConfig] = None,
+        config: Optional[AssistantConfig] = None, lazy: bool = False,
     ):
         """
-        Build the engine with *build* in the background, then run the
-        *initial_program* in the session of the REPL on it; or serve the
-        session *repl*, as given. The assistant's settings *config*, such
-        as the time and memory a query may take, are the defaults if None.
+        Build the engine with *build* in the background, from the start or,
+        if *lazy*, at the first tool call, then run the *initial_program*
+        in the session of the REPL on it; or serve the session *repl*, as
+        given. The assistant's settings *config*, such as the time and
+        memory a query may take, are the defaults if None.
         """
         self.engine = engine
         self.config = config or AssistantConfig()
@@ -153,25 +160,43 @@ class McpSession:
         self._toolbox: Optional[Toolbox] = None
         self._lock = threading.Lock()
         self._repl = Future()
+        self._pending = None  # the build not started yet
         if repl is not None:
             self._repl.set_result(repl)
+        elif lazy:
+            self._pending = (build, initial_program)
         else:
-            threading.Thread(
-                target=self._start, args=(build, initial_program),
-                daemon=True,
-            ).start()
+            self._begin(build, initial_program)
+
+    def _begin(self, build, initial_program: str) -> None:
+        threading.Thread(
+            target=self._start, args=(build, initial_program), daemon=True,
+        ).start()
 
     def _start(self, build, initial_program: str) -> None:
+        log.info("engine %s: building", self.engine)
+        start = time.monotonic()
         try:
             repl = WebRepl(build(), self.engine, html=False)
             if initial_program:
                 repl.submit(initial_program)
             self._repl.set_result(repl)
+            log.info(
+                "engine %s: built in %.1f s; the answers' files in %s",
+                self.engine, time.monotonic() - start, self.store.root,
+            )
         except BaseException as error:  # told to the client by each tool
+            log.exception(
+                "engine %s: failed after %.1f s", self.engine,
+                time.monotonic() - start,
+            )
             self._repl.set_exception(error)
 
     def _session(self) -> WebRepl:
         """The REPL, once the engine is built, or why it is not."""
+        if self._pending is not None:  # lazy: built at the first call
+            pending, self._pending = self._pending, None
+            self._begin(*pending)
         try:
             return self._repl.result()
         except Exception as error:
@@ -441,6 +466,58 @@ def _tsv(table: dict) -> str:
     return "\n".join(lines)
 
 
+def _logged(name: str, arguments: dict, run):
+    """Return ``run()``, the call of the tool *name* on *arguments*,
+    logged with its time and outcome."""
+    start = time.monotonic()
+    try:
+        result = run()
+    except Exception as error:
+        log.info(
+            "%s %s -> error after %.1f s: %s", name, _brief(arguments),
+            time.monotonic() - start, error,
+        )
+        raise
+    log.info(
+        "%s %s -> %s (%.1f s)", name, _brief(arguments), _outcome(result),
+        time.monotonic() - start,
+    )
+    return result
+
+
+def _brief(arguments: dict) -> str:
+    """The *arguments* of a tool call on one line of the log."""
+    return " ".join(
+        f"{key}={_one_line(str(value), 400)}"
+        for key, value in arguments.items() if value not in (None, "")
+    )
+
+
+def _outcome(result) -> str:
+    """What a tool returned, on one line of the log: an accepted answer's
+    id, rows, images and folder, else the first line of its text."""
+    if isinstance(result, types.CallToolResult):
+        answer = result.structured_content
+        if answer:
+            rows = ", ".join(
+                f"{table['title'] or 'ans'}: {table['total']} rows"
+                for table in answer["tables"]
+            )
+            images = sum(c.type == "image" for c in result.content)
+            folder = answer["links"]["query"].rsplit("/", 1)[0]
+            return (
+                f"accepted {answer['id']} ({rows}; {images} images) "
+                f"in {folder}"
+            )
+        result = result.content[0].text
+    return _one_line(result.strip().split("\n", 1)[0], 200)
+
+
+def _one_line(text: str, limit: int) -> str:
+    text = " | ".join(line.strip() for line in text.splitlines())
+    return text if len(text) <= limit else f"{text[:limit]}..."
+
+
 def assistant_settings(path=None) -> AssistantConfig:
     """
     Return the assistant settings of the LLM configuration (see
@@ -471,34 +548,42 @@ def server(session: McpSession):
         refine to an answer's id (a1, ...) or to `last` (the last query
         run) to change it for the question instead.
         """
-        return session.ask(question, refine)
+        return _logged(
+            "ask", {"question": question, "refine": refine},
+            lambda: session.ask(question, refine),
+        )
 
     described = {tool["name"]: tool["description"] for tool in prompts.TOOLS}
 
+    def _called(name: str, **arguments) -> str:
+        return _logged(
+            name, arguments, lambda: session.call(name, **arguments)
+        )
+
     @mcp.tool(description=described["list_predicates"])
     def list_predicates() -> str:
-        return session.call("list_predicates")
+        return _called("list_predicates")
 
     @mcp.tool(description=described["describe_predicate"])
     def describe_predicate(name: str) -> str:
-        return session.call("describe_predicate", name=name)
+        return _called("describe_predicate", name=name)
 
     @mcp.tool(description=described["search_values"])
     def search_values(
         pattern: str, predicate: str = "", column: str = ""
     ) -> str:
-        return session.call(
+        return _called(
             "search_values", pattern=pattern,
             predicate=predicate or None, column=column or None,
         )
 
     @mcp.tool(description=described["check_query"])
     def check_query(query: str) -> str:
-        return session.call("check_query", query=query)
+        return _called("check_query", query=query)
 
     @mcp.tool(description=described["run_query"])
     def run_query(query: str) -> str:
-        return session.call("run_query", query=query)
+        return _called("run_query", query=query)
 
     @mcp.tool(
         description=described["final_answer"] + " With a comment, one "
@@ -509,7 +594,12 @@ def server(session: McpSession):
     def final_answer(
         query: str, explanation: str, comments: list[str]
     ) -> types.CallToolResult:
-        return session.final_answer(query, explanation, comments)
+        return _logged(
+            "final_answer",
+            {"query": query, "explanation": explanation,
+             "comments": comments},
+            lambda: session.final_answer(query, explanation, comments),
+        )
 
     @mcp.tool()
     def repl(text: str, max_rows: int = MAX_ROWS) -> str:
@@ -519,7 +609,9 @@ def server(session: McpSession):
         Returns the output and the first max_rows rows of each result,
         tab-separated.
         """
-        return session.repl(text, max_rows)
+        return _logged(
+            "repl", {"text": text}, lambda: session.repl(text, max_rows)
+        )
 
     return mcp
 
@@ -532,9 +624,15 @@ def main(args, initial_program: str = "") -> None:
             use_cache=not args.no_engine_cache,
         )
 
+    if args.log:
+        handler = logging.FileHandler(Path(args.log).expanduser())
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        log.addHandler(handler)
+        log.setLevel(logging.INFO)
+        log.propagate = False
     session = McpSession(
         args.engine, build, initial_program,
         results_dir=Path(args.results_dir or RESULTS_DIR),
-        config=assistant_settings(),
+        config=assistant_settings(), lazy=args.build_on_first_call,
     )
     server(session).run("stdio")
