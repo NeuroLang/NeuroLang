@@ -104,6 +104,7 @@ import contextlib
 import copy
 import functools
 import re
+import sys
 import warnings
 from pathlib import Path
 from typing import (
@@ -2184,7 +2185,17 @@ def build_engine(
     _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
     if cfg.get("datalog_init"):
         tell(f"Defining the rules of {name}")
-    _phase_datalog_init(nl, cfg, data_dir, mask)
+    # The tables its rules derive from its source tables while it is built
+    # (activated) are kept, the build's only: a session's rules derive
+    # theirs as they are.
+    if use_cache and sys.platform != "emscripten":  # not in a browser
+        nl.program_ir.derived_tables = engine_cache.DerivedTables(
+            Path(data_dir) / engine_cache.DERIVED_DIRECTORY
+        )
+    try:
+        _phase_datalog_init(nl, cfg, data_dir, mask)
+    finally:
+        nl.program_ir.__dict__.pop("derived_tables", None)
     _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
     _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir, yaml_path)
     _phase_probabilistic_choices(nl, cfg)

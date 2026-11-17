@@ -179,6 +179,84 @@ def keep_json(directory, kind: str, key: str, compute: Callable):
     return keep(directory, f"{kind}-{key}.json", read, write, compute)
 
 
+#: The directory, in the data directory, of the tables the engines derive
+#: from their source tables (:class:`DerivedTables`): one for all engines,
+#: as engines of a family derive the same, and not in the browser's bundle.
+DERIVED_DIRECTORY = "derived_tables"
+
+
+def frame_digest(frame) -> str:
+    """Return a name for what the table *frame* holds: its column names,
+    their types and every value, row by row."""
+    import pandas as pd
+
+    rows = pd.util.hash_pandas_object(frame, index=False).to_numpy()
+    return digest(
+        [str(name) for name in frame.columns],
+        [str(dtype) for dtype in frame.dtypes],
+        hashlib.sha256(np.ascontiguousarray(rows).tobytes()).hexdigest(),
+    )
+
+
+class DerivedTables:
+    """
+    The tables a program derives from its source tables while an engine is
+    built (the pairs of points of a Euclidean bound: ``activated``, the
+    voxels within reach of each peak), kept in *directory* as Arrow files
+    named by a checksum of the source tables and of how the table is derived
+    (:func:`frame_digest`, :func:`digest`): a change of the data makes
+    another one, and engines deriving the same table from the same data
+    (``neurostore``, ``neurostore_iit``...) find the same file.
+
+    A table kept is read memory-mapped: in under a second rather than
+    computed again (35 s for the ``activated`` of ``neurostore``), its
+    columns views of the file, whose pages the processes reading it (the
+    engines of the builder of the REPL server and the sessions forked from
+    it) share, and which the system may drop and read again when memory is
+    short. Assign one to ``program_ir.derived_tables`` (see
+    :class:`~neurolang.frontend.datalog.sugar.spatial.TranslateEuclideanDistanceBoundMatrixMixin`).
+    """
+
+    def __init__(self, directory):
+        self.directory = Path(directory)
+
+    def __call__(self, kind: str, frames, parameters, compute):
+        """Return the table derived as *kind* from the tables *frames* with
+        *parameters*: the one kept, or *compute()*, kept for the next time.
+        A directory that cannot be written to, or a file that cannot be
+        read, only means that it is computed again."""
+        key = digest(kind, parameters, *(frame_digest(f) for f in frames))
+        path = self.directory / f"{kind}-{key}.arrow"
+        if path.exists():
+            try:
+                return self._read(path)
+            except Exception:  # damaged, or written by another version
+                pass
+        frame = compute()
+        try:
+            _write(path, lambda file: self._write(file, frame))
+            return self._read(path)  # mapped: its pages are shared
+        except Exception:
+            return frame
+
+    @staticmethod
+    def _write(file, frame) -> None:
+        import pyarrow as pa
+        import pyarrow.ipc as ipc
+
+        table = pa.Table.from_pandas(frame, preserve_index=False)
+        with ipc.new_file(file, table.schema) as writer:
+            writer.write_table(table)
+
+    @staticmethod
+    def _read(path: Path):
+        import pyarrow as pa
+        import pyarrow.ipc as ipc
+
+        table = ipc.open_file(pa.memory_map(str(path))).read_all()
+        return table.to_pandas(split_blocks=True)
+
+
 def prebuild(
     engine_name: str, data_dir, resolution: Optional[float] = None,
     yaml_path=None,
