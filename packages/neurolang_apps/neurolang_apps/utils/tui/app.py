@@ -613,9 +613,12 @@ class InteractiveTuiApp:
             )
             if key and len(self.results) == 1 and not self.results[0].title \
                     and not (self._left_out_used or self.settings.sort_by):
-                self._nl.result_cache.put(
-                    key, self.results[0].frame, self.last_notes
-                )
+                cache = self._nl.result_cache
+                # A note may name a predicate of the session ("did you
+                # mean"): such notes are not kept.
+                if not self.last_notes or cache.session_symbols(
+                        self._nl) == set():
+                    cache.put(key, self.results[0].frame, self.last_notes)
 
     def _shared_key(self, program: str, query: bool):
         """

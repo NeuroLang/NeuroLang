@@ -724,7 +724,8 @@ Results shared by the sessions
 
 A query that reads nothing of its session has the same answer in every
 session: the examples of the page, the queries of its example questions,
-shown to every user, take 1.6 to 5.2 s each on ``neurosynth_iit``.  The
+shown to every user, take 3.4 to 10.5 s each on ``neurosynth_iit``
+(0.4 to 0.9 s when kept).  The
 server keeps the rows of such a result in an Arrow file of
 ``--result-cache-dir`` (``neurolang_apps.utils.result_cache``), and a session
 running the same query again, of any user, shows them in place of running
@@ -752,10 +753,12 @@ are those of the rows kept.
   the files outlive a restart of the server.  The data an engine reads
   from outside ``--data-dir`` (nilearn's downloads, a model of text
   embeddings) is taken to stay the same: empty DIR after changing it.
-- A result is kept only if its file reads back equal to its rows, column
-  types included (not, e.g., rows of Python objects), if it alone is
-  within the limit, and if its session does not sort the results
-  (``.sort``); a session reading it sorts it as it sorts its own.
+- A result is kept only if Arrow holds its columns as they are (none of
+  Python objects, each of the same type back), if its file reads back
+  equal to them, if it alone is within the limit, if its session does not
+  sort the results (``.sort``), a session reading it sorting it as it
+  sorts its own, and if its notes, which may name the session's
+  predicates ("did you mean"), come from a session that defined none.
 
 
 Activity and usage

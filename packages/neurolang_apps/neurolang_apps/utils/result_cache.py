@@ -5,8 +5,10 @@ the sessions of a REPL server.
 A query that reads nothing of its session (no rule, relation, fact or upload
 of it) has the same answer in every session on the same engine, data and
 NeuroLang: 29 representative queries of ``neurosynth_iit`` gave the same
-rows in two builds and in a new scope. The examples of the page, shown to
-every user, take 1.6 to 5.2 s each; :class:`ResultCache` runs them once.
+rows in two builds and in a new scope. The examples of the page and the
+queries of its example questions, shown to every user, take 3.4 to 10.5 s
+each on Margaret (0.4 to 0.9 s read back); :class:`ResultCache` runs them
+once.
 
 The rows of such a result are kept in an Arrow file of its directory, named
 by a key (:meth:`ResultCache.key`) of
@@ -27,8 +29,9 @@ session's own, neither read nor kept.
 A command (``.load_tractogram``, ``.import``...) changes the engine in ways
 its symbols may not tell: after one, the engine shares nothing more.
 
-A file is written whole or not at all, and kept only if it reads back equal
-to the rows; reading it makes it the most recently used, and the least
+A file is written whole or not at all, and kept only if Arrow holds its
+columns as they are (none of Python objects, each of the same type back in
+pandas) and the file reads back equal to them; reading it makes it the most recently used, and the least
 recently used go when the files take more than the limit
 (``result_cache_mb`` of the server, :doc:`/repl_server`). Another process
 removing a file only makes the query run.
@@ -180,21 +183,28 @@ class ResultCache:
             {section: dict(config[section]) for section in config.sections()},
         )
 
+    def session_symbols(self, nl) -> Optional[set]:
+        """Return the symbols defined in the scopes of *nl* above the
+        engine's, the session's and its submission's, or None if its scope
+        is not on the engine's."""
+        session, scope = set(), nl.program_ir.symbol_table
+        while scope is not self._engine_scope:
+            if scope is None:
+                return None
+            session.update(scope._symbols)
+            scope = scope.enclosing_scope
+        return session
+
     def _reads_session(self, nl, parsed) -> bool:
         """Whether a symbol *parsed* reaches, through the rules and the
         constraints of the engine, is defined in a scope above the
         engine's: the session's, or that of its submission. A session with
         constraints of its own reads them in every query."""
-        session, scope = set(), nl.program_ir.symbol_table
-        while scope is not self._engine_scope:
-            if scope is None:  # not on the engine's scope: share nothing
-                return True
-            session.update(scope._symbols)
-            scope = scope.enclosing_scope
+        session = self.session_symbols(nl)
+        if session is None or _CONSTRAINTS in session:
+            return True
         if not session:
             return False
-        if _CONSTRAINTS in session:
-            return True
         symbol_table, seen, to_read = nl.program_ir.symbol_table, set(), [
             parsed]
         while to_read:
@@ -277,7 +287,7 @@ class ResultCache:
         import pyarrow as pa
         import pyarrow.ipc as ipc
 
-        with pa.memory_map(str(path)) as file:
+        with pa.OSFile(str(path)) as file:  # its rows writable, not mapped
             return ipc.open_file(file).read_all()
 
     @classmethod
