@@ -323,3 +323,59 @@ def test_images_uploaded_of_the_same_name_are_never_shared(
         reply = bob.submit(query)
         assert _rows(reply) == [[0, 0, 0]] and KEPT not in reply["html"]
     assert _files(cache_dir) == []
+
+
+@pytest.mark.parametrize("command", [".ra", ".rewritten"])
+def test_the_facts_of_a_query_run_again_are_not_shared(
+        user, cache_dir, command):
+    ann, bob = user(), user()
+    ann.submit("person('carol', 9).\nans(x) :- adult(x)")
+    ann.submit(command)
+    assert _rows(ann.submit("ans(x) :- adult(x)")) == [["bob"]]
+    assert _rows(bob.submit("ans(x) :- adult(x)")) == [["bob"]]
+
+
+def test_notes_that_may_name_the_sessions_predicates_are_not_kept(
+        user, cache_dir):
+    ann, bob = user(), user()
+    ann.submit("secret_plan(x) :- person(x, n)")
+    reply = ann.submit("ans(x) :- secret_plans(x)")
+    assert "did you mean secret_plan?" in reply["html"]
+    assert _files(cache_dir) == []
+    reply = bob.submit("ans(x) :- secret_plans(x)")
+    assert "secret_plan?" not in reply["html"] and KEPT not in reply["html"]
+    assert len(_files(cache_dir)) == 1  # Bob's: his session defines nothing
+
+
+def test_a_kept_frame_is_writable(tmp_path):
+    nl = _engine("", None)
+    cache = result_cache.ResultCache(nl, "e", tmp_path, 1)
+    assert cache.put("k", pd.DataFrame({"i": [1, 2], "v": [0.5, 1.0]}))
+    frame = cache.get("k").frame
+    frame.loc[0, "i"] = 3  # as a viewer or a sort may
+    frame.sort_values("i", inplace=True)
+    assert frame["i"].tolist() == [2, 3]
+
+
+def _engine_with_a_map(name, say):
+    nl = _engine_with_template(name, say)
+    nl.add_tuple_set([(1, 2, 3, 0.5), (0, 0, 0, 1.0)], name="my_map")
+    nl.grids = {"schaefer": nl.template}  # the grid the engine's voxels are on
+    return nl
+
+
+def test_the_image_of_a_kept_result_is_the_one_computed(tmp_path, cache_dir):
+    users = []
+    for _ in range(2):
+        backend = LocalBackend(
+            tmp_path / "data", build=_engine_with_a_map,
+            result_cache={"directory": str(cache_dir), "most_mb": 1},
+        )
+        backend.start("neurostore")
+        users.append(backend)
+    ann, bob = users
+    query = "ans(i, j, k, v) :- my_map(i, j, k, v)"
+    ann.submit(query)
+    assert KEPT in bob.submit(query)["html"]
+    images = [b.download(0, "nifti").data for b in (ann, bob)]
+    assert images[0] == images[1] and images[0]

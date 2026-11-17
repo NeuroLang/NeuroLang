@@ -61,7 +61,7 @@ from neurolang_apps.utils.predicate_catalog import (
     predicate_catalog,
     program_documentation,
 )
-from .submission import predicate_extent
+from .submission import Submission, predicate_extent, submission_outline
 
 def open_session_scope(nl) -> None:
     """Open the scope of the program of *nl* holding the session's rules."""
@@ -888,7 +888,12 @@ def last_query_scope(app):
     The rules that its submission added are taken out of the session
     while the block runs: running the query again adds them again, and
     SQUALL gives them new variables, so that they would be there twice.
+    The scope is that of a :class:`~.submission.Submission` not kept: the
+    facts of the query go to copies of their relations, not to the
+    session's or the engine's relations, which NeuroLang adds to in place.
     """
+    program, squall = app.last_query
+    _, facts = submission_outline(app._nl, program, squall)
     session = app._nl.program_ir.symbol_table
     saved = {}
     for symbol, added in app.last_added_rules.items():
@@ -898,7 +903,7 @@ def last_query_scope(app):
             rules = tuple(r for r in value.formulas if r not in added)
             _replace(session, symbol, DatalogUnion(rules) if rules else None)
     try:
-        with app._nl.scope:
+        with Submission(app._nl, facts, keep=False):
             yield
     finally:
         for symbol, value in saved.items():
