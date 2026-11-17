@@ -19,6 +19,7 @@ from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui.sessions import (  # noqa: E402
     SessionEnded,
     Sessions,
+    free_memory,
 )
 
 
@@ -26,6 +27,8 @@ def build(name, say):
     """An engine of the registry's name with a test's relations (imported
     by name in the builder, which is started anew); neurosynth takes 2 s."""
     say(f"Building {name}")
+    if name == "broken":
+        raise RuntimeError("no data")
     if name == "neurosynth":
         time.sleep(2)
     nl = NeurolangPDL()
@@ -176,6 +179,40 @@ def test_the_steps_of_a_start_are_told(sessions):
     while not listener.empty():
         messages.append(listener.get())
     assert any("Building neurostore" in m for m in messages)
+
+
+def test_an_engine_built_before_its_sessions_starts_them_at_once(
+        sessions, capsys):
+    """The engines built when the server starts, the broken one told in the
+    log: a first session of neurosynth starts without a build, and another
+    engine still starts."""
+    sessions.prebuild(["broken", "neurosynth"])
+    deadline = time.monotonic() + 30
+    while "neurosynth in" not in capsys.readouterr().out:
+        assert time.monotonic() < deadline
+        time.sleep(0.1)
+    ann = sessions.session("ann", "1")
+    listener = ann.listen()
+    ann.start("neurosynth")
+    messages = []
+    while not listener.empty():
+        messages.append(listener.get())
+    assert not any("Building" in m for m in messages)
+    sessions.prebuild(["neurosynth"])  # built already: not again
+    bob = sessions.session("bob", "1")
+    bob.start("neurostore")
+    assert bob.pid is not None
+
+
+def test_a_query_leaves_no_garbage(sessions):
+    """A session frees what its query left, after replying; freeing is
+    harmless where malloc_trim does not exist (not glibc)."""
+    free_memory()
+    ann = sessions.session("ann", "1")
+    ann.start("neurostore")
+    assert sorted(_rows(ann.submit("ans(x) :- person(x, a)"))) == [
+        ["alice"], ["bob"]]
+    assert _rows(ann.submit("ans(x) :- person(x, 5)")) == [["bob"]]
 
 
 def test_no_process_is_left_when_the_server_ends(tmp_path):

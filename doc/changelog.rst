@@ -34,6 +34,18 @@ Unreleased
   runs statements and dot-commands in the session. See *From an MCP client* in the LLM Query
   Assistant documentation.
 
+- REPL server (``--users --local``): the builder builds the engines the
+  page offers when the server starts, the default first, and an engine
+  the admin console turns on when it does, so that no session waits for
+  a build (up to 75 s for ``neurostore_iit``); a session then starts in
+  under two seconds. ``--no-prebuild`` (``prebuild: false``) leaves each
+  engine to its first session, as before. The builder also finds the
+  names the notes on a query's constants look up, once, rather than each
+  session at its first query: that of ``neurostore_iit`` takes 6 s
+  instead of 18 s. After each query, once it has replied, a session frees
+  what the query left (``gc.collect`` and, on Linux, ``malloc_trim``,
+  13 ms): with the chase fix of #1335, a session that decoded an image
+  keeps 90 MB of its own instead of 0.8 GB.
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
   the regions a question lists (which regions, parcels or structures a
   term, a topic or a seed activates or co-activates) are answered with the
@@ -64,6 +76,15 @@ Unreleased
   relations, with a note); one tractogram is indexed at a time.  The
   engine's own tractogram is listed first, never removed, its *Index*
   putting it back (:doc:`tutorial_decoding`).
+
+**Bug fixes:**
+
+- The relational-algebra chase no longer keeps every chase that ran: three
+  of its rewritings were cached with ``lru_cache`` on the method, a cache
+  of the class whose keys held the chase, its program and the relations
+  of its query. A REPL session kept 0.6 GB more after each query decoding
+  an image on ``neurosynth_iit``; the caches are now each chase's own
+  (the same hits), and that session keeps 0.18 GB, however many queries.
 
 
 v0.1a23 (2026-11-15)

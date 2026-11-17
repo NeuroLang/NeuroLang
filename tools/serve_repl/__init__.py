@@ -493,6 +493,12 @@ class EngineChoice:
         """The engines the page offers."""
         return [name for name in self.entries if name not in self.off]
 
+    def to_build(self) -> list:
+        """The engines the page offers, its default first: those the
+        builder builds before their sessions (``--no-prebuild``)."""
+        return [self.default] + [name for name in self.on()
+                                 if name != self.default]
+
     def state(self) -> dict:
         """The engines, whether each is offered, and the default, for the
         admin console."""
@@ -1144,6 +1150,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 raise ValueError("No engines here: the server runs no REPL "
                                  "of its own (--local)")
             self.engines.change(body.get("on"), body.get("default"))
+            if getattr(self.backend, "prebuilds", False):
+                # Those turned on now: the others are built already.
+                self.backend.prebuild(self.engines.to_build())
             print(f"{self.user} set the engines of the page: "
                   f"{', '.join(self.engines.on())}, starting with "
                   f"{self.engines.default}", flush=True)
@@ -2832,6 +2841,7 @@ def service_command(args) -> list:
         command += [] if args.prepare else ["--no-prepare"]
         command += [] if args.preload_embeddings else [
             "--no-preload-embeddings"]
+        command += [] if args.prebuild else ["--no-prebuild"]
     command += ["--max-upload-mb", str(args.max_upload_mb),
                 "--max-uploads-mb", str(args.max_uploads_mb)]
     if args.users:
@@ -3311,6 +3321,13 @@ def parse_args(argv=None):
         "keeps what it downloads in --data-dir): its first session does",
     )
     parser.add_argument(
+        "--no-prebuild", action="store_false", dest="prebuild",
+        default=DEFAULTS["prebuild"],
+        help="with --users and --local, do not build the engines the page "
+        "offers when the server starts: the first session of each does, "
+        "and waits for it",
+    )
+    parser.add_argument(
         "--no-preload-embeddings", action="store_false",
         dest="preload_embeddings", default=DEFAULTS["preload_embeddings"],
         help="with --local, do not load the text embeddings of an engine "
@@ -3649,6 +3666,11 @@ def main(argv=None) -> None:
                 preload_embeddings=args.preload_embeddings,
                 **options,
             )
+            backend.prebuilds = args.prebuild
+            if args.prebuild:
+                # Their sessions then start at once (a fork), the first
+                # ones too.
+                backend.prebuild(engines.to_build())
             if args.activity_db:
                 print("What the users run is logged in "
                       f"{args.activity_db.resolve()}", flush=True)
