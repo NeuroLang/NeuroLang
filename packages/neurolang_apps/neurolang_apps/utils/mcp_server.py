@@ -23,6 +23,7 @@ waits for it. The calls run one at a time, on the one session.
 import base64
 import logging
 import os
+import re
 import secrets
 import shutil
 import threading
@@ -85,8 +86,9 @@ MAX_CELLS = 20_000_000
 # The rows of each result an answer returns, and its glass brains at most.
 ANSWER_ROWS = 20
 ANSWER_IMAGES = 2
-# Where the files of the answers are kept, by default.
+# Where the files of the answers are kept, by default, and for how many days.
 RESULTS_DIR = Path("~/.cache/neurolang/mcp")
+KEEP_RESULTS_DAYS = 7
 LANGUAGE = "datalog"
 
 INSTRUCTIONS = """\
@@ -139,16 +141,35 @@ class Answer:
     links: dict = field(default_factory=dict)
 
 
+# The name of the folder of a session's answers: its start, and a token.
+SESSION_FOLDER = re.compile(r"\d{8}-\d{6}-[0-9a-f]{8}")
+
+
 class ResultStore:
     """
     Where the files of the answers of a session are kept, a folder each,
     and the links to them: ``file://`` URIs, the server and its client
-    being on the same machine.
+    being on the same machine. The folders of the sessions older than
+    *keep_days* days are removed (none if 0).
     """
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, keep_days: float = KEEP_RESULTS_DAYS):
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        self.root = Path(root).expanduser() / f"{stamp}-{secrets.token_hex(4)}"
+        root = Path(root).expanduser()
+        self.root = root / f"{stamp}-{secrets.token_hex(4)}"
+        if keep_days and root.is_dir():
+            self._prune(root, time.time() - keep_days * 86400)
+
+    @staticmethod
+    def _prune(root: Path, before: float) -> None:
+        """Remove the folders of the sessions in *root* last changed
+        before the time *before*: only those named as a session's."""
+        for folder in root.iterdir():
+            if (
+                folder.is_dir() and SESSION_FOLDER.fullmatch(folder.name)
+                and folder.stat().st_mtime < before
+            ):
+                shutil.rmtree(folder, ignore_errors=True)
 
     def folder(self, answer: str) -> Path:
         folder = self.root / answer
@@ -169,6 +190,7 @@ class McpSession:
         self, engine: str, build=None, initial_program: str = "",
         repl: Optional[WebRepl] = None, results_dir: Path = RESULTS_DIR,
         config: Optional[AssistantConfig] = None, lazy: bool = False,
+        keep_days: float = KEEP_RESULTS_DAYS,
     ):
         """
         Build the engine with *build* in the background, from the start or,
@@ -179,7 +201,7 @@ class McpSession:
         """
         self.engine = engine
         self.config = config or AssistantConfig()
-        self.store = ResultStore(results_dir)
+        self.store = ResultStore(results_dir, keep_days)
         self.answers: dict = {}
         self._question = ""
         self._toolbox: Optional[Toolbox] = None
@@ -811,6 +833,7 @@ def main(args, initial_program: str = "") -> None:
         return build_engine(args)
 
     confine(args)
+    os.umask(0o077)  # the answers' files and the log, the user's only
 
     if args.log:
         handler = logging.FileHandler(Path(args.log).expanduser())
@@ -822,5 +845,6 @@ def main(args, initial_program: str = "") -> None:
         args.engine, build, initial_program,
         results_dir=Path(args.results_dir or RESULTS_DIR),
         config=assistant_settings(), lazy=args.build_on_first_call,
+        keep_days=args.keep_results,
     )
     server(session).run("stdio")

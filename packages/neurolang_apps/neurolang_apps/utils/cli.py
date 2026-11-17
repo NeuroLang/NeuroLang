@@ -631,6 +631,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "(default: ~/.cache/neurolang/mcp).",
     )
     parser.add_argument(
+        "--keep-results",
+        type=float,
+        default=7,
+        metavar="DAYS",
+        help="With --mcp, remove at start the answers' files of the "
+        "sessions older than DAYS days in --results-dir (default: 7; 0 "
+        "keeps them all).",
+    )
+    parser.add_argument(
         "--unconfined",
         action="store_true",
         help="With --mcp, let the statements of the session read and write "

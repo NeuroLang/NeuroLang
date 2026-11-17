@@ -550,3 +550,54 @@ def test_the_engine_of_mcp_is_on_a_grid_of_2_mm(given, built, monkeypatch):
     )
     main(["--mcp", "--engine", "neurosynth", *given])
     assert seen == [built]
+
+
+def test_the_answers_of_old_sessions_are_removed(tmp_path):
+    import time
+
+    from neurolang_apps.utils.mcp_server import ResultStore
+
+    old, recent = tmp_path / "20261001-120000-0a1b2c3d", (
+        tmp_path / "20261117-120000-0a1b2c3d"
+    )
+    mine = tmp_path / "notes"
+    for folder in (old, recent, mine):
+        folder.mkdir()
+    week_ago = time.time() - 8 * 86400
+    for folder in (old, mine):
+        os.utime(folder, (week_ago, week_ago))
+    ResultStore(tmp_path, keep_days=0)
+    assert old.exists()
+    ResultStore(tmp_path, keep_days=7)
+    assert not old.exists() and recent.exists() and mine.exists()
+
+
+def test_the_files_of_the_server_are_its_users_only(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from neurolang.confine import CONFINE_ENV
+    from neurolang_apps.utils import mcp_server
+
+    monkeypatch.setenv(CONFINE_ENV, "")
+    log = tmp_path / "mcp.log"
+    monkeypatch.setattr(mcp_server, "McpSession", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mcp_server, "server",
+        lambda session: SimpleNamespace(run=lambda transport: None),
+    )
+    args = SimpleNamespace(
+        unconfined=True, data_dir=tmp_path, results_dir=tmp_path,
+        log=str(log), build_on_first_call=True, keep_results=7, engine="",
+    )
+    umask = os.umask(0o022)
+    try:
+        mcp_server.main(args)
+        assert os.umask(0o022) == 0o077
+    finally:
+        os.umask(umask)
+        for handler in list(mcp_server.log.handlers):
+            mcp_server.log.removeHandler(handler)
+            handler.close()
+        mcp_server.log.propagate = True
+        mcp_server.log.setLevel(0)
+    assert oct(log.stat().st_mode & 0o777) == "0o600"

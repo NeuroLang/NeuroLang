@@ -430,7 +430,10 @@ given as argument or with ``--file`` runs first, in the session.
       interactive viewer of
       ``.view`` (``view.html``), the images (``result.nii.gz``), all the
       rows (``rows.csv``), the query (``query.dl``) and its graph
-      (``graph.html``, as ``.graph``).
+      (``graph.html``, as ``.graph``). They are the user's only (as the
+      ``--log`` file), and the folders of the sessions older than
+      ``--keep-results`` days (7 by default; 0 keeps them) are removed when
+      the server starts.
     - how to cite NeuroLang and the sources of the engine's data (as
       ``.credits`` gives them).
 ``repl``
