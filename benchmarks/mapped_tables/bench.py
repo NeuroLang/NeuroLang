@@ -9,7 +9,7 @@ its rows). With --queries, run the example queries of the engine and the
 benchmark queries and keep each result as a parquet file.
 
     python bench.py ENGINE OUT_DIR [--tables DIR] [--queries Q.json]
-        [--timeout S]
+        [--timeout S] [--prepare] [--no-signatures]
 
 --tables points the Arrow files of the build (DATA_DIR/derived_tables) at
 DIR; without it the data directory's is used (a branch without them builds
@@ -218,6 +218,9 @@ def main():
     parser.add_argument("--queries")
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--no-signatures", action="store_true")
+    parser.add_argument(
+        "--prepare", action="store_true",
+        help="then constant_notes.prepare, as the REPL server's builder")
     args = parser.parse_args()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -247,6 +250,15 @@ def main():
     }
     print(json.dumps({k: report[k] for k in (
         "build_seconds", "phases", "status_built", "tables")}), flush=True)
+    if args.prepare:
+        from neurolang_apps.utils.tui import constant_notes
+        began = time.perf_counter()
+        constant_notes.prepare(nl, args.engine)
+        report["prepare_seconds"] = round(time.perf_counter() - began, 2)
+        report["status_prepared"] = status()
+        report["mapping_prepared"] = mapping(nl)
+        print("prepared", report["prepare_seconds"],
+              report["status_prepared"], flush=True)
     if not args.no_signatures:
         report["signatures"] = signatures(nl)
     if args.queries:

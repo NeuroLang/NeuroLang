@@ -641,8 +641,10 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   ``neurostore`` and ``neurostore_iit``) is held once
   (:mod:`neurolang_apps.utils.shared_tables`), and the tables an engine
   derives from its own while it is built (``activated``, the voxels within
-  reach of each peak) are kept as files of ``DATA_DIR/derived_tables``
-  that the builder and the sessions map, rather than copy (see
+  reach of each peak) and its large source tables (the studies of the
+  regions of the atlases, the TF-IDF of the terms, the peaks, the bootstrap
+  replicates) are kept as files of ``DATA_DIR/derived_tables`` that the
+  builder and the sessions map, rather than copy (see
   :doc:`engine_configuration`).
 - Before its first fork, the builder loads the engine's text embeddings
   (those of its documents, from their cache, and the query model), which

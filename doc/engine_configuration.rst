@@ -465,6 +465,21 @@ when memory is short. Only the build keeps them: a session's own rules
 derive their tables as they are, and the browser, whose data zip does not
 carry them, derives them too. Remove the directory to find them again.
 
+The large source tables of the build are kept there the same way, each named
+by a checksum of what it is found from, which is all it depends on: the
+studies activating and covering the regions of the atlases and the points of
+the regions (by the atlas image, its labels, the rows of the peaks and the
+radius or kernel), the relation files of ``relations`` (by their bytes), the
+bootstrap replicates of ``resamplings`` (by the rows of the choice, ``n``,
+the scheme and the seed), and NeuroStore's peaks, TF-IDF and labels of the
+studies (by the files of the release, the grid and the options). The next
+build maps them rather than reading the arrays of ``engine_cache`` into
+Python objects and finding them again. The tables held as Python objects
+(the regions of an atlas) are not kept. ``build_engine(...,
+map_tables=False)`` builds without any of them, as the build of the
+browser's bundle and ``python -m neurolang_apps.utils.engine_cache`` do: the
+files the browser reads are then all written.
+
 ``python -m neurolang_apps.utils.engine_cache ENGINE -d DATA_DIR -r MM`` builds
 the engine at the resolution it will be used with, so that the tables are
 kept; ``--list`` lists them and ``--clear`` removes them;

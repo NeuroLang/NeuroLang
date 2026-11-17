@@ -2237,7 +2237,9 @@ def build_engine(
             tell(f"Defining the rules of {name}")
         _phase_datalog_init(nl, cfg, data_dir, mask)
         _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
-        _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir, yaml_path)
+        _phase_text_embeddings(
+            nl, cfg, data_dir, name, rel_base_dir, yaml_path
+        )
         _phase_probabilistic_choices(nl, cfg)
         if cfg.get("resamplings"):
             tell("Drawing the bootstrap replicates")

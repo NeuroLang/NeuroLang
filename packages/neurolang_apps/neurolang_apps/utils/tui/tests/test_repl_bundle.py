@@ -90,6 +90,24 @@ def test_a_certificate_error_is_retried_with_the_system_certificates(
     monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
 
 
+def test_the_bundle_builds_keep_no_arrow_files_in_its_data(
+    bundle, monkeypatch, tmp_path
+):
+    """The Arrow files a build maps its tables from natively
+    (``DATA_DIR/derived_tables``) are not read by the page: the builds of
+    the bundle, whose data directory is zipped, keep none."""
+    from neurolang_apps.utils import engine_registry
+
+    calls = []
+    monkeypatch.setattr(
+        engine_registry, "build_engine",
+        lambda *args, **kwargs: calls.append(kwargs),
+    )
+    bundle.build_engine(tmp_path)
+    bundle.build_engine(tmp_path, use_cache=False)
+    assert [call["map_tables"] for call in calls] == [False, False]
+
+
 def test_without_system_certificates_the_error_is_raised(
     bundle, monkeypatch, tmp_path
 ):

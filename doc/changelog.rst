@@ -33,6 +33,20 @@ Unreleased
   installed on Linux has ``OOMPolicy=continue``: a session killed for
   memory no longer stops the server, and the server stops, for systemd to
   start it again, if its builder is killed.
+- Engine builds keep their large source tables as they keep the tables
+  they derive (#1337): the studies activating and covering the regions of
+  the atlases and the points of the regions, the relation files, the
+  bootstrap replicates and NeuroStore's peaks, TF-IDF and labels are kept
+  in ``DATA_DIR/derived_tables`` as Arrow files named by a checksum of
+  what each is found from, and the next build maps them rather than
+  finding them again (see :doc:`engine_configuration`). On Margaret, with
+  the files kept, ``neurostore_iit`` builds in 23 s instead of 46 s
+  (76 s on master) with 1.2 GB of private memory instead of 3.1 GB
+  (8.9 GB), and ``neurosynth_iit`` in 21 s instead of 25 s (49 s) with
+  0.7 GB instead of 1.1 GB (2.5 GB); their tables and the answers of
+  their example queries are those of master. The builds of the browser's
+  bundle keep no Arrow file (``build_engine(..., map_tables=False)``),
+  which the bundle's data zip carried since #1337.
 - REPL server (``--users --local``): the builder builds the engines the
   page offers when the server starts, the default first, and an engine
   the admin console turns on when it does, so that no session waits for
