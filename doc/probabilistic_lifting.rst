@@ -23,10 +23,11 @@ Solvers and their order
 uses the first one which accepts the query:
 
 1. :mod:`neurolang.probabilistic.small_dichotomy_theorem_based_solver`, for
-   conjunctive queries without negation whose existential variables all
-   occur in atoms of probabilistic choices, which it computes by a join
-   and a disjoint sum on the head (see `Conjunctive queries summed on
-   probabilistic choices`_);
+   conjunctive queries without negation nor self-join whose existential
+   variables all occur in atoms of probabilistic choices, once those of
+   deterministic atoms only are projected out as a deterministic
+   relation, which it computes by a join and a disjoint sum on the head
+   (see `Conjunctive queries summed on probabilistic choices`_);
 2. :mod:`neurolang.probabilistic.dalvi_suciu_lift`, which first plans
    non-repeating queries with negation (see `Non-repeating queries with
    negation`_ and `Planning non-repeating queries`_), and otherwise lifts
@@ -146,11 +147,20 @@ conjunction without negation in which
 * every existential variable of an atom of a probabilistic fact relation
   also occurs in an atom of a probabilistic choice
   (``_verify_fact_and_choice_e_quantification``);
-* no existential variable occurs in deterministic atoms only
-  (``_verify_deterministic_e_quantification``);
-* the probabilistic atoms form a hierarchical query without self-joins
-  (``is_hierarchical_without_self_joins``, see `The small dichotomy
-  theorem`_), a further restriction which the plan below does not need.
+* the existential variables occurring in deterministic atoms only are
+  projected out first: each set of conjuncts connected by such variables
+  :math:`\bar z`, atoms of deterministic relations and builtins, is
+  replaced by a deterministic relation
+  :math:`D(\bar x) := \exists \bar z\, (D_1 \land \dots \land D_n)`,
+  computed as a set when the plan is
+  (``ProjectDeterministicExistentials``); a set with a negation, or with
+  a variable which none of its atoms binds, such as :math:`v` in
+  :math:`\mathit{Act}(l, s) \land l > v`, is left as it is, and the
+  query declined (``_verify_deterministic_e_quantification``);
+* no probabilistic relation occurs in two atoms, the query having no
+  self-join (``extract_atom_sets_and_detect_self_joins``). The
+  probabilistic atoms need not form a hierarchical query (see `The small
+  dichotomy theorem`_): the plan below does not need it.
 
 Its plan is the join of the atoms of the body, followed by the projection
 on the head, which the provenance solver computes as a sum of the
@@ -167,8 +177,24 @@ choice and are mutually exclusive (see `Correctness of the plans`_). No
 completeness is claimed for the solver: the hierarchical query
 :math:`\mathit{ans}(x) \leftarrow R(x, y) \land S(y)` of probabilistic
 facts, for instance, is declined, as :math:`y` occurs in no choice, and
-is lifted by the next solver. Queries with negations or disjunctions are
-declined too.
+is lifted by the next solver. Queries with negations, disjunctions or
+self-joins are declined too: a disjunction even when its disjuncts have
+the same probabilistic atoms and differ on deterministic ones only, as
+the two rules ``d(s) :- act(1, s), sel(s)`` and ``d(s) :- act(2, s),
+sel(s)``.
+
+For the study activating a label of the left dorsal attention network,
+
+.. code-block:: text
+
+   dorsal(s) :- dorsal_label(l), schaefer400_activated(l, s), selected_study(s)
+
+:math:`l` is in deterministic atoms only, and the solver sums the
+probabilities of the studies of
+:math:`D(s) := \exists l\, (\mathit{dorsal\_label}(l) \land
+\mathit{schaefer400\_activated}(l, s))`, each study once. Summing the
+join on :math:`s` without projecting :math:`l` first would count a study
+once per label it activates.
 
 Once the join is ordered (``RAQueryGOOOptimiser``), the projection is
 pushed through it (``PushSumsThroughJoins``): at each join, each side is
@@ -1554,23 +1580,68 @@ Comparisons in an existential conjunct
    cover.
 
 Conjunctive queries summed on probabilistic choices
-   The body is a conjunction without negation and, the probabilistic
-   atoms forming a query without self-joins
-   (``is_hierarchical_without_self_joins``), no probabilistic relation
-   occurs in two atoms. For an assignment of all its variables, the event
-   of the body is then the conjunction of distinct tuples of distinct
-   relations, deterministic tuples being true or false in every world, so
-   its probability is the product that the join computes (Lemma 1). Every
-   existential variable occurs in a probabilistic atom
-   (``_verify_deterministic_e_quantification``), and if it occurs in an
-   atom of a probabilistic fact relation, it also occurs in an atom of a
-   probabilistic choice (``_verify_fact_and_choice_e_quantification``):
-   every existential variable occurs in an atom of a choice. Two rows of
-   the join that the projection on the head merges have the same answer
-   and differ on an existential variable, so they imply different tuples
-   of a choice, and are mutually exclusive by Lemma 2. Their probabilities
-   add up, which the projection of the provenance solver computes. The
-   hierarchy of the probabilistic atoms is not used.
+   *Deterministic existentials.* Let :math:`\bar z` be existential
+   variables of the body occurring in no atom of a probabilistic relation,
+   :math:`D_1, \dots, D_n` the conjuncts connected to one of them by
+   variables of :math:`\bar z`, in which all the variables of
+   :math:`\bar z` they have occur, :math:`\bar x` their other variables
+   and :math:`Q` the other conjuncts, in which no variable of
+   :math:`\bar z` is free. In every world and for every :math:`\theta`,
+
+   .. math::
+
+      \exists \bar z\, (D_1 \land \dots \land D_n \land Q)
+      \equiv D(\bar x) \land Q, \qquad
+      D(\bar x) := \exists \bar z\, (D_1 \land \dots \land D_n),
+
+   the other existential variables being quantified outside both sides.
+   The :math:`D_i` are atoms of deterministic relations and builtins, so
+   :math:`D` is the same relation in every world: its event is true or
+   false, with probability 1 or 0. Its atoms binding every variable of
+   the :math:`D_i`, it is finite, and the projection on :math:`\bar x` of
+   the join of the :math:`D_i`, computed as a set by the
+   ``Materialise`` of :func:`~neurolang.probabilistic.deterministic_subqueries.materialised_relation`,
+   is :math:`D`. A deterministic relation has the number 1 on each of its
+   rows, so each :math:`\bar x` of :math:`D` contributes 1, the
+   probability of :math:`\exists \bar z\, D_1 \land \dots \land D_n`
+   for it, whatever the number of values of :math:`\bar z` that satisfy
+   it. Summing the join of the :math:`D_i` on :math:`\bar z` would
+   instead multiply the probability by that number. The replacement is
+   repeated for each such set, each removing variables of :math:`\bar z`
+   from the body, and leaves a body equivalent in every world, of the
+   same probability for every answer.
+
+   *Join and sum.* The body is then a conjunction without negation and
+   without self-joins (``extract_atom_sets_and_detect_self_joins``): no
+   probabilistic relation occurs in two atoms. For an assignment of all
+   its variables, the event of the body is then the conjunction of
+   distinct tuples of distinct relations, deterministic tuples being true
+   or false in every world, so its probability is the product that the
+   join computes (Lemma 1). Every existential variable occurs in a
+   probabilistic atom (``_verify_deterministic_e_quantification``), and
+   if it occurs in an atom of a probabilistic fact relation, it also
+   occurs in an atom of a probabilistic choice
+   (``_verify_fact_and_choice_e_quantification``): every existential
+   variable occurs in an atom of a choice. Two rows of the join that the
+   projection on the head merges have the same answer and differ on an
+   existential variable, so they imply different tuples of a choice, and
+   are mutually exclusive by Lemma 2. Their probabilities add up, which
+   the projection of the provenance solver computes. The plan is a join
+   and a projection, computed in polynomial time.
+
+   The hierarchy of the probabilistic atoms is not used, and not checked:
+   :math:`C(x, y) \land F(x) \land G(y)`, with :math:`C` a choice, is
+   not hierarchical, and its probability is
+   :math:`\sum_{a, b} P[C(a, b)]\, P[F(a)]\, P[G(b)]`. The absence of
+   self-joins is used: for :math:`C_1(x) \land C_2(y) \land F(x)
+   \land F(y)`, :math:`C_1` and :math:`C_2` choices, the assignment
+   :math:`x = y = a` has the event :math:`C_1(a) \land C_2(a) \land
+   F(a)`, of probability :math:`P[C_1(a)]\, P[C_2(a)]\, p`, :math:`p`
+   being that of :math:`F(a)`, while the join would multiply by
+   :math:`p^2`. The atoms of a single choice are made one before
+   (`Preparing the query`_), and constants shattered so that the atoms
+   of a relation with different constants are of different relations
+   with disjoint tuples (`The Dalvi–Suciu algorithm`_).
 
 Sums pushed through joins
    In the plan above, a projection is computed as the sum of the

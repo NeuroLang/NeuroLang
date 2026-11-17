@@ -75,10 +75,8 @@ from ..relational_algebra import (
     Materialise,
     NamedRelationalAlgebraFrozenSet,
     NAryRelationalAlgebraOperation,
-    Projection,
     RelationalAlgebraSolver,
     UnaryRelationalAlgebraOperation,
-    int2columnint_constant,
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
@@ -86,8 +84,10 @@ from nl_expr.utils.orderedset import OrderedSet
 from nl_expr.utils.various import log_performance
 from .containment import is_contained
 from .deterministic_subqueries import (
+    materialised_atom,
     materialised_relation,
     replace_deterministic_negations,
+    tuples_of,
 )
 from .expression_processing import (
     STRICT_COMPARISONS,
@@ -101,8 +101,6 @@ from .probabilistic_ra_utils import (
     DeterministicFactSet,
     GetProbabilisticSetAtom,
     NonLiftable,
-    ProbabilisticChoiceSet,
-    ProbabilisticFactSet,
     classify_and_wrap_symbols,
     generate_probabilistic_symbol_table_for_query,
     is_atom_a_deterministic_relation,
@@ -818,7 +816,7 @@ def _comparisons_as_relations(projected, quantified, conjuncts, symbol_table):
         )
         if any(domain is None for domain in domains):
             return None
-        relations[comparison] = _materialised_atom(
+        relations[comparison] = materialised_atom(
             add_existentials_except(
                 Conjunction(domains + (comparison,)), set(comparison.args)
             ),
@@ -2174,7 +2172,7 @@ def disjoint_separator(query, symbol_table):
             deterministic = add_existentials_except(deterministic, kept)
         # D is computed as a set, the choice atoms in it being
         # replaced by their tuples.
-        deterministic_atom = _materialised_atom(
+        deterministic_atom = materialised_atom(
             deterministic, sorted(kept, key=lambda v: v.name), symbol_table
         )
         if deterministic_atom is not None:
@@ -2212,7 +2210,7 @@ def disjoint_separator(query, symbol_table):
         RTO.walk(Disjunction(tuple(disjuncts))), kept
     )
     plan = dalvi_suciu_lift(body, symbol_table)
-    tuples = {atom.functor: _tuples_of(atom, symbol_table)
+    tuples = {atom.functor: tuples_of(atom, symbol_table)
               for atom in choice_atoms}
     if not is_pure_lifted_plan(plan) and not any(
         atom.functor in tuples for atom in remainder_atoms
@@ -2238,47 +2236,6 @@ def disjoint_separator(query, symbol_table):
             ),
         )
     return True, rap.DisjointProjection(plan, attributes)
-
-
-def _materialised_atom(formula, columns, symbol_table):
-    """The atom, on the variables `columns`, of a deterministic relation
-    of the tuples of `formula`, its relations being replaced by their
-    tuples, or None if one of them is not known as a set."""
-    relations = {
-        atom.functor: _tuples_of(atom, symbol_table)
-        for atom in extract_logic_atoms(formula)
-        if isinstance(atom.functor, Symbol)
-    }
-    if any(r is None for r in relations.values()):
-        return None
-    relation, functor = Symbol.fresh(), Symbol.fresh()
-    symbol_table[relation] = materialised_relation(
-        formula, columns, relations
-    )
-    symbol_table[functor] = DeterministicFactSet(relation)
-    return functor(*columns)
-
-
-def _tuples_of(atom, symbol_table):
-    """The set of the tuples of an atom, without their probabilities, or
-    None if it is not known as a set."""
-    entry = symbol_table[atom.functor]
-    relation = entry.relation
-    if isinstance(relation, Symbol):
-        relation = symbol_table[relation]
-    if isinstance(entry, DeterministicFactSet) and isinstance(
-        relation, (Constant[AbstractSet], Materialise)
-    ):
-        return relation
-    if (
-        isinstance(entry, (ProbabilisticChoiceSet, ProbabilisticFactSet)) and
-        isinstance(relation, Constant[AbstractSet]) and
-        entry.probability_column == int2columnint_constant(0)
-    ):
-        return Projection(relation, tuple(
-            int2columnint_constant(i) for i in range(1, len(atom.args) + 1)
-        ))
-    return None
 
 
 def _choice_terms_as_equalities(disjuncts, quantified, symbol_table):

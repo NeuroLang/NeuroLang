@@ -613,18 +613,13 @@ def test_multilevel_existential_2(solver):
 
     query = Implication(ans(z), B(z))
 
-    if solver is small_dichotomy_theorem_based_solver:
-        context = pytest.raises(NotHierarchicalQueryException)
-    else:
-        context = nullcontext()
-
-    with context:
-        result = solver.solve_succ_query(query, cpl_program)
-        expected = testing.make_prov_set(
-            [(0.5 * 0.1 * 0.5, "c")],
-            ("_p_", "z"),
-        )
-        assert testing.eq_prov_relations(result, expected)
+    # Not hierarchical, but every existential variable is in a choice.
+    result = solver.solve_succ_query(query, cpl_program)
+    expected = testing.make_prov_set(
+        [(0.5 * 0.1 * 0.5, "c")],
+        ("_p_", "z"),
+    )
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_repeated_antecedent_predicate_symbol(solver):
@@ -1937,3 +1932,196 @@ def test_choice_atoms_with_constants(solver):
         result = solver.solve_succ_query(Implication(ans(), body), cpl)
         expected = testing.make_prov_set(probabilities, ("_p_",))
         assert testing.eq_prov_relations(result, expected)
+
+
+
+Act = Symbol("Act")
+Label = Symbol("Label")
+Sel = Symbol("Sel")
+F = Symbol("F")
+s = Symbol("s")
+l = Symbol("l")
+u = Symbol("u")
+k = Constant("k")
+
+
+def _studies_with_labels_program():
+    """A non-uniform choice Sel of a study among 0-3, the probabilistic
+    facts F of studies 0-2, the deterministic activations Act of labels
+    1-3 by the studies, with a duplicate row, and the deterministic
+    labels 1 and 2. Studies 0 and 1 activate two labels each, which a sum
+    over the labels would count twice."""
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        Sel, [(0.1, 0), (0.2, 1), (0.3, 2), (0.4, 3)]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        F, [(0.5, 0), (0.25, 1), (0.75, 2)]
+    )
+    cpl.add_extensional_predicate_from_tuples(
+        Act, [(1, 0), (2, 0), (1, 1), (1, 1), (3, 1), (2, 2), (3, 3)]
+    )
+    cpl.add_extensional_predicate_from_tuples(Label, [(1,), (2,)])
+    return cpl
+
+
+@pytest.mark.parametrize("head, body, probabilities", [
+    ((s,), (Act(l, s), Sel(s)), [(0.1, 0), (0.2, 1), (0.3, 2), (0.4, 3)]),
+    ((), (Act(l, s), Sel(s)), [(1.0,)]),
+    ((s,), (Label(l), Act(l, s), Sel(s)), [(0.1, 0), (0.2, 1), (0.3, 2)]),
+    ((), (Label(l), Act(l, s), Sel(s)), [(0.6,)]),
+    ((s,), (Act(l, s), GT(l, Constant(2)), Sel(s)), [(0.2, 1), (0.4, 3)]),
+    ((s,), (Act(Constant(1), s), Act(l, s), Sel(s)), [(0.1, 0), (0.2, 1)]),
+    ((s,), (Label(l), Act(l, s), Sel(s), F(s)),
+     [(0.1 * 0.5, 0), (0.2 * 0.25, 1), (0.3 * 0.75, 2)]),
+    ((), (Label(l), Act(l, s), Sel(s), F(s)),
+     [(0.1 * 0.5 + 0.2 * 0.25 + 0.3 * 0.75,)]),
+    ((s,), (Act(l, s), Act(l, u), Sel(u)),
+     [(0.6, 0), (0.7, 1), (0.4, 2), (0.6, 3)]),
+    ((), (Act(l, s), Act(l, u), Sel(u)), [(1.0,)]),
+    ((s,), (Label(l), Sel(s)), [(0.1, 0), (0.2, 1), (0.3, 2), (0.4, 3)]),
+])
+def test_variable_of_deterministic_atoms_only(
+    solver, head, body, probabilities
+):
+    """A variable in deterministic atoms only is quantified existentially
+    before the sum on the choice, P[∃l (D(l, s) ∧ C(s))] = Σ_s P[C(s)]
+    [∃l D(l, s)], each study being counted once whatever the number of
+    its labels. The first solver computes it as a deterministic relation.
+    """
+    query = Implication(ans(*head), Conjunction(body))
+    result = solver.solve_succ_query(query, _studies_with_labels_program())
+    assert testing.eq_prov_relations(result, testing.make_prov_set(
+        probabilities, ("_p_",) + tuple(v.name for v in head)
+    ))
+
+
+def test_variable_of_deterministic_atoms_only_constant_in_head(solver):
+    """The rule's head has a constant, which the query's head has as a
+    variable."""
+    cpl = _studies_with_labels_program()
+    cpl.walk(Union((Implication(
+        Z(s, k), Conjunction((Label(l), Act(l, s), Sel(s)))
+    ),)))
+    result = solver.solve_succ_query(Implication(ans(s, y), Z(s, y)), cpl)
+    assert testing.eq_prov_relations(result, testing.make_prov_set(
+        [(0.1, 0, "k"), (0.2, 1, "k"), (0.3, 2, "k")], ("_p_", "s", "y")
+    ))
+
+
+def test_non_hierarchical_query_summed_on_a_choice(solver):
+    """C(x, y) ∧ F(x) ∧ G(y) is not hierarchical, but the choice has every
+    variable: P = Σ P[C(x, y)] P[F(x)] P[G(y)]."""
+    G = Symbol("G")
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        C, [(0.1, "a", "a"), (0.2, "a", "b"), (0.3, "b", "a"), (0.4, "b", "b")]
+    )
+    cpl.add_probabilistic_facts_from_tuples(F, [(0.5, "a"), (0.25, "b")])
+    cpl.add_probabilistic_facts_from_tuples(G, [(0.75, "a"), (0.2, "b")])
+    query = Implication(ans(), Conjunction((C(x, y), F(x), G(y))))
+    result = solver.solve_succ_query(query, cpl)
+    expected = (
+        0.1 * 0.5 * 0.75 + 0.2 * 0.5 * 0.2 +
+        0.3 * 0.25 * 0.75 + 0.4 * 0.25 * 0.2
+    )
+    assert testing.eq_prov_relations(
+        result, testing.make_prov_set([(expected,)], ("_p_",))
+    )
+
+
+def test_self_join_of_a_fact_with_choice_variables(solver):
+    """F(x) ∧ F(y) is the single tuple F(a) when the choices give x = y = a,
+    so the product of the join is not its probability: the first solver
+    declines the self-join, even with every variable in a choice."""
+    C2 = Symbol("C2")
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(C, [(0.3, "a"), (0.7, "b")])
+    cpl.add_probabilistic_choice_from_tuples(C2, [(0.6, "a"), (0.4, "b")])
+    cpl.add_probabilistic_facts_from_tuples(F, [(0.5, "a"), (0.2, "b")])
+    query = Implication(ans(), Conjunction((C(x), C2(y), F(x), F(y))))
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+    with context:
+        result = solver.solve_succ_query(query, cpl)
+        expected = (
+            0.3 * 0.6 * 0.5 + 0.3 * 0.4 * 0.5 * 0.2 +
+            0.7 * 0.6 * 0.2 * 0.5 + 0.7 * 0.4 * 0.2
+        )
+        assert testing.eq_prov_relations(
+            result, testing.make_prov_set([(expected,)], ("_p_",))
+        )
+
+
+def test_union_of_deterministic_disjuncts_with_a_choice(solver):
+    """Two rules with the same choice and different deterministic atoms:
+    a study is counted once when both hold. The first solver declines the
+    disjunction."""
+    cpl = _studies_with_labels_program()
+    cpl.walk(Union((
+        Implication(Z(s), Conjunction((Act(Constant(1), s), Sel(s)))),
+        Implication(Z(s), Conjunction((Act(Constant(2), s), Sel(s)))),
+    )))
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+    with context:
+        result = solver.solve_succ_query(Implication(ans(), Z(s)), cpl)
+        assert testing.eq_prov_relations(
+            result, testing.make_prov_set([(0.6,)], ("_p_",))
+        )
+
+
+def test_variable_of_deterministic_atoms_only_compared_to_another(solver):
+    """∃l (Act(l, s) ∧ l > v) is not a relation of the deterministic atoms,
+    which do not bind v: the first solver declines it."""
+    cpl = _studies_with_labels_program()
+    cpl.add_probabilistic_choice_from_tuples(C, [(0.5, 0, 1), (0.5, 2, 2)])
+    query = Implication(
+        ans(), Conjunction((Act(l, s), GT(l, u), C(s, u)))
+    )
+    if solver is small_dichotomy_theorem_based_solver:
+        context = pytest.raises(UnsupportedSolverError)
+    else:
+        context = nullcontext()
+    with context:
+        result = solver.solve_succ_query(query, cpl)
+        assert testing.eq_prov_relations(
+            result, testing.make_prov_set([(0.5,)], ("_p_",))
+        )
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_variable_of_deterministic_atoms_only_random(seed):
+    """On random programs, the first solver gives the probabilities of
+    weighted model counting."""
+    rng = np.random.default_rng(seed)
+    weights = rng.random(5)
+    weights /= weights.sum()
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        Sel, [(float(p), i) for i, p in enumerate(weights)]
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        F, [(float(rng.random()), i) for i in range(5)]
+    )
+    cpl.add_extensional_predicate_from_tuples(Act, [
+        (int(i), int(j)) for i, j in rng.integers(0, 5, size=(12, 2))
+    ])
+    cpl.add_extensional_predicate_from_tuples(
+        Label, [(int(i),) for i in rng.integers(0, 5, size=2)]
+    )
+    for head, body in (
+        ((s,), (Label(l), Act(l, s), Sel(s))),
+        ((), (Label(l), Act(l, s), Sel(s), F(s))),
+        ((s,), (Act(l, s), Act(l, u), Sel(u), F(u))),
+        ((u,), (Act(l, s), Act(s, u), Sel(u), F(u))),
+    ):
+        query = Implication(ans(*head), Conjunction(body))
+        assert testing.eq_prov_relations(
+            small_dichotomy_theorem_based_solver.solve_succ_query(query, cpl),
+            weighted_model_counting.solve_succ_query(query, cpl),
+        )
