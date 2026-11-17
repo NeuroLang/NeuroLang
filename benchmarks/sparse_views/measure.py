@@ -231,6 +231,7 @@ def main():
         def timed_views(nl, cfg):
             gc.collect()
             rss = status("VmRSS")
+            record["peak_before_views_mib"] = status("VmHWM")
             reset_peak()
             began = time.perf_counter()
             views_phase(nl, cfg)
@@ -248,7 +249,10 @@ def main():
         yaml_path=yaml_path,
     )
     record["build_seconds"] = round(time.perf_counter() - began, 1)
-    record["build_peak_mib"] = status("VmHWM")
+    # the whole build's peak, that before the views reset it included
+    record["build_peak_mib"] = max(
+        status("VmHWM"), record.get("peak_before_views_mib", 0)
+    )
     gc.collect()
     record["rss_after_build_mib"] = status("VmRSS")
     views = getattr(nl, "sparse_views", {})
