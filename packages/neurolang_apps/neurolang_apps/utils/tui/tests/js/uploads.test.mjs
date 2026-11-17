@@ -26,6 +26,8 @@ test("each upload is a row: name, kind, size, what it was loaded as", () => {
   ]);
   const tracts = { files: [{ name: "AF_L.trk", size: 820, age: 3, loaded: ["af_l"] }] };
   assert.deepEqual(uploadRows(tracts), [["AF_L.trk", "tractogram", "820 B", "af_l"]]);
+  const ontology = { files: [{ name: "staff.ttl", size: 820, age: 3, loaded: ["ontology"] }] };
+  assert.deepEqual(uploadRows(ontology), [["staff.ttl", "ontology", "820 B", "ontology"]]);
 });
 
 test("the engine's tractogram is a row, but no upload", () => {
@@ -52,8 +54,9 @@ test("the statements loading a removed file are not run again", () => {
     { text: ".load 'my scores.csv' scores", mode: "datalog" },
     { text: "a(x) :- old(x)", mode: "datalog" },
     { text: ".image roi.nii.gz --name image", mode: "datalog" },
+    { text: ".ontology 'old staff.ttl'", mode: "datalog" },
   ];
-  assert.deepEqual(withoutUploads(entries, ["old.csv", "roi.nii.gz"]).map((e) => e.text), [
+  assert.deepEqual(withoutUploads(entries, ["old.csv", "roi.nii.gz", "old staff.ttl"]).map((e) => e.text), [
     ".load 'my scores.csv' scores", "a(x) :- old(x)",
   ]);
 });

@@ -15,6 +15,7 @@ last query is rewritten (``.rewritten``) or translated from SQUALL to
 Datalog, and the Datalog rules of a predicate (``.datalog``).
 """
 
+import io
 import re
 import shlex
 import shutil
@@ -26,7 +27,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from neurolang.confine import confined_roots
+from neurolang.confine import ConfinedError, check_read, confined_roots
 from rich import box
 from rich.table import Table
 
@@ -74,14 +75,17 @@ def session_idb_symbols(nl) -> set:
 
     The helpers NeuroLang compiles a conditional probability into, such
     as ``P^cond_num`` and ``P^cond_den`` for ``P``, are left out: they
-    are named ``P`` too.
+    are named ``P`` too. So are the predicates of the ontologies the
+    session loaded (``.ontology``).
     """
     symbol_table = nl.program_ir.symbol_table
+    ontology = getattr(nl, "ontology_predicates", ())
     return {
         symbol
         for symbol in nl.program_ir.intensional_database()
         if symbol in symbol_table._symbols
         and not isinstance(symbol, AdornedSymbol)
+        and symbol.name not in ontology
     }
 
 
@@ -256,6 +260,11 @@ def drop(app, name: str, number=None) -> None:
     value = _session_value(app, name)
     if value is None:
         return
+    if name in getattr(app._nl, "ontology_predicates", ()):
+        _warn(app, f"{name!r} is a predicate of an ontology the session "
+                   "loaded: .clear removes the ontologies of the session, "
+                   "with its other predicates.")
+        return
     if isinstance(value, DatalogUnion):
         if number is None:
             _drop_all_rules(app, name, value.formulas)
@@ -311,7 +320,8 @@ def _cleared_line(app, symbol, value):
     the symbols NeuroLang generates and those that are not predicates.
     """
     extent = predicate_extent(value)
-    if extent is None or not is_user_symbol(symbol):
+    if extent is None or not is_user_symbol(symbol) \
+            or symbol.name in getattr(app._nl, "ontology_predicates", ()):
         return None
     if symbol.name in app.loaded_relations:
         return f"removed relation {symbol.name}"
@@ -328,7 +338,10 @@ def _cleared_lines(app) -> list:
         symbol.name: _cleared_line(app, symbol, value)
         for symbol, value in session.items()
     }
-    return [line for _, line in sorted(lines.items()) if line]
+    return [f"removed ontology {source}"
+            for source in app.loaded_ontologies] + [
+        line for _, line in sorted(lines.items()) if line
+    ]
 
 
 @command(
@@ -345,6 +358,7 @@ def cmd_clear(app, arg: str) -> None:
     app._nl.program_ir.pop_scope()
     open_session_scope(app._nl)
     app.loaded_relations.clear()
+    app.loaded_ontologies.clear()
     app.squall_rules.clear()
     for line in lines or ["nothing to clear"]:
         app.console.print(line, style="green", markup=False)
@@ -462,6 +476,16 @@ MOST_UPLOADS_BYTES = 200 << 20
 # .load: a tractogram as the voxels near the ends of its streamlines.
 TRACTOGRAM_SUFFIXES = (".trk", ".tck")
 IMAGE_SUFFIXES = (".nii", ".nii.gz") + TRACTOGRAM_SUFFIXES
+
+
+#: The files of ontologies that ``.ontology`` loads (rdflib's formats).
+ONTOLOGY_SUFFIXES = (".owl", ".rdf", ".ttl", ".nt", ".n3", ".jsonld")
+
+
+def is_ontology(name: str) -> bool:
+    """Whether the file *name* is an ontology, which ``.ontology``
+    loads."""
+    return name.lower().endswith(ONTOLOGY_SUFFIXES)
 
 
 def is_image(name: str) -> bool:
@@ -620,7 +644,8 @@ class Uploads:
 def store_upload(app, name: str, data: bytes) -> None:
     """
     Keep the file *name*, of the bytes *data*, that the page uploaded, for
-    ``.load NAME`` (``.image NAME`` for a NIfTI image or a tractogram), in
+    ``.load NAME`` (``.image NAME`` for a NIfTI image or a tractogram,
+    ``.ontology NAME`` for an ontology), in
     the uploads of
     the session (:class:`Uploads`), gone with it. A ValueError tells why it
     is refused (its name, its format, its size).
@@ -629,7 +654,7 @@ def store_upload(app, name: str, data: bytes) -> None:
             or ".." in name:
         raise ValueError(f"{name!r} is not the name of a file: letters, "
                          "digits, '.', '_', '-' and spaces")
-    if not is_image(name):
+    if not is_image(name) and not is_ontology(name):
         engine_registry.relation_file_separator(name)  # .csv, .tsv(.gz)
     app.uploads.put(name, data)
 
@@ -673,6 +698,89 @@ def cmd_load(app, arg: str) -> None:
         return
     if data is not None:
         app.uploads.loaded(words[0], name)
+
+
+ONTOLOGY_USAGE = (
+    ".ontology URL|PATH|UPLOADED [--individuals] [--names local|prefixed] "
+    "[--format FORMAT]"
+)
+
+
+@command(
+    ".ontology", "Load an OWL or RDF ontology, from an address, a file, or "
+    "one the page uploaded: its classes and properties are predicates, its "
+    "axioms constraints of the queries",
+    ONTOLOGY_USAGE,
+)
+def cmd_ontology(app, arg: str) -> None:
+    """Load the ontology of *arg* into the session, as the ``ontologies``
+    of an engine are (:func:`engine_registry.load_ontology_entry`): one
+    the page uploaded, by its name, or an address or a path; on a server,
+    which fetches no address and reads none of its files for a statement
+    (neurolang.confine), an uploaded one only. ``.clear`` removes it."""
+    from .nifti import SaveError, split_args
+
+    try:
+        words, options = split_args(
+            arg, {"--individuals": 0, "--names": 1, "--format": 1},
+            ONTOLOGY_USAGE,
+        )
+    except SaveError as exc:
+        _load_failed(app, str(exc))
+        return
+    names = options.get("--names", ["local"])[0]
+    if len(words) != 1 or names not in ("local", "prefixed"):
+        _load_failed(app, f"Usage: {ONTOLOGY_USAGE}")
+        return
+    source = words[0]
+    if source in app.loaded_ontologies or source in _engine_ontologies(app):
+        _load_failed(app, f"The ontology {source} is already loaded"
+                     + ("." if source in app.loaded_ontologies else
+                        ", by the engine."))
+        return
+    entry = {"url": source, "names": names,
+             "individuals": "--individuals" in options}
+    if "--format" in options:
+        entry["format"] = options["--format"][0]
+    data = app._read_upload(source, "ontology")
+    if data is not None:
+        from rdflib.util import guess_format
+
+        entry["url"] = io.BytesIO(data)
+        entry.setdefault("format", guess_format(source) or "xml")
+    else:
+        try:
+            check_read(source, "ontology")
+        except ConfinedError as exc:
+            _load_failed(app, f"{exc}; upload the ontology (Upload data), "
+                         "then .ontology NAME loads it")
+            return
+    known = set(getattr(app._nl, "ontology_predicates", ()))
+    data_dir = Path(app.settings.data_dir or Path.home() / "neurolang_data")
+    try:
+        engine_registry.load_ontology_entry(
+            app._nl, entry, data_dir, "ontologies", base_dir=Path.cwd()
+        )
+    except Exception as exc:
+        _load_failed(app, f"Cannot load the ontology {source}: {exc}", exc)
+        return
+    added = sorted(set(app._nl.ontology_predicates) - known)
+    app.loaded_ontologies[source] = added
+    shown = ", ".join(added[:8]) + (", ..." if len(added) > 8 else "")
+    app.console.print(
+        f"loaded the ontology {source}: {_plural(len(added), 'predicate')}"
+        + (f" ({shown})" if added else ""),
+        style="green", markup=False,
+    )
+
+
+def _engine_ontologies(app) -> list:
+    """The addresses and paths of the ontologies the engine loads."""
+    try:
+        cfg = engine_registry.get_engine_config(app.settings.engine_name)
+    except ValueError:
+        return []
+    return engine_registry.ontology_sources(cfg.get("ontologies"))
 
 
 UPLOADS_USAGE = ".uploads [remove NAME | restore NAME]"
