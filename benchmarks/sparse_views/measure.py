@@ -123,6 +123,49 @@ def fork_reads(view):
     return result
 
 
+def coactivation(nl, name):
+    """
+    Compare P(both regions active) over the uniform choice of a study, by
+    the engine's query and by R R^T / N over the weighted view R of
+    *name* (N the studies of ``study``, the source of ``selected_study``).
+    """
+    view = nl.sparse_views[name]
+    query = (
+        f"ans(l1, l2, PROB) :- {name}(l1, s) & {name}(l2, s) "
+        "& selected_study(s)"
+    )
+    out = {}
+    with nl.scope:
+        studies = len(nl.execute_datalog_program("ans(s) :- study(s)"))
+    reset_peak()
+    rss, began = status("VmRSS"), time.perf_counter()
+    with nl.scope:
+        engine = nl.execute_datalog_program(query).as_pandas_dataframe()
+    out["engine_seconds"] = round(time.perf_counter() - began, 2)
+    out["engine_peak_above_rss_mib"] = round(status("VmHWM") - rss, 1)
+    gc.collect()
+    reset_peak()
+    rss, began = status("VmRSS"), time.perf_counter()
+    weighted = view.weighted()
+    product = (weighted @ weighted.T).tocoo()
+    out["spgemm_seconds"] = round(time.perf_counter() - began, 3)
+    out["spgemm_peak_above_rss_mib"] = round(status("VmHWM") - rss, 1)
+    labels = view.row_index.decode(np.arange(len(view.row_index)))[0]
+    mine = pd.DataFrame({
+        "l1": labels.to_numpy()[product.row],
+        "l2": labels.to_numpy()[product.col],
+        "p": product.data / studies,
+    })
+    engine.columns = ["l1", "l2", "p"]
+    merged = engine.merge(mine, on=["l1", "l2"], how="outer", indicator=True)
+    out["pairs_engine"], out["pairs_spgemm"] = len(engine), len(mine)
+    out["pairs_only_one_side"] = int((merged["_merge"] != "both").sum())
+    both = merged[merged["_merge"] == "both"]
+    out["max_abs_diff"] = float((both["p_x"] - both["p_y"]).abs().max())
+    out["studies"] = studies
+    return out
+
+
 def answer_frame(result):
     """Return the answer *result* as a sorted DataFrame."""
     if hasattr(result, "as_pandas_dataframe"):
@@ -145,6 +188,7 @@ def main():
     parser.add_argument("--queries", nargs="*", default=[])
     parser.add_argument("--examples", action="store_true")
     parser.add_argument("--answers")
+    parser.add_argument("--coactivation", help="a region x study view")
     args = parser.parse_args()
 
     from neurolang_apps.utils import engine_registry
@@ -187,6 +231,10 @@ def main():
         record["views"][name]["fork_reads"] = fork_reads(view)
         record["views"][name]["round_trip"] = round_trip(nl, name, view)
     print(json.dumps(record, indent=1), flush=True)
+
+    if args.coactivation:
+        record["coactivation"] = coactivation(nl, args.coactivation)
+        print(record["coactivation"], flush=True)
 
     queries = {Path(q).stem: Path(q).read_text() for q in args.queries}
     if args.examples:

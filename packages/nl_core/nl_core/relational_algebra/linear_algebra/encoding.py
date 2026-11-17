@@ -271,7 +271,9 @@ class SparseView:
 
     The matrix is a ``scipy.sparse.csr_array`` with int32 indices; its
     transpose ``matrix.T`` is the CSC matrix of the transposed relation,
-    without a copy.
+    without a copy. Its entries are booleans when there is no value: to
+    multiply views (sums of products, as ``R @ R.T``), take
+    :meth:`weighted`.
 
     Parameters
     ----------
@@ -331,6 +333,27 @@ class SparseView:
                 f"the column {value!r} is not a function of the row and "
                 "column entities"
             )
+
+    def weighted(self, dtype=np.float64):
+        """
+        Return the matrix with its entries as numbers of *dtype*: 1 for
+        each tuple of a view without a value, its value otherwise.
+
+        The matrix shares the indices of the view; only its entries are
+        new (8 bytes a tuple in float64). Products of views are to be
+        taken over it: the boolean ``matrix`` multiplies as a logical
+        or, and ``R @ R.T`` would not count the studies two regions
+        share.
+        """
+        data = self.matrix.data
+        data = (
+            np.ones(len(data), dtype=dtype) if self.value is None
+            else data.astype(dtype, copy=False)
+        )
+        return sparse.csr_array(
+            (data, self.matrix.indices, self.matrix.indptr),
+            shape=self.matrix.shape, copy=False,
+        )
 
     def __repr__(self):
         shape = "x".join(map(str, self.matrix.shape))

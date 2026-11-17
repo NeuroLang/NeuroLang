@@ -1444,6 +1444,28 @@ class TestSparseViews:
             )].itertuples(index=False)
         } == expected
 
+    def test_the_atlases_share_the_studies_of_activated(
+        self, small_neurosynth
+    ):
+        """Check the region x study views of the atlases number the
+        studies as ``activated`` does, and hold their relation's tuples."""
+        from nl_expr.expressions import Symbol
+
+        views = small_neurosynth.sparse_views
+        for name in (
+            "schaefer_activated", "schaefer400_activated",
+            "destrieux_activated", "tian_activated",
+        ):
+            view = views[name]
+            assert view.column_index is views["activated"].column_index
+            rows = small_neurosynth.program_ir.symbol_table[
+                Symbol(name)
+            ].value.as_pandas_dataframe()
+            assert view.matrix.nnz == len(rows) > 0
+            assert {
+                tuple(row) for row in view.to_frame().itertuples(index=False)
+            } == {tuple(row) for row in rows.itertuples(index=False)}
+
     @staticmethod
     def _engine(tmp_path, views, body="p(x, y, w) :- q(x, y, w)"):
         from neurolang_apps.utils import engine_registry

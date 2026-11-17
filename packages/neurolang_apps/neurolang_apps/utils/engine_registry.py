@@ -1986,6 +1986,13 @@ def _phase_sparse_views(nl, cfg):
             for name, sorts in declared.items()
         },
     )
+    # Hashing the string columns leaves Arrow's pool holding the memory it
+    # freed (780 MiB for 10^8 study ids), which the sessions would inherit.
+    try:
+        import pyarrow
+    except ImportError:
+        return
+    pyarrow.default_memory_pool().release_unused()
 
 
 _ONTOLOGY_OPTIONS = ("format", "individuals", "names", "prefixes")

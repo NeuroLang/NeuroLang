@@ -161,7 +161,13 @@ may specify the following keys, all of them optional:
   per sort, a voxel ``(i, j, k)`` being one entity); the engine's
   ``sparse_views`` holds the
   :class:`~nl_core.relational_algebra.linear_algebra.SparseView` of each
-  predicate, a ``scipy.sparse`` CSR matrix with int32 indices
+  predicate, a ``scipy.sparse`` CSR matrix with int32 indices, of
+  booleans when there is no value (its ``weighted()`` matrix, of
+  float64 entries over the same indices, is the one to multiply: ``R @
+  R.T`` counts the studies two regions share).  The coordinate
+  meta-analysis engines declare ``activated`` (voxel x study) and the
+  activations of their atlases (``schaefer400_activated``... region x
+  study)
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of

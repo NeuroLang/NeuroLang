@@ -275,3 +275,43 @@ def test_build_sparse_views_share_the_index_of_a_sort():
     # views is the join on the study, summed over it.
     product = views["activated"].matrix @ views["tfidf"].matrix
     np.testing.assert_array_equal(product.toarray(), [[.25], [0], [0]])
+
+
+def test_weighted_view_counts_in_products():
+    # Region x study incidence: the studies two regions share are the
+    # entries of R @ R.T, which the boolean matrix would not count.
+    rng = np.random.default_rng(0)
+    pairs = {(int(r), int(s)) for r, s in rng.integers(0, [7, 40], (120, 2))}
+    relation = RelationalAlgebraFrozenSet(sorted(pairs))
+    frame = relation.as_pandas_dataframe()
+    view = SparseView(
+        relation, (0,), (1,),
+        EntityIndex([frame[[0]]]), EntityIndex([frame[[1]]]),
+    )
+    weighted = view.weighted()
+    assert weighted.dtype == np.float64
+    assert np.shares_memory(weighted.indices, view.matrix.indices)
+    assert np.shares_memory(weighted.indptr, view.matrix.indptr)
+    shared = (weighted @ weighted.T).toarray()
+    regions = view.row_index.decode(range(len(view.row_index)))[0]
+    for a, first in enumerate(regions):
+        for b, second in enumerate(regions):
+            studies = {s for r, s in pairs if r == first} & {
+                s for r, s in pairs if r == second
+            }
+            assert shared[a, b] == len(studies)
+    assert (view.matrix @ view.matrix.T).toarray().max() == 1
+
+
+def test_weighted_view_of_values():
+    relation = NamedRelationalAlgebraFrozenSet(
+        ("s", "t", "w"), [("a", "x", 0.5), ("b", "x", 2.0)]
+    )
+    frame = relation.as_pandas_dataframe()
+    view = SparseView(
+        relation, ("s",), ("t",),
+        EntityIndex([frame[["s"]]]), EntityIndex([frame[["t"]]]), value="w",
+    )
+    np.testing.assert_array_equal(
+        view.weighted(np.float32).toarray(), [[0.5], [2.0]]
+    )
