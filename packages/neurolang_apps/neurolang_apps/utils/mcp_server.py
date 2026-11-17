@@ -75,8 +75,8 @@ instructions with the tools (`search_values`,
 `describe_predicate`, `run_query`, ...) and give the query with
 `final_answer`, with a comment on each rule: it returns the explanation,
 the commented query, its first rows, images and links to the interactive
-viewer and the files of the result; show them to the user, the query with
-its comments. To change an
+viewer and the files of the result; show them to the user: the query with
+its comments, and always the links, the viewer's first. To change an
 answer for a new question, call `ask` with `refine` set to the answer's id
 (`a1`, ...) or to `last`, the last query run, such as one the user changed
 and ran with `repl`. `repl` runs statements and dot-commands (`.help`) in
@@ -338,24 +338,37 @@ class McpSession:
         self._toolbox = None
         self._question = ""  # that of the next ask
         images = self._files(repl, answer)
+        answer.links = links = dict(sorted(
+            answer.links.items(), key=lambda item: _link_rank(item[0])
+        ))
         text = [
             f"Answer {answer.id}" + (
                 f" to: {answer.question}" if answer.question else ""
             ),
+            f"Interactive viewer: {links['viewer']}"
+            if "viewer" in links else "",
             explanation,
             f"```datalog\n{commented}\n```",
             *map(_tsv, reply.tables),
         ]
         if reply.failed:
             text.append(f"Running it failed:\n{reply.html.strip()}")
-        text.append("\n".join(
-            f"{name}: {link}" for name, link in answer.links.items()
+        text.append("Links to give the user:\n" + "\n".join(
+            f"{name}: {link}" for name, link in links.items()
         ))
         return types.CallToolResult(
             content=[_content("\n\n".join(part for part in text if part))]
-            + images,
+            + images + [
+                types.ResourceLink(
+                    name=f"{answer.id} {name}", uri=link,
+                    title=f"{answer.id}: {LINKS[_link_kind(name)][0]}",
+                    mime_type=LINKS[_link_kind(name)][1],
+                )
+                for name, link in links.items()
+            ],
             structured_content={
                 "id": answer.id, "question": answer.question,
+                "viewer": links.get("viewer"), "links": links,
                 "query": commented, "explanation": explanation,
                 # clients showing it in place of the text see the rows too
                 "tables": [
@@ -364,7 +377,6 @@ class McpSession:
                     )}
                     for table in reply.tables
                 ],
-                "links": answer.links,
             },
         )
 
@@ -430,6 +442,26 @@ class McpSession:
             pass
         repl._output()  # what making them said, of files moved since
         return images
+
+
+# The files of an answer, in the order they are given: their kind, title
+# and type.
+LINKS = {
+    "viewer": ("interactive viewer", "text/html"),
+    "result": ("NIfTI image", "application/gzip"),
+    "rows": ("rows (CSV)", "text/csv"),
+    "graph": ("graph of the query", "text/html"),
+    "query": ("query (Datalog)", "text/plain"),
+}
+
+
+def _link_kind(name: str) -> str:
+    """The kind of the file *name* of an answer: ``rows-ans`` is rows."""
+    return name.split("-", 1)[0]
+
+
+def _link_rank(name: str) -> int:
+    return list(LINKS).index(_link_kind(name))
 
 
 def _text(text: str) -> types.CallToolResult:
@@ -589,7 +621,8 @@ def server(session: McpSession):
         description=described["final_answer"] + " With a comment, one "
         "short line, for each rule of the query, in order. Once accepted, "
         "returns the commented query, its rows, images and links to the "
-        "viewer and the files of the result: show them to the user."
+        "viewer and the files of the result: show them to the user, and "
+        "always end your reply with the links, the viewer's first."
     )
     def final_answer(
         query: str, explanation: str, comments: list[str]

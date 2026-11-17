@@ -420,8 +420,12 @@ given as argument or with ``--file`` runs first, in the session.
     - the same as structured content (``structuredContent``: its id,
       query, explanation, first rows and links), which some clients, such
       as Claude Code, show in place of the text;
-    - the links to its files, kept in a folder of ``--results-dir``
-      (``~/.cache/neurolang/mcp`` by default): the interactive viewer of
+    - the links to its files, the viewer's first, in the text, in the
+      structured content and as MCP resource links, which clients may show
+      as links of their own; the instructions ask the client's model to
+      always give them to the user. They are kept in a folder of
+      ``--results-dir`` (``~/.cache/neurolang/mcp`` by default): the
+      interactive viewer of
       ``.view`` (``view.html``), the images (``result.nii.gz``), all the
       rows (``rows.csv``), the query (``query.dl``) and its graph
       (``graph.html``, as ``.graph``).

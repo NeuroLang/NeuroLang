@@ -291,7 +291,16 @@ def test_an_answer_of_voxels_has_its_glass_brain_and_viewer(
     images = [c for c in result.content if c.type == "image"]
     assert len(images) == 1 and images[0].mime_type == "image/png"
     links = result.structured_content["links"]
-    assert {"viewer", "result", "rows", "query"} <= set(links)
+    assert list(links) == ["viewer", "result", "rows", "graph", "query"]
+    assert result.structured_content["viewer"] == links["viewer"]
+    assert result.content[0].text.split("\n\n")[1] == (
+        f"Interactive viewer: {links['viewer']}"
+    )
+    resources = [c for c in result.content if c.type == "resource_link"]
+    assert [(c.uri, c.title, c.mime_type) for c in resources[:2]] == [
+        (links["viewer"], "a1: interactive viewer", "text/html"),
+        (links["result"], "a1: NIfTI image", "application/gzip"),
+    ]
     folder = next((tmp_path / "results").glob("*/a1"))
     assert (folder / "result.nii.gz").exists()
     assert "<html" in (folder / "view.html").read_text().lower()
