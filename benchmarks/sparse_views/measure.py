@@ -1,0 +1,218 @@
+"""
+Measure the sparse views an engine builds, and the answers of queries,
+for comparing a branch with master (Linux: reads /proc).
+
+    python measure.py ENGINE OUT.json [--queries QUERY.dl ...]
+        [--examples] [--answers DIR]
+
+Builds ENGINE at 2 mm from ~/neurolang_data and records the build time
+and peak memory; when the engine has ``sparse_views`` (the branch), the
+time, peak memory and bytes of building them, an exact check of the
+round trip of each view to its relation's rows, and the private memory a
+session forked from the built engine adds while it reads a whole view.
+With --queries / --examples, runs each query (the files, and the Datalog
+examples of coordinate_meta_analysis) and writes its answer, sorted, to
+DIR/<name>.pkl.
+"""
+import argparse
+import gc
+import json
+import os
+import time
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+
+def status(field):
+    """Return the *field* (VmHWM, VmRSS) of this process, in MiB."""
+    with open("/proc/self/status") as f:
+        for line in f:
+            if line.startswith(field + ":"):
+                return int(line.split()[1]) / 1024
+    return float("nan")
+
+
+def reset_peak():
+    """Reset VmHWM to the current RSS (Linux >= 4.0)."""
+    with open("/proc/self/clear_refs", "w") as f:
+        f.write("5")
+
+
+def private_mib(pid):
+    """Return the private memory (USS) of *pid*, in MiB."""
+    kb = {}
+    with open(f"/proc/{pid}/smaps_rollup") as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) == 3:
+                kb[parts[0].rstrip(":")] = int(parts[1])
+    return (kb["Private_Clean"] + kb["Private_Dirty"]) / 1024
+
+
+def nbytes(view):
+    """Return the bytes of the arrays of *view* and of its indices."""
+    matrix = view.matrix
+    out = {
+        "data": matrix.data.nbytes, "indices": matrix.indices.nbytes,
+        "indptr": matrix.indptr.nbytes,
+        "dtypes": [str(matrix.data.dtype), str(matrix.indices.dtype),
+                   str(matrix.indptr.dtype)],
+    }
+    for name, index in (("row_index", view.row_index),
+                        ("column_index", view.column_index)):
+        out[name] = {
+            "entities": len(index),
+            "bytes": int(index._entities.memory_usage(deep=True) + sum(
+                d.memory_usage(deep=True) for d in index._dictionaries
+            )),
+        }
+    return out
+
+
+def row_hashes(frame):
+    """Return the sorted 64-bit hashes of the rows of *frame*."""
+    frame = frame.reset_index(drop=True)
+    frame.columns = range(frame.shape[1])
+    return np.sort(pd.util.hash_pandas_object(frame, index=False).to_numpy())
+
+
+def round_trip(nl, name, view):
+    """Check the view's tuples are the rows of its stored relation."""
+    from nl_core.relational_algebra.linear_algebra import stored_relation
+    from nl_expr.expressions import Symbol
+
+    relation, positions = stored_relation(
+        nl.program_ir.symbol_table, Symbol(name)
+    )
+    began = time.perf_counter()
+    rows = relation.as_pandas_dataframe()
+    back = view.to_frame()[list(view.rows) + list(view.columns) + (
+        [] if view.value is None else [view.value]
+    )]
+    rows = rows[list(back.columns)]
+    equal = len(rows) == len(back) and np.array_equal(
+        row_hashes(rows), row_hashes(back)
+    )
+    return {"rows": len(rows), "view_tuples": len(back),
+            "equal_row_hash_multisets": bool(equal),
+            "seconds": round(time.perf_counter() - began, 1)}
+
+
+def fork_reads(view):
+    """Return the private MiB a forked process adds reading the view."""
+    reader, writer = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(reader)
+        before = private_mib(os.getpid())
+        total = float(view.matrix.sum()) + float(view.matrix.indices.sum())
+        after = private_mib(os.getpid())
+        os.write(writer, json.dumps(
+            {"before": before, "after": after, "checksum": total}
+        ).encode())
+        os._exit(0)
+    os.close(writer)
+    out = b""
+    while chunk := os.read(reader, 4096):
+        out += chunk
+    os.waitpid(pid, 0)
+    result = json.loads(out)
+    result["added_mib"] = round(result["after"] - result["before"], 1)
+    return result
+
+
+def answer_frame(result):
+    """Return the answer *result* as a sorted DataFrame."""
+    if hasattr(result, "as_pandas_dataframe"):
+        frame = result.as_pandas_dataframe()
+    else:
+        frame = pd.DataFrame(list(result))
+    frame = frame.reset_index(drop=True)
+    columns = list(frame.columns)
+    try:
+        return frame.sort_values(columns).reset_index(drop=True)
+    except TypeError:  # unorderable values (regions): by their text
+        order = frame.astype(str).sort_values(columns).index
+        return frame.loc[order].reset_index(drop=True)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("engine")
+    parser.add_argument("out")
+    parser.add_argument("--queries", nargs="*", default=[])
+    parser.add_argument("--examples", action="store_true")
+    parser.add_argument("--answers")
+    args = parser.parse_args()
+
+    from neurolang_apps.utils import engine_registry
+
+    record = {"engine": args.engine}
+    views_phase = getattr(engine_registry, "_phase_sparse_views", None)
+    if views_phase is not None:
+        def timed_views(nl, cfg):
+            gc.collect()
+            rss = status("VmRSS")
+            reset_peak()
+            began = time.perf_counter()
+            views_phase(nl, cfg)
+            record["views_seconds"] = round(time.perf_counter() - began, 2)
+            record["views_peak_above_rss_mib"] = round(
+                status("VmHWM") - rss, 1
+            )
+            gc.collect()
+            record["views_rss_added_mib"] = round(status("VmRSS") - rss, 1)
+
+        engine_registry._phase_sparse_views = timed_views
+    began = time.perf_counter()
+    nl = engine_registry.build_engine(
+        args.engine, Path.home() / "neurolang_data", resolution=2
+    )
+    record["build_seconds"] = round(time.perf_counter() - began, 1)
+    record["build_peak_mib"] = status("VmHWM")
+    gc.collect()
+    record["rss_after_build_mib"] = status("VmRSS")
+    views = getattr(nl, "sparse_views", {})
+    record["views"] = {}
+    for name, view in views.items():
+        record["views"][name] = {
+            "shape": list(view.matrix.shape), "nnz": int(view.matrix.nnz),
+            "nbytes": nbytes(view),
+        }
+    gc.collect()
+    gc.freeze()
+    for name, view in views.items():
+        record["views"][name]["fork_reads"] = fork_reads(view)
+        record["views"][name]["round_trip"] = round_trip(nl, name, view)
+    print(json.dumps(record, indent=1), flush=True)
+
+    queries = {Path(q).stem: Path(q).read_text() for q in args.queries}
+    if args.examples:
+        cfg = engine_registry.get_engine_config(args.engine)
+        for number, query in enumerate(
+            (cfg.get("examples") or {}).get("datalog", [])
+        ):
+            queries[f"example{number}"] = query
+    record["queries"] = {}
+    if queries:
+        answers = Path(args.answers)
+        answers.mkdir(parents=True, exist_ok=True)
+    for name, query in queries.items():
+        began = time.perf_counter()
+        try:
+            with nl.scope:
+                frame = answer_frame(nl.execute_datalog_program(query))
+            frame.to_pickle(answers / f"{name}.pkl")
+            outcome = {"rows": len(frame)}
+        except Exception as error:  # the same failure on both is compared
+            outcome = {"error": f"{type(error).__name__}: {error}"[:300]}
+        outcome["seconds"] = round(time.perf_counter() - began, 1)
+        record["queries"][name] = outcome
+        print(name, outcome, flush=True)
+    Path(args.out).write_text(json.dumps(record, indent=1))
+
+
+if __name__ == "__main__":
+    main()
