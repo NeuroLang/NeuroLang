@@ -24,7 +24,10 @@ Unreleased
   the admin console turns on when it does, so that no session waits for
   a build (up to 75 s for ``neurostore_iit``); a session then starts in
   under two seconds. ``--no-prebuild`` (``prebuild: false``) leaves each
-  engine to its first session, as before.
+  engine to its first session, as before. The builder also finds the
+  names the notes on a query's constants look up, once, rather than each
+  session at its first query: that of ``neurostore_iit`` takes 6 s
+  instead of 18 s.
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
   the regions a question lists (which regions, parcels or structures a
   term, a topic or a seed activates or co-activates) are answered with the

@@ -782,7 +782,7 @@ class Sessions:
                 break
             if key is None:  # of an engine built before its sessions
                 if kind == "built":
-                    print(f"The engine {value} is built", flush=True)
+                    print(f"Built the engine {value}", flush=True)
                 elif kind == "failed":
                     print("An engine could not be built before its "
                           f"sessions (see above): {value}; its first "

@@ -615,7 +615,10 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   engine the console turns on when it does: a first session finds its
   engine built (about 25 s for ``neurosynth_iit``, 75 s for
   ``neurostore_iit``, from the tables kept in ``--data-dir``), unless it
-  comes while the builder is still at work.  The engines then hold their
+  comes while the builder is still at work.  The builder also finds the
+  names of the engine's relations (its terms, studies, regions), which a
+  query's notes on a misspelled name look up, so that no session finds
+  them again at its first query (12 s for ``neurostore_iit``).  The engines then hold their
   memory from the start, as they would after their first session; an
   engine turned off stays built until the server restarts.
   ``--no-prebuild`` (``prebuild: false``) leaves each engine to its first
