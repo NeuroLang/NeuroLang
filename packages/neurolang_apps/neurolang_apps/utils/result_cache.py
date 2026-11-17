@@ -229,15 +229,26 @@ class ResultCache:
         """
         Keep the rows *frame* of a result, with the *notes* its run printed,
         as *key*; return whether it is kept: not if Arrow does not hold its
-        values as they are (it must read back equal, column types included),
-        or if it alone is above the limit.
+        values as they are (a column of Python objects, or one that comes
+        back of another type), or if it alone is above the limit. The file
+        must read back equal to what was written.
+
+        Arrow does it all, without a copy of the rows in pandas: copies
+        made and freed here left the heap of a session hundreds of
+        megabytes larger after the next queries.
         """
         import pyarrow as pa
 
         path = self._path(key)
-        frame = frame.reset_index(drop=True)
         try:
+            if len(frame) and any(
+                    dtype == object for dtype in frame.dtypes):
+                return False
             table = pa.Table.from_pandas(frame, preserve_index=False)
+            empty = table.slice(0, 0).to_pandas()
+            if list(empty.columns) != list(frame.columns) or \
+                    list(empty.dtypes) != list(frame.dtypes):
+                return False
             table = table.replace_schema_metadata({
                 **(table.schema.metadata or {}),
                 b"neurolang_notes": json.dumps(list(notes)).encode(),
@@ -245,10 +256,7 @@ class ResultCache:
             if table.nbytes > self.most:
                 return False
             engine_cache._write(path, lambda file: self._write(file, table))
-            back = self._read(path).frame
-            same = (list(back.columns) == list(frame.columns)
-                    and list(back.dtypes) == list(frame.dtypes)
-                    and back.equals(frame))
+            same = self._table(path).equals(table, check_metadata=True)
         except Exception:
             same = False
         if not same:
@@ -265,12 +273,16 @@ class ResultCache:
             writer.write_table(table)
 
     @staticmethod
-    def _read(path: Path) -> Kept:
+    def _table(path: Path):
         import pyarrow as pa
         import pyarrow.ipc as ipc
 
-        with pa.OSFile(str(path)) as file:
-            table = ipc.open_file(file).read_all()
+        with pa.memory_map(str(path)) as file:
+            return ipc.open_file(file).read_all()
+
+    @classmethod
+    def _read(cls, path: Path) -> Kept:
+        table = cls._table(path)
         notes = json.loads(
             (table.schema.metadata or {}).get(b"neurolang_notes", b"[]")
         )
