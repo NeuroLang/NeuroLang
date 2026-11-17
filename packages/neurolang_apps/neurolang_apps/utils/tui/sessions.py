@@ -104,10 +104,10 @@ def _anonymous_memory() -> int:
 def available_memory() -> Optional[Tuple[int, int]]:
     """
     Return the memory this process may still take and all the memory it
-    may take, in bytes: the machine's (``MemAvailable``, ``MemTotal``),
-    or its control group's when it has a limit (``memory.max`` and
-    ``memory.current``, cgroup v2: a service's or a batch job's), the
-    smaller of the two. None where it cannot be read (not Linux).
+    may take, in bytes: the machine's (``MemAvailable``, ``MemTotal``), or
+    that its control group and those above it leave, the tightest limit
+    (``memory.max`` less ``memory.current``, cgroup v2: a service's slice,
+    a batch job's). None where it cannot be read (not Linux).
     """
     try:
         info = {}
@@ -122,14 +122,25 @@ def available_memory() -> Optional[Tuple[int, int]]:
         with open("/proc/self/cgroup") as cgroup:
             path = next(line.split("::", 1)[1].strip() for line in cgroup
                         if line.startswith("0::"))
-        group = Path("/sys/fs/cgroup") / path.lstrip("/")
-        limit = (group / "memory.max").read_text().strip()
-        if limit != "max":
-            used = int((group / "memory.current").read_text())
-            total = min(total, int(limit))
-            available = min(available, int(limit) - used)
-    except (OSError, StopIteration, ValueError):
-        pass
+    except (OSError, StopIteration):
+        return available, total
+    root = Path("/sys/fs/cgroup")
+    group = root / path.lstrip("/")
+    while group != root and root in group.parents:
+        try:
+            limit = (group / "memory.max").read_text().strip()
+            if limit != "max":
+                used = int((group / "memory.current").read_text())
+                # less the pages of files not used lately, which the system
+                # takes back before it kills
+                for line in (group / "memory.stat").read_text().splitlines():
+                    if line.startswith("inactive_file "):
+                        used -= int(line.split()[1])
+                total = min(total, int(limit))
+                available = min(available, int(limit) - used)
+        except (OSError, ValueError):
+            pass
+        group = group.parent
     return available, total
 
 
