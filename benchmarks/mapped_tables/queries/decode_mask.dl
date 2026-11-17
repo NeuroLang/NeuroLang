@@ -1,0 +1,6 @@
+image_active(i, j, k) :- brain_mask(i, j, k), (k > 45)
+image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+p_image(PROB) :- image_hit(s) & selected_study(s)
+term_studies(t, count(s)) :- term_in_study(s, t)
+ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), (lift == a / b)

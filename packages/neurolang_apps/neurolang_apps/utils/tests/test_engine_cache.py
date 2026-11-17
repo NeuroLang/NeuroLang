@@ -483,3 +483,95 @@ def test_a_derived_table_that_cannot_be_kept_is_computed(tmp_path):
     for path in (tmp_path / "d").glob("*.arrow"):
         path.write_bytes(b"damaged")
     assert damaged("pairs", [frame], (), lambda: frame).equals(frame)
+
+
+# -- The source tables of a build, kept as the derived ones ---------------
+
+def test_the_tables_of_an_atlas_are_read_mapped_by_the_next_build(
+    engine, finds, monkeypatch
+):
+    first = engine_registry.build_engine("e", engine)
+    assert {path.name.split("-")[0] for path in derived_files(engine)} == {
+        "atlas_activation"
+    }
+    # read from the Arrow file: the pairs kept for the browser are not
+    # read, nor their checksum computed
+    monkeypatch.setattr(
+        engine_registry, "cached_atlas_activation",
+        lambda *args: pytest.fail("found again"),
+    )
+    second = engine_registry.build_engine("e", engine)
+    assert len(finds) == 1
+    assert activated(second) == activated(first) == [("A", 7), ("A", 8)]
+    container = second.symbol_table["activated"].value.unwrap()._container
+    assert not np.asarray(container.iloc[:, 1].array).flags.writeable
+
+
+def test_prebuild_writes_the_tables_of_the_browser_the_arrow_files_hold(
+    engine, finds
+):
+    """The tables of the browser's bundle are all written, even those of
+    which an Arrow file is kept, which the browser does not read."""
+    engine_registry.build_engine("e", engine)
+    engine_cache.clear(engine, "e")
+    assert len(engine_cache.prebuild("e", engine)) == 2
+    assert len(finds) == 2
+
+
+def test_a_relation_file_is_read_mapped_until_it_changes(
+    tmp_path, monkeypatch
+):
+    rows = tmp_path / "rows.csv"
+    rows.write_text("a,b\n1,x\n2,y\n")
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        f"engines:\n  r:\n    relations:\n      rows: {rows}\n"
+    )
+    monkeypatch.setattr(engine_registry, "_ENGINES_YAML", path)
+    reads = []
+    read = engine_registry.read_relation_file
+    monkeypatch.setattr(
+        engine_registry, "read_relation_file",
+        lambda *args: reads.append(args) or read(*args),
+    )
+
+    def table(nl):
+        return sorted(nl.symbol_table["rows"].value.unwrap())
+
+    data_dir = tmp_path / "data"
+    first = engine_registry.build_engine("r", data_dir)
+    second = engine_registry.build_engine("r", data_dir)
+    assert len(reads) == 1 and table(second) == table(first)
+    assert table(first) == [(1, "x"), (2, "y")]
+    rows.write_text("a,b\n3,z\n")
+    assert table(engine_registry.build_engine("r", data_dir)) == [(3, "z")]
+    assert len(reads) == 2
+
+
+def test_a_table_is_computed_without_a_program_keeping_tables(tmp_path):
+    import pandas as pd
+
+    frame = pd.DataFrame({"i": [1, 2]})
+
+    class Program:
+        pass
+
+    program = Program()
+    assert engine_cache.keep_table(
+        program, "t", [], (), lambda: frame
+    ) is frame
+    program.derived_tables = engine_cache.DerivedTables(tmp_path)
+    engine_cache.keep_table(program, "t", [], (1,), lambda: frame)
+    kept = engine_cache.keep_table(
+        program, "t", [], (1,), lambda: pytest.fail("kept")
+    )
+    assert kept.equals(frame)
+
+
+def test_a_file_is_named_by_its_bytes(tmp_path):
+    one, other = tmp_path / "one", tmp_path / "other"
+    one.write_bytes(b"rows")
+    other.write_bytes(b"rows")
+    assert engine_cache.file_digest(one) == engine_cache.file_digest(other)
+    other.write_bytes(b"rows!")
+    assert engine_cache.file_digest(one) != engine_cache.file_digest(other)

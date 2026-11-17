@@ -79,7 +79,7 @@ def test_a_certificate_error_is_retried_with_the_system_certificates(
     monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
     calls = []
 
-    def build(name, data_dir, resolution, use_cache=True):
+    def build(name, data_dir, resolution, use_cache=True, map_tables=True):
         calls.append(os.environ.get("REQUESTS_CA_BUNDLE"))
         if len(calls) == 1:
             raise requests.exceptions.SSLError("certificate has expired")
@@ -97,7 +97,7 @@ def test_without_system_certificates_the_error_is_raised(
 
     monkeypatch.setattr(bundle, "SYSTEM_CERTIFICATES", (tmp_path / "none",))
 
-    def build(name, data_dir, resolution, use_cache=True):
+    def build(name, data_dir, resolution, use_cache=True, map_tables=True):
         raise requests.exceptions.SSLError("certificate has expired")
 
     monkeypatch.setattr(engine_registry, "build_engine", build)
@@ -171,7 +171,7 @@ def test_without_torch_nor_saved_embeddings_the_page_goes_without(
         cache_path = tmp_path / "e.npz"
 
     nl = type("NL", (), {"text_embedding_indexes": {"abstracts": Index()}})()
-    monkeypatch.setattr(engine_registry, "build_engine", lambda *a: nl)
+    monkeypatch.setattr(engine_registry, "build_engine", lambda *a, **k: nl)
     monkeypatch.setattr(text_embeddings, "_torch_available", lambda: False)
     assert bundle.export_embeddings(tmp_path, tmp_path) == {}
 

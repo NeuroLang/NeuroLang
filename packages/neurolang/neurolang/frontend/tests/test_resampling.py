@@ -249,3 +249,32 @@ r_flat(b, p) :- RESAMPLE[boot](p_flat(p)) = b.
     assert len(reps) == N
     for (b, n), f in reps.items():
         assert n == pytest.approx(f)
+
+
+def test_replicates_a_program_keeps_give_the_same_intervals():
+    """A program keeping its tables (``derived_tables``, an engine's build)
+    takes the replicates it kept, rather than draw them again, and they
+    give the same sums."""
+    kept, calls = {}, []
+
+    def derived_tables(kind, frames, parameters, compute):
+        calls.append(kind)
+        key = kind, parameters, tuple(map(len, frames))
+        if key not in kept:
+            # as read back from a file: a table of its own, columns named
+            kept[key] = compute().copy()
+        return kept[key]
+
+    query = """
+rep(b, t, p) :- RESAMPLE[boot](term_probability(t, p)) = b.
+ans(b, t, p) :- rep(b, t, p).
+"""
+    answers = []
+    for keeping in (False, True, True):
+        nl = engine(uniform)
+        if keeping:
+            nl.program_ir.derived_tables = derived_tables
+        nl.add_resampling("boot", "selected_study", n=N, seed=3)
+        answers.append(rows(nl, query))
+    assert calls == ["resampling", "resampling"] and len(kept) == 1
+    assert answers[0] and answers[1] == answers[0] == answers[2]
