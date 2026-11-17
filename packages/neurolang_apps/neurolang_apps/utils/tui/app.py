@@ -626,11 +626,13 @@ class InteractiveTuiApp:
         results are kept.
         """
         cache = getattr(self._nl, "result_cache", None)
-        if cache is None or self.settings.squall:
+        if cache is None:
             return None
+        # Whatever the settings: it notes a command, which changes the
+        # engine.
         key = cache.key(self._nl, program, self.settings.join_profile)
         settings = self.settings
-        if query and settings.scope_queries and not (
+        if query and not settings.squall and settings.scope_queries and not (
             settings.show_ra or settings.show_rewritten
         ):
             return key

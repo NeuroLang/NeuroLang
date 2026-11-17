@@ -736,8 +736,9 @@ are those of the rows kept.
   local to it (``.scope on``), run to show its result (not ``.ra`` nor
   ``.rewritten``), with no command (``.load_csv(...)``,
   ``.index_tracts(...)``...), and no predicate it reads, through its rules
-  and the engine's, is defined in the session: a rule, a relation loaded
-  or uploaded, a fact added to one of the engine's.  Any other query runs,
+  and the engine's rules and constraints, is defined in the session: a
+  rule, a relation loaded or uploaded, an image, a fact added to one of the
+  engine's (a constraint of the session is read by every query).  Any other query runs,
   and its result is never kept: one user's rules and data never reach
   another's page.  After a command, which may change the engine in ways
   its predicates do not tell, the session's engine shares nothing more.

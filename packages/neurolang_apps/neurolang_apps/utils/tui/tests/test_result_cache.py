@@ -239,3 +239,87 @@ def test_the_sessions_of_a_server_share_their_results(tmp_path):
         assert KEPT in bob.submit("ans(x) :- person(x, a)")["html"]
     finally:
         sessions.close()
+
+
+def _engine_with_constraint(name, say):
+    """An engine whose constraint makes every vip noted."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([("alice",)], name="noted")
+    nl.add_tuple_set([("zed",)], name="vip")
+    with nl.environment as e:
+        nl.add_constraint(e.vip[e.x], e.noted[e.x])
+    return nl
+
+
+def test_a_fact_read_through_an_engine_constraint_is_the_sessions(
+        tmp_path, cache_dir):
+    def start():
+        backend = LocalBackend(
+            tmp_path / "data", build=_engine_with_constraint,
+            result_cache={"directory": str(cache_dir), "most_mb": 1},
+        )
+        backend.start("neurostore")
+        return backend
+
+    ann, bob = start(), start()
+    ann.submit("vip('carol').")
+    assert sorted(_rows(ann.submit("ans(x) :- noted(x)"))) == [
+        ["alice"], ["carol"], ["zed"]]
+    assert _files(cache_dir) == []
+    reply = bob.submit("ans(x) :- noted(x)")
+    assert sorted(_rows(reply)) == [["alice"], ["zed"]]
+    assert KEPT not in reply["html"] and len(_files(cache_dir)) == 1
+    assert KEPT not in ann.submit("ans(x) :- noted(x)")["html"]
+
+
+def test_a_constraint_of_the_session_is_read_by_every_query():
+    nl = _engine_with_constraint("", None)
+    cache = result_cache.ResultCache(nl, "e", "unused", 1)
+    program = "ans(x) :- person(x, n)"
+    assert cache.key(nl, program)
+    nl.program_ir.push_scope()  # the session's
+    with nl.environment as e:
+        nl.add_constraint(e.person[e.x, e.n], e.noted[e.x])
+    assert cache.key(nl, program) is None
+
+
+def _image(values) -> bytes:
+    import gzip
+
+    import nibabel as nib
+    import numpy as np
+
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    for voxel, value in values.items():
+        data[voxel] = value
+    return gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+
+
+def _engine_with_template(name, say):
+    import nibabel as nib
+    import numpy as np
+
+    nl = _engine(name, say)
+    nl.template = nib.Nifti1Image(np.ones((4, 4, 4), np.uint8), np.eye(4))
+    return nl
+
+
+def test_images_uploaded_of_the_same_name_are_never_shared(
+        tmp_path, cache_dir):
+    users = []
+    for voxel in ((1, 2, 3), (0, 0, 0)):
+        backend = LocalBackend(
+            tmp_path / "data", build=_engine_with_template,
+            result_cache={"directory": str(cache_dir), "most_mb": 1},
+        )
+        backend.start("neurostore")
+        backend.upload("z.nii.gz", _image({voxel: 5.0}))
+        assert not backend.submit(".image z.nii.gz --name img")["failed"]
+        users.append(backend)
+    ann, bob = users
+    for relation in ("img(i, j, k, v)", "img_probability(i, j, k, v)"):
+        query = f"ans(i, j, k) :- {relation}"
+        assert _rows(ann.submit(query)) == [[1, 2, 3]]
+        reply = bob.submit(query)
+        assert _rows(reply) == [[0, 0, 0]] and KEPT not in reply["html"]
+    assert _files(cache_dir) == []

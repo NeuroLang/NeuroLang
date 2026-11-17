@@ -21,8 +21,9 @@ by a key (:meth:`ResultCache.key`) of
   profile of the Euclidean join).
 
 A program is shared only if it is a Datalog query with no command and no
-symbol it reaches, through its rules and the engine's, is defined in the
-session: otherwise its result is the session's own, neither read nor kept.
+symbol it reaches, through its rules and the engine's rules and constraints,
+is defined in the session, nor a constraint: otherwise its result is the
+session's own, neither read nor kept.
 A command (``.load_tractogram``, ``.import``...) changes the engine in ways
 its symbols may not tell: after one, the engine shares nothing more.
 
@@ -40,9 +41,8 @@ from importlib import import_module, metadata
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from nl_core.datalog import Union as DatalogUnion
 from nl_expr.expression_walker import expression_iterator
-from nl_expr.expressions import Command, Symbol
+from nl_expr.expressions import Command, Constant, Symbol
 
 from . import engine_cache
 
@@ -55,6 +55,8 @@ _NOT_DATA = {engine_cache.DIRECTORY, "derived_tables", "__pycache__", ".git"}
 #: Whose code makes the answers: their files and versions are in the key.
 _PACKAGES = ("nl_expr", "nl_core", "neurolang", "neurolang_apps")
 _LIBRARIES = ("numpy", "scipy", "pandas", "pyarrow", "polars")
+#: Where a program keeps its constraints (``body \N{RIGHTWARDS ARROW} head``).
+_CONSTRAINTS = Symbol("__constraints__")
 #: The fresh symbols of a parsed program, numbered as they were made.
 _FRESH = re.compile(r"(?<=S\{)fresh_[0-9a-f]+(?=:)")
 
@@ -137,6 +139,12 @@ class ResultCache:
         self.directory = Path(directory).expanduser()
         self.most = int(most_mb * (1 << 20))
         self._engine_scope = nl.program_ir.symbol_table
+        #: The engine's constraints by the symbols of their head: a query
+        #: reading one of them may read their body too.
+        self._constraints = {}
+        for constraint in nl.program_ir.constraints().formulas:
+            for symbol in _symbols(constraint.consequent):
+                self._constraints.setdefault(symbol, []).append(constraint)
         #: Whether a command changed the engine: nothing is shared then.
         self.changed = False
 
@@ -173,9 +181,10 @@ class ResultCache:
         )
 
     def _reads_session(self, nl, parsed) -> bool:
-        """Whether a symbol *parsed* reaches, through its rules and the
-        engine's, is defined in a scope above the engine's: the session's,
-        or that of its submission."""
+        """Whether a symbol *parsed* reaches, through the rules and the
+        constraints of the engine, is defined in a scope above the
+        engine's: the session's, or that of its submission. A session with
+        constraints of its own reads them in every query."""
         session, scope = set(), nl.program_ir.symbol_table
         while scope is not self._engine_scope:
             if scope is None:  # not on the engine's scope: share nothing
@@ -184,6 +193,8 @@ class ResultCache:
             scope = scope.enclosing_scope
         if not session:
             return False
+        if _CONSTRAINTS in session:
+            return True
         symbol_table, seen, to_read = nl.program_ir.symbol_table, set(), [
             parsed]
         while to_read:
@@ -192,9 +203,10 @@ class ResultCache:
                     return True
                 if symbol not in seen:
                     seen.add(symbol)
-                    rules = symbol_table.get(symbol)
-                    if isinstance(rules, DatalogUnion):
-                        to_read.append(rules)
+                    value = symbol_table.get(symbol)
+                    if value is not None and not isinstance(value, Constant):
+                        to_read.append(value)  # its rules
+                    to_read.extend(self._constraints.get(symbol, ()))
         return False
 
     # -- The files --------------------------------------------------------
