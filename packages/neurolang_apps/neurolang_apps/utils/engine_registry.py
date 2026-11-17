@@ -1924,6 +1924,70 @@ def _phase_resamplings(nl, cfg):
         })
 
 
+def _view_declaration(name: str, sorts, predicates: Dict[str, Any]):
+    """
+    Return the view of the predicate *name* over the arguments of the
+    *sorts* (rows, columns and, if a third, value), each by its columns'
+    positions, from the arguments the engine declares for it.
+    """
+    from nl_core.relational_algebra.linear_algebra import (
+        Axis, ViewDeclaration,
+    )
+
+    arguments = predicates.get(name, {}).get("arguments") or ()
+    if len(sorts) not in (2, 3):
+        raise ValueError(
+            f"sparse view of {name!r}: give the sorts of its rows, of its "
+            "columns and, if any, of its value"
+        )
+    axes, start = {}, 0
+    for argument in arguments:
+        width = len(argument["columns"])
+        axes.setdefault(argument["sort"], []).append(
+            Axis(argument["sort"], tuple(range(start, start + width)))
+        )
+        start += width
+    found = []
+    for sort in sorts:
+        if len(axes.get(sort, ())) != 1:
+            raise ValueError(
+                f"sparse view of {name!r}: the predicate must have one "
+                f"argument of the sort {sort!r}"
+            )
+        found.append(axes[sort][0])
+    value = None
+    if len(found) == 3:
+        if len(found[2].columns) != 1:
+            raise ValueError(
+                f"sparse view of {name!r}: its value spans one column"
+            )
+        value = found[2].columns[0]
+    return ViewDeclaration(found[0], found[1], value)
+
+
+def _phase_sparse_views(nl, cfg):
+    """
+    Build the ``sparse_views`` of the engine, before any session is forked
+    from it, as the engine's ``sparse_views``: by predicate, its
+    :class:`~nl_core.relational_algebra.linear_algebra.SparseView`,
+    one numbering of the entities of each sort shared by all.
+    """
+    declared = cfg.get("sparse_views") or {}
+    nl.sparse_views = {}
+    if not declared:
+        return
+    from nl_core.relational_algebra.linear_algebra import build_sparse_views
+
+    predicates = _declared_predicates(cfg)
+    nl.sparse_views = build_sparse_views(
+        nl.program_ir.symbol_table,
+        {
+            name: _view_declaration(name, sorts, predicates)
+            for name, sorts in declared.items()
+        },
+    )
+
+
 _ONTOLOGY_OPTIONS = ("format", "individuals", "names", "prefixes")
 
 
@@ -2117,7 +2181,9 @@ def build_engine(
         not require the MNI mask. Its ``grids`` attribute holds the
         images of the grids voxel indices may index, by name: the
         template, as ``template``, and each atlas, under its name (the
-        sorts naming a ``grid``).
+        sorts naming a ``grid``). Its ``sparse_views`` attribute holds the
+        :class:`~nl_core.relational_algebra.linear_algebra.SparseView` of
+        each relation of the engine's ``sparse_views``, by predicate.
 
     Raises
     ------
@@ -2191,5 +2257,8 @@ def build_engine(
     if cfg.get("resamplings"):
         tell("Drawing the bootstrap replicates")
     _phase_resamplings(nl, cfg)
+    if cfg.get("sparse_views"):
+        tell("Building the sparse views: " + ", ".join(cfg["sparse_views"]))
+    _phase_sparse_views(nl, cfg)
 
     return nl

@@ -19,6 +19,18 @@ Unreleased
 
 **New features:**
 
+- ``nl_core.relational_algebra.linear_algebra``, the encoding of
+  relations for linear algebra: ``EntityIndex`` numbers the entities of a
+  sort (a voxel ``(i, j, k)`` is one; strings through a dictionary) and
+  back, and ``SparseView`` holds a relation between two entities, with
+  the value of a third column or not, as a ``scipy.sparse`` CSR matrix
+  with int32 indices, under set semantics, built once for the frame of
+  its rows (``sparse_view``). An engine declares the views it builds with
+  it, before the REPL server forks its sessions, which share them, in
+  ``sparse_views`` of ``engines.yaml``: the coordinate meta-analysis
+  engines hold ``activated`` as a voxel x study matrix. Reading the rows
+  of an empty relation of no columns no longer fails.
+
 - REPL server (``--users --local``): with ``--mcp``, it answers MCP
   clients, LLM agents such as Claude Code, at ``/mcp``, each user with a
   personal token of their account page (only its hash kept, in the users

@@ -702,6 +702,12 @@ engines:
     # voxel index).  They stay usable when typed; ``reports`` and
     # ``labels`` are the forms that read as SQUALL verbs.
     hidden_predicates: [peak_reported, schaefer_voxels]
+    # The relations kept, besides their rows, as sparse matrices over the
+    # entities of two of their sorts (and the value of a third), built
+    # with the engine, before its sessions are forked, which share them:
+    # ``activated`` as a voxel x study matrix.
+    sparse_views:
+      activated: [voxel, study]
     # The sorts of the entities the predicates relate, declared once: the
     # columns an entity spans and their type.  A sort of N > 1 columns
     # reads ``in ND`` in SQUALL (``every Voxel in 3D``).
