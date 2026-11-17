@@ -361,3 +361,125 @@ def test_the_registry_imports_the_atlases_when_it_loads_them():
         check=True,
     )
     assert result.stdout.strip() == "False"
+
+
+# -- The tables an engine derives from its source tables (activated) ------
+
+VOXELS = [(i, j, k) for i in range(4) for j in range(4) for k in range(4)]
+SOURCE_PEAKS = [(1, 1, 1, "s1"), (3, 2, 1, "s2"), (0, 0, 3, "s3")]
+CLOSE = (
+    "close(i, j, k, s) :- voxel(i, j, k) & peak_reported(i1, j1, k1, s) "
+    "& (EUCLIDEAN(i, j, k, i1, j1, k1) <= {radius})"
+)
+
+
+@pytest.fixture
+def deriving(tmp_path, monkeypatch):
+    """An engine ``d`` whose rule derives the voxels within 1.5 of each
+    peak, and the calls of the computation of such pairs."""
+    path = tmp_path / "engines.yaml"
+    path.write_text(
+        "engines:\n  d:\n    datalog_init: |\n      "
+        + CLOSE.format(radius=1.5) + "\n"
+    )
+    monkeypatch.setattr(engine_registry, "_ENGINES_YAML", path)
+    peaks = {"rows": list(SOURCE_PEAKS)}
+
+    def sources(nl, cfg, mask, data_dir):
+        nl.add_tuple_set(VOXELS, name="voxel")
+        nl.add_tuple_set(peaks["rows"], name="peak_reported")
+
+    monkeypatch.setattr(engine_registry, "_phase_python_init", sources)
+    from neurolang.frontend.datalog.sugar import spatial
+
+    calls = []
+    join = spatial.euclidean_join
+
+    def spy(*args, **kwargs):
+        calls.append(args)
+        return join(*args, **kwargs)
+
+    monkeypatch.setattr(spatial, "euclidean_join", spy)
+    return tmp_path / "data", calls, peaks
+
+
+def derived_files(data_dir):
+    return sorted(
+        (data_dir / engine_cache.DERIVED_DIRECTORY).glob("*.arrow")
+    )
+
+
+def close(nl):
+    return sorted(nl.execute_datalog_program(
+        "ans(i, j, k, s) :- close(i, j, k, s)"
+    ).to_unnamed())
+
+
+def test_a_derived_table_is_kept_and_read_mapped_by_the_next_build(
+        deriving):
+    data_dir, calls, _ = deriving
+    first = engine_registry.build_engine("d", data_dir)
+    assert len(calls) == 1 and len(derived_files(data_dir)) == 1
+    second = engine_registry.build_engine("d", data_dir)
+    assert len(calls) == 1  # read, not computed again
+    assert close(second) == close(first) and close(first)
+    # nothing is kept from what a session's own rules derive
+    assert not hasattr(second.program_ir, "derived_tables")
+    second.execute_datalog_program(
+        CLOSE.format(radius=2.5).replace("close(", "near(", 1)
+    )
+    assert len(calls) == 2 and len(derived_files(data_dir)) == 1
+
+
+def test_a_change_of_a_source_table_derives_the_table_again(deriving):
+    data_dir, calls, peaks = deriving
+    engine_registry.build_engine("d", data_dir)
+    peaks["rows"] = SOURCE_PEAKS[:2]
+    changed = engine_registry.build_engine("d", data_dir)
+    assert len(calls) == 2 and len(derived_files(data_dir)) == 2
+    assert {row[3] for row in close(changed)} == {"s1", "s2"}
+
+
+def test_an_engine_built_without_the_cache_keeps_no_derived_table(deriving):
+    data_dir, calls, _ = deriving
+    engine_registry.build_engine("d", data_dir, use_cache=False)
+    engine_registry.build_engine("d", data_dir, use_cache=False)
+    assert len(calls) == 2 and not derived_files(data_dir)
+
+
+def test_a_derived_table_comes_back_as_it_was_computed(tmp_path):
+    import pandas as pd
+
+    frame = pd.DataFrame({
+        "i": np.arange(5, dtype="int64"),
+        "s": pd.array(["a", "b", "c", "a", "é"], dtype="str"),
+        "d": np.linspace(0, 1, 5),
+    })
+    derived = engine_cache.DerivedTables(tmp_path)
+    kept = derived("pairs", [frame], (1.5,), lambda: frame)
+    again = derived("pairs", [frame], (1.5,), lambda: pytest.fail("kept"))
+    for table in (kept, again):
+        assert list(table.columns) == ["i", "s", "d"]
+        assert list(table.dtypes) == list(frame.dtypes)
+        assert table.equals(frame)
+    # read from the file, mapped: its numbers are not a copy
+    assert not np.asarray(again["i"].array).flags.writeable
+    # other parameters, or other source rows, name another table
+    derived("pairs", [frame], (2.5,), lambda: frame)
+    derived("pairs", [frame.iloc[:4]], (1.5,), lambda: frame)
+    assert len(list(tmp_path.glob("pairs-*.arrow"))) == 3
+
+
+def test_a_derived_table_that_cannot_be_kept_is_computed(tmp_path):
+    import pandas as pd
+
+    frame = pd.DataFrame({"i": [1, 2]})
+    blocked = tmp_path / "file"
+    blocked.write_text("not a directory")
+    derived = engine_cache.DerivedTables(blocked / "derived")
+    assert derived("pairs", [frame], (), lambda: frame).equals(frame)
+    damaged = engine_cache.DerivedTables(tmp_path / "d")
+    derived = damaged("pairs", [frame], (), lambda: frame)
+    for path in (tmp_path / "d").glob("*.arrow"):
+        path.write_bytes(b"damaged")
+    assert damaged("pairs", [frame], (), lambda: frame).equals(frame)

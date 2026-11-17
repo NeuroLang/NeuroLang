@@ -894,12 +894,25 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         # keep them (``derived_tables``), named by those, rather than find
         # them again (an engine's ``activated``, at each of its builds).
         derived = getattr(self, "derived_tables", None)
-        pairs = compute() if derived is None else derived(
-            "euclidean_pairs", [frame for frame, _ in tables],
-            (bound.radius, bound.strict, names, bound.distance.name,
-             [coordinates for _, coordinates in tables]),
-            compute,
-        )
+        if derived is None:
+            pairs = compute()
+        else:
+            # By the place of each variable, not its name, which may be
+            # fresh, another at each build.
+            place = {}
+
+            def at(name):
+                return place.setdefault(name, f"c{len(place)}")
+
+            pairs = derived(
+                "euclidean_pairs",
+                [frame.set_axis([at(c) for c in frame.columns], axis=1)
+                 for frame, _ in tables],
+                (bound.radius, bound.strict, [at(n) for n in names],
+                 at(bound.distance.name),
+                 [[at(c) for c in coordinates] for _, coordinates in tables]),
+                compute,
+            ).set_axis(names, axis=1)
         return Implication(
             rule.consequent,
             Conjunction(

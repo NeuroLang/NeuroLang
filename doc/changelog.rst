@@ -19,6 +19,20 @@ Unreleased
 
 **New features:**
 
+- REPL server (``--users --local``): the engines its builder holds share
+  their tables, and building ahead stays within the memory, after the six
+  engines of a server built ahead (#1334) took 32 GB of its 31 GB and were
+  killed again at each start. A table identical to one of an engine built
+  before is held once (``neurolang_apps.utils.shared_tables``); the tables
+  an engine derives while it is built (``activated``, 5.6 GB for
+  ``neurostore``) are kept in ``DATA_DIR/derived_tables`` as Arrow files
+  named by a checksum of their source tables, read memory-mapped rather
+  than computed again (see :doc:`engine_configuration`); an engine is
+  built ahead only while ``--prebuild-reserve`` (0.35) of the memory stays
+  for the queries, the others by their first session. The service
+  installed on Linux has ``OOMPolicy=continue``: a session killed for
+  memory no longer stops the server, and the server stops, for systemd to
+  start it again, if its builder is killed.
 - REPL server (``--users --local``): the builder builds the engines the
   page offers when the server starts, the default first, and an engine
   the admin console turns on when it does, so that no session waits for

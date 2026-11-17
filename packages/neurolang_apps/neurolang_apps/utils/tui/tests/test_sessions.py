@@ -19,6 +19,8 @@ from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui.sessions import (  # noqa: E402
     SessionEnded,
     Sessions,
+    _room_for_another,
+    available_memory,
     free_memory,
 )
 
@@ -213,6 +215,45 @@ def test_a_query_leaves_no_garbage(sessions):
     assert sorted(_rows(ann.submit("ans(x) :- person(x, a)"))) == [
         ["alice"], ["bob"]]
     assert _rows(ann.submit("ans(x) :- person(x, 5)")) == [["bob"]]
+
+
+def test_an_engine_is_built_ahead_while_memory_stays_for_the_queries():
+    gb = 2**30
+    # the first engine, or without knowing the memory: built
+    assert _room_for_another(0, 0.35, (1 * gb, 31 * gb))
+    assert _room_for_another(9 * gb, 0.35, None)
+    # 1.5 times the largest build, and 35% of 31 GB (10.9 GB) left
+    assert _room_for_another(4 * gb, 0.35, (17 * gb, 31 * gb))
+    assert not _room_for_another(4 * gb, 0.35, (16 * gb, 31 * gb))
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"),
+                    reason="the memory is read from /proc")
+def test_the_memory_is_that_of_the_machine_or_of_the_control_group():
+    available, total = available_memory()
+    assert 0 < available <= total
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"),
+                    reason="the memory is read from /proc")
+def test_an_engine_that_would_leave_too_little_memory_is_not_built_ahead(
+        tmp_path, capsys):
+    """With all the memory kept for the queries, the default engine is
+    built ahead, the next is left to its first session."""
+    sessions = Sessions(tmp_path, build=build, prebuild_reserve=1.0)
+    try:
+        sessions.prebuild(["neurostore", "destrieux"])
+        deadline, out = time.monotonic() + 60, ""
+        while "Did not build the engine destrieux" not in out:
+            assert time.monotonic() < deadline, out
+            out += capsys.readouterr().out
+            time.sleep(0.1)
+        assert "Built the engine neurostore" in out
+        ann = sessions.session("ann", "1")
+        ann.start("destrieux")  # its first session builds it
+        assert ann.pid is not None
+    finally:
+        sessions.close()
 
 
 def test_no_process_is_left_when_the_server_ends(tmp_path):

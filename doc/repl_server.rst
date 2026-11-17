@@ -115,6 +115,10 @@ Serving
    With ``--users``, do not build the engines the page offers when the
    server starts: the first session of each builds it, and waits for it;
    see `Sessions`_.
+``--prebuild-reserve FRACTION``
+   With ``--users``, build an engine ahead only while the share FRACTION of
+   the memory stays for the queries of the sessions (default 0.35); see
+   `Sessions`_.
 ``--resolution MM``
    The resolution of the engines' MNI grid (default 2).
 ``--light``
@@ -624,6 +628,22 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   ``--no-prebuild`` (``prebuild: false``) leaves each engine to its first
   session.  An engine that cannot be built is told in the log, and its
   first session tries again.
+- The builder builds an engine ahead only while it leaves the share
+  ``--prebuild-reserve`` (``prebuild_reserve``, 0.35) of the memory to the
+  queries: the memory Linux says is available (``MemAvailable``, or the
+  limit of the service's control group), less one and a half times the
+  most a build took.  An engine past it is told in the log ("Did not build
+  the engine …") and built by its first session.  35% of 31 GB is 11 GB:
+  the 8 queries that run at once on 8 CPUs (``max_running``) decoding an
+  image on ``neurosynth_iit`` take 1.4 GB each.
+- The engines the builder holds share their tables: a table identical to
+  one of an engine built before (the studies, terms and peaks of
+  ``neurostore`` and ``neurostore_iit``) is held once
+  (:mod:`neurolang_apps.utils.shared_tables`), and the tables an engine
+  derives from its own while it is built (``activated``, the voxels within
+  reach of each peak) are kept as files of ``DATA_DIR/derived_tables``
+  that the builder and the sessions map, rather than copy (see
+  :doc:`engine_configuration`).
 - Before its first fork, the builder loads the engine's text embeddings
   (those of its documents, from their cache, and the query model), which
   its sessions then share, rather than each load them, in memory of its
@@ -832,7 +852,11 @@ other options given:
 
 - on Linux, a unit of systemd's user manager,
   :file:`~/.config/systemd/user/neurolang-repl.service`; ``loginctl
-  enable-linger $USER`` keeps it running when you are logged out;
+  enable-linger $USER`` keeps it running when you are logged out.  A
+  process killed for lack of memory (a session's query) does not stop the
+  service (``OOMPolicy=continue``): its session ends, the others go on.  If
+  the builder itself is killed, the server stops, and systemd starts it
+  again;
 - on macOS, a launchd agent,
   :file:`~/Library/LaunchAgents/org.neurolang.repl.plist`.
 
