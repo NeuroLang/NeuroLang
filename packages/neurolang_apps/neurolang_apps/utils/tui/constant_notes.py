@@ -56,6 +56,21 @@ def _sort_values(nl, declared: dict, sort: str) -> frozenset:
     return values
 
 
+def prepare(nl, engine_name: str) -> None:
+    """
+    Find the values of the string sorts of the engine *engine_name* in the
+    relations of *nl*, which the notes of its queries look up: once, in
+    the process that builds the engine, rather than in each session forked
+    from it at its first query (12 s for ``neurostore_iit``).
+    """
+    declared = declared_column_sorts(engine_name)
+    if not declared:
+        return
+    for sort in engine_registry.get_sorts(engine_name).values():
+        if sort.type == "str":
+            _sort_values(nl, declared, sort.name)
+
+
 def _closest(value: str, values) -> list:
     """Return the *values* close to *value*, those equal but case first."""
     same = [v for v in values if v.lower() == value.lower()]

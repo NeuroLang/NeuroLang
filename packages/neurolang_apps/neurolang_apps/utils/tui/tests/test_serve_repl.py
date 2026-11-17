@@ -1223,6 +1223,10 @@ class _FakeSessions:
 
     def __init__(self):
         self.asked = []
+        self.prebuilds, self.built = True, []
+
+    def prebuild(self, engines):
+        self.built.append(list(engines))
 
     def session(self, user, tab):
         self.asked.append((user, tab))
@@ -1721,7 +1725,10 @@ def test_the_admin_console_chooses_the_engines_of_the_page(serve, tmp_path):
                       {"on": ["nowhere"], "default": "nowhere"}):
             assert _status(port, change, _basic("ann-pw", "ann"), "POST",
                            wrong) == 400
+        assert engines.to_build() == ["neurostore", "neurosynth"]
         assert _json_of(port, change, "ann", "ann-pw", body) == {"ok": True}
+        # the engines turned on are built, those turned off are not
+        assert sessions.built == [["neurosynth"]]
         page = json.loads(bundle.read_text())
         assert (list(page["engines"]), page["default"]) == (
             ["neurosynth"], "neurosynth")
