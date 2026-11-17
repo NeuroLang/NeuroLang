@@ -9,7 +9,8 @@ Run with the Python of the tree measured; it prints a JSON object::
     python benchmarks/repl_server/start_while_building.py --real \\
         --queries q1.dl q2.dl --out answers.json
 
-``--fake`` builds test engines: ``a`` in 0.5 s, ``b`` in ``--build-seconds``.
+``--fake`` builds test engines of the registry's names: ``neurosynth`` in
+0.5 s, ``neurostore`` in ``--build-seconds``.
 ``--real`` builds ``--built`` (default neurosynth_iit) from the data
 directory, then ``--building`` (default neurostore_iit) while a session
 starts on the first. Each time is that of ``Session.start``, from the
@@ -25,15 +26,17 @@ import threading
 import time
 from pathlib import Path
 
-from neurolang_apps.utils.tui.sessions import Sessions
+from neurolang_apps.utils.tui.sessions import Sessions, process_usage
 
 
 def fake_build(name, say):
-    """A test engine: ``a`` builds in 0.5 s, ``b`` in BUILD_SECONDS."""
+    """A test engine: neurosynth builds in 0.5 s, the others in
+    BUILD_SECONDS."""
     from neurolang.frontend import NeurolangPDL
 
     say(f"Building {name}")
-    time.sleep(0.5 if name == "a" else float(os.environ["BUILD_SECONDS"]))
+    time.sleep(0.5 if name == "neurosynth"
+               else float(os.environ["BUILD_SECONDS"]))
     nl = NeurolangPDL()
     nl.add_tuple_set([(name,)], name="engine")
     return nl
@@ -47,16 +50,17 @@ def _timed_start(sessions, user, engine):
 
 def _while_building(sessions, built, building, wait):
     """Start a session on *built* (built first), then, once *building*
-    has built for *wait* seconds, another: return the times of a start on
-    *built* with nothing building and of that start, and the session."""
-    _timed_start(sessions, "first", built)
+    has built for *wait* seconds, another: return the times of the first
+    start on *built* (its build), of a start on it with nothing building
+    and of that start, and the thread starting *building*."""
+    first = _timed_start(sessions, "first", built)
     idle = _timed_start(sessions, "idle", built)
     other = threading.Thread(target=_timed_start,
                              args=(sessions, "other", building), daemon=True)
     other.start()
     time.sleep(wait)
     during = _timed_start(sessions, "during", built)
-    return idle, during, other
+    return first, idle, during, other
 
 
 def fake(args) -> dict:
@@ -66,9 +70,10 @@ def fake(args) -> dict:
         with tempfile.TemporaryDirectory() as directory:
             sessions = Sessions(directory, build=fake_build)
             try:
-                times = _while_building(sessions, "a", "b", 1.0)
-                idle.append(times[0])
-                during.append(times[1])
+                times = _while_building(sessions, "neurosynth",
+                                        "neurostore", 1.0)
+                idle.append(times[1])
+                during.append(times[2])
             finally:
                 sessions.close()
     return {"mode": "fake", "build_seconds": args.build_seconds,
@@ -100,18 +105,26 @@ def _answers(session, queries) -> dict:
 def real(args) -> dict:
     sessions = Sessions(Path.home() / "neurolang_data", resolution=2.0)
     try:
-        idle, during, other = _while_building(
+        first, idle, during, other = _while_building(
             sessions, args.built, args.building, args.wait)
         building = other.is_alive()  # still, after the start measured
         other.join()
+        # The memory of the builders (with the coordinator, on this
+        # branch), both engines built, summed: on Linux only.
+        pids = [sessions._builder.pid,
+                *getattr(sessions, "builders", {}).values()]
+        usages = [process_usage(pid) for pid in pids]
+        memory = {name: sum(u[name] for u in usages if u)
+                  for name in ("rss", "pss", "private")}
         answers = _answers(sessions.session("during", "1"), args.queries)
     finally:
         sessions.close()
     if args.out:
         Path(args.out).write_text(json.dumps(answers))
     return {"mode": "real", "built": args.built, "building": args.building,
-            "idle": idle, "during": during,
-            "still_building_after": building,
+            "first": first, "idle": idle, "during": during,
+            "still_building_after": building, "builders_mb": memory,
+            "processes": len(pids),
             "queries": {name: {"failed": a["failed"],
                                "seconds": round(a["seconds"], 2),
                                "rows": [f.count("\n") - 1 for f in a["csv"]]}

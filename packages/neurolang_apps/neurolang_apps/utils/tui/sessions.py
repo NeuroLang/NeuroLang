@@ -3,11 +3,11 @@ Sessions of the REPL page, each in a process of its own, for the users of
 ``neurolang-repl-serve --local --users FILE``.
 
 The server's process answers the pages; a *coordinator* process, started
-fresh (``spawn``) before the server answers anything, forks a *builder*
-process per engine, which builds the engine once, then forks a process per
-session from it: the sessions share the memory of the engine's data, as
-the pages of a fork do until they are written, and each has its own rules,
-AI assistant and requests. A build does not hold up the sessions of the
+fresh (``spawn``) before the server answers anything, starts a *builder*
+process per engine, anew too, which builds the engine once, then forks a
+process per session from it: the sessions share the memory of the engine's
+data, as the pages of a fork do until they are written, and each has its
+own rules, AI assistant and requests. A build does not hold up the sessions of the
 engines built, nor does the end of a builder those of the other engines.
 A session is that of a tab of a user: its key is (user, the tab's id). Its
 process talks to the server through a socket of this machine; a stop kills
@@ -103,8 +103,8 @@ def _headless() -> None:
 
 def _builder(conn, address, authkey, options: dict, build,
              preload_embeddings: bool = True) -> None:
-    """Coordinate the builders of the engines, a process each, forked from
-    this one (which builds nothing and runs no thread) at the first
+    """Coordinate the builders of the engines, a process each, started
+    anew (``spawn``, as this one, whose environment it has) at the first
     request of its engine: :func:`_engine_builder` builds the engine once
     and forks its sessions' processes. The requests of *conn* (see
     :func:`_engine_builder`) go to their engine's builder, the messages of
@@ -113,13 +113,13 @@ def _builder(conn, address, authkey, options: dict, build,
     of an engine built fork at once, whatever builds meanwhile. A builder
     that ends (killed, out of memory) fails the starts it had not
     answered, is told (``ended``), and the next request of its engine
-    forks another; the others go on. End, with the builders, when the
-    server does. With *preload_embeddings*, an engine's text embeddings
-    are loaded before its first fork, for its sessions to share them."""
+    starts another; the others go on. End, with the builders, when the
+    server does. The other arguments are the builders' (see
+    :func:`_engine_builder`)."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the builders reap
-    _headless()
-    backend = LocalBackend(build=build,
-                           preload_embeddings=preload_embeddings, **options)
+    # It starts processes, which a daemon may not; it ends by os._exit.
+    multiprocessing.current_process().daemon = False
+    arguments = (address, authkey, options, build, preload_embeddings)
     builders = {}  # by engine
     turns = []  # the engines whose build waits, in order
     building = None
@@ -128,9 +128,7 @@ def _builder(conn, address, authkey, options: dict, build,
             building = turns.pop(0)
             builder = builders[building]
             if builder.conn is None:
-                builder.fork(building, conn, [b.conn for b in builders.values()
-                                              if b.conn is not None],
-                             (backend, address, authkey, options))
+                builder.start(building, arguments)
                 conn.send(("builder", None, None, (building, builder.pid)))
             builder.send(builder.waiting.pop(0))
         engines = {b.conn: e for e, b in builders.items() if b.conn}
@@ -195,27 +193,19 @@ class _EngineBuilder:
         self.waiting = []
         self.sent = set()
 
-    def fork(self, engine: str, conn, others: list, arguments: tuple
-             ) -> None:
-        """Fork the builder of *engine*, :func:`_engine_builder` with
-        *arguments*, which closes the connections of the coordinator,
-        *conn* and *others* (those of the other builders): its end is that
-        of its connection only, and so read here."""
-        ours, theirs = multiprocessing.Pipe()
-        self.pid = os.fork()
-        if self.pid == 0:
-            for other in (conn, ours, *others):
-                other.close()
-            try:
-                _engine_builder(theirs, engine, *arguments)
-            except BaseException:
-                traceback.print_exc()
-            finally:
-                sys.stdout.flush()
-                sys.stderr.flush()
-                os._exit(1)
+    def start(self, engine: str, arguments: tuple) -> None:
+        """Start the builder of *engine*, :func:`_engine_builder` with
+        *arguments*. It is started anew rather than forked: on macOS, a
+        session forked from a forked process failed in CoreFoundation (it
+        crashed asking the system's proxies)."""
+        context = multiprocessing.get_context("spawn")
+        ours, theirs = context.Pipe()
+        process = context.Process(
+            target=_engine_builder, args=(theirs, engine, *arguments),
+            name=f"neurolang-repl-builder-{engine}")
+        process.start()
         theirs.close()
-        self.conn = ours
+        self.conn, self.pid = ours, process.pid
 
     def send(self, message) -> None:
         if message[0] == "fork":
@@ -239,17 +229,22 @@ class _EngineBuilder:
             _kill(self.pid)
 
 
-def _engine_builder(conn, engine: str, backend, address, authkey,
-                    options: dict) -> None:
+def _engine_builder(conn, engine: str, address, authkey, options: dict,
+                    build, preload_embeddings: bool) -> None:
     """Build *engine* at the first request of *conn* (again at the next,
-    if it failed), then fork a session's process from it for each
+    if it failed), with *build* (see :class:`Sessions`), then fork a
+    session's process from it for each
     ``("fork", key, start, engine, env, feedback)`` (*start* numbering each
     start of a session once, *env* the variables of its user, *feedback*
     where its ratings go); for a ``("build", None, None, engine, None,
     None)``, build it only, and tell it (``built`` or ``failed``, without
-    a key); end when the coordinator does."""
-    # Its sessions reap: set again, as macOS does not keep it in a fork.
-    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+    a key); end when the coordinator does. With *preload_embeddings*, the
+    engine's text embeddings are loaded before its first fork, for its
+    sessions to share them."""
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
+    _headless()
+    backend = LocalBackend(build=build,
+                           preload_embeddings=preload_embeddings, **options)
     nl = None
     while True:
         try:

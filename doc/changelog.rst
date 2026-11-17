@@ -91,7 +91,7 @@ Unreleased
 **Bug fixes:**
 
 - REPL server (``--users --local``): each engine has a builder process of
-  its own, forked by a coordinator, rather than one builder for all: a
+  its own, started by a coordinator, rather than one builder for all: a
   session of an engine built starts at once while another engine builds,
   rather than after that build (up to 90 s for ``neurostore_iit``), and a
   builder that dies fails the starts of its engine only, is told in the

@@ -650,8 +650,8 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   once, then forks a process per session from it, in under two seconds.
   The sessions share the memory of the engine's data, as forked processes
   do until they write it.  A *coordinator* process, started anew before
-  the server answers, forks the builder of an engine at its first request
-  (before building anything) and passes the requests on.  One engine
+  the server answers, starts the builder of an engine, anew too, at its
+  first request, and passes the requests on.  One engine
   builds at a time, in the order asked (the builds' memory does not add
   up); a session of an engine built starts at once, whatever builds
   meanwhile, rather than wait for that build (up to 90 s for
