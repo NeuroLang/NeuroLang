@@ -196,13 +196,14 @@ class LocalBackend:
             progress=say,
         )
 
-    def _working(self, work: Callable):
-        """Return *work()*, one request at a time, which a stop interrupts."""
+    def _working(self, work: Callable, watched: bool = False):
+        """Return *work()*, one request at a time, which a stop interrupts,
+        and so does the memory cap if the request is *watched*."""
         with self._lock:
             self._worker = threading.current_thread()
             self._over = None
             done = threading.Event()
-            if self.memory_mb:
+            if watched and self.memory_mb:
                 threading.Thread(target=self._watch, args=(done,),
                                  daemon=True).start()
             try:
@@ -341,21 +342,25 @@ class LocalBackend:
                 if payload["tokens"]:  # whose key: the page's, or the server's
                     payload["tokens"]["key"] = \
                         "page" if self._page_key else "server"
-                return payload
+                if not (self._over and payload["failed"]):
+                    return payload
             except KeyboardInterrupt:
-                message = "Stopped."
-                if self._over:
-                    message = (
-                        f"Stopped: the query took {self._over:.0f} MB of "
-                        f"memory, over the {self.memory_mb:g} MB a session "
-                        "may take (session_memory_mb). Narrow it (a smaller "
-                        "region, fewer terms, a restriction before a join) "
-                        "and run it again; the rules of the session stay.")
-                return {
-                    "html": f"<pre>{message}</pre>", "failed": True,
-                    "viewers": [], "tables": [],
-                }
-        return self._working(work)
+                pass
+            # Stopped, by the page or by the memory cap (the REPL tells
+            # "Query interrupted" only).
+            message = "Stopped."
+            if self._over:
+                message = (
+                    f"Stopped: the query took {self._over:.0f} MB of "
+                    f"memory, over the {self.memory_mb:g} MB a session "
+                    "may take (session_memory_mb). Narrow it (a smaller "
+                    "region, fewer terms, a restriction before a join) "
+                    "and run it again; the rules of the session stay.")
+            return {
+                "html": f"<pre>{message}</pre>", "failed": True,
+                "viewers": [], "tables": [],
+            }
+        return self._working(work, watched=True)
 
     def set_llm(
         self, provider: str = "", key: str = "", model: str = "",

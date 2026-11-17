@@ -96,7 +96,6 @@ def test_a_stop_interrupts_the_request_at_work(backend, monkeypatch):
 
 
 def _run_busy(backend, monkeypatch, allocate):
-    backend.start("neurostore")
     started = threading.Event()
 
     def busy(text):
@@ -120,12 +119,16 @@ def _run_busy(backend, monkeypatch, allocate):
                     reason="the memory of a process is read on Linux")
 def test_a_query_over_the_memory_cap_is_stopped_with_a_message(
         tmp_path, monkeypatch):
-    backend = LocalBackend(tmp_path, build=_engine, memory_mb=150,
-                           memory_seconds=0.05)
+    from neurolang_apps.utils.tui.sessions import process_usage
+
+    backend = LocalBackend(tmp_path, build=_engine, memory_seconds=0.05)
+    backend.start("neurostore")
+    # 150 MB more than this process takes, which a query then exceeds.
+    backend.memory_mb = process_usage(os.getpid())["private"] + 150
     replies = _run_busy(backend, monkeypatch,
                         lambda: bytearray(b"x" * (400 << 20)))
     assert replies and replies[0]["failed"]
-    assert "over the 150 MB a session may take" in replies[0]["html"]
+    assert "MB a session may take" in replies[0]["html"]
     assert not backend.stop()  # nothing at work any more
 
 
