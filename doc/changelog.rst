@@ -92,7 +92,7 @@ Unreleased
 
 - Query assistant: a query is run once per question for its preview.
   ``final_answer`` and the confirmation of an empty answer reuse the
-  preview of the identical (whitespace-normalised) query run before by
+  preview of the identical query text run before by
   ``run_query`` or ``final_answer``, instead of running it again.
 
 **Bug fixes:**

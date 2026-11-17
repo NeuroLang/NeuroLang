@@ -465,11 +465,21 @@ def run(query):
 
 def test_final_answer_reuses_the_preview_of_run_query(nl, monkeypatch):
     runs = count_previews(monkeypatch)
-    replies = [run(PAIN_DATALOG), final(PAIN_DATALOG.replace(" :- ", "  :-  "))]
+    replies = [run(PAIN_DATALOG), final(PAIN_DATALOG)]
     react, steps = agent(nl, ReactAgent, replies, language="datalog")
     result = react.run("Which studies mention pain?")
     assert result.valid and steps[1].observation == "Accepted."
     assert len(runs) == 1  # 2 without the reuse
+
+
+def test_a_different_string_constant_is_not_reused(nl, monkeypatch):
+    runs = count_previews(monkeypatch)
+    one = "ans(s) :- mentions(s, 'a b')"
+    two = "ans(s) :- mentions(s, 'a  b')"
+    replies = [run(one), final(two), final(two)]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    react.run("Which studies mention a b?")
+    assert runs == [one, two]  # two, once confirmed, is reused
 
 
 def test_confirming_an_empty_answer_reuses_its_preview(nl, monkeypatch):

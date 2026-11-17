@@ -317,10 +317,8 @@ class Toolbox:
         self.answer_rows = ""
         self.answer_frames = None
         self.answer_preview = None
-        # The successful previews by normalised query text, and how many
-        # previews were run.
+        # The successful previews by exact query text.
         self.previews = {}
-        self.previews_run = 0
         # The observations of the calls, by tool and arguments.
         self.observations = {}
         # The facts search_values found, and its calls finding none new.
@@ -407,21 +405,20 @@ class Toolbox:
 
     def _preview(self, query: str):
         """
-        The preview of *query*, run once per normalised text: the
-        engine does not change during an ask, so a successful preview
-        is reused by later run_query and final_answer calls.
+        The preview of *query*, run once per exact text (whitespace can
+        matter, in string constants): the engine does not change during
+        an ask, so a successful preview is reused by later run_query and
+        final_answer calls.
         """
-        normalised = " ".join(query.split())
-        preview = self.previews.get(normalised)
+        preview = self.previews.get(query)
         if preview is None:
             preview = run_preview(
                 self.context.nl, query, self.language, self.preview_rows,
                 self.context.engine_name if self.context.declared else "",
                 self.query_timeout, self.query_memory_mb, self.max_cells,
             )
-            self.previews_run += 1
             if preview.ok:
-                self.previews[normalised] = preview
+                self.previews[query] = preview
         return preview
 
     def tool_run_query(self, query: str):
