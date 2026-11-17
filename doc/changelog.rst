@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+- REPL server (``--users --local``): ``--session-memory-mb`` stops, on Linux,
+  a query taking its session's process more than that much memory of its own,
+  with a message, the session staying, instead of the OOM killer taking the
+  builder or the server; ``doc/repl_server.rst`` gives the matching systemd
+  ``MemoryHigh``/``MemoryMax``.
+
 - REPL server (``--users --local``): with ``--mcp``, it answers MCP
   clients, LLM agents such as Claude Code, at ``/mcp``, each user with a
   personal token of their account page (only its hash kept, in the users

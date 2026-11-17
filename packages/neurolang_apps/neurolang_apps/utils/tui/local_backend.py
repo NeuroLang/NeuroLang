@@ -95,13 +95,17 @@ class LocalBackend:
     by default
     :func:`~neurolang_apps.utils.engine_registry.build_engine`. With
     *preload_embeddings*, an engine built has its text embeddings loaded
-    too (see :meth:`build`).
+    too (see :meth:`build`). With *memory_mb*, a request that takes this
+    process more than that much memory of its own (on Linux; see
+    :func:`~.sessions.process_usage`) is interrupted as a stop does, and
+    its reply says so.
     """
 
     def __init__(
         self, data_dir, resolution: float = 2.0, light: bool = False,
         feedback: Optional[tuple] = None, build: Optional[Callable] = None,
         preload_embeddings: bool = False, uploads: Optional[dict] = None,
+        memory_mb: float = 0, memory_seconds: float = 0.5,
     ):
         self.data_dir = Path(data_dir).resolve()
         # Where the page's uploads go and how large they may be
@@ -124,6 +128,9 @@ class LocalBackend:
         # that does, for a stop to interrupt it.
         self._lock = threading.Lock()
         self._worker: Optional[threading.Thread] = None
+        self.memory_mb = memory_mb
+        self.memory_seconds = memory_seconds
+        self._over: Optional[float] = None  # MB, when the cap stopped a request
         self._listeners = []
         self._listeners_lock = threading.Lock()
 
@@ -193,10 +200,30 @@ class LocalBackend:
         """Return *work()*, one request at a time, which a stop interrupts."""
         with self._lock:
             self._worker = threading.current_thread()
+            self._over = None
+            done = threading.Event()
+            if self.memory_mb:
+                threading.Thread(target=self._watch, args=(done,),
+                                 daemon=True).start()
             try:
                 return work()
             finally:
+                done.set()
                 self._worker = None
+
+    def _watch(self, done: threading.Event) -> None:
+        """Stop the request at work, until *done*, if this process takes
+        more than *memory_mb* of memory of its own (nothing off Linux)."""
+        from neurolang_apps.utils.tui.sessions import process_usage
+
+        while not done.wait(self.memory_seconds):
+            usage = process_usage(os.getpid())
+            if usage is None:
+                return
+            if usage["private"] > self.memory_mb and not done.is_set():
+                self._over = usage["private"]
+                self.stop()
+                return
 
     def stop(self) -> bool:
         """Interrupt the request at work, if any; return whether there was
@@ -316,8 +343,16 @@ class LocalBackend:
                         "page" if self._page_key else "server"
                 return payload
             except KeyboardInterrupt:
+                message = "Stopped."
+                if self._over:
+                    message = (
+                        f"Stopped: the query took {self._over:.0f} MB of "
+                        f"memory, over the {self.memory_mb:g} MB a session "
+                        "may take (session_memory_mb). Narrow it (a smaller "
+                        "region, fewer terms, a restriction before a join) "
+                        "and run it again; the rules of the session stay.")
                 return {
-                    "html": "<pre>Stopped.</pre>", "failed": True,
+                    "html": f"<pre>{message}</pre>", "failed": True,
                     "viewers": [], "tables": [],
                 }
         return self._working(work)

@@ -3220,6 +3220,7 @@ def test_the_defaults_of_the_options_are_those_of_their_file(serve):
     assert f"({defaults['idle_minutes']}, above 0)" in server
     assert f"({defaults['query_minutes']}; 0, never)" in server
     assert f"guests at once ({defaults['max_guest_sessions']})" in server
+    assert "``--session-memory-mb MB``" in server
     assert f"in DIR (``{defaults['uploads_dir']}``)" in server
     assert f"at most MB megabytes ({defaults['max_upload_mb']})" in server
     assert f"together at most MB ({defaults['max_uploads_mb']})" in server

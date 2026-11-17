@@ -562,7 +562,9 @@ class Sessions:
     :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`. At most
     *running* queries (and downloads) run at once (by default, as many as
     the machine has CPUs), the others waiting; one running longer than
-    *query_seconds*, if given, ends its session's process. With
+    *query_seconds*, if given, ends its session's process. A query taking
+    its session's process more than *memory_mb* MB of memory of its own is
+    stopped, with a message, the session staying (0: no limit; Linux). With
     *preload_embeddings*, the builder loads the text embeddings of an
     engine (its documents' and its query model) before forking its
     sessions, which share them. *build* must be importable by name, as the
@@ -578,6 +580,7 @@ class Sessions:
         withhold=(), activity_db=None, running: Optional[int] = None,
         query_seconds: Optional[float] = None,
         preload_embeddings: bool = True, uploads: Optional[dict] = None,
+        memory_mb: float = 0,
     ):
         env = env or {}
         #: Where the sessions' uploads go, a folder each in its directory,
@@ -616,7 +619,7 @@ class Sessions:
         self._builder_conn, theirs = context.Pipe()
         options = {"data_dir": str(data_dir), "resolution": resolution,
                    "light": light, "feedback": feedback,
-                   "uploads": self.uploads}
+                   "uploads": self.uploads, "memory_mb": memory_mb}
         self._builder = context.Process(
             target=_builder, daemon=True, name="neurolang-repl-builder",
             args=(theirs, self._listener.address, authkey, options, build,
