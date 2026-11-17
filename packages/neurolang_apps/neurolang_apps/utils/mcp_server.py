@@ -51,6 +51,15 @@ from neurolang_apps.utils.tui.assistant import (
 )
 from neurolang_apps.utils.tui.web import WebRepl
 
+# How to cite NeuroLang, at the end of each answer with the sources of the
+# engine's data (their acknowledgements, as `.credits` gives them).
+NEUROLANG_CITATION = (
+    "NeuroLang: Zanitti GE, Soto Y, Iovene V, Martinez MV, Rodriguez RO, "
+    "Simari GI, Wassermann D. Scalable Query Answering Under Uncertainty to "
+    "Neuroscientific Ontological Knowledge: The NeuroLang Approach. "
+    "Neuroinformatics 21(2):407-425 (2023)."
+)
+
 # What the server does, with --log: the build of the engine, each tool
 # call with its arguments, time and outcome. Its own logger, to a file:
 # the engine's would log every rewrite, and clients hide stderr.
@@ -76,7 +85,8 @@ instructions with the tools (`search_values`,
 `final_answer`, with a comment on each rule: it returns the explanation,
 the commented query, its first rows, images and links to the interactive
 viewer and the files of the result; show them to the user: the query with
-its comments, and always the links, the viewer's first. To change an
+its comments, and always the links, the viewer's first, and how to cite
+NeuroLang and the data the answer comes from. To change an
 answer for a new question, call `ask` with `refine` set to the answer's id
 (`a1`, ...) or to `last`, the last query run, such as one the user changed
 and ran with `repl`. `repl` runs statements and dot-commands (`.help`) in
@@ -356,6 +366,10 @@ class McpSession:
         text.append("Links to give the user:\n" + "\n".join(
             f"{name}: {link}" for name, link in links.items()
         ))
+        citations = self.citations()
+        text.append("To cite, if the answer is used:\n" + "\n".join(
+            f"- {citation}" for citation in citations
+        ))
         return types.CallToolResult(
             content=[_content("\n\n".join(part for part in text if part))]
             + images + [
@@ -377,8 +391,17 @@ class McpSession:
                     )}
                     for table in reply.tables
                 ],
+                "citations": citations,
             },
         )
+
+    def citations(self) -> list:
+        """How to cite NeuroLang and the sources of the engine's data."""
+        engine = self.engine
+        known = engine in engine_registry.list_engine_names()
+        return [NEUROLANG_CITATION, *(
+            engine_registry.get_acknowledgements(engine) if known else ()
+        )]
 
     def _files(self, repl, answer: Answer):
         """
@@ -640,7 +663,8 @@ def server(session: McpSession):
         "short line, for each rule of the query, in order. Once accepted, "
         "returns the commented query, its rows, images and links to the "
         "viewer and the files of the result: show them to the user, and "
-        "always end your reply with the links, the viewer's first."
+        "always end your reply with the links, the viewer's first, and the "
+        "citations of NeuroLang and of the data."
     )
     def final_answer(
         query: str, explanation: str, comments: list[str]
@@ -670,10 +694,17 @@ def server(session: McpSession):
 def main(args, initial_program: str = "") -> None:
     """Serve the REPL on the engine of the CLI's *args* over stdio."""
     def build():
-        return engine_registry.build_engine(
+        nl = engine_registry.build_engine(
             args.engine, Path(args.data_dir), args.resolution,
             use_cache=not args.no_engine_cache,
         )
+        if getattr(nl, "text_embedding_indexes", None):
+            # Loaded here, as the REPL server does: on macOS a query's
+            # forked process cannot load a model (SIGABRT, similar_study).
+            from neurolang_apps.utils import text_embeddings
+
+            text_embeddings.preload(nl)
+        return nl
 
     if args.log:
         handler = logging.FileHandler(Path(args.log).expanduser())

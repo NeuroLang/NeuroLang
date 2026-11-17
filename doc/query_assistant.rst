@@ -429,6 +429,8 @@ given as argument or with ``--file`` runs first, in the session.
       ``.view`` (``view.html``), the images (``result.nii.gz``), all the
       rows (``rows.csv``), the query (``query.dl``) and its graph
       (``graph.html``, as ``.graph``).
+    - how to cite NeuroLang and the sources of the engine's data (as
+      ``.credits`` gives them).
 ``repl``
     runs what is typed at the prompt, statements and dot-commands, and
     returns the output and the first rows of each result (50 by default),

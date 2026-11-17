@@ -399,3 +399,13 @@ def test_a_glass_brain_is_entitled_with_the_question():
     assert _image_title("a1: Where?", "a1", "lift", False) == "a1: Where?"
     assert _image_title("a1: Where?", "a1", "p", True) == "a1: Where? (p)"
     assert _image_title("a1: " + "x" * 90, "a1", "p", False).endswith("...")
+
+
+def test_an_answer_ends_with_how_to_cite_neurolang_and_the_data(tmp_path):
+    session = McpSession("neurosynth", _engine, results_dir=tmp_path)
+    result = _answer(session)
+    text = result.content[0].text
+    citations = text.split("To cite, if the answer is used:\n")[1]
+    assert citations.startswith("- NeuroLang: Zanitti GE")
+    assert "- Neurosynth: Yarkoni T" in citations
+    assert result.structured_content["citations"][0].startswith("NeuroLang")
