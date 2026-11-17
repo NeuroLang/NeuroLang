@@ -73,7 +73,8 @@ def main():
                   f"rows {line['rows']:7d} kept {line['kept']!s:5s} "
                   f"failed {line['failed']!s:5s} "
                   f"private {line['private_mb_before']:.0f}->"
-                  f"{line['private_mb_after']:.0f} MB")
+                  f"{line['private_mb_after']:.0f} MB "
+                  f"peak {line.get('maxrss_mb', float('nan')):.0f} MB")
         for number in sorted({line["session"] for line in lines}):
             times = [line["seconds"] for line in lines
                      if line["session"] == number]

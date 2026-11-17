@@ -14,14 +14,16 @@ then the programs of the files ``--queries``.
 
 ``OUT_DIR/times.jsonl`` gets a line per session and query: its wall time,
 whether it failed, its number of rows, whether the reply says it was kept,
-and the private memory of the session before and after it (Linux,
-``smaps_rollup``). ``OUT_DIR/s{N}-q{i}.pkl`` holds the frames of its result
+the private memory of the session before and after it (Linux,
+``smaps_rollup``) and the peak resident memory of the session so far
+(``ru_maxrss``). ``OUT_DIR/s{N}-q{i}.pkl`` holds the frames of its result
 (``app.results``) for comparing answers across checkouts.
 """
 import argparse
 import json
 import os
 import pickle
+import resource
 import sys
 import time
 from pathlib import Path
@@ -67,6 +69,8 @@ def session(backend_class, options, engine, nl, queries_files, out, number):
                 "rows": sum(len(f) for _, f in frames),
                 "kept": "kept from an earlier run" in reply["html"],
                 "private_mb_before": before, "private_mb_after": private_mb(),
+                "maxrss_mb": resource.getrusage(
+                    resource.RUSAGE_SELF).ru_maxrss / 1024,
             }) + "\n")
 
 
