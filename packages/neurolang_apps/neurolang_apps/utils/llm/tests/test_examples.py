@@ -5,6 +5,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from neurolang_apps.utils import engine_registry
+
 from ..examples import (
     Example,
     bm25_scores,
@@ -13,6 +15,9 @@ from ..examples import (
     words,
 )
 from ..validation import check_query
+
+# Before the session fixture of ../../conftest.py replaces it by a small file.
+REAL_ONTOLOGY_FILE = engine_registry._ontology_file
 
 BANK_ENGINES = ("structural_connectivity", "functional_connectivity",
                 "neurosynth", "neurostore")
@@ -117,8 +122,6 @@ DATA_DIR = os.environ.get("NEUROLANG_TEST_DATA_DIR")
 )
 @pytest.mark.parametrize("engine", BANK_ENGINES + ("neurosynth_iit",))
 def test_bank_queries_are_valid_on_the_engine(engine):
-    from neurolang_apps.utils import engine_registry
-
     nl = engine_registry.build_engine(engine, Path(DATA_DIR), None)
     # What .image loads: the questions on an image need one, on the
     # engines of a brain mask (those of peaks of studies).
@@ -143,15 +146,18 @@ def test_bank_queries_are_valid_on_the_engine(engine):
     reason="set NEUROLANG_TEST_DATA_DIR to the engines' data directory "
     "to run the start-up examples (builds the engine)",
 )
-def test_startup_examples_return_rows():
+def test_startup_examples_return_rows(monkeypatch):
     """
     The examples shown to every user of the engine (its ``examples``,
     not the assistant's bank) answer with rows: one that returns nothing
     teaches nothing, as the Cognitive Atlas subclasses of a concept none
     of whose subclasses is a term of the studies.
     """
-    from neurolang_apps.utils import engine_registry
-
+    # The Cognitive Atlas of the data directory, not the small file of the
+    # tests: what its subclasses are is what the example is about.
+    monkeypatch.setattr(
+        engine_registry, "_ontology_file", REAL_ONTOLOGY_FILE
+    )
     nl = engine_registry.build_engine("neurosynth", Path(DATA_DIR), None)
     config = engine_registry.get_engine_config("neurosynth")
     empty = []
