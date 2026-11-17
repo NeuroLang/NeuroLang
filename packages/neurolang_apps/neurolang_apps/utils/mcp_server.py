@@ -691,20 +691,28 @@ def server(session: McpSession):
     return mcp
 
 
+def build_engine(args):
+    """
+    Build the engine of the CLI's *args*, with its text embeddings loaded,
+    as the REPL server does: the queries run in forked processes, and on
+    macOS one cannot load the model, nor download it (SIGABRT, as
+    ``similar_study`` did); it uses the one loaded here.
+    """
+    nl = engine_registry.build_engine(
+        args.engine, Path(args.data_dir), args.resolution,
+        use_cache=not args.no_engine_cache,
+    )
+    if getattr(nl, "text_embedding_indexes", None):
+        from neurolang_apps.utils import text_embeddings
+
+        text_embeddings.preload(nl)
+    return nl
+
+
 def main(args, initial_program: str = "") -> None:
     """Serve the REPL on the engine of the CLI's *args* over stdio."""
     def build():
-        nl = engine_registry.build_engine(
-            args.engine, Path(args.data_dir), args.resolution,
-            use_cache=not args.no_engine_cache,
-        )
-        if getattr(nl, "text_embedding_indexes", None):
-            # Loaded here, as the REPL server does: on macOS a query's
-            # forked process cannot load a model (SIGABRT, similar_study).
-            from neurolang_apps.utils import text_embeddings
-
-            text_embeddings.preload(nl)
-        return nl
+        return build_engine(args)
 
     if args.log:
         handler = logging.FileHandler(Path(args.log).expanduser())

@@ -409,3 +409,25 @@ def test_an_answer_ends_with_how_to_cite_neurolang_and_the_data(tmp_path):
     assert citations.startswith("- NeuroLang: Zanitti GE")
     assert "- Neurosynth: Yarkoni T" in citations
     assert result.structured_content["citations"][0].startswith("NeuroLang")
+
+
+def test_the_engine_is_built_with_its_text_embeddings_loaded(monkeypatch):
+    """A query's forked process uses the model loaded before it: on macOS
+    it could not load it (SIGABRT, similar_study)."""
+    from types import SimpleNamespace
+
+    from neurolang_apps.utils import engine_registry, mcp_server
+    from neurolang_apps.utils import text_embeddings
+
+    loaded = []
+    nl = SimpleNamespace(text_embedding_indexes={"studies": object()})
+    monkeypatch.setattr(
+        engine_registry, "build_engine", lambda *args, **kwargs: nl
+    )
+    monkeypatch.setattr(text_embeddings, "preload", loaded.append)
+    args = SimpleNamespace(
+        engine="neurosynth", data_dir="d", resolution=2.0,
+        no_engine_cache=False,
+    )
+    assert mcp_server.build_engine(args) is nl
+    assert loaded == [nl]
