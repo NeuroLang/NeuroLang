@@ -8,6 +8,8 @@ Run with the Python of the tree measured; it prints a JSON object::
     python benchmarks/repl_server/start_while_building.py --fake
     python benchmarks/repl_server/start_while_building.py --real \\
         --queries q1.dl q2.dl --out answers.json
+    python benchmarks/repl_server/start_while_building.py \\
+        --compare answers_master.json answers.json
 
 ``--fake`` builds test engines of the registry's names: ``neurosynth`` in
 0.5 s, ``neurostore`` in ``--build-seconds``.
@@ -84,12 +86,12 @@ def fake(args) -> dict:
 
 def _answers(session, queries) -> dict:
     """The full answers (CSV) of each query file run in *session*."""
-    answers, block = {}, 0
+    answers = {}
     for path in queries:
         began = time.monotonic()
         reply = session.submit(Path(path).read_text())
         seconds = time.monotonic() - began
-        files = []
+        files, block = [], 0  # the results of the latest input
         while True:
             try:
                 files.append(session.download(block=block, kind="csv")
@@ -114,8 +116,9 @@ def real(args) -> dict:
         pids = [sessions._builder.pid,
                 *getattr(sessions, "builders", {}).values()]
         usages = [process_usage(pid) for pid in pids]
-        memory = {name: sum(u[name] for u in usages if u)
+        memory = {name: round(sum(u[name] for u in usages if u), 1)
                   for name in ("rss", "pss", "private")}
+        memory["each"] = usages
         answers = _answers(sessions.session("during", "1"), args.queries)
     finally:
         sessions.close()
@@ -131,11 +134,37 @@ def real(args) -> dict:
                         for name, a in answers.items()}}
 
 
+def _rows(text: str) -> list:
+    """The rows of a CSV *text*, sorted, each value a float if it is one,
+    rounded to 9 significant digits."""
+    import csv
+    import io
+
+    def value(cell):
+        try:
+            return ("", float(f"{float(cell):.9g}"))
+        except ValueError:
+            return (cell, 0.0)
+
+    rows = list(csv.reader(io.StringIO(text)))
+    return rows[:1] + sorted([value(c) for c in row] for row in rows[1:])
+
+
+def compare(first: str, second: str) -> dict:
+    """Whether the answers of two --real runs (their --out) are the same,
+    by query: the rows sorted, the floats to 9 significant digits."""
+    a, b = (json.loads(Path(p).read_text()) for p in (first, second))
+    return {name: a[name]["failed"] == b.get(name, {}).get("failed") and
+            [_rows(t) for t in a[name]["csv"]] ==
+            [_rows(t) for t in b[name]["csv"]] for name in a}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--fake", action="store_true")
     mode.add_argument("--real", action="store_true")
+    mode.add_argument("--compare", nargs=2, metavar="ANSWERS")
     parser.add_argument("--build-seconds", type=float, default=20.0)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--built", default="neurosynth_iit")
@@ -144,7 +173,8 @@ def main():
     parser.add_argument("--queries", nargs="*", default=[])
     parser.add_argument("--out")
     args = parser.parse_args()
-    print(json.dumps(fake(args) if args.fake else real(args)), flush=True)
+    print(json.dumps(compare(*args.compare) if args.compare else
+                     fake(args) if args.fake else real(args)), flush=True)
 
 
 if __name__ == "__main__":
