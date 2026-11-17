@@ -67,11 +67,10 @@ class DatalogConstraintsMixin(PatternWalker):
         sym_constraints = Symbol("__constraints__")
         return self.symbol_table.get(sym_constraints, Union(()))
 
-    def set_constraints(self, categorized_constraints):
-        '''This function receives a dictionary with the constraints organized
-        according to the functor of its consequent and is in charge of setting
-        it both in the symbol table and in the global variable
-        `categorized_contraints`, useful for XRewriter optimizations.
+    def add_constraints(self, categorized_constraints):
+        '''Add constraints, organised by the functor of their consequent,
+        to those of the program: both to the symbol table and to
+        `categorized_constraints`, useful for XRewriter optimizations.
 
         Parameters
         ----------
@@ -81,12 +80,16 @@ class DatalogConstraintsMixin(PatternWalker):
             and the values are lists of constraints with
             each rule associated to the corresponding functor.
         '''
-        sym_constraints = Symbol("__constraints__")
-        if isinstance(categorized_constraints, dict):
-            cons = [b for a in list(categorized_constraints.values()) for b in a]
-            self.symbol_table[sym_constraints] = Union(cons)
-
-            self.categorized_constraints = categorized_constraints
+        constraints = {
+            functor: set(formulas)
+            for functor, formulas in self.get_constraints().items()
+        }
+        for functor, formulas in categorized_constraints.items():
+            constraints.setdefault(functor, set()).update(formulas)
+        self.symbol_table[Symbol("__constraints__")] = Union(
+            tuple(c for formulas in constraints.values() for c in formulas)
+        )
+        self.categorized_constraints = constraints
 
     def get_constraints(self):
         '''Returns the constraints in a dictionary, where the key is the functor
@@ -106,7 +109,14 @@ class DatalogConstraintsMixin(PatternWalker):
         return self.categorized_constraints
 
     def add_existential_rules(self, rules):
-        self.existential_rules = rules
+        """Add existential rules, by entity, to those of the program."""
+        merged = {
+            entity: list(entity_rules)
+            for entity, entity_rules in self.existential_rules.items()
+        }
+        for entity, entity_rules in rules.items():
+            merged.setdefault(entity, []).extend(entity_rules)
+        self.existential_rules = merged
 
     def _categorize_constraints(self, sigma):
         '''Function in charge of sorting the constraints in a dictionary
@@ -121,16 +131,14 @@ class DatalogConstraintsMixin(PatternWalker):
             constraint to be categorized.
         '''
         sigma_functor = sigma.consequent.functor.name
-        if (
-            self.categorized_constraints
-            and sigma_functor in self.categorized_constraints
-        ):
-            cons_set = self.categorized_constraints[sigma_functor]
-            if sigma not in cons_set:
-                cons_set.add(sigma)
-                self.categorized_constraints[sigma_functor] = cons_set
-        else:
-            self.categorized_constraints[sigma_functor] = set([sigma])
+        # A new dictionary, not the class's, shared by all the programs.
+        self.categorized_constraints = {
+            **self.categorized_constraints,
+            sigma_functor: (
+                self.categorized_constraints.get(sigma_functor, set())
+                | {sigma}
+            ),
+        }
 
 
 def iter_implications(expression):

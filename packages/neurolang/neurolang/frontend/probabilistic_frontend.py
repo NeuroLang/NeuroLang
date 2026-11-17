@@ -338,10 +338,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             the new connector_symbol, to be used in
             the query program.
         """
-        if connector_symbol_name is None:
-            self.connector_symbol = self.new_symbol()
-        else:
+        # The ontologies loaded one after the other add up: they share
+        # the connector symbol, and their constraints, rules and facts
+        # are added to those of the ontologies loaded before.
+        if connector_symbol_name is not None:
             self.connector_symbol = self.new_symbol(name=connector_symbol_name)
+        elif not hasattr(self, "connector_symbol"):
+            self.connector_symbol = self.new_symbol()
+        loaded = set(self.ontology_predicates)
         onto = OntologyParser(
             paths, connector_symbol=self.connector_symbol.expression,
             load_format=format, individuals=individuals, names=names,
@@ -351,14 +355,19 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.ontology_predicates.update(constraints)
         self.ontology_predicates.update(s.name for s in est_knowledge)
         self.ontology_predicates.update(s.name for s in entity_rules)
-        self.program_ir.set_constraints(constraints)
+        self.program_ir.add_constraints(constraints)
         for name, expressions in constraints.items():
             symbol = Symbol(name=name).cast(UnionOfConjunctiveQueries)
-            self.program_ir.symbol_table[symbol] = Union(expressions)
+            before = self.program_ir.symbol_table.get(symbol, Union(()))
+            self.program_ir.symbol_table[symbol] = Union(
+                before.formulas + tuple(expressions)
+            )
         for symbol, expressions in est_knowledge.items():
-            iterable = [exp.args for exp in expressions]
+            rows = {
+                tuple(arg.value for arg in exp.args) for exp in expressions
+            }
             self.program_ir.add_extensional_predicate_from_tuples(
-                symbol, iterable
+                symbol, self._loaded_rows(symbol.name, loaded) | rows
             )
         self.program_ir.add_existential_rules(onto.existential_rules)
         for symbol, expressions in entity_rules.items():
@@ -376,7 +385,10 @@ class NeurolangPDL(QueryBuilderDatalog):
                 if name == self._type_predicate:
                     self._add_stated_types(rows)
                 else:
-                    self.add_tuple_set(rows, name=name)
+                    self.add_tuple_set(
+                        self._loaded_rows(name, loaded) | set(rows),
+                        name=name,
+                    )
                 self.ontology_predicates.add(name)
 
         self._rewrite_det_idb.cache_clear(self)
@@ -389,14 +401,24 @@ class NeurolangPDL(QueryBuilderDatalog):
         own that a rule of ``rdf:type`` reads: the rules of a program can
         state more types, ``rdf:type(e, t) :- …``."""
         stated = Symbol(f"{self._type_predicate}@files")
-        self.add_tuple_set(rows, name=stated.name)
+        before = self._loaded_rows(stated.name, {stated.name})
+        self.add_tuple_set(before | set(rows), name=stated.name)
         self._stated_types |= {
             (x, c) for x, c in rows if c in self._class_names
         }
-        x, c = Symbol.fresh(), Symbol.fresh()
-        self.program_ir.walk(Union((Implication(
-            Symbol(self._type_predicate)(x, c), stated(x, c)
-        ),)))
+        if not before:
+            x, c = Symbol.fresh(), Symbol.fresh()
+            self.program_ir.walk(Union((Implication(
+                Symbol(self._type_predicate)(x, c), stated(x, c)
+            ),)))
+
+    def _loaded_rows(self, name, loaded):
+        """The rows of the relation ``name``, if one of the ``loaded``
+        predicates of the ontologies, else none."""
+        relation = self.program_ir.symbol_table.get(Symbol(name))
+        if name not in loaded or not isinstance(relation, Constant):
+            return set()
+        return set(relation.value.itervalues())
 
     def _closed_world_rows(self, body, variables):
         """The rows of ``variables`` in ``body``, by the rules and facts of

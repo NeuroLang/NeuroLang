@@ -114,3 +114,28 @@ def test_reachable_code_through_constraints():
         RightImplication(P(x), Q(x)),
     ))
     assert set(reachable_code(query, dl).formulas) == {query, rule_p}
+
+
+def test_constraints_are_those_of_their_program():
+    first = Datalog()
+    first.walk(RightImplication(P(x), Q(x)))
+    assert first.get_constraints() == {"Q": {RightImplication(P(x), Q(x))}}
+    assert Datalog().get_constraints() == {}
+
+
+def test_added_constraints_add_up():
+    R = Symbol("R")
+    first, second = RightImplication(P(x), Q(x)), RightImplication(R(x), Q(x))
+    dl = Datalog()
+    dl.add_constraints({"Q": [first]})
+    dl.add_constraints({"Q": [second]})
+    assert dl.get_constraints() == {"Q": {first, second}}
+    assert set(dl.constraints().formulas) == {first, second}
+
+
+def test_added_existential_rules_add_up():
+    dl = Datalog()
+    dl.add_existential_rules({P: ["a"]})
+    dl.add_existential_rules({P: ["b"], Q: ["c"]})
+    assert dl.existential_rules == {P: ["a", "b"], Q: ["c"]}
+    assert Datalog().existential_rules == {}
