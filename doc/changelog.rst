@@ -40,12 +40,12 @@ Unreleased
   in ``DATA_DIR/derived_tables`` as Arrow files named by a checksum of
   what each is found from, and the next build maps them rather than
   finding them again (see :doc:`engine_configuration`). On Margaret, with
-  the files kept, ``neurostore_iit`` builds in 23 s instead of 46 s
-  (76 s on master) with 1.2 GB of private memory instead of 3.1 GB
-  (8.9 GB), and ``neurosynth_iit`` in 21 s instead of 25 s (49 s) with
-  0.7 GB instead of 1.1 GB (2.5 GB); their tables hold the rows of
-  master's, and the example and benchmark queries that run on master
-  (143 and 113) give its answers. The builds of the browser's bundle keep
+  the files kept, ``neurostore_iit`` builds in 23-25 s instead of 44-46 s
+  (76-84 s on master) with 1.2 GB of private memory instead of 3.1 GB
+  (8.9 GB), and ``neurosynth_iit`` in 14-23 s instead of 24-32 s
+  (22-50 s) with 0.7 GB instead of 1.1 GB (2.5 GB); their tables hold
+  the rows of master's, and the example and benchmark queries that run
+  on master (143 and 113) give its answers. The builds of the browser's bundle keep
   no Arrow file (``build_engine(..., map_tables=False)``), which the
   bundle's data zip carried since #1337. ``add_resampling`` refuses
   ``n`` below 1.
