@@ -33,6 +33,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import anyio
+import anyio.to_thread
 import mcp.types as types
 import yaml
 from mcp.server.mcpserver import MCPServer
@@ -47,6 +49,7 @@ from neurolang_apps.utils.llm import (
 from neurolang_apps.utils.llm.agent import Toolbox
 from neurolang_apps.utils.llm.comments import commented_query, split_rules
 from neurolang_apps.utils.llm.config import _assistant, config_path
+from neurolang_apps.utils.llm import validation
 from neurolang_apps.utils.llm.validation import run_preview
 from neurolang_apps.utils.tui import nifti, query_graph
 from neurolang_apps.utils.tui.app import AgentRun
@@ -57,13 +60,16 @@ from neurolang_apps.utils.tui.statements import split_at_commands
 from neurolang_apps.utils.tui.submission import submission_outline
 from neurolang_apps.utils.tui.web import WebRepl
 
-# How to cite NeuroLang, at the end of each answer with the sources of the
-# engine's data (their acknowledgements, as `.credits` gives them).
-NEUROLANG_CITATION = (
-    "NeuroLang: Zanitti GE, Soto Y, Iovene V, Martinez MV, Rodriguez RO, "
-    "Simari GI, Wassermann D. Scalable Query Answering Under Uncertainty to "
+# The references of NeuroLang, at the end of each answer: the language
+# (AUTHORS.rst, "Citing NeuroLang") and its coordinate-based meta-analyses.
+NEUROLANG_REFERENCES = (
+    "Zanitti GE, Soto Y, Iovene V, Martinez MV, Rodriguez RO, Simari GI, "
+    "Wassermann D. Scalable Query Answering Under Uncertainty to "
     "Neuroscientific Ontological Knowledge: The NeuroLang Approach. "
-    "Neuroinformatics 21(2):407-425 (2023)."
+    "Neuroinformatics 21(2):407-425 (2023).",
+    "Iovene V, Zanitti GE, Wassermann D. Complex Coordinate-Based "
+    "Meta-Analysis with Probabilistic Programming. Proceedings of the AAAI "
+    "Conference on Artificial Intelligence 35(1):223-231 (2021).",
 )
 
 # What the server does, with --log: the build of the engine, each tool
@@ -102,8 +108,8 @@ instructions with the tools (`search_values`,
 `final_answer`, with a comment on each rule: it returns the explanation,
 the commented query, its first rows, images and links to the interactive
 viewer and the files of the result; show them to the user: the query with
-its comments, and always the links, the viewer's first, and how to cite
-NeuroLang and the data the answer comes from. To change an
+its comments, and always the links, the viewer's first, and the references
+to cite NeuroLang. To change an
 answer for a new question, call `ask` with `refine` set to the answer's id
 (`a1`, ...) or to `last`, the last query run, such as one the user changed
 and ran with `repl`. `repl` runs statements and dot-commands (`.help`) in
@@ -457,8 +463,8 @@ class McpSession:
         text.append("Links to give the user:\n" + "\n".join(
             f"{name}: {link}" for name, link in links.items()
         ))
-        citations = self.citations()
-        text.append("To cite, if the answer is used:\n" + "\n".join(
+        citations = list(NEUROLANG_REFERENCES)
+        text.append("To cite NeuroLang:\n" + "\n".join(
             f"- {citation}" for citation in citations
         ))
         return types.CallToolResult(
@@ -485,14 +491,6 @@ class McpSession:
                 "citations": citations,
             },
         )
-
-    def citations(self) -> list:
-        """How to cite NeuroLang and the sources of the engine's data."""
-        engine = self.engine
-        known = engine in engine_registry.list_engine_names()
-        return [NEUROLANG_CITATION, *(
-            engine_registry.get_acknowledgements(engine) if known else ()
-        )]
 
     def _files(self, repl, answer: Answer):
         """
@@ -639,12 +637,23 @@ def _tsv(table: dict) -> str:
     return "\n".join(lines)
 
 
-def _logged(name: str, arguments: dict, run):
-    """Return ``run()``, the call of the tool *name* on *arguments*,
-    logged with its time and outcome."""
+async def _logged(name: str, arguments: dict, run):
+    """
+    Return ``run()``, the call of the tool *name* on *arguments*, logged
+    with its time and outcome. It runs in a thread; if the client cancels
+    the call, the query it runs, in a process of its own, is stopped, so
+    that the session is free for the next call at once.
+    """
     start = time.monotonic()
     try:
-        result = run()
+        result = await anyio.to_thread.run_sync(run, abandon_on_cancel=True)
+    except anyio.get_cancelled_exc_class():
+        stopped = validation.stop_queries()
+        log.info(
+            "%s %s -> cancelled after %.1f s (%d queries stopped)", name,
+            _brief(arguments), time.monotonic() - start, stopped,
+        )
+        raise
     except Exception as error:
         log.info(
             "%s %s -> error after %.1f s: %s", name, _brief(arguments),
@@ -714,49 +723,49 @@ def server(session: McpSession):
     )
 
     @mcp.tool()
-    def ask(question: str, refine: str = "") -> str:
+    async def ask(question: str, refine: str = "") -> str:
         """
         Start answering a question on the engine: returns the instructions,
         the syntax, the predicates and examples close to the question. Set
         refine to an answer's id (a1, ...) or to `last` (the last query
         run) to change it for the question instead.
         """
-        return _logged(
+        return await _logged(
             "ask", {"question": question, "refine": refine},
             lambda: session.ask(question, refine),
         )
 
     described = {tool["name"]: tool["description"] for tool in prompts.TOOLS}
 
-    def _called(name: str, **arguments) -> str:
-        return _logged(
+    async def _called(name: str, **arguments) -> str:
+        return await _logged(
             name, arguments, lambda: session.call(name, **arguments)
         )
 
     @mcp.tool(description=described["list_predicates"])
-    def list_predicates() -> str:
-        return _called("list_predicates")
+    async def list_predicates() -> str:
+        return await _called("list_predicates")
 
     @mcp.tool(description=described["describe_predicate"])
-    def describe_predicate(name: str) -> str:
-        return _called("describe_predicate", name=name)
+    async def describe_predicate(name: str) -> str:
+        return await _called("describe_predicate", name=name)
 
     @mcp.tool(description=described["search_values"])
-    def search_values(
+    async def search_values(
         pattern: str, predicate: str = "", column: str = ""
     ) -> str:
-        return _called(
+        return await _called(
             "search_values", pattern=pattern,
             predicate=predicate or None, column=column or None,
         )
 
     @mcp.tool(description=described["check_query"])
-    def check_query(query: str) -> str:
-        return _called("check_query", query=query)
+    async def check_query(query: str) -> str:
+        return await _called("check_query", query=query)
 
     @mcp.tool(description=described["run_query"])
-    def run_query(query: str) -> str:
-        return _called("run_query", query=query)
+    async def run_query(query: str) -> str:
+        return await _called("run_query", query=query)
 
     @mcp.tool(
         description=described["final_answer"] + " With a comment, one "
@@ -764,12 +773,12 @@ def server(session: McpSession):
         "returns the commented query, its rows, images and links to the "
         "viewer and the files of the result: show them to the user, and "
         "always end your reply with the links, the viewer's first, and the "
-        "citations of NeuroLang and of the data."
+        "references to cite NeuroLang."
     )
-    def final_answer(
+    async def final_answer(
         query: str, explanation: str, comments: list[str]
     ) -> types.CallToolResult:
-        return _logged(
+        return await _logged(
             "final_answer",
             {"query": query, "explanation": explanation,
              "comments": comments},
@@ -777,14 +786,14 @@ def server(session: McpSession):
         )
 
     @mcp.tool()
-    def repl(text: str, max_rows: int = MAX_ROWS) -> str:
+    async def repl(text: str, max_rows: int = MAX_ROWS) -> str:
         """
         Run text in the NeuroLang REPL session, as typed at its prompt:
         statements (rules, facts, queries) and dot-commands (`.help`).
         Returns the output and the first max_rows rows of each result,
         tab-separated.
         """
-        return _logged(
+        return await _logged(
             "repl", {"text": text}, lambda: session.repl(text, max_rows)
         )
 

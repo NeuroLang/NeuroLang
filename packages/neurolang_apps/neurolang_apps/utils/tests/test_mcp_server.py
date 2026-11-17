@@ -402,14 +402,16 @@ def test_a_glass_brain_is_entitled_with_the_question():
     assert _image_title("a1: " + "x" * 90, "a1", "p", False).endswith("...")
 
 
-def test_an_answer_ends_with_how_to_cite_neurolang_and_the_data(tmp_path):
+def test_an_answer_ends_with_the_references_of_neurolang(tmp_path):
     session = McpSession("neurosynth", _engine, results_dir=tmp_path)
     result = _answer(session)
     text = result.content[0].text
-    citations = text.split("To cite, if the answer is used:\n")[1]
-    assert citations.startswith("- NeuroLang: Zanitti GE")
-    assert "- Neurosynth: Yarkoni T" in citations
-    assert result.structured_content["citations"][0].startswith("NeuroLang")
+    references = text.split("To cite NeuroLang:\n")[1].splitlines()
+    assert [line[:16] for line in references] == [
+        "- Zanitti GE, So", "- Iovene V, Zani",
+    ]
+    assert "Yarkoni" not in text  # the data's sources: .credits
+    assert len(result.structured_content["citations"]) == 2
 
 
 def test_the_engine_is_built_with_its_text_embeddings_loaded(monkeypatch):
@@ -601,3 +603,53 @@ def test_the_files_of_the_server_are_its_users_only(monkeypatch, tmp_path):
         mcp_server.log.propagate = True
         mcp_server.log.setLevel(0)
     assert oct(log.stat().st_mode & 0o777) == "0o600"
+
+
+def test_a_cancelled_call_stops_the_query_it_runs(monkeypatch):
+    import threading
+
+    import anyio
+    from neurolang_apps.utils import mcp_server
+
+    freed = threading.Event()
+
+    def stop_queries():  # the query's process killed: the call returns
+        freed.set()
+        return 1
+
+    monkeypatch.setattr(mcp_server.validation, "stop_queries", stop_queries)
+
+    async def call():
+        with anyio.move_on_after(0.2) as scope:
+            await mcp_server._logged("run_query", {}, lambda: freed.wait(5))
+        return scope.cancelled_caught
+
+    assert anyio.run(call)
+    assert freed.wait(1)
+
+
+def test_stop_queries_stops_a_running_query(monkeypatch):
+    import threading
+    import time
+
+    import neurolang_apps
+    from neurolang_apps.utils.llm import validation
+
+    monkeypatch.setattr(neurolang_apps, "BLAS_FORK_SAFE", True)
+    raised = []
+
+    def run():
+        try:
+            validation._in_child(lambda: time.sleep(30), 60, None)
+        except validation.QueryStopped:
+            raised.append(True)
+
+    thread = threading.Thread(target=run)
+    start = time.monotonic()
+    thread.start()
+    while not validation._RUNNING and time.monotonic() - start < 10:
+        time.sleep(0.05)
+    assert validation.stop_queries() == 1
+    thread.join(10)
+    assert raised == [True] and time.monotonic() - start < 10
+    assert not validation._RUNNING and not validation._STOPPED

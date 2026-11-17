@@ -360,6 +360,33 @@ class QueryCrashed(Exception):
     """Raised for a query whose process died of a signal, e.g. SIGSEGV."""
 
 
+class QueryStopped(Exception):
+    """Raised for a query whose process :func:`stop_queries` stopped."""
+
+
+# The processes running queries (see _in_child), and those stopped.
+_RUNNING = set()
+_STOPPED = set()
+_RUNNING_LOCK = threading.Lock()
+
+
+def stop_queries() -> int:
+    """
+    Stop the processes running queries now, as when the call that runs
+    them is cancelled: each query raises :class:`QueryStopped`. Return
+    how many were stopped.
+    """
+    with _RUNNING_LOCK:
+        running = list(_RUNNING)
+        _STOPPED.update(running)
+    for pid in running:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    return len(running)
+
+
 def _memory_mb(pid: int) -> float:
     """
     Return the memory of the process *pid*, in MB: that private to it
@@ -443,6 +470,8 @@ def _in_child(function, timeout, memory_mb):
             stream.write(data)
         os._exit(0)
     os.close(write)
+    with _RUNNING_LOCK:
+        _RUNNING.add(pid)
     received = {}
     reader = threading.Thread(
         target=lambda: received.setdefault(
@@ -465,6 +494,12 @@ def _in_child(function, timeout, memory_mb):
             reader.join()
             break
     _, status = os.waitpid(pid, 0)
+    with _RUNNING_LOCK:
+        _RUNNING.discard(pid)
+        stopped = pid in _STOPPED
+        _STOPPED.discard(pid)
+    if stopped:
+        raise QueryStopped()
     if stop is not None:
         raise stop()
     if not received.get("data"):
@@ -522,6 +557,10 @@ def run_preview(
             "The query was stopped: it used too much memory, e.g. joining "
             "large relations without a shared variable. Restrict it, e.g. "
             "with the class of its entities, before running it again.",
+        )
+    except QueryStopped:
+        return Preview(
+            False, "The query was stopped: the call running it was cancelled."
         )
     except QueryCrashed as exc:
         return Preview(

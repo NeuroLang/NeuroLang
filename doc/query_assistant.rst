@@ -434,8 +434,8 @@ given as argument or with ``--file`` runs first, in the session.
       ``--log`` file), and the folders of the sessions older than
       ``--keep-results`` days (7 by default; 0 keeps them) are removed when
       the server starts.
-    - how to cite NeuroLang and the sources of the engine's data (as
-      ``.credits`` gives them).
+    - the references to cite NeuroLang (the sources of the engine's data
+      are those of ``.credits``).
 ``repl``
     runs what is typed at the prompt, statements and dot-commands, and
     returns the output and the first rows of each result (50 by default,
