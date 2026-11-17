@@ -293,6 +293,7 @@ class LocalBackend:
                 self._engine, repl=repl, results_dir=Path(results_dir),
                 token_bytes=16,
             )
+            session.about = {"Grid": f"{self.resolution} mm"}
             bridge = mcp_server.HttpBridge(mcp_server.http_app(session))
             self._mcp = (repl, session, bridge)
         _, session, bridge = self._mcp

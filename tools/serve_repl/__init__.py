@@ -1637,11 +1637,14 @@ class LocalHandler(Handler):
         # Neither the token nor a cookie goes to the session.
         headers = {name: value for name, value in self.headers.items()
                    if name.lower() not in ("authorization", "cookie")}
+        # The user's answers in a folder of their own, which their
+        # list_answers reads.
+        mine = hashlib.sha256(self.user.encode()).hexdigest()[:16]
         request = {
             "verb": "POST", "path": MCP_PATH, "headers": headers,
-            "body": body, "results_dir": str(self.mcp_results),
+            "body": body, "results_dir": str(Path(self.mcp_results) / mine),
             "base_url": f"{self._scheme()}://{self.headers.get('Host')}"
-                        f"{MCP_FILES}",
+                        f"{MCP_FILES}{mine}/",
         }
         session = self.backend.session(self.user, MCP_TAB)
         try:

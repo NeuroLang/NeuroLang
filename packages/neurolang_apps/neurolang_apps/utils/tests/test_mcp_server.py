@@ -1,6 +1,7 @@
 """Tests of the MCP server of the REPL (``neurolang-query --mcp``)."""
 
 import asyncio
+import json
 import os
 
 import pytest
@@ -140,6 +141,7 @@ class TestServer:
         assert {tool.name for tool in tools} == {
             "ask", "repl", "list_predicates", "describe_predicate",
             "search_values", "check_query", "run_query", "final_answer",
+            "list_answers", "status", "examples",
         }
         assert not result.is_error
         assert "bob" in result.content[0].text
@@ -313,18 +315,25 @@ def test_an_answer_of_voxels_has_its_glass_brain_and_viewer(
     images = [c for c in result.content if c.type == "image"]
     assert len(images) == 1 and images[0].mime_type == "image/png"
     links = result.structured_content["links"]
-    assert list(links) == ["viewer", "result", "rows", "graph", "query"]
+    assert list(links) == [
+        "viewer", "glass-brain", "result", "rows", "graph", "query", "index",
+    ]
     assert result.content[0].text.split("\n\n")[1] == (
         f"**[Open the interactive viewer]({links['viewer']})**"
     )
     assert "| 0 | 0 | 0 | 0.5 |" in result.content[0].text
     resources = [c for c in result.content if c.type == "resource_link"]
-    assert [(c.uri, c.title, c.mime_type) for c in resources[:2]] == [
+    assert [(c.uri, c.title, c.mime_type) for c in resources[:3]] == [
         (links["viewer"], "a1: interactive viewer", "text/html"),
+        (links["glass-brain"], "a1: glass brain (PNG)", "image/png"),
         (links["result"], "a1: NIfTI image", "application/gzip"),
     ]
     folder = next((tmp_path / "results").glob("*/a1"))
     assert (folder / "result.nii.gz").exists()
+    assert (folder / "glass-brain.png").read_bytes()[:4] == b"\x89PNG"
+    assert links["glass-brain"].endswith("a1/glass-brain.png")
+    assert "| 2 | 2 | 2 | 0.75 |" in result.content[0].text.split(
+        "by v, highest first")[1].splitlines()[3]
     assert "<html" in (folder / "view.html").read_text().lower()
     heading = "a1: Which voxels have a weight?"
     assert f"<h1>{heading}</h1>" in (folder / "graph.html").read_text()
@@ -601,7 +610,9 @@ def test_the_files_of_the_server_are_its_users_only(monkeypatch, tmp_path):
 
     monkeypatch.setenv(CONFINE_ENV, "")
     log = tmp_path / "mcp.log"
-    monkeypatch.setattr(mcp_server, "McpSession", lambda *a, **k: None)
+    monkeypatch.setattr(
+        mcp_server, "McpSession", lambda *a, **k: SimpleNamespace()
+    )
     monkeypatch.setattr(
         mcp_server, "server",
         lambda session: SimpleNamespace(run=lambda transport: None),
@@ -735,3 +746,97 @@ class TestHttp:
         session.ask("who?")
         session.new_conversation()
         assert "# Datalog syntax" in session.ask("who else?")
+
+
+def _floats():
+    nl = _engine()
+    nl.add_tuple_set([("a", 0.2), ("b", 0.9), ("c", 0.5)], name="score")
+    return nl
+
+
+class TestUsability:
+    def test_a_result_is_ordered_by_its_value(self, tmp_path):
+        session = McpSession("", _floats, results_dir=tmp_path)
+        text = session.final_answer(
+            "ans(n, v) :- score(n, v)", "Scores.", ["each score"]
+        ).content[0].text
+        assert "### Result (3 rows, by v, highest first)\n| n | v |\n" \
+            "|---|---|\n| b | 0.9 |\n| c | 0.5 |\n| a | 0.2 |" in text
+
+    def test_the_answers_have_an_index_and_records(self, session, tmp_path):
+        session.ask("who is over 4?")
+        result = _answer(session)
+        index = result.structured_content["links"]["index"]
+        page = next(tmp_path.glob("*/index.html"))
+        assert index == page.resolve().as_uri()
+        assert "who is over 4?" in page.read_text()
+        assert 'href="a1/rows.csv"' in page.read_text()
+        record = json.loads(next(tmp_path.glob("*/a1/answer.json"))
+                            .read_text())
+        assert record["question"] == "who is over 4?"
+
+    def test_an_earlier_sessions_answer_is_listed_and_refined(self, tmp_path):
+        first = McpSession("", _engine, results_dir=tmp_path)
+        first.ask("who is over 4?")
+        _answer(first)
+        later = McpSession("", _engine, results_dir=tmp_path)
+        listed = later.list_answers()
+        ident = f"{first.store.root.name}/a1"
+        assert f"`{ident}`: who is over 4?" in listed
+        text = later.ask("and over 6?", refine=ident)
+        assert "# Previous question\nwho is over 4?" in text
+
+    def test_status_tells_the_engine_and_the_confinement(self, session):
+        session.about = {"Grid": "2.0 mm"}
+        session._session()
+        text = session.status()
+        assert "built" in text and "Grid: 2.0 mm" in text
+        assert "Statements: not confined" in text
+
+    def test_examples_give_topics_then_questions(self):
+        session = McpSession("neurosynth", _engine)
+        topics = session.examples()
+        assert topics.startswith("Topics of the example questions")
+        topic = topics.splitlines()[1][2:].rsplit(" (", 1)[0]
+        assert session.examples(topic).startswith("- ")
+        assert "No topic 'nope'" in session.examples("nope")
+
+
+def test_the_mcp_options_come_from_their_file(monkeypatch, tmp_path, capsys):
+    config = tmp_path / "mcp.yaml"
+    config.write_text("resolution: 1.0\nlog: ~/mcp.log\n"
+                      "allow_dir: [/data/maps]\n")
+    monkeypatch.setenv("NEUROLANG_MCP_CONFIG", str(config))
+    main(["--mcp", "--engine", "neurostore", "--print-mcp-command"])
+    command = capsys.readouterr().out
+    assert command.startswith("claude mcp add --scope user neurolang -- ")
+    assert "--engine neurostore" in command and "--resolution 1.0" in command
+    home = os.path.expanduser("~")
+    assert f"--data-dir {home}/neurolang_data" in command
+    assert f"--log {home}/mcp.log" in command
+    assert "--allow-dir /data/maps" in command
+    config.write_text("nope: 1\n")
+    with pytest.raises(SystemExit):
+        main(["--mcp", "--print-mcp-command"])
+
+
+def test_an_allowed_folder_is_read_confined(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from neurolang.confine import CONFINE_ENV
+    from neurolang_apps.utils.mcp_server import confine
+
+    monkeypatch.setenv(CONFINE_ENV, "")
+    maps = tmp_path / "maps"
+    maps.mkdir()
+    (maps / "pets.csv").write_text("name,pet\nalice,zebrafish\n")
+    confine(SimpleNamespace(
+        unconfined=False, data_dir=tmp_path / "d",
+        results_dir=tmp_path / "r", allow_dir=[str(maps)],
+    ))
+    session = McpSession("", _engine, results_dir=tmp_path / "r")
+    assert "zebrafish" in session.repl(
+        f".load {maps / 'pets.csv'} pets\nans(n, p) :- pets(n, p)"
+    )
+    text = session.repl(f".load {tmp_path / 'outside.csv'} x")
+    assert text.startswith("FAILED") and "--allow-dir" in text

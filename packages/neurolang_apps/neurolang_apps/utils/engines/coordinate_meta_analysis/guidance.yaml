@@ -168,3 +168,8 @@ assistant_guidance: >
   terms on the same bootstrap replicate, as the Bayes factors are.
   Never join the image with p_a_given_t over its voxels: it computes
   every term at every voxel.
+  A question asking where in the brain a term is reported, activated or
+  involved (a map of voxels: where, which voxels, a brain map) gets the
+  lift of each voxel, lift(t, i, j, k, l), P(active | term) / P(active),
+  in a column named lift; the probability alone (p_a_given_t), the
+  relative risk or the uniformity only when the question asks for them.

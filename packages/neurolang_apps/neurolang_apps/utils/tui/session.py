@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from neurolang.confine import confined_roots
+from neurolang.confine import ConfinedError, check_read, confined_roots
 from rich import box
 from rich.table import Table
 
@@ -634,6 +634,16 @@ def store_upload(app, name: str, data: bytes) -> None:
     app.uploads.put(name, data)
 
 
+def _confined_may_read(path: str) -> bool:
+    """Whether the confined statements may read the file *path*: one of
+    the directories they may read (neurolang.confine)."""
+    try:
+        check_read(Path(path).expanduser(), "file")
+    except ConfinedError:
+        return False
+    return True
+
+
 @command(
     ".load", "Load a CSV or TSV file (optionally gzipped), or one the page "
     "uploaded, as a relation",
@@ -649,10 +659,13 @@ def cmd_load(app, arg: str) -> None:
         _load_failed(app, "Usage: .load PATH|UPLOADED [NAME]")
         return
     data = app.uploads.get(words[0])
-    if data is None and confined_roots() is not None:
-        _load_failed(app, f"No file {words[0]} was uploaded: this server "
-                     "loads the files you upload (the Upload button) by "
-                     "their name, not its own files")
+    if data is None and confined_roots() is not None and \
+            not _confined_may_read(words[0]):
+        _load_failed(app, f"No file {words[0]} was uploaded: here the "
+                     "statements load the files uploaded (the page's Upload "
+                     "button) by their name, and those of the folders they "
+                     "may read (neurolang-query --mcp --allow-dir), not the "
+                     "machine's other files")
         return
     path = Path(words[0]) if data is not None else \
         Path(words[0]).expanduser()
