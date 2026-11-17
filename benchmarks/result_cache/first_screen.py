@@ -10,7 +10,8 @@ then forks N sessions (default 2) one after the other, as the server forks
 one per tab. Each starts the REPL (``LocalBackend.start``) and submits, by
 ``LocalBackend.submit`` as the page does, the engine's Datalog examples and
 the Datalog queries of its example questions (the page's first screen),
-then the programs of the files ``--queries``.
+then the programs of the files ``--queries``, freeing the memory after
+each as the server does.
 
 ``OUT_DIR/times.jsonl`` gets a line per session and query: its wall time,
 whether it failed, its number of rows, whether the reply says it was kept,
@@ -47,6 +48,14 @@ def first_screen(repl) -> list:
         ("question", q) for q in questions if q]
 
 
+def free_memory():
+    """Free what the query left, as a session of the server does after each
+    one (``sessions.free_memory``: ``gc.collect`` and ``malloc_trim``)."""
+    from neurolang_apps.utils.tui.sessions import free_memory
+
+    free_memory()
+
+
 def session(backend_class, options, engine, nl, queries_files, out, number):
     backend = backend_class(build=lambda name, say: nl, **options)
     backend.start(engine)
@@ -58,6 +67,7 @@ def session(backend_class, options, engine, nl, queries_files, out, number):
             began = time.perf_counter()
             reply = backend.submit(query)
             seconds = time.perf_counter() - began
+            free_memory()  # as the server does after each query
             frames = [(b.title, b.frame) for b in backend.repl.app.results]
             with open(out / f"s{number}-q{index}.pkl", "wb") as file:
                 pickle.dump({"query": query, "failed": reply["failed"],
