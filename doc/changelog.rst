@@ -93,11 +93,14 @@ Unreleased
 - REPL server (``--users --local``): each engine has a builder process of
   its own, started by a coordinator, rather than one builder for all: a
   session of an engine built starts at once while another engine builds,
-  rather than after that build (up to 90 s for ``neurostore_iit``), and a
-  builder that dies fails the starts of its engine only, is told in the
-  log, and the next session of its engine builds it again, rather than no
-  session starting until a restart. One engine still builds at a time, in
-  the order asked.
+  rather than after that build: on ``neurosynth_iit`` while
+  ``neurostore_iit`` builds, in 1.4-1.6 s rather than 96-98 s. A builder
+  that dies fails the starts of its engine only, is told in the log, and
+  the next session of its engine builds it again, rather than no session
+  starting until a restart. One engine still builds at a time, in the
+  order asked. The coordinator and each builder's own interpreter take
+  about 0.5 GB more memory than one builder did (resident and private,
+  both engines built, on Linux).
 
 - The relational-algebra chase no longer keeps every chase that ran: three
   of its rewritings were cached with ``lru_cache`` on the method, a cache

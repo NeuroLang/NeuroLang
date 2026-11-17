@@ -451,6 +451,32 @@ def test_a_builder_that_ends_ends_its_engine_only(sessions, capsys):
     assert not sessions.dead
 
 
+def test_the_engines_build_one_at_a_time_in_their_order(sessions, capsys):
+    """neurosynth takes 2 s, neurostore none: built at once, neurostore
+    would be first."""
+    sessions.prebuild(["neurosynth", "neurostore"])
+    out = ""
+    deadline = time.monotonic() + 30
+    while "neurostore in" not in out:
+        assert time.monotonic() < deadline
+        time.sleep(0.1)
+        out += capsys.readouterr().out
+    assert out.index("neurosynth in") < out.index("neurostore in")
+
+
+def test_a_failing_coordinator_ends_its_builders(sessions):
+    """An error of the coordinator ends it with its builders, rather than
+    leave them: no session starts any more, which the server tells."""
+    sessions.session("ann", "1").start("neurostore")
+    builder = sessions.builders["neurostore"]
+    sessions._builder_conn.send(("fork",))  # not a request
+    sessions._builder.join(10)
+    assert not sessions._builder.is_alive() and _ends(builder)
+    _until(lambda: sessions.dead)
+    with pytest.raises(RuntimeError, match="builder"):
+        sessions.session("bob", "1").start("neurostore")
+
+
 def test_without_the_builder_a_start_fails(sessions):
     sessions._builder.kill()
     sessions._builder.join(10)

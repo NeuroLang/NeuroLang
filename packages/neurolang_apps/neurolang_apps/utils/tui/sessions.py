@@ -7,12 +7,12 @@ fresh (``spawn``) before the server answers anything, starts a *builder*
 process per engine, anew too, which builds the engine once, then forks a
 process per session from it: the sessions share the memory of the engine's
 data, as the pages of a fork do until they are written, and each has its
-own rules, AI assistant and requests. A build does not hold up the sessions of the
-engines built, nor does the end of a builder those of the other engines.
-A session is that of a tab of a user: its key is (user, the tab's id). Its
-process talks to the server through a socket of this machine; a stop kills
-it (the page starts a session again), as does a session idle for too
-long.
+own rules, AI assistant and requests. A build does not hold up the
+sessions of the engines built, nor does the end of a builder those of the
+other engines. A session is that of a tab of a user: its key is (user, the
+tab's id). Its process talks to the server through a socket of this
+machine; a stop kills it (the page starts a session again), as does a
+session idle for too long.
 
 :class:`Sessions` is what the server holds; its :meth:`Sessions.session`
 is a :class:`Session`, which answers as a
@@ -121,6 +121,24 @@ def _builder(conn, address, authkey, options: dict, build,
     multiprocessing.current_process().daemon = False
     arguments = (address, authkey, options, build, preload_embeddings)
     builders = {}  # by engine
+    try:
+        _coordinate(conn, builders, arguments)
+    except BaseException:
+        traceback.print_exc()
+    finally:
+        # However it ends, so do the builders, at once, rather than finish
+        # a build (and nothing waits for them).
+        for builder in builders.values():
+            builder.kill()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
+
+
+def _coordinate(conn, builders: dict, arguments: tuple) -> None:
+    """Pass the requests of *conn* to the *builders*, by engine, started
+    with *arguments* as needed, and their messages to *conn*, until the
+    server ends (see :func:`_builder`)."""
     turns = []  # the engines whose build waits, in order
     building = None
     while True:
@@ -137,11 +155,7 @@ def _builder(conn, address, authkey, options: dict, build,
                 try:
                     message = conn.recv()
                 except (EOFError, OSError):
-                    # The server ended: so do the builders, at once,
-                    # rather than finish a build.
-                    for builder in builders.values():
-                        builder.kill()
-                    os._exit(0)
+                    return  # the server ended
                 engine = message[3]
                 builder = builders.setdefault(engine, _EngineBuilder())
                 if builder.built:
@@ -957,14 +971,18 @@ class Sessions:
                 kind, key, start, value = self._builder_conn.recv()
             except (EOFError, OSError):
                 break
+            except TypeError:  # close() closed it while it read
+                if self._closed:
+                    break
+                raise
             if key is None:  # of an engine built before its sessions
                 if kind == "builder":
                     self.builders[value[0]] = value[1]
                 elif kind == "ended":
-                    self.builders.pop(value, None)
                     print(f"The builder of the engine {value} ended (see "
                           "above): its next session builds it again",
                           flush=True)
+                    self.builders.pop(value, None)
                 elif kind == "built":
                     print(f"Built the engine {value}", flush=True)
                 elif kind == "failed":
