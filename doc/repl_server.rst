@@ -111,6 +111,10 @@ Serving
    Do not load an engine's text embeddings when it is built (with
    ``--users``, before forking its sessions): its first query of them
    does; see `Sessions`_.
+``--no-prebuild``
+   With ``--users``, do not build the engines the page offers when the
+   server starts: the first session of each builds it, and waits for it;
+   see `Sessions`_.
 ``--resolution MM``
    The resolution of the engines' MNI grid (default 2).
 ``--light``
@@ -603,10 +607,20 @@ With ``--users`` and ``--local``, each tab of each user has a session of its
 own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
 
 - A *builder* process, started anew before the server answers, builds each
-  engine once (the first start of an engine takes the time of a build; the
-  next start in another tab takes under a second), then forks a process per
-  session from it.  The sessions share the memory of the engine's data, as
-  forked processes do until they write it.
+  engine once, then forks a process per session from it, in under two
+  seconds.  The sessions share the memory of the engine's data, as forked
+  processes do until they write it.
+- When the server starts, the builder builds the engines the page offers
+  (those the admin console did not turn off), the default first, and an
+  engine the console turns on when it does: a first session finds its
+  engine built (about 25 s for ``neurosynth_iit``, 75 s for
+  ``neurostore_iit``, from the tables kept in ``--data-dir``), unless it
+  comes while the builder is still at work.  The engines then hold their
+  memory from the start, as they would after their first session; an
+  engine turned off stays built until the server restarts.
+  ``--no-prebuild`` (``prebuild: false``) leaves each engine to its first
+  session.  An engine that cannot be built is told in the log, and its
+  first session tries again.
 - Before its first fork, the builder loads the engine's text embeddings
   (those of its documents, from their cache, and the query model), which
   its sessions then share, rather than each load them, in memory of its

@@ -90,22 +90,26 @@ def _builder(conn, address, authkey, options: dict, build,
     """Build the engines asked for, once each, and fork a session's
     process from them for each ``("fork", key, start, engine, env)`` of
     *conn* (*start* numbering each start of a session once, *env* the
-    variables of its user, *feedback* where its ratings go); end when the
-    server does. With *preload_embeddings*, an engine's text embeddings
-    are loaded before its first fork, for its sessions to share them."""
+    variables of its user, *feedback* where its ratings go); for a
+    ``("build", None, None, engine, None, None)``, build the engine only,
+    if it is not built, and tell it (``built`` or ``failed``, without a
+    key); end when the server does. With *preload_embeddings*, an
+    engine's text embeddings are loaded before its first fork, for its
+    sessions to share them."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
     backend = LocalBackend(build=build,
                            preload_embeddings=preload_embeddings, **options)
     engines = {}
     while True:
         try:
-            _, key, start, engine, env, feedback = conn.recv()
+            kind, key, start, engine, env, feedback = conn.recv()
         except (EOFError, OSError):
             # The server ended: so does the builder, at once, rather than
             # wait for threads that building an engine may have left.
             os._exit(0)
         try:
             if engine not in engines:
+                began = time.monotonic()
                 with lifted():  # the engine's commands are the server's
                     engines[engine] = backend.build(
                         engine,
@@ -113,10 +117,15 @@ def _builder(conn, address, authkey, options: dict, build,
                     )
                 gc.freeze()  # a session's process then writes fewer pages
                 _warn_of_threads(engine)
+                if kind == "build":
+                    conn.send(("built", None, None, f"{engine} in "
+                               f"{time.monotonic() - began:.0f} s"))
         except Exception as error:
             traceback.print_exc()
             conn.send(("failed", key, start,
                        f"{type(error).__name__}: {error}"))
+            continue
+        if kind == "build":
             continue
         pid = os.fork()
         if pid == 0:
@@ -666,6 +675,19 @@ class Sessions:
             raise RuntimeError("The builder of the engines ended: see the "
                                "server's log")
 
+    def prebuild(self, engines) -> None:
+        """Have the builder build the *engines*, in their order, before
+        their sessions ask for them: a session's start then takes no build.
+        An engine built already is not built again; one that fails is
+        told in the log, and built again by its first session."""
+        try:
+            with self._forking:
+                for engine in engines:
+                    self._builder_conn.send(
+                        ("build", None, None, engine, None, None))
+        except OSError:  # the builder is gone, its reader tells it
+            pass
+
     def _owner(self, key, start: int) -> Optional[Session]:
         """Return the session *key* if its latest start is *start*."""
         with self._lock:
@@ -758,6 +780,14 @@ class Sessions:
                 kind, key, start, value = self._builder_conn.recv()
             except (EOFError, OSError):
                 break
+            if key is None:  # of an engine built before its sessions
+                if kind == "built":
+                    print(f"The engine {value} is built", flush=True)
+                elif kind == "failed":
+                    print("An engine could not be built before its "
+                          f"sessions (see above): {value}; its first "
+                          "session tries again", flush=True)
+                continue
             session = self._owner(key, start)
             if session is None:
                 continue
@@ -780,6 +810,10 @@ class Sessions:
         for session in sessions:
             if not session._forked.is_set():
                 session._failed(self.dead)
+
+    #: Whether the server has the engines the admin console turns on
+    #: built at once (:meth:`prebuild`), as those offered at its start.
+    prebuilds = False
 
     #: Why no session starts any more, if the builder ended.
     dead: Optional[str] = None

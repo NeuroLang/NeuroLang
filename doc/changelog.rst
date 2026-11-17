@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+- REPL server (``--users --local``): the builder builds the engines the
+  page offers when the server starts, the default first, and an engine
+  the admin console turns on when it does, so that no session waits for
+  a build (up to 75 s for ``neurostore_iit``); a session then starts in
+  under two seconds. ``--no-prebuild`` (``prebuild: false``) leaves each
+  engine to its first session, as before.
 - Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
   the regions a question lists (which regions, parcels or structures a
   term, a topic or a seed activates or co-activates) are answered with the
