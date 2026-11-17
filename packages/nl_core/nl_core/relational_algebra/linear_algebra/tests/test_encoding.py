@@ -55,6 +55,25 @@ def test_entity_index_composite_unknown_combination():
     assert list(codes) == [-1, 0, 1]
 
 
+def test_numbered_frames_are_encoded_alike():
+    frames = [
+        pd.DataFrame({"a": [2, 0, 2], "b": pd.array(["x", "y", "x"], "str")}),
+        pd.DataFrame({"a": [5, 0], "b": pd.array(["z", "y"], "str")}),
+    ]
+    index, numbers = EntityIndex.numbered(frames)
+    assert len(index) == 3
+    for frame, number in zip(frames, numbers):
+        assert number.dtype == np.int32
+        np.testing.assert_array_equal(number, index.encode(frame))
+
+
+def test_integers_outside_the_dictionary_are_unknown():
+    # Rows outnumber the span of the values: looked up in a table.
+    index = EntityIndex([pd.DataFrame({"i": [3, 4, 6, 3, 4, 6]})])
+    codes = index.encode(pd.DataFrame({"i": [-1, 2, 3, 5, 6, 7, 99, 4]}))
+    assert list(codes) == [-1, -1, 0, -1, 2, -1, -1, 1]
+
+
 def test_entity_index_empty():
     index = EntityIndex([pd.DataFrame(columns=["i", "j"])])
     assert len(index) == 0

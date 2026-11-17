@@ -65,11 +65,11 @@ def _dictionary(series_list):
     """
     Return the distinct values of the series of *series_list*, sorted, as
     a ``pandas.Index``, and the position in it of each value of each
-    series, -1 for missing values.
+    series (int32), -1 for missing values.
 
-    Each series is read once: integers spanning no more values than there
-    are rows are marked in a table of that span, other values hashed
-    (``pandas.factorize``) and only their distinct values sorted and
+    Integers spanning no more values than there are rows are marked in a
+    table of that span, then looked up in it; other values are hashed
+    once (``pandas.factorize``) and only their distinct values sorted and
     looked up.
     """
     integers = [_integers(series) for series in series_list]
@@ -78,21 +78,25 @@ def _dictionary(series_list):
         low = min(int(values.min()) for values in integers if len(values))
         high = max(int(values.max()) for values in integers if len(values))
         if high - low < rows:
-            shifted = [values.astype(np.int64) - low for values in integers]
             present = np.zeros(high - low + 1, dtype=bool)
-            for values in shifted:
-                present[values] = True
-            lookup = np.cumsum(present) - 1
+            for values in integers:
+                present[np.subtract(values, low, dtype=np.int64)] = True
+            lookup = (np.cumsum(present) - 1).astype(np.int32)
             dtype = np.result_type(*(values.dtype for values in integers))
             dictionary = (np.flatnonzero(present) + low).astype(dtype)
-            return pd.Index(dictionary), [lookup[values] for values in shifted]
+            return pd.Index(dictionary), [
+                lookup[np.subtract(values, low, dtype=np.int64)]
+                for values in integers
+            ]
     factorized = [pd.factorize(series) for series in series_list]
     uniques = [pd.Series(values) for _, values in factorized]
     dictionary = pd.Index(
         pd.concat(uniques, ignore_index=True).unique() if uniques else []
     ).sort_values()
+    if len(dictionary) >= 2 ** 31:
+        raise ValueError("a column holds fewer than 2**31 distinct values")
     return dictionary, [
-        np.append(dictionary.get_indexer(values), -1)[codes]
+        np.append(dictionary.get_indexer(values), -1).astype(np.int32)[codes]
         for codes, values in factorized
     ]
 
@@ -149,25 +153,35 @@ class EntityIndex:
                 "the entity has too many combinations of values to be keyed"
             )
         self._strides = np.cumprod([1] + sizes[:0:-1])[::-1]
-        keys = []
-        for rows in zip(*positions):
-            key = sum(row * stride for row, stride in zip(rows, self._strides))
-            key[np.logical_or.reduce([row < 0 for row in rows])] = -1
-            keys.append(key)
         if self.width == 1:
-            self._entities, numbers = pd.Index(np.arange(sizes[0])), keys
-        else:
-            present = [key >= 0 for key in keys]
-            self._entities, found = _dictionary(
-                [pd.Series(key[mask]) for key, mask in zip(keys, present)]
-            )
-            numbers = []
-            for mask, number in zip(present, found):
-                numbers.append(np.full(len(mask), -1, dtype=np.int64))
-                numbers[-1][mask] = number
+            self._entities = pd.Index(np.arange(sizes[0]))
+            return list(positions[0])
+        keys = []
+        for rows in zip(*positions):  # in mixed radix, in place
+            key = rows[0].astype(np.int64)
+            absent = rows[0] < 0
+            for row, size in zip(rows[1:], sizes[1:]):
+                key *= size
+                key += row
+                absent |= row < 0
+            if absent.any():
+                key[absent] = -1
+            keys.append(key)
+        del positions, rows
+        present = [None if (key >= 0).all() else key >= 0 for key in keys]
+        self._entities, found = _dictionary([
+            pd.Series(key if mask is None else key[mask], copy=False)
+            for key, mask in zip(keys, present)
+        ])
         if len(self._entities) >= 2 ** 31:
             raise ValueError("an entity index holds fewer than 2**31 entities")
-        return [number.astype(np.int32) for number in numbers]
+        numbers = []
+        for mask, number in zip(present, found):
+            if mask is not None:
+                number, scattered = np.full(len(mask), -1, np.int32), number
+                number[mask] = scattered
+            numbers.append(number)
+        return numbers
 
     def __len__(self):
         return len(self._entities)
