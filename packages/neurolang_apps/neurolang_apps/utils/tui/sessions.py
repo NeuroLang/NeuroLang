@@ -2,14 +2,17 @@
 Sessions of the REPL page, each in a process of its own, for the users of
 ``neurolang-repl-serve --local --users FILE``.
 
-The server's process answers the pages; a *builder* process, started
-fresh (``spawn``) before the server answers anything, builds each engine
-once, then forks a process per session from it: the sessions share the
-memory of the engine's data, as the pages of a fork do until they are
-written, and each has its own rules, AI assistant and requests. A session
-is that of a tab of a user: its key is (user, the tab's id). Its process
-talks to the server through a socket of this machine; a stop kills it (the
-page starts a session again), as does a session idle for too long.
+The server's process answers the pages; a *coordinator* process, started
+fresh (``spawn``) before the server answers anything, forks a *builder*
+process per engine, which builds the engine once, then forks a process per
+session from it: the sessions share the memory of the engine's data, as
+the pages of a fork do until they are written, and each has its own rules,
+AI assistant and requests. A build does not hold up the sessions of the
+engines built, nor does the end of a builder those of the other engines.
+A session is that of a tab of a user: its key is (user, the tab's id). Its
+process talks to the server through a socket of this machine; a stop kills
+it (the page starts a session again), as does a session idle for too
+long.
 
 :class:`Sessions` is what the server holds; its :meth:`Sessions.session`
 is a :class:`Session`, which answers as a
@@ -28,7 +31,7 @@ import sys
 import threading
 import time
 import traceback
-from multiprocessing.connection import Client, Listener
+from multiprocessing.connection import Client, Listener, wait
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -84,7 +87,7 @@ def process_usage(pid: int, memory: bool = True) -> Optional[dict]:
     }
 
 
-# -- In the builder's process ---------------------------------------------
+# -- In the processes of the builders ---------------------------------------
 
 def _headless() -> None:
     """Draw with matplotlib without a window, in the builder and so in the
@@ -100,45 +103,177 @@ def _headless() -> None:
 
 def _builder(conn, address, authkey, options: dict, build,
              preload_embeddings: bool = True) -> None:
-    """Build the engines asked for, once each, and fork a session's
-    process from them for each ``("fork", key, start, engine, env)`` of
-    *conn* (*start* numbering each start of a session once, *env* the
-    variables of its user, *feedback* where its ratings go); for a
-    ``("build", None, None, engine, None, None)``, build the engine only,
-    if it is not built, and tell it (``built`` or ``failed``, without a
-    key); end when the server does. With *preload_embeddings*, an
-    engine's text embeddings are loaded before its first fork, for its
-    sessions to share them."""
+    """Coordinate the builders of the engines, a process each, forked from
+    this one (which builds nothing and runs no thread) at the first
+    request of its engine: :func:`_engine_builder` builds the engine once
+    and forks its sessions' processes. The requests of *conn* (see
+    :func:`_engine_builder`) go to their engine's builder, the messages of
+    the builders to *conn*, told first ``("builder", None, None, (engine,
+    pid))``. One engine builds at a time, in the order asked; the sessions
+    of an engine built fork at once, whatever builds meanwhile. A builder
+    that ends (killed, out of memory) fails the starts it had not
+    answered, is told (``ended``), and the next request of its engine
+    forks another; the others go on. End, with the builders, when the
+    server does. With *preload_embeddings*, an engine's text embeddings
+    are loaded before its first fork, for its sessions to share them."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
     _headless()
     backend = LocalBackend(build=build,
                            preload_embeddings=preload_embeddings, **options)
-    engines = {}
+    builders = {}  # by engine
+    turns = []  # the engines whose build waits, in order
+    building = None
+    while True:
+        if building is None and turns:
+            building = turns.pop(0)
+            builder = builders[building]
+            if builder.conn is None:
+                builder.fork(building, conn, [b.conn for b in builders.values()
+                                              if b.conn is not None],
+                             (backend, address, authkey, options))
+                conn.send(("builder", None, None, (building, builder.pid)))
+            builder.send(builder.waiting.pop(0))
+        engines = {b.conn: e for e, b in builders.items() if b.conn}
+        for ready in wait([conn, *engines]):
+            if ready is conn:
+                try:
+                    message = conn.recv()
+                except (EOFError, OSError):
+                    # The server ended: so do the builders, at once,
+                    # rather than finish a build.
+                    for builder in builders.values():
+                        builder.kill()
+                    os._exit(0)
+                engine = message[3]
+                builder = builders.setdefault(engine, _EngineBuilder())
+                if builder.built:
+                    if message[0] == "fork":  # a build of it is done
+                        builder.send(message)
+                    continue
+                builder.waiting.append(message)
+                if engine != building and engine not in turns:
+                    turns.append(engine)
+                continue
+            engine = engines[ready]
+            builder = builders[engine]
+            try:
+                message = ready.recv()
+            except (EOFError, OSError):  # the builder died
+                for key, start in builder.end():
+                    conn.send(("failed", key, start, f"The builder of "
+                               f"{engine} ended: see the server's log"))
+                conn.send(("ended", None, None, engine))
+                if engine == building:
+                    building = None
+                if builder.waiting and engine not in turns:
+                    turns.append(engine)
+                continue
+            kind, key, start, _ = message
+            if kind != "status":
+                builder.sent.discard((key, start))
+                if engine == building:  # its build is over
+                    building = None
+                    builder.built = kind != "failed"
+                    if builder.built:
+                        for waiting in builder.waiting:
+                            if waiting[0] == "fork":
+                                builder.send(waiting)
+                        builder.waiting.clear()
+                    elif builder.waiting:  # tried again, in its turn
+                        turns.append(engine)
+            conn.send(message)
+
+
+class _EngineBuilder:
+    """In the coordinator (:func:`_builder`), the builder of an engine:
+    its connection and process, whether it built the engine, the requests
+    waiting for its build and the starts it has not answered."""
+
+    def __init__(self):
+        self.conn = self.pid = None
+        self.built = False
+        self.waiting = []
+        self.sent = set()
+
+    def fork(self, engine: str, conn, others: list, arguments: tuple
+             ) -> None:
+        """Fork the builder of *engine*, :func:`_engine_builder` with
+        *arguments*, which closes the connections of the coordinator,
+        *conn* and *others* (those of the other builders): its end is that
+        of its connection only, and so read here."""
+        ours, theirs = multiprocessing.Pipe()
+        self.pid = os.fork()
+        if self.pid == 0:
+            for other in (conn, ours, *others):
+                other.close()
+            try:
+                _engine_builder(theirs, engine, *arguments)
+            except BaseException:
+                traceback.print_exc()
+            finally:
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(1)
+        theirs.close()
+        self.conn = ours
+
+    def send(self, message) -> None:
+        if message[0] == "fork":
+            self.sent.add((message[1], message[2]))
+        try:
+            self.conn.send(message)
+        except OSError:  # it died: its end is read next
+            pass
+
+    def end(self) -> set:
+        """Forget the process, ended; return the starts it left
+        unanswered."""
+        self.conn.close()
+        self.conn = self.pid = None
+        self.built = False
+        sent, self.sent = self.sent, set()
+        return sent
+
+    def kill(self) -> None:
+        if self.pid is not None:
+            _kill(self.pid)
+
+
+def _engine_builder(conn, engine: str, backend, address, authkey,
+                    options: dict) -> None:
+    """Build *engine* at the first request of *conn* (again at the next,
+    if it failed), then fork a session's process from it for each
+    ``("fork", key, start, engine, env, feedback)`` (*start* numbering each
+    start of a session once, *env* the variables of its user, *feedback*
+    where its ratings go); for a ``("build", None, None, engine, None,
+    None)``, build it only, and tell it (``built`` or ``failed``, without
+    a key); end when the coordinator does."""
+    nl = None
     while True:
         try:
-            kind, key, start, engine, env, feedback = conn.recv()
+            kind, key, start, _, env, feedback = conn.recv()
         except (EOFError, OSError):
-            # The server ended: so does the builder, at once, rather than
-            # wait for threads that building an engine may have left.
+            # The coordinator ended: so does the builder, at once, rather
+            # than wait for threads that building an engine may have left.
             os._exit(0)
-        try:
-            if engine not in engines:
+        if nl is None:
+            try:
                 began = time.monotonic()
                 with lifted():  # the engine's commands are the server's
-                    engines[engine] = backend.build(
+                    nl = backend.build(
                         engine,
                         lambda text: conn.send(("status", key, start, text)),
                     )
                 gc.freeze()  # a session's process then writes fewer pages
                 _warn_of_threads(engine)
-                if kind == "build":
-                    conn.send(("built", None, None, f"{engine} in "
-                               f"{time.monotonic() - began:.0f} s"))
-        except Exception as error:
-            traceback.print_exc()
-            conn.send(("failed", key, start,
-                       f"{type(error).__name__}: {error}"))
-            continue
+            except Exception as error:
+                traceback.print_exc()
+                conn.send(("failed", key, start,
+                           f"{type(error).__name__}: {error}"))
+                continue
+            if kind == "build":
+                conn.send(("built", None, None, f"{engine} in "
+                           f"{time.monotonic() - began:.0f} s"))
         if kind == "build":
             continue
         pid = os.fork()
@@ -150,7 +285,7 @@ def _builder(conn, address, authkey, options: dict, build,
                          {**options, "feedback": feedback or
                           options["feedback"],
                           "uploads": _session_uploads(options, start)},
-                         engines[engine])
+                         nl)
                 code = 0
             except BaseException:
                 traceback.print_exc()
@@ -548,12 +683,13 @@ class Session:
 class Sessions:
     """
     The sessions of the users of the server, each in a process forked
-    from the builder's, at most *most* running at once; one unused for *idle*
-    seconds ends. *identity*, ``identity(user)``, gives the variables of
-    the sessions of *user* (the key of their AI assistant) and their groups,
-    at each start; by default those of *env*, by user, and no groups. With
-    *feedback_db*, the sessions store their ratings in that database,
-    signed by their user and groups. With *activity_db*, the inputs of the
+    from that of the builder of its engine, at most *most* running at
+    once; one unused for *idle* seconds ends. *identity*,
+    ``identity(user)``, gives the variables of the sessions of *user* (the
+    key of their AI assistant) and their groups, at each start; by default
+    those of *env*, by user, and no groups. With *feedback_db*, the
+    sessions store their ratings in that database, signed by their user and
+    groups. With *activity_db*, the inputs of the
     sessions, their results and the resources they took are logged there
     (:class:`~neurolang_apps.utils.tui.activity.ActivityLog`). The
     variables *withhold* (the keys of
@@ -563,10 +699,10 @@ class Sessions:
     *running* queries (and downloads) run at once (by default, as many as
     the machine has CPUs), the others waiting; one running longer than
     *query_seconds*, if given, ends its session's process. With
-    *preload_embeddings*, the builder loads the text embeddings of an
+    *preload_embeddings*, the builders load the text embeddings of an
     engine (its documents' and its query model) before forking its
     sessions, which share them. *build* must be importable by name, as the
-    builder is started anew.
+    coordinator of the builders is started anew.
     """
 
     def __init__(
@@ -598,9 +734,11 @@ class Sessions:
             self.activity = ActivityLog(activity_db)
             # This run of the server, for its uptime (see _measure).
             self._run = self.activity.start_run()
-        #: The latest usage of the builder's process (process_usage): the
-        #: memory the sessions share.
+        #: The latest usage of the builders' processes (process_usage),
+        #: summed: the memory the sessions share.
         self.builder_usage: Optional[dict] = None
+        #: The process of the builder of each engine, by engine.
+        self.builders = {}
         self.most = most
         self.idle = idle
         self.running = running or os.cpu_count() or 1
@@ -659,9 +797,11 @@ class Sessions:
             self.activity.beat(self._run, stopped=True)
         self._builder_conn.close()
         self._builder.join(5)
-        if self._builder.is_alive():
+        if self._builder.is_alive():  # nor so its builders
             self._builder.kill()
             self._builder.join(5)
+            for pid in list(self.builders.values()):
+                _kill(pid)
         self._listener.close()
 
     def _owns(self, session: Session) -> bool:
@@ -689,8 +829,8 @@ class Sessions:
             f"made room for a session of {starting.key[0]}")
 
     def _fork(self, session: Session, engine: str) -> None:
-        """Number a start of *session* and ask the builder for its
-        process."""
+        """Number a start of *session* and ask the builder of *engine*, by
+        the coordinator, for its process."""
         if self.dead:
             raise RuntimeError(self.dead)
         with self._lock:
@@ -716,7 +856,7 @@ class Sessions:
                                "server's log")
 
     def prebuild(self, engines) -> None:
-        """Have the builder build the *engines*, in their order, before
+        """Have the builders build the *engines*, in their order, before
         their sessions ask for them: a session's start then takes no build.
         An engine built already is not built again; one that fails is
         told in the log, and built again by its first session."""
@@ -821,7 +961,14 @@ class Sessions:
             except (EOFError, OSError):
                 break
             if key is None:  # of an engine built before its sessions
-                if kind == "built":
+                if kind == "builder":
+                    self.builders[value[0]] = value[1]
+                elif kind == "ended":
+                    self.builders.pop(value, None)
+                    print(f"The builder of the engine {value} ended (see "
+                          "above): its next session builds it again",
+                          flush=True)
+                elif kind == "built":
                     print(f"Built the engine {value}", flush=True)
                 elif kind == "failed":
                     print("An engine could not be built before its "
@@ -877,7 +1024,7 @@ class Sessions:
 
     def _measure(self) -> None:
         """Take the usage of the processes of the sessions running, and of
-        the builder, every USAGE_SECONDS; tell the activity log the server
+        the builders, every USAGE_SECONDS; tell the activity log the server
         is alive every ALIVE_SECONDS."""
         beaten = time.monotonic()
         while not self._closed:
@@ -888,13 +1035,24 @@ class Sessions:
                     self.activity.beat(self._run)
                 except Exception:
                     traceback.print_exc()
-            self.builder_usage = process_usage(self._builder.pid)
+            self._measure_builders()
             with self._lock:
                 sessions = [s for s in self._sessions.values()
                             if s.pid is not None]
             for session in sessions:
                 session._sample()
             time.sleep(self.USAGE_SECONDS)
+
+    def _measure_builders(self) -> None:
+        """Take the usage of the builders, summed, that of the coordinator
+        with them (whose process is that of ``pid``)."""
+        usages = [process_usage(pid) for pid in
+                  (self._builder.pid, *list(self.builders.values()))]
+        usages = [usage for usage in usages if usage is not None]
+        self.builder_usage = usages and {
+            "pid": self._builder.pid,
+            **{name: round(sum(usage[name] for usage in usages), 2)
+               for name in ("cpu", "rss", "pss", "private")}} or None
 
     def _log(self, session: Session, kind: str, **fields) -> None:
         """Log the event *kind* of *session*, if the activity is logged;
