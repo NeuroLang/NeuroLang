@@ -16,8 +16,8 @@ examples:
     - "ans(study, tfidf) :- weighted_mention(study, 'pain', tfidf), (tfidf > 0.1)"
     - "ans(i, j, k, uniformity) :- uniformity('pain', i, j, k, uniformity)"
     - "ans(i, j, k, uniformity) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, uniformity)"
-    - "ans(concept) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, concept)"
-    - "ans(study) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(study, t)"
+    - "ans(concept) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, concept)"
+    - "ans(study) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(study, t)"
   squall:
     - "obtain every Study that mentions 'pain'."
     - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
@@ -804,10 +804,10 @@ assistant_examples:
     topic: "Encoding: from a term to the brain"
     datalog: |-
       strength(sum(n)) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l, n)
-      ends_in(l) ^ (n / t) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l, n), strength(t)
+      ending_region(l) ^ (n / t) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l, n), strength(t)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      reached(s) :- ends_in(l), active(l, s)
+      reached(s) :- ending_region(l), active(l, s)
       ans(probability) :- PROB[reached(s) // term_association(s, 'memory')] = probability
 
   # The three connectivities together: the structural (white-matter
