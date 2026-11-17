@@ -22,6 +22,7 @@ waits for it. The calls run one at a time, on the one session.
 
 import base64
 import logging
+import os
 import secrets
 import shutil
 import threading
@@ -35,6 +36,7 @@ import mcp.types as types
 import yaml
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from neurolang.confine import CONFINE_ENV, lifted
 
 from neurolang_apps.utils import engine_registry
 from neurolang_apps.utils.llm import (
@@ -49,6 +51,7 @@ from neurolang_apps.utils.tui.app import AgentRun
 from neurolang_apps.utils.tui.assistant import (
     _previous, _run_outcome, _without_left_out,
 )
+from neurolang_apps.utils.tui.statements import split_at_commands
 from neurolang_apps.utils.tui.web import WebRepl
 
 # How to cite NeuroLang, at the end of each answer with the sources of the
@@ -64,6 +67,11 @@ NEUROLANG_CITATION = (
 # call with its arguments, time and outcome. Its own logger, to a file:
 # the engine's would log every rewrite, and clients hide stderr.
 log = logging.getLogger("neurolang_apps.mcp")
+
+# The dot-commands ``repl`` refuses: those of the server's own assistant,
+# which would run a model of the machine's configuration, the client's
+# model being the assistant.
+REFUSED_COMMANDS = frozenset({".ask", ".llm", ".explain", ".rate", ".refine"})
 
 # The rows of each result the ``repl`` tool returns, by default.
 MAX_ROWS = 50
@@ -187,7 +195,9 @@ class McpSession:
         log.info("engine %s: building", self.engine)
         start = time.monotonic()
         try:
-            repl = WebRepl(build(), self.engine, html=False)
+            with lifted():  # the engine's commands are the server's
+                nl = build()
+            repl = WebRepl(nl, self.engine, html=False)
             if initial_program:
                 repl.submit(initial_program)
             self._repl.set_result(repl)
@@ -281,6 +291,15 @@ class McpSession:
         Run *text* in the session and return its output and the first
         *max_rows* rows of each result, tab-separated.
         """
+        refused = sorted({
+            part.split()[0] for part in split_at_commands(text)
+            if part.split()[0] in REFUSED_COMMANDS
+        })
+        if refused:
+            return (
+                f"FAILED\n\n{', '.join(refused)}: not here, where you are "
+                "the assistant: answer with ask and the tools."
+            )
         with self._lock:
             repl = self._session()
             repl.max_rows = max_rows
@@ -347,7 +366,8 @@ class McpSession:
         self.answers[answer.id] = answer
         self._toolbox = None
         self._question = ""  # that of the next ask
-        images = self._files(repl, answer)
+        with lifted():  # the server writes the answer's files
+            images = self._files(repl, answer)
         answer.links = links = dict(sorted(
             answer.links.items(), key=lambda item: _link_rank(item[0])
         ))
@@ -709,10 +729,30 @@ def build_engine(args):
     return nl
 
 
+def confine(args) -> Optional[list]:
+    """
+    Confine the statements of the session, unless the CLI's *args* say
+    ``--unconfined``: they read the engine's data and the answers' files
+    only, and write no file (see :mod:`neurolang.confine`); what the
+    server does, building the engine and writing the answers' files, is
+    not. Return the directories they may read, None if not confined.
+    """
+    if args.unconfined:
+        return None
+    roots = [
+        Path(args.data_dir).expanduser().resolve(),
+        Path(args.results_dir or RESULTS_DIR).expanduser().resolve(),
+    ]
+    os.environ[CONFINE_ENV] = os.pathsep.join(map(str, roots))
+    return roots
+
+
 def main(args, initial_program: str = "") -> None:
     """Serve the REPL on the engine of the CLI's *args* over stdio."""
     def build():
         return build_engine(args)
+
+    confine(args)
 
     if args.log:
         handler = logging.FileHandler(Path(args.log).expanduser())

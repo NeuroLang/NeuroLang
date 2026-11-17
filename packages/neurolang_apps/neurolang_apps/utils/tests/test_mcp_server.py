@@ -1,6 +1,7 @@
 """Tests of the MCP server of the REPL (``neurolang-query --mcp``)."""
 
 import asyncio
+import os
 
 import pytest
 
@@ -431,3 +432,59 @@ def test_the_engine_is_built_with_its_text_embeddings_loaded(monkeypatch):
     )
     assert mcp_server.build_engine(args) is nl
     assert loaded == [nl]
+
+
+class TestConfined:
+    @pytest.fixture
+    def confined(self, monkeypatch, tmp_path):
+        from neurolang.confine import CONFINE_ENV
+
+        data = tmp_path / "data"
+        data.mkdir()
+        monkeypatch.setenv(CONFINE_ENV, str(data))
+        return McpSession("", _engine, results_dir=tmp_path / "results")
+
+    def test_a_file_outside_the_data_is_not_read(self, confined, tmp_path):
+        path = tmp_path / "private.csv"
+        path.write_text("k,v\napi_key,secret\n")
+        text = confined.repl(f".load {path} private")
+        assert text.startswith("FAILED") and "secret" not in text
+
+    def test_no_file_is_written(self, confined, tmp_path):
+        confined.repl("ans(n) :- person(n, a)")
+        assert confined.repl(f".save {tmp_path / 'out.csv'}").startswith(
+            "FAILED"
+        )
+        assert not (tmp_path / "out.csv").exists()
+
+    def test_the_answers_files_are_written(self, confined, tmp_path):
+        result = _answer(confined)
+        assert result.structured_content["id"] == "a1"
+        assert next((tmp_path / "results").glob("*/a1/rows.csv")).exists()
+
+
+@pytest.mark.parametrize("command", [
+    ".llm reload", ".ask which?", ".explain", ".llm which?",
+])
+def test_the_servers_own_assistant_is_refused(session, command):
+    text = session.repl(f"ans(n) :- person(n, a)\n{command}")
+    assert text.startswith("FAILED")
+    assert "you are the assistant" in text
+
+
+def test_the_session_is_confined_unless_unconfined(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from neurolang.confine import CONFINE_ENV
+    from neurolang_apps.utils.mcp_server import confine
+
+    monkeypatch.setenv(CONFINE_ENV, "")  # restored after the test
+    monkeypatch.delenv(CONFINE_ENV)
+    args = SimpleNamespace(
+        unconfined=True, data_dir=tmp_path / "d", results_dir=tmp_path / "r"
+    )
+    assert confine(args) is None and CONFINE_ENV not in os.environ
+    args.unconfined = False
+    roots = confine(args)
+    assert roots == [(tmp_path / "d").resolve(), (tmp_path / "r").resolve()]
+    assert os.environ[CONFINE_ENV].split(os.pathsep) == list(map(str, roots))

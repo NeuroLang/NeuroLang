@@ -631,6 +631,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "(default: ~/.cache/neurolang/mcp).",
     )
     parser.add_argument(
+        "--unconfined",
+        action="store_true",
+        help="With --mcp, let the statements of the session read and write "
+        "any file the server can: by default they read the engine's data "
+        "and the answers' files only (--data-dir, --results-dir), and write "
+        "none: the server writes the answers' files.",
+    )
+    parser.add_argument(
         "--build-on-first-call",
         action="store_true",
         help="With --mcp, build the engine at the first tool call instead of "

@@ -439,6 +439,15 @@ given as argument or with ``--file`` runs first, in the session.
     ``.scope``). ``.save`` and ``.load`` write and read files on the
     server's machine, relative to its working directory.
 
+The statements of the session are confined, as those of the users of the
+REPL server: they read the engine's data and the answers' files only
+(``--data-dir``, ``--results-dir``) and write no file, so that what the
+client's model is led to run, by a text of the data for instance, reaches
+no other file of the machine. ``--unconfined`` lifts it, to ``.load`` or
+``.image`` a file of one's own. ``repl`` refuses ``.ask``, ``.llm``,
+``.explain``, ``.rate`` and ``.refine``: they would run the assistant of
+the machine's ``llm.yaml``, the client's model being the assistant.
+
 The time and memory a query may take are those of the ``assistant``
 settings of ``llm.yaml`` (``query_timeout``, ``query_memory_mb``): a query
 of every voxel of the brain may need more than their default 4 GB.
