@@ -2010,3 +2010,11 @@ def test_the_probability_of_activation_of_z_scores():
     assert np.median(p[:20000]) < 0.01 and p[-1] == 0
     assert abs(delta0) < 0.1 and abs(sigma0 - 1) < 0.1
     assert ((0 <= p) & (p <= 1)).all()
+
+
+def test_an_unknown_option_of_image_lists_its_options(tiny, tmp_path):
+    """An unknown option of .image tells the options there are (a
+    KeyError on --name, which had no form, before)."""
+    tiny._handle_dot_command(f".image {tmp_path / 'z.nii.gz'} --zoom 2")
+    out = _output(tiny)
+    assert "Unknown option --zoom" in out and "--name NAME" in out
