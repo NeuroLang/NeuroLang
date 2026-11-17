@@ -181,9 +181,10 @@ class TestFinalAnswer:
         assert "### Result (2 rows)\n| n |\n|---|\n| bob |\n| carol |" in text
         assert "### Files\n- [Rows (CSV)](file://" in text
         assert result.structured_content["markdown"] == text
-        [table] = result.structured_content["tables"]
-        assert table["columns"] == ["n"] and table["total"] == 2
-        assert table["rows"] == [["bob"], ["carol"]]
+        assert set(result.structured_content) == {
+            "id", "markdown", "links", "rows",
+        }
+        assert result.structured_content["rows"] == {"ans": 2}
         links = result.structured_content["links"]
         assert {"query", "rows", "graph"} <= set(links)
         folder = next(tmp_path.glob("*/a1"))
@@ -226,6 +227,22 @@ class TestFinalAnswer:
         )
         assert result.structured_content["id"] == "a2"
         assert set(session.answers) == {"a1", "a2"}
+
+
+class TestAskAgain:
+    def test_a_second_ask_gives_only_the_examples_and_the_task(
+        self, session
+    ):
+        first = session.ask("who is over 4?")
+        second = session.ask("who is under 4?")
+        assert "# Datalog syntax" in first and "# Datalog syntax" not in second
+        assert second.startswith("The instructions, the syntax and the ")
+        assert second.endswith("# Question\nwho is under 4?")
+        assert len(second) < len(first) / 2
+
+    def test_full_gives_them_all_again(self, session):
+        session.ask("who is over 4?")
+        assert "# Datalog syntax" in session.ask("who?", full=True)
 
 
 class TestRefine:
@@ -297,7 +314,6 @@ def test_an_answer_of_voxels_has_its_glass_brain_and_viewer(
     assert len(images) == 1 and images[0].mime_type == "image/png"
     links = result.structured_content["links"]
     assert list(links) == ["viewer", "result", "rows", "graph", "query"]
-    assert result.structured_content["viewer"] == links["viewer"]
     assert result.content[0].text.split("\n\n")[1] == (
         f"**[Open the interactive viewer]({links['viewer']})**"
     )
@@ -415,7 +431,6 @@ def test_an_answer_ends_with_the_references_of_neurolang(tmp_path):
         "1. Zanitti GE, S", "2. Iovene V, Zan",
     ]
     assert "Yarkoni" not in text  # the data's sources: .credits
-    assert len(result.structured_content["citations"]) == 2
 
 
 def test_the_engine_is_built_with_its_text_embeddings_loaded(monkeypatch):

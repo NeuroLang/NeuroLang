@@ -49,6 +49,7 @@ from neurolang_apps.utils.llm import (
 from neurolang_apps.utils.llm.agent import Toolbox
 from neurolang_apps.utils.llm.comments import commented_query, split_rules
 from neurolang_apps.utils.llm.config import _assistant, config_path
+from neurolang_apps.utils.llm.examples import load_examples, select_examples
 from neurolang_apps.utils.llm import validation
 from neurolang_apps.utils.llm.validation import run_preview
 from neurolang_apps.utils.tui import nifti, query_graph
@@ -122,9 +123,19 @@ SCHEMA_POINTER = """\
 (Call list_predicates for them: their columns, descriptions and sizes.)"""
 
 MCP_NOTE = """\
-Call the tools of this server. In final_answer give, besides the query and
-its explanation, `comments`: one short line (at most 15 words) for each rule
-of the query, in order, saying what it computes."""
+Call the tools of this server, and those that do not depend on each other
+(several search_values) in the same turn. final_answer runs the query and
+checks it as run_query does, sending back one that fails or gives no rows:
+give a query you are confident of to final_answer directly, run_query only
+one you are unsure of. In final_answer give, besides the query and its
+explanation, `comments`: one short line (at most 15 words) for each rule of
+the query, in order, saying what it computes."""
+
+# In place of the instructions, the syntax and the guidance after the first
+# ask of a session: the client has them, and each turn reads them again.
+AGAIN_NOTE = """\
+The instructions, the syntax and the guidance are those the first ask gave;
+call ask with full=true to have them again."""
 
 
 class _NoModel:
@@ -210,6 +221,7 @@ class McpSession:
         self.store = ResultStore(results_dir, keep_days)
         self.answers: dict = {}
         self._question = ""
+        self._prompted = False  # whether an ask gave the whole prompt
         self._toolbox: Optional[Toolbox] = None
         self._lock = threading.Lock()
         self._repl = Future()
@@ -281,11 +293,13 @@ class McpSession:
             )
         return self._toolbox
 
-    def ask(self, question: str, refine: str = "") -> str:
+    def ask(self, question: str, refine: str = "", full: bool = False) -> str:
         """
         Return the assistant's instructions for *question*, and start its
         tools anew; with *refine*, an answer's id or ``last``, the task
         is to change that answer, or the last query run, for *question*.
+        After the first ask, unless *full*, only the examples closest to
+        *question* and the task: the client has the rest.
         """
         with self._lock:
             repl = self._session()
@@ -310,8 +324,25 @@ class McpSession:
             task = prompts.refinement_request(
                 question, previous, LANGUAGE
             ) if previous else f"# Question\n{question}"
+            if self._prompted and not full:
+                examples = self._examples(agent, question)
+                return "\n\n".join(filter(None, [AGAIN_NOTE, examples, task]))
+            self._prompted = True
             prompt = agent.system_prompt(question, schema=SCHEMA_POINTER)
             return f"{prompt}\n\n{MCP_NOTE}\n\n{task}"
+
+    def _examples(self, agent, question: str) -> str:
+        """The examples of the assistant's bank closest to *question*, as
+        its prompt has them."""
+        bank = agent.examples
+        if bank is None:
+            bank = load_examples(self.engine)
+        examples = select_examples(
+            bank, question, LANGUAGE, self.config.few_shot_k
+        )
+        if not examples:
+            return ""
+        return f"# Examples\n{prompts.format_examples(examples, LANGUAGE)}"
 
     def call(self, name: str, /, **arguments) -> str:
         """Return the text of the assistant's tool *name* on *arguments*."""
@@ -479,21 +510,15 @@ class McpSession:
                 )
                 for name, link in links.items()
             ],
+            # The answer once: its text, which some clients (Claude Code)
+            # give their model in place of the content, the links to its
+            # files and its numbers of rows, for programs.
             structured_content={
-                "id": answer.id, "question": answer.question,
-                # the answer as the text has it, to show as it is, for the
-                # clients giving their model this in place of the text
-                "markdown": markdown,
-                "viewer": links.get("viewer"), "links": links,
-                "query": commented, "explanation": explanation,
-                # clients showing it in place of the text see the rows too
-                "tables": [
-                    {key: table[key] for key in (
-                        "title", "columns", "rows", "total"
-                    )}
+                "id": answer.id, "markdown": markdown, "links": links,
+                "rows": {
+                    table["title"] or "ans": table["total"]
                     for table in reply.tables
-                ],
-                "citations": citations,
+                },
             },
         )
 
@@ -725,8 +750,8 @@ def _outcome(result) -> str:
         answer = result.structured_content
         if answer:
             rows = ", ".join(
-                f"{table['title'] or 'ans'}: {table['total']} rows"
-                for table in answer["tables"]
+                f"{title}: {total} rows"
+                for title, total in answer["rows"].items()
             )
             images = sum(c.type == "image" for c in result.content)
             folder = answer["links"]["query"].rsplit("/", 1)[0]
@@ -766,16 +791,19 @@ def server(session: McpSession):
     )
 
     @mcp.tool()
-    async def ask(question: str, refine: str = "") -> str:
+    async def ask(
+        question: str, refine: str = "", full: bool = False
+    ) -> str:
         """
-        Start answering a question on the engine: returns the instructions,
-        the syntax, the predicates and examples close to the question. Set
-        refine to an answer's id (a1, ...) or to `last` (the last query
-        run) to change it for the question instead.
+        Start answering a question on the engine: the first call returns
+        the instructions, the syntax, the guidance and examples close to the
+        question; the next ones only the examples and the task (full=true:
+        all again). Set refine to an answer's id (a1, ...) or to `last` (the
+        last query run) to change it for the question instead.
         """
         return await _logged(
-            "ask", {"question": question, "refine": refine},
-            lambda: session.ask(question, refine),
+            "ask", {"question": question, "refine": refine, "full": full},
+            lambda: session.ask(question, refine, full),
         )
 
     described = {tool["name"]: tool["description"] for tool in prompts.TOOLS}

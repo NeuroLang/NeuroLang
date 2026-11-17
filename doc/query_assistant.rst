@@ -398,9 +398,12 @@ given as argument or with ``--file`` runs first, in the session.
     with the Datalog syntax, the guidance of the engine and the examples
     closest to the question. The predicates are left to
     ``list_predicates``: with them, the prompt would be longer than what
-    clients take of a tool's result (80,000 characters on ``neurosynth``). With ``refine`` set to the id
-    of an answer (``a1``, ``a2``, ...) the task is to change that answer for
-    the new question, from its query and the rows it gave; with
+    clients take of a tool's result (80,000 characters on ``neurosynth``).
+    The next calls of a session return only the examples closest to their
+    question and the task, as the client has the rest and reads it again
+    at each turn (``full=true`` returns it all again). With ``refine`` set
+    to the id of an answer (``a1``, ``a2``, ...) the task is to change that
+    answer for the new question, from its query and the rows it gave; with
     ``refine`` set to ``last``, it is the last query run, such as one the
     user corrected and ran with ``repl``, as ``.ask --refine`` does.
 ``list_predicates``, ``describe_predicate``, ``search_values``, ``check_query``, ``run_query``
@@ -423,9 +426,9 @@ given as argument or with ``--file`` runs first, in the session.
     - the first 20 rows of each result;
     - a glass brain (PNG) of each of its first two images, for a result of
       voxels or of regions with a value;
-    - the same as structured content (``structuredContent``: its id,
-      query, explanation, first rows and links), which some clients, such
-      as Claude Code, show in place of the text;
+    - as structured content (``structuredContent``), its id, the same
+      Markdown, which some clients, such as Claude Code, give their model in
+      place of the text, its links and its numbers of rows;
     - the links to its files, the viewer's first, in the text, in the
       structured content and as MCP resource links, which clients may show
       as links of their own; the instructions ask the client's model to
