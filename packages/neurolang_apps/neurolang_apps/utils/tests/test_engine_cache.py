@@ -557,13 +557,14 @@ def test_a_table_is_computed_without_a_program_keeping_tables(tmp_path):
         pass
 
     program = Program()
+    # nor are its parameters computed (in a browser)
     assert engine_cache.keep_table(
-        program, "t", [], (), lambda: frame
+        program, "t", [], lambda: pytest.fail("named"), lambda: frame
     ) is frame
     program.derived_tables = engine_cache.DerivedTables(tmp_path)
-    engine_cache.keep_table(program, "t", [], (1,), lambda: frame)
+    engine_cache.keep_table(program, "t", [], lambda: (1,), lambda: frame)
     kept = engine_cache.keep_table(
-        program, "t", [], (1,), lambda: pytest.fail("kept")
+        program, "t", [], lambda: (1,), lambda: pytest.fail("kept")
     )
     assert kept.equals(frame)
 

@@ -279,18 +279,19 @@ class DerivedTables:
         return table.to_pandas(split_blocks=True)
 
 
-def keep_table(program, kind: str, frames, parameters, compute):
+def keep_table(program, kind: str, frames, parameters: Callable, compute):
     """
     Return the table *compute()* gives, found as *kind* from the tables
-    *frames* and the *parameters* (texts, numbers, :func:`file_digest`...),
+    *frames* and the *parameters()* (texts, numbers, :func:`file_digest`...),
     which are all it depends on: the one kept by the ``derived_tables`` of
     *program* (a :class:`DerivedTables`, while an engine is built), or else
-    *compute()*.
+    *compute()*, without naming it (in a browser, the parameters are not
+    computed).
     """
     tables = getattr(program, "derived_tables", None)
     if tables is None:
         return compute()
-    return tables(kind, frames, parameters, compute)
+    return tables(kind, frames, parameters(), compute)
 
 
 def prebuild(

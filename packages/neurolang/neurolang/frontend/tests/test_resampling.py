@@ -278,3 +278,9 @@ ans(b, t, p) :- rep(b, t, p).
         answers.append(rows(nl, query))
     assert calls == ["resampling", "resampling"] and len(kept) == 1
     assert answers[0] and answers[1] == answers[0] == answers[2]
+
+
+def test_a_resampling_without_replicates_is_refused():
+    nl = engine(uniform)
+    with pytest.raises(ValueError, match="n=0"):
+        nl.add_resampling("boot", "selected_study", n=0)

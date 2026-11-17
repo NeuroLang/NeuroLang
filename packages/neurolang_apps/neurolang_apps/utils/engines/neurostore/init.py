@@ -335,7 +335,7 @@ def _kept_tfidf_terms(
         TFIDF_THRESHOLD, np.array(abstracts.index.values, dtype=str),
     )
     return engine_cache.keep_table(
-        program, "neurostore_tfidf", [], (key,),
+        program, "neurostore_tfidf", [], lambda: (key,),
         lambda: _tfidf_table(engine_cache.keep_arrays(
             cache_dir, "tfidf", key, lambda: _tfidf_arrays(abstracts)
         )),
@@ -381,8 +381,8 @@ def init_engine(
     coordinates = release_dir / "coordinates.parquet"
     peak_data = engine_cache.keep_table(
         nl.program_ir, "neurostore_peaks", [],
-        (engine_cache.file_digest(coordinates), unknown_space,
-         engine_cache.grid_digest(mask)),
+        lambda: (engine_cache.file_digest(coordinates), unknown_space,
+                 engine_cache.grid_digest(mask)),
         lambda: process_peaks(
             _peaks_from_coordinates(pd.read_parquet(coordinates)), mask,
             study_id_type=str, unknown_space=unknown_space,
@@ -431,11 +431,13 @@ def init_engine(
         table = table[table["study_id"].isin(set(study_ids))]
         return table[["study_id", label]]
 
-    annotated = engine_cache.file_digest(annotations_path)
+    annotated = functools.cache(
+        lambda: engine_cache.file_digest(annotations_path)
+    )
     studies = study_ids.to_frame()
     for label, suffix in (("concept", "Concepts"), ("domain", "Domain")):
         nl.add_tuple_set(engine_cache.keep_table(
             nl.program_ir, "neurostore_labels", [studies],
-            (annotated, label, suffix),
+            lambda label=label, suffix=suffix: (annotated(), label, suffix),
             functools.partial(labels, label, suffix),
         ), name=f"study_{label}")

@@ -43,10 +43,12 @@ Unreleased
   the files kept, ``neurostore_iit`` builds in 23 s instead of 46 s
   (76 s on master) with 1.2 GB of private memory instead of 3.1 GB
   (8.9 GB), and ``neurosynth_iit`` in 21 s instead of 25 s (49 s) with
-  0.7 GB instead of 1.1 GB (2.5 GB); their tables and the answers of
-  their example queries are those of master. The builds of the browser's
-  bundle keep no Arrow file (``build_engine(..., map_tables=False)``),
-  which the bundle's data zip carried since #1337.
+  0.7 GB instead of 1.1 GB (2.5 GB); their tables hold the rows of
+  master's, and the example and benchmark queries that run on master
+  (143 and 113) give its answers. The builds of the browser's bundle keep
+  no Arrow file (``build_engine(..., map_tables=False)``), which the
+  bundle's data zip carried since #1337. ``add_resampling`` refuses
+  ``n`` below 1.
 - REPL server (``--users --local``): the builder builds the engines the
   page offers when the server starts, the default first, and an engine
   the admin console turns on when it does, so that no session waits for

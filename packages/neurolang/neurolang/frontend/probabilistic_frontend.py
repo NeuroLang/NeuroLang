@@ -1586,7 +1586,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         choice : str
             name of a probabilistic choice of the program.
         n : int, optional
-            number of replicates, by default 1000.
+            number of replicates, at least 1, by default 1000.
         scheme : str, optional
             ``"bayesian"`` (Dirichlet weights, the Bayesian bootstrap),
             ``"multinomial"`` (the classical bootstrap) or ``"poisson"``,
@@ -1617,6 +1617,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         choices = self.program_ir.probabilistic_choices()
         if choice_symbol not in choices:
             raise ValueError(f"{choice} is not a probabilistic choice")
+        if n < 1:
+            raise ValueError(f"A resampling needs replicates, not n={n}")
         rows = choices[choice_symbol].value.as_pandas_dataframe()
 
         def compute():

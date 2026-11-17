@@ -1441,7 +1441,7 @@ def _register_atlas_activation(
     radius = float(settings.get("radius_mm", 3))
     pairs = engine_cache.keep_table(
         nl.program_ir, "atlas_activation", [peaks],
-        (engine_cache.image_digest(img), _label_items(labels), radius),
+        lambda: (engine_cache.image_digest(img), _label_items(labels), radius),
         lambda: pd.DataFrame(find(
             img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
             peaks.iloc[:, 3].to_numpy(), radius,
@@ -1471,8 +1471,8 @@ def _register_atlas_coverage(
     threshold = float(settings.get("threshold", 1e-3))
     rows = engine_cache.keep_table(
         nl.program_ir, "atlas_coverage", [peaks],
-        (engine_cache.image_digest(img), _label_items(labels), fwhm,
-         threshold),
+        lambda: (engine_cache.image_digest(img), _label_items(labels), fwhm,
+                 threshold),
         lambda: find(
             img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
             peaks.iloc[:, 3].to_numpy(), fwhm, threshold,
@@ -1492,8 +1492,8 @@ def _register_atlas_points(nl, atlas, settings: dict) -> None:
     """
     nl.add_tuple_set(
         engine_cache.keep_table(
-            nl.program_ir, "atlas_points", [], (atlas.content_hash(),),
-            atlas.points,
+            nl.program_ir, "atlas_points", [],
+            lambda: (atlas.content_hash(),), atlas.points,
         ),
         name=settings["predicate_name"],
     )
@@ -1930,8 +1930,8 @@ def _phase_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
         try:
             df = engine_cache.keep_table(
                 nl.program_ir, "relation_file", [],
-                (relation_file_separator(rel_path),
-                 engine_cache.file_digest(rel_path)),
+                lambda: (relation_file_separator(rel_path),
+                         engine_cache.file_digest(rel_path)),
                 lambda: read_relation_file(rel_path),
             )
         except UnsupportedRelationFile as exc:
