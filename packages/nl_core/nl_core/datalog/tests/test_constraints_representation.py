@@ -137,5 +137,5 @@ def test_added_existential_rules_add_up():
     dl = Datalog()
     dl.add_existential_rules({P: ["a"]})
     dl.add_existential_rules({P: ["b"], Q: ["c"]})
-    assert dl.existential_rules == {P: ["a", "b"], Q: ["c"]}
+    assert dl.existential_rules == {P: ("a", "b"), Q: ("c",)}
     assert Datalog().existential_rules == {}

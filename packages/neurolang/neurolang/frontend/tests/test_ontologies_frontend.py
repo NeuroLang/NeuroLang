@@ -1304,3 +1304,37 @@ def test_ontologies_loaded_one_after_the_other_add_up(individuals):
         == EXPECTED_ANSWERS[individuals]
     )
 
+
+
+def test_an_ontology_loaded_in_a_scope_goes_with_it():
+    """An ontology loaded in a scope, as in a session of the REPL, is
+    gone, constraints and all, when the scope is popped; loaded again,
+    it answers as the first time."""
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(FIRST_ONTOLOGY), format="turtle", individuals=True
+    )
+
+    def state():
+        # mentor, of the second ontology only, is not a predicate of the
+        # first.
+        return (
+            {
+                key: set(nl.execute_datalog_program(query))
+                for key, query in TWO_ONTOLOGY_QUERIES.items()
+                if key != "mentored"
+            },
+            dict(nl.program_ir.get_constraints()),
+            nl.program_ir.existential_rules,
+            nl.ontology_predicates,
+        )
+
+    before = state()
+    for _ in range(2):
+        nl.program_ir.push_scope()
+        nl.load_ontology(
+            io.StringIO(SECOND_ONTOLOGY), format="turtle", individuals=True
+        )
+        assert _two_ontology_answers(nl, True) == EXPECTED_ANSWERS[True]
+        nl.program_ir.pop_scope()
+        assert state() == before

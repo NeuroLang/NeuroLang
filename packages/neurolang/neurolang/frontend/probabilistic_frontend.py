@@ -13,12 +13,16 @@ from typing import (
     Any,
     Callable,
     Dict,
+    FrozenSet,
     Iterable,
     List,
+    Mapping,
+    NamedTuple,
     Optional,
     Tuple,
     Type,
 )
+from types import MappingProxyType
 from uuid import uuid1
 
 import pandas as pd
@@ -146,22 +150,52 @@ def _symbol_names(symbols):
     return tuple(symbol.name for symbol in symbols)
 
 
-def instance_lru_cache(key_fn, maxsize=128):
+def _constraints_of(frontend):
+    """The constraints of the program of ``frontend``, the object of its
+    symbol table, or None: the rewritings depend on them."""
+    return frontend.program_ir.symbol_table.get(Symbol("__constraints__"))
+
+
+class LoadedOntologies(NamedTuple):
+    """What the ontologies loaded into a program define (see
+    :meth:`NeurolangPDL.load_ontology`)."""
+
+    #: the names of the predicates they define
+    predicates: FrozenSet[str] = frozenset()
+    #: the name of the connector symbol of the labels of their classes
+    connector: Optional[str] = None
+    #: the predicate of rdf:type
+    type_predicate: Optional[str] = None
+    #: the predicate of each class, by its IRI
+    class_names: Mapping[str, str] = MappingProxyType({})
+    #: the (individual, class IRI) of the rdf:type facts of the files
+    stated_types: FrozenSet[Tuple[str, str]] = frozenset()
+
+
+# In the symbol table: what the ontologies loaded, by scope.
+LOADED_ONTOLOGIES = Symbol("__loaded_ontologies__")
+
+
+def instance_lru_cache(key_fn, maxsize=128, valid_while=None):
     """LRU cache decorator for instance methods with non-hashable arguments.
 
     key_fn(*args, **kwargs) must return a hashable cache key.
     The cache is stored per-instance to avoid cross-instance sharing.
-    Call wrapper.cache_clear(instance) to invalidate.
+    Call wrapper.cache_clear(instance) to invalidate. With
+    ``valid_while``, the cache is also invalidated when
+    ``valid_while(instance)`` is no longer the object it was.
     """
     def decorator(method):
         cache_attr = f'_lru_cache_{method.__name__}'
 
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
-            cache = getattr(self, cache_attr, None)
-            if cache is None:
-                cache = collections.OrderedDict()
-                setattr(self, cache_attr, cache)
+            stamp = None if valid_while is None else valid_while(self)
+            cached = getattr(self, cache_attr, None)
+            if cached is None or cached[0] is not stamp:
+                cached = (stamp, collections.OrderedDict())
+                setattr(self, cache_attr, cached)
+            cache = cached[1]
             key = key_fn(*args, **kwargs)
             if key in cache:
                 cache.move_to_end(key)
@@ -173,7 +207,7 @@ def instance_lru_cache(key_fn, maxsize=128):
             return result
 
         def cache_clear(instance):
-            setattr(instance, cache_attr, collections.OrderedDict())
+            setattr(instance, cache_attr, None)
 
         wrapper.cache_clear = cache_clear
         return wrapper
@@ -277,14 +311,6 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.probabilistic_solvers = probabilistic_solvers
         self.probabilistic_marg_solvers = probabilistic_marg_solvers
         self.current_program_rewritten = None
-        # The names of the predicates the loaded ontologies define.
-        self.ontology_predicates = set()
-        # The predicate of rdf:type, and the predicate of each class of
-        # the ontologies by its IRI (see _type_bridges).
-        self._type_predicate = None
-        self._class_names = {}
-        # The (individual, class IRI) of the rdf:type facts of the files.
-        self._stated_types = set()
         self._bridging = False
         self.check_qbased_pfact_tuple_unicity = (
             check_qbased_pfact_tuple_unicity
@@ -341,20 +367,19 @@ class NeurolangPDL(QueryBuilderDatalog):
         # The ontologies loaded one after the other add up: they share
         # the connector symbol, and their constraints, rules and facts
         # are added to those of the ontologies loaded before.
-        if connector_symbol_name is not None:
-            self.connector_symbol = self.new_symbol(name=connector_symbol_name)
-        elif not hasattr(self, "connector_symbol"):
-            self.connector_symbol = self.new_symbol()
-        loaded = set(self.ontology_predicates)
+        loaded = self._loaded_ontologies
+        connector = connector_symbol_name or loaded.connector or str(uuid1())
+        self._set_loaded_ontologies(connector=connector)
+        loaded = loaded.predicates
         onto = OntologyParser(
             paths, connector_symbol=self.connector_symbol.expression,
             load_format=format, individuals=individuals, names=names,
             prefixes=prefixes,
         )
         constraints, est_knowledge, entity_rules = onto.parse_ontology()
-        self.ontology_predicates.update(constraints)
-        self.ontology_predicates.update(s.name for s in est_knowledge)
-        self.ontology_predicates.update(s.name for s in entity_rules)
+        self._set_loaded_ontologies(predicates=loaded | set(constraints) | {
+            s.name for s in (*est_knowledge, *entity_rules)
+        })
         self.program_ir.add_constraints(constraints)
         for name, expressions in constraints.items():
             symbol = Symbol(name=name).cast(UnionOfConjunctiveQueries)
@@ -373,9 +398,13 @@ class NeurolangPDL(QueryBuilderDatalog):
         for symbol, expressions in entity_rules.items():
             for e in expressions:
                 self.program_ir.walk(e)
-        self._class_names.update(onto.class_names())
+        self._set_loaded_ontologies(
+            class_names=MappingProxyType(
+                {**self._class_names, **onto.class_names()}
+            )
+        )
         if individuals:
-            self._type_predicate = onto.type_name()
+            self._set_loaded_ontologies(type_predicate=onto.type_name())
             classes = set(self._class_names.values())
             for name, rows in onto.parse_individuals().items():
                 if name in classes:
@@ -389,11 +418,9 @@ class NeurolangPDL(QueryBuilderDatalog):
                         self._loaded_rows(name, loaded) | set(rows),
                         name=name,
                     )
-                self.ontology_predicates.add(name)
-
-        self._rewrite_det_idb.cache_clear(self)
-        self._constraints_that_can_hold.cache_clear(self)
-        self._projecting_rewritings.cache_clear(self)
+                self._set_loaded_ontologies(
+                    predicates=self.ontology_predicates | {name}
+                )
         return self.connector_symbol
 
     def _add_stated_types(self, rows):
@@ -403,14 +430,56 @@ class NeurolangPDL(QueryBuilderDatalog):
         stated = Symbol(f"{self._type_predicate}@files")
         before = self._loaded_rows(stated.name, {stated.name})
         self.add_tuple_set(before | set(rows), name=stated.name)
-        self._stated_types |= {
+        self._set_loaded_ontologies(stated_types=self._stated_types | {
             (x, c) for x, c in rows if c in self._class_names
-        }
+        })
         if not before:
             x, c = Symbol.fresh(), Symbol.fresh()
             self.program_ir.walk(Union((Implication(
                 Symbol(self._type_predicate)(x, c), stated(x, c)
             ),)))
+
+    # What the ontologies loaded, in the symbol table: it follows its
+    # scopes, as the constraints, rules and facts of the ontologies do.
+
+    @property
+    def _loaded_ontologies(self):
+        loaded = self.program_ir.symbol_table.get(LOADED_ONTOLOGIES)
+        return LoadedOntologies() if loaded is None else loaded.value
+
+    def _set_loaded_ontologies(self, **changes):
+        self.program_ir.symbol_table[LOADED_ONTOLOGIES] = Constant(
+            self._loaded_ontologies._replace(**changes),
+            auto_infer_type=False, verify_type=False,
+        )
+
+    @property
+    def ontology_predicates(self):
+        """The names of the predicates the loaded ontologies define."""
+        return self._loaded_ontologies.predicates
+
+    @property
+    def connector_symbol(self):
+        """The symbol of the labels of the classes of the ontologies,
+        ``connector(entity, label)``, or None if none was loaded."""
+        name = self._loaded_ontologies.connector
+        return None if name is None else self.new_symbol(name=name)
+
+    @property
+    def _type_predicate(self):
+        """The predicate of rdf:type (see _type_bridges)."""
+        return self._loaded_ontologies.type_predicate
+
+    @property
+    def _class_names(self):
+        """The predicate of each class of the ontologies, by its IRI."""
+        return self._loaded_ontologies.class_names
+
+    @property
+    def _stated_types(self):
+        """The (individual, class IRI) of the rdf:type facts of the
+        files."""
+        return self._loaded_ontologies.stated_types
 
     def _loaded_rows(self, name, loaded):
         """The rows of the relation ``name``, if one of the ``loaded``
@@ -1244,7 +1313,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             added = {
                 rule.consequent.functor for rule in det_idb.formulas
             } - heads
-            if hasattr(self, 'connector_symbol'):
+            if self.connector_symbol is not None:
                 connector_rules = tuple(
                     [q
                     for q in get_list_of_intensional_rules(self.program_ir)
@@ -1390,7 +1459,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         key_fn=lambda det_idb, holds: (
             frozenset(str(r) for r in det_idb.formulas), holds
         ),
-        maxsize=32,
+        maxsize=32, valid_while=_constraints_of,
     )
     def _rewrite_det_idb(self, det_idb, holds):
         """Xrewrite det_idb against ontology constraints, LRU-cached per instance.
@@ -1401,17 +1470,22 @@ class NeurolangPDL(QueryBuilderDatalog):
         Only the Xrewrite step is cached. The connector_rules scan that follows
         in _solve_deterministic_stratum accesses live program_ir and is NOT
         cached, so EDB added after load_ontology() remains visible.
-        Cache is invalidated by load_ontology() on each call.
+        Cache is invalidated when the constraints change (an ontology is
+        loaded, a scope is popped).
         """
         return self._rewrite_program_with_ontology(det_idb, holds)
 
-    @instance_lru_cache(key_fn=lambda holds: holds, maxsize=4)
+    @instance_lru_cache(
+        key_fn=lambda holds: holds, maxsize=4, valid_while=_constraints_of
+    )
     def _constraints_that_can_hold(self, holds):
         return constraints_that_can_hold(
             self.program_ir.get_constraints(), holds
         )
 
-    @instance_lru_cache(key_fn=lambda holds: holds, maxsize=4)
+    @instance_lru_cache(
+        key_fn=lambda holds: holds, maxsize=4, valid_while=_constraints_of
+    )
     def _projecting_rewritings(self, holds):
         """The rewritings of the projecting constraints that can hold, the
         same for every query, which can have values, and the predicates
