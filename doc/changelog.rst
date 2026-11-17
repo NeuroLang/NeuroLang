@@ -492,6 +492,17 @@ v0.1a23 (2026-11-15)
 
 **Bug fixes:**
 
+* Ontologies loaded one after the other, with ``load_ontology``, add up:
+  the constraints, rules, facts and labels of a later one are added to those
+  of the earlier ones, as if they had been loaded together. A second
+  ontology replaced the constraints of the first, and the labels of its
+  connector symbol. The constraints of a program were also seen by every
+  other program built after it (a dictionary of the class, not of the
+  program). What the ontologies loaded follows the scopes of the program:
+  popping a scope, as ``.clear`` does in the REPL, takes away the
+  ontologies loaded in it, constraints included, and the rewritings
+  cached with them.
+
 * ``.view`` draws the regions of a result of the connectivity relations:
   their labels, of the sorts ``schaefer400_tian_label`` and
   ``destrieux_tian_label``, are looked up in ``schaefer400`` or ``destrieux``,
