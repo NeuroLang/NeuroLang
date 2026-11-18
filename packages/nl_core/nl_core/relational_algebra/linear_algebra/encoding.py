@@ -396,8 +396,81 @@ class SparseView:
 
 
 # The views built on the frame holding the rows of a relation, by the
-# frame's id, for as long as the frame lives.
+# frame's id, and the frame, by the identities of its columns (see
+# :func:`views_of_columns`), for as long as the frame lives.
 _VIEWS = {}
+_FRAMES = {}
+
+
+def _column_identity(column: pd.Series):
+    """
+    Return what identifies the values of *column* for as long as the
+    arrays holding them live: the addresses, sizes and types of its
+    buffers; None if they are not known.
+    """
+    array = column.array
+    arrow = getattr(array, "_pa_array", None)
+    if arrow is not None:
+        return (str(arrow.type), len(arrow)) + tuple(
+            (buffer.address, buffer.size)
+            for chunk in arrow.chunks for buffer in chunk.buffers()
+            if buffer is not None
+        )
+    values = array.to_numpy() if isinstance(
+        array, pd.arrays.NumpyExtensionArray
+    ) else None
+    if values is None:
+        return None
+    return (
+        values.dtype.str, values.shape, values.strides,
+        values.__array_interface__["data"][0],
+    )
+
+
+def _frame_identity(frame: pd.DataFrame):
+    """Return the identities of the columns of *frame*, as a set, or None
+    if one is not known."""
+    identities = [_column_identity(frame[c]) for c in frame.columns]
+    if not identities or None in identities:
+        return None
+    return frozenset(identities)
+
+
+def _forget(frame_id, identity):
+    _VIEWS.pop(frame_id, None)
+    _FRAMES.pop(identity, None)
+
+
+def views_of_columns(frame: pd.DataFrame):
+    """
+    Return the views built on a frame of the same columns as *frame*, the
+    same arrays, as a frame computed by a rule renaming a stored relation
+    has them, with the column of *frame* each of the view's is.
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        The rows of a relation.
+
+    Returns
+    -------
+    list of (SparseView, dict)
+        The views, each with the column of *frame* of each column of
+        the frame it was built on.
+    """
+    identity = _frame_identity(frame)
+    reference = None if identity is None else _FRAMES.get(identity)
+    other = None if reference is None else reference()
+    if other is None or len(other) != len(frame) or (
+        len(set(identity)) != len(frame.columns)
+    ):
+        return []
+    column_of = {_column_identity(frame[c]): c for c in frame.columns}
+    columns = {c: column_of[_column_identity(other[c])] for c in other.columns}
+    return [
+        (view, columns) for view in _VIEWS.get(id(other), {}).values()
+        if view.matrix.nnz == len(other)
+    ]
 
 
 def sparse_view(
@@ -423,7 +496,10 @@ def sparse_view(
     views = _VIEWS.get(id(frame))
     if views is None:
         views = _VIEWS[id(frame)] = {}
-        weakref.finalize(frame, _VIEWS.pop, id(frame), None)
+        identity = _frame_identity(frame)
+        if identity is not None:
+            _FRAMES[identity] = weakref.ref(frame)
+        weakref.finalize(frame, _forget, id(frame), identity)
     key = (tuple(rows), tuple(columns), value, row_index, column_index)
     view = views.get(key)
     if view is None or view.matrix.nnz != len(frame):
