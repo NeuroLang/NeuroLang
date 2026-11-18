@@ -33,7 +33,7 @@ import time
 import traceback
 from multiprocessing.connection import Client, Listener, wait
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 from neurolang.confine import lifted
 from neurolang_apps.utils.tui.local_backend import LocalBackend
@@ -89,6 +89,75 @@ def process_usage(pid: int, memory: bool = True) -> Optional[dict]:
 
 # -- In the processes of the builders ---------------------------------------
 
+def _anonymous_memory() -> int:
+    """The memory of this process of its own (``RssAnon``) in bytes, on
+    Linux (0 elsewhere): not the pages of files it maps, which the system
+    may drop and read again."""
+    try:
+        with open("/proc/self/status") as status:
+            for line in status:
+                if line.startswith("RssAnon:"):
+                    return int(line.split()[1]) * 1024
+    except OSError:
+        pass
+    return 0
+
+
+def available_memory() -> Optional[Tuple[int, int]]:
+    """
+    Return the memory this process may still take and all the memory it
+    may take, in bytes: the machine's (``MemAvailable``, ``MemTotal``), or
+    that its control group and those above it leave, the tightest limit
+    (``memory.max`` less ``memory.current``, cgroup v2: a service's slice,
+    a batch job's). None where it cannot be read (not Linux).
+    """
+    try:
+        info = {}
+        with open("/proc/meminfo") as meminfo:
+            for line in meminfo:
+                name, value = line.split(":", 1)
+                info[name] = int(value.split()[0]) * 1024
+        available, total = info["MemAvailable"], info["MemTotal"]
+    except (OSError, KeyError, ValueError):
+        return None
+    try:
+        with open("/proc/self/cgroup") as cgroup:
+            path = next(line.split("::", 1)[1].strip() for line in cgroup
+                        if line.startswith("0::"))
+    except (OSError, StopIteration):
+        return available, total
+    root = Path("/sys/fs/cgroup")
+    group = root / path.lstrip("/")
+    while group != root and root in group.parents:
+        try:
+            limit = (group / "memory.max").read_text().strip()
+            if limit != "max":
+                used = int((group / "memory.current").read_text())
+                # less the pages of files not used lately, which the system
+                # takes back before it kills
+                for line in (group / "memory.stat").read_text().splitlines():
+                    if line.startswith("inactive_file "):
+                        used -= int(line.split()[1])
+                total = min(total, int(limit))
+                available = min(available, int(limit) - used)
+        except (OSError, ValueError):
+            pass
+        group = group.parent
+    return available, total
+
+
+def _room_for_another(grown: int, reserve: float,
+                      memory: Optional[Tuple[int, int]]) -> bool:
+    """Whether an engine may be built ahead: whether, after it takes one
+    and a half times the most a build took (*grown*, bytes), the fraction
+    *reserve* of the memory is left for the queries of the sessions.
+    Without the memory (*memory* None), or without a build before, yes."""
+    if memory is None or not grown:
+        return True
+    available, total = memory
+    return available - 1.5 * grown >= reserve * total
+
+
 def _headless() -> None:
     """Draw with matplotlib without a window, in the builder and so in the
     sessions forked from it: on macOS its default backend loads AppKit,
@@ -102,7 +171,7 @@ def _headless() -> None:
 
 
 def _builder(conn, address, authkey, options: dict, build,
-             preload_embeddings: bool = True) -> None:
+             preload_embeddings: bool = True, reserve: float = 0.0) -> None:
     """Coordinate the builders of the engines, a process each, started
     anew (``spawn``, as this one, whose environment it has) at the first
     request of its engine: :func:`_engine_builder` builds the engine once
@@ -114,15 +183,20 @@ def _builder(conn, address, authkey, options: dict, build,
     that ends (killed, out of memory) fails the starts it had not
     answered, is told (``ended``), and the next request of its engine
     starts another; the others go on. End, with the builders, when the
-    server does. The other arguments are the builders' (see
-    :func:`_engine_builder`)."""
+    server does. An engine asked to be built ahead only (``build``, with
+    no start waiting for it), when its turn comes, is built if, an engine
+    built before, it leaves the fraction *reserve* of the memory to the
+    sessions (:func:`available_memory`, :func:`_room_for_another`: a
+    build takes up to the most one did, ``grown``, its builder tells);
+    else it is ``skipped``, and built by its first session. The other
+    arguments are the builders' (see :func:`_engine_builder`)."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the builders reap
     # It starts processes, which a daemon may not; it ends by os._exit.
     multiprocessing.current_process().daemon = False
     arguments = (address, authkey, options, build, preload_embeddings)
     builders = {}  # by engine
     try:
-        _coordinate(conn, builders, arguments)
+        _coordinate(conn, builders, arguments, reserve)
     except BaseException:
         traceback.print_exc()
     finally:
@@ -135,16 +209,31 @@ def _builder(conn, address, authkey, options: dict, build,
         os._exit(0)
 
 
-def _coordinate(conn, builders: dict, arguments: tuple) -> None:
+def _coordinate(
+    conn, builders: dict, arguments: tuple, reserve: float = 0.0
+) -> None:
     """Pass the requests of *conn* to the *builders*, by engine, started
     with *arguments* as needed, and their messages to *conn*, until the
     server ends (see :func:`_builder`)."""
     turns = []  # the engines whose build waits, in order
     building = None
+    grown = 0  # the most memory a build took, in bytes
     while True:
         if building is None and turns:
             building = turns.pop(0)
             builder = builders[building]
+            memory = available_memory()
+            if builder.conn is None and all(
+                waiting[0] == "build" for waiting in builder.waiting
+            ) and not _room_for_another(grown, reserve, memory):
+                conn.send(("skipped", None, None, (
+                    f"{building}: {memory[0] / 2**30:.1f} GB free of "
+                    f"{memory[1] / 2**30:.1f} GB, a build takes up to "
+                    f"{grown / 2**30:.1f} GB and {reserve:.0%} stay for "
+                    "the queries")))
+                builder.waiting.clear()
+                building = None
+                continue
             if builder.conn is None:
                 builder.start(building, arguments)
                 conn.send(("builder", None, None, (building, builder.pid)))
@@ -181,6 +270,9 @@ def _coordinate(conn, builders: dict, arguments: tuple) -> None:
                     turns.append(engine)
                 continue
             kind, key, start, _ = message
+            if kind == "grown":  # the memory its build took
+                grown = max(grown, message[3])
+                continue
             if kind != "status":
                 builder.sent.discard((key, start))
                 if engine == building:  # its build is over
@@ -252,9 +344,11 @@ def _engine_builder(conn, engine: str, address, authkey, options: dict,
     start of a session once, *env* the variables of its user, *feedback*
     where its ratings go); for a ``("build", None, None, engine, None,
     None)``, build it only, and tell it (``built`` or ``failed``, without
-    a key); end when the coordinator does. With *preload_embeddings*, the
-    engine's text embeddings are loaded before its first fork, for its
-    sessions to share them."""
+    a key), and, after it, ``("grown", None, None, bytes)``, the memory
+    of its own the build took (:func:`_anonymous_memory`); end when the
+    coordinator does. With *preload_embeddings*, the engine's text
+    embeddings are loaded before its first fork, for its sessions to
+    share them."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
     _headless()
     backend = LocalBackend(build=build,
@@ -269,12 +363,16 @@ def _engine_builder(conn, engine: str, address, authkey, options: dict,
             os._exit(0)
         if nl is None:
             try:
-                began = time.monotonic()
+                began, before = time.monotonic(), _anonymous_memory()
                 with lifted():  # the engine's commands are the server's
                     nl = backend.build(
                         engine,
                         lambda text: conn.send(("status", key, start, text)),
                     )
+                gc.collect()
+                conn.send((
+                    "grown", None, None, max(0, _anonymous_memory() - before)
+                ))
                 gc.freeze()  # a session's process then writes fewer pages
                 _warn_of_threads(engine)
             except Exception as error:
@@ -712,8 +810,11 @@ class Sessions:
     *query_seconds*, if given, ends its session's process. With
     *preload_embeddings*, the builders load the text embeddings of an
     engine (its documents' and its query model) before forking its
-    sessions, which share them. *build* must be importable by name, as the
-    coordinator of the builders is started anew.
+    sessions, which share them. The engines built ahead (:meth:`prebuild`)
+    are built while the fraction *prebuild_reserve* of the memory stays
+    for the queries (see :func:`available_memory`). *build* must be
+    importable by name, as the coordinator of the builders is started
+    anew.
     """
 
     def __init__(
@@ -725,6 +826,7 @@ class Sessions:
         withhold=(), activity_db=None, running: Optional[int] = None,
         query_seconds: Optional[float] = None,
         preload_embeddings: bool = True, uploads: Optional[dict] = None,
+        prebuild_reserve: float = 0.35,
     ):
         env = env or {}
         #: Where the sessions' uploads go, a folder each in its directory,
@@ -769,7 +871,7 @@ class Sessions:
         self._builder = context.Process(
             target=_builder, daemon=True, name="neurolang-repl-builder",
             args=(theirs, self._listener.address, authkey, options, build,
-                  preload_embeddings),
+                  preload_embeddings, prebuild_reserve),
         )
         # The variables *withhold* (the server's keys) are not the
         # builder's, nor so of the sessions it forks: a session has those
@@ -869,8 +971,10 @@ class Sessions:
     def prebuild(self, engines) -> None:
         """Have the builders build the *engines*, in their order, before
         their sessions ask for them: a session's start then takes no build.
-        An engine built already is not built again; one that fails is
-        told in the log, and built again by its first session."""
+        An engine built already is not built again; one that fails, or
+        that would leave too little memory to the queries
+        (*prebuild_reserve*), is told in the log, and built by its first
+        session."""
         try:
             with self._forking:
                 for engine in engines:
@@ -985,6 +1089,9 @@ class Sessions:
                     self.builders.pop(value, None)
                 elif kind == "built":
                     print(f"Built the engine {value}", flush=True)
+                elif kind == "skipped":
+                    print(f"Did not build the engine {value}: its first "
+                          "session builds it", flush=True)
                 elif kind == "failed":
                     print("An engine could not be built before its "
                           f"sessions (see above): {value}; its first "
@@ -1007,11 +1114,21 @@ class Sessions:
 
         # The builder is gone: no session starts any more.
         self.dead = "The builder of the engines ended: see the server's log"
+        if self.exit_without_builder and not self._closed:
+            print(f"{self.dead}: the server stops, for its service manager "
+                  "to start it again", flush=True)
+            sys.stdout.flush()
+            os._exit(1)
         with self._lock:
             sessions = list(self._sessions.values())
         for session in sessions:
             if not session._forked.is_set():
                 session._failed(self.dead)
+
+    #: Whether the server's process ends (status 1) when the builder ends
+    #: on its own (killed for memory): a service manager then starts it
+    #: again, rather than it serve pages that can start no session.
+    exit_without_builder = False
 
     #: Whether the server has the engines the admin console turns on
     #: built at once (:meth:`prebuild`), as those offered at its start.

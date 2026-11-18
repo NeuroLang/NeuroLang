@@ -3018,6 +3018,7 @@ def service_command(args) -> list:
         command += [] if args.preload_embeddings else [
             "--no-preload-embeddings"]
         command += [] if args.prebuild else ["--no-prebuild"]
+        command += ["--prebuild-reserve", str(args.prebuild_reserve)]
     command += ["--max-upload-mb", str(args.max_upload_mb),
                 "--max-uploads-mb", str(args.max_uploads_mb)]
     if args.users:
@@ -3084,6 +3085,9 @@ def systemd_unit(command: list, directory: Path) -> str:
         for name, value in service_environment(command[0]).items()
     )
     directory = str(directory).replace("%", "%%")
+    # A process killed for memory (a session's query, the builder) does not
+    # stop the server, as systemd's default (OOMPolicy=stop) would: the
+    # server tells the session, and the others go on.
     return (
         "[Unit]\n"
         "Description=The NeuroLang REPL (neurolang-repl-serve)\n"
@@ -3093,7 +3097,8 @@ def systemd_unit(command: list, directory: Path) -> str:
         f"WorkingDirectory={directory}\n"
         f"{environment}"
         "Restart=on-failure\n"
-        "RestartSec=5\n\n"
+        "RestartSec=5\n"
+        "OOMPolicy=continue\n\n"
         "[Install]\n"
         "WantedBy=default.target\n"
     )
@@ -3521,6 +3526,14 @@ def parse_args(argv=None):
         "and waits for it",
     )
     parser.add_argument(
+        "--prebuild-reserve", type=float,
+        default=DEFAULTS["prebuild_reserve"], metavar="FRACTION",
+        help="with --users and --local, build an engine ahead only if the "
+        "share FRACTION of the memory (the machine's, or the service's "
+        "limit) stays for the queries of the sessions; the others are "
+        "built by their first session",
+    )
+    parser.add_argument(
         "--no-preload-embeddings", action="store_false",
         dest="preload_embeddings", default=DEFAULTS["preload_embeddings"],
         help="with --local, do not load the text embeddings of an engine "
@@ -3859,9 +3872,11 @@ def main(argv=None) -> None:
                 running=args.max_running,
                 query_seconds=args.query_minutes * 60,
                 preload_embeddings=args.preload_embeddings,
+                prebuild_reserve=args.prebuild_reserve,
                 **options,
             )
             backend.prebuilds = args.prebuild
+            backend.exit_without_builder = True
             if args.prebuild:
                 # Their sessions then start at once (a fork), the first
                 # ones too.
