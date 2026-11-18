@@ -31,6 +31,18 @@ Unreleased
   for what is found from it, by the name of the file, without reading
   its rows again.
 
+- Magic sets no longer copy the rows of a stored relation they restrict:
+  a restriction rule, ``p^bf(x, y) :- magic_p^bf(x), r(x, y)`` of a
+  stored relation ``r``, is unfolded into the rules using it
+  (``unfold_restrictions``, the last step of ``magic_rewrite``), whose
+  plans join ``r`` with the magic predicate: relational algebra as any
+  join, the contractions as a product with the sparse view of ``r``.
+  Magic sets bind every predicate again, those of sparse views included
+  (no ``unbound_predicates``); the decoding of a mask reads
+  ``activated`` as its view, without the 20-million-row copy. See
+  :doc:`probabilistic_lifting`, *Restrictions of magic sets left to the
+  plans*.
+
 - Probabilistic queries whose plans are sums of products (joins,
   projections and selections over choices, probabilistic facts and
   deterministic relations, the independent and disjoint projections of
@@ -40,7 +52,8 @@ Unreleased
   into a normal form, and computed with ``scipy.sparse``, reading the
   engines' sparse views (``activated``, the atlas activations) as
   matrices. Plans it cannot write so are computed as before. With it,
-  magic sets leave the predicates of sparse views unbound. Answers are
+  the restrictions of stored relations by magic sets are joined by the
+  plans rather than copied (see below). Answers are
   unchanged (see :doc:`probabilistic_lifting`, *Computing the plans as
   tensor contractions*); ``[PROBABILISTIC_SOLVER] contractions = False``
   in ``config.ini`` turns it off.

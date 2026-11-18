@@ -383,3 +383,69 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
     assert set(contracted) == set(relational)
     for key, value in relational.items():
         assert contracted[key] == pytest.approx(value, rel=1e-12)
+
+
+def test_a_view_restricted_by_magic_sets_is_read_as_its_matrix(
+    contractions, monkeypatch
+):
+    """A view bound by magic sets by a relation (the voxels of an image)
+    is restricted in the plan by the join with its magic predicate, which
+    the product applies to the view's matrix: no restricted copy, the
+    answers of relational algebra."""
+    from nl_core.relational_algebra.linear_algebra import (
+        Axis,
+        ViewDeclaration,
+        build_sparse_views,
+        scipy_backend,
+    )
+
+    rng = np.random.default_rng(0)
+    voxels = list(itertools.product(range(4), range(2), range(2)))
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [v + (s,) for v in voxels for s in range(6) if rng.random() < .5],
+        name="stored_activated",
+    )
+    nl.add_tuple_set([(0, 0, 0), (1, 1, 1), (2, 0, 1)], name="mask")
+    nl.add_tuple_set(
+        [(s, t) for s in range(6) for t in ("pain", "fear")
+         if rng.random() < .5],
+        name="term_in_study",
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="selected_study"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        voxels, name="selected_voxel"
+    )
+    nl.execute_datalog_program(
+        "activated(i, j, k, s) :- stored_activated(i, j, k, s)"
+    )
+    nl.sparse_views = build_sparse_views(
+        nl.program_ir.symbol_table,
+        {"activated": ViewDeclaration(
+            Axis("voxel", (0, 1, 2)), Axis("study", (3,))
+        )},
+    )
+    viewed = []
+    view_of = scipy_backend._view_of
+    monkeypatch.setattr(
+        scipy_backend, "_view_of",
+        lambda factor: (lambda found: viewed.append(found) or found)(
+            view_of(factor)
+        ),
+    )
+    program = """
+image_active(i, j, k) :- mask(i, j, k)
+image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), \
+activated(i, j, k, s)
+q(t, PROB) :- (image_hit(s) & selected_study(s)) // \
+(term_in_study(s, t) & selected_study(s))
+ans(t, p) :- q(t, p)
+"""
+    contracted = _solve(nl, program)
+    assert contractions and any(found is not None for found in viewed)
+    relational = _solve(nl, program, contract=False)
+    assert set(contracted) == set(relational)
+    for key, value in relational.items():
+        assert contracted[key] == pytest.approx(value, rel=1e-12)
