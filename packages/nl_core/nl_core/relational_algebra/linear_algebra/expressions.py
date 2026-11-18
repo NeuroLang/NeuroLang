@@ -11,7 +11,8 @@ contraction of the tensors of its relations.
 
 The expressions of this module write such a plan:
 
-- :class:`Factor`, the tensor of a relation;
+- :class:`Factor`, the tensor of a relation, of entries 1, and
+  :class:`WeightedFactor`, of entries the numbers of a column;
 - :class:`TensorProduct`, the product of tensors over the union of their
   axes (a natural join);
 - :class:`Contraction`, the sum of a tensor over the axes it does not
@@ -29,7 +30,7 @@ plans of the probabilistic solver), normalised by the walkers of
 computed by a backend (:mod:`.scipy_backend`). An axis name is one
 variable.
 """
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 
 from nl_expr.expressions import Definition
 
@@ -44,9 +45,8 @@ class TensorExpression(Definition):
 
 class Factor(TensorExpression):
     """
-    The tensor of *relation*, a relation set: an axis per column of
-    *positions*, named by *axes*, its entry at a tuple the number in the
-    column *value*, or 1 without one.
+    The tensor of *relation*, a relation set, of entries 1: an axis per
+    column of *positions*, named by *axes*.
 
     Its tuples are those of the relation equal to the constant of each
     ``(position, constant)`` of *slices*, and with equal values in the
@@ -55,13 +55,11 @@ class Factor(TensorExpression):
 
     def __init__(
         self, relation: Any, axes: Tuple, positions: Tuple[int, ...],
-        value: Optional[int] = None, slices: Tuple = (),
-        diagonals: Tuple = (),
+        slices: Tuple, diagonals: Tuple,
     ):
         self.relation = relation
         self.factor_axes = tuple(axes)
         self.positions = tuple(positions)
-        self.value = value
         self.slices = tuple(slices)
         self.diagonals = tuple(diagonals)
 
@@ -69,22 +67,45 @@ class Factor(TensorExpression):
     def axes(self):
         return self.factor_axes
 
+    def _fields(self):
+        return dict(
+            relation=self.relation, axes=self.factor_axes,
+            positions=self.positions, slices=self.slices,
+            diagonals=self.diagonals,
+        )
+
     def replace(self, **changes):
         """Return this factor with the fields of *changes* replaced."""
-        fields = dict(
-            relation=self.relation, axes=self.factor_axes,
-            positions=self.positions, value=self.value,
-            slices=self.slices, diagonals=self.diagonals,
-        )
-        fields.update(changes)
-        return Factor(**fields)
+        return type(self)(**{**self._fields(), **changes})
+
+    def _entry(self):
+        return "1"
 
     def __repr__(self):
-        value = "1" if self.value is None else f"#{self.value}"
         cuts = "".join(
             f"[{p}={c!r}]" for p, c in self.slices
         ) + "".join(f"[{p}=={q}]" for p, q in self.diagonals)
-        return f"T<{value}>{cuts}{self.factor_axes}"
+        return f"T<{self._entry()}>{cuts}{self.factor_axes}"
+
+
+class WeightedFactor(Factor):
+    """
+    The tensor of *relation* as a :class:`Factor`, its entry at a tuple
+    the number in the column *value* (a probability).
+    """
+
+    def __init__(
+        self, relation: Any, axes: Tuple, positions: Tuple[int, ...],
+        value: int, slices: Tuple, diagonals: Tuple,
+    ):
+        super().__init__(relation, axes, positions, slices, diagonals)
+        self.value = value
+
+    def _fields(self):
+        return {**super()._fields(), "value": self.value}
+
+    def _entry(self):
+        return f"#{self.value}"
 
 
 class TensorProduct(TensorExpression):

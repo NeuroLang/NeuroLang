@@ -36,7 +36,10 @@ from ..relational_algebra import (
     eq_,
     str2columnstr_constant,
 )
-from ..relational_algebra.relational_algebra import Column
+from ..relational_algebra.relational_algebra import (
+    Column,
+    RelationalAlgebraOperation,
+)
 from ..relational_algebra.linear_algebra.expressions import (
     Contraction,
     Diagonal,
@@ -46,6 +49,7 @@ from ..relational_algebra.linear_algebra.expressions import (
     SliceAxis,
     TensorProduct,
     TensorRatio,
+    WeightedFactor,
 )
 from ..relational_algebra.linear_algebra.rewrites import (
     NotApplicable,
@@ -121,14 +125,16 @@ class ContractionPlan(PatternWalker):
     def deterministic(self, fact_set):
         relation = self._relation(fact_set.relation)
         columns = tuple(range(relation.arity))
-        return Factor(relation, columns, columns)
+        return Factor(relation, columns, columns, (), ())
 
     @add_match(ProbabilisticFactSet(Symbol, Constant[ColumnInt]))
     def probabilistic(self, fact_set):
         relation = self._relation(fact_set.relation)
         value = fact_set.probability_column.value
         positions = tuple(c for c in range(relation.arity) if c != value)
-        return Factor(relation, tuple(range(len(positions))), positions, value)
+        return WeightedFactor(
+            relation, tuple(range(len(positions))), positions, value, (), ()
+        )
 
     @add_match(ProbabilisticChoiceSet(Symbol, Constant[ColumnInt]))
     def choice(self, choice_set):
@@ -142,8 +148,9 @@ class ContractionPlan(PatternWalker):
         columns = tuple(relation.columns)
         value = columns.index(provenance_set.provenance_column.value)
         positions = tuple(c for c in range(len(columns)) if c != value)
-        return Factor(
-            relation, tuple(columns[c] for c in positions), positions, value
+        return WeightedFactor(
+            relation, tuple(columns[c] for c in positions), positions, value,
+            (), (),
         )
 
     @add_match(Selection(..., FunctionApplication(
@@ -272,7 +279,7 @@ class ContractionPlan(PatternWalker):
         )
 
 
-class SolveAsContractions:
+class SolveAsContractions(PatternWalker):
     """
     Step of the provenance query solver computing a plan of sums of
     products (:class:`ContractionPlan`) as tensor contractions: the plan
@@ -290,29 +297,33 @@ class SolveAsContractions:
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
 
-    def walk(self, expression):
+    @add_match(RelationalAlgebraOperation)
+    def contract(self, plan):
         try:
-            plan = normal_form(
-                ContractionPlan(self.symbol_table).walk(expression)
-            )
-            if isinstance(plan, Factor) or any(
-                not isinstance(a, str) for a in plan.axes
+            tensor = normal_form(ContractionPlan(self.symbol_table).walk(plan))
+            if isinstance(tensor, Factor) or any(
+                not isinstance(a, str) for a in tensor.axes
             ):
-                return expression
+                return plan
             column = Symbol.fresh().name
-            frame = evaluate(plan, column, config.getint(
+            frame = evaluate(tensor, column, config.getint(
                 "PROBABILISTIC_SOLVER", "dense_cells"
             ))
         except (NotApplicable, NeuroLangPatternMatchingNoMatch):
-            return expression
+            return plan
         except Exception:  # a bug: relational algebra still answers
             LOG.warning(
                 "The plan was not computed as contractions", exc_info=True
             )
-            return expression
+            return plan
         return ProvenanceAlgebraSet(
             Constant[AbstractSet](
                 NamedRelationalAlgebraFrozenSet(tuple(frame.columns), frame)
             ),
             str2columnstr_constant(column),
         )
+
+    @add_match(...)
+    def other(self, expression):
+        """Not a plan of relational algebra: left as it is."""
+        return expression

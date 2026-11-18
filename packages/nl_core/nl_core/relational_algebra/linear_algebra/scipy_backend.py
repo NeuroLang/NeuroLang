@@ -32,6 +32,7 @@ from .expressions import (
     TensorExpression,
     TensorProduct,
     TensorRatio,
+    WeightedFactor,
 )
 from .rewrites import NotApplicable
 
@@ -149,8 +150,8 @@ class _Evaluation:
             present &= code >= 0
             codes.append(code)
         values = (
-            np.ones(len(frame)) if factor.value is None
-            else frame.iloc[:, factor.value].to_numpy(np.float64)
+            frame.iloc[:, factor.value].to_numpy(np.float64)
+            if isinstance(factor, WeightedFactor) else np.ones(len(frame))
         )
         return _Tensor(
             groups, [c[present].astype(np.int64) for c in codes],
@@ -482,7 +483,9 @@ def _view_of(factor):
     """Return the view an engine built of the relation of *factor*, and
     the axes of its rows and of its columns, if there is one: a view
     without values, of a relation not sliced, every column an axis."""
-    if factor.slices or factor.diagonals or factor.value is not None:
+    if factor.slices or factor.diagonals or isinstance(
+        factor, WeightedFactor
+    ):
         return None
     frame = getattr(factor.relation, "_container", None)
     if not isinstance(frame, pd.DataFrame) or len(frame.columns) != len(
@@ -559,7 +562,9 @@ def _plan(expression):
         if axes.isna().to_numpy().any():  # joined with each other
             raise NotApplicable("missing values in a column of axes")
         try:
-            duplicated = factor.value is not None and axes.duplicated().any()
+            duplicated = isinstance(factor, WeightedFactor) and (
+                axes.duplicated().any()
+            )
         except TypeError as error:  # values without a hash
             raise NotApplicable(str(error)) from error
         if duplicated:

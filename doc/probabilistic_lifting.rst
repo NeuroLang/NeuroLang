@@ -2258,7 +2258,7 @@ computed as relational algebra: joins materialised, then grouped and
 summed. When the plan is a sum of products — joins, projections and
 selections of relations annotated with probabilities, and the
 projections and divisions of the lifted plans — the step
-``SolveAsContractions`` of the provenance solver
+``SolveAsContractions``, a pattern walker, of the provenance solver
 (``packages/nl_core/nl_core/probabilistic/sums_of_products.py``) computes
 it instead as a contraction of sparse tensors, with the same answers. It
 is on by default (``[PROBABILISTIC_SOLVER] contractions`` in
@@ -2272,7 +2272,9 @@ per column whose entry at a tuple is the tuple's probability. The
 expressions of tensors (``nl_core.relational_algebra.linear_algebra.expressions``)
 are NeuroLang expressions:
 
-* :math:`F_R` (``Factor``), the tensor of a relation :math:`R`;
+* :math:`F_R` (``Factor``), the tensor of a relation :math:`R`, of
+  entries 1, and (``WeightedFactor``) of entries the numbers of one of
+  its columns, its probabilities;
 * :math:`T_1 \times \dots \times T_k` (``TensorProduct``), of axes the
   union of theirs, the product of their entries;
 * :math:`\Sigma_K T` (``Contraction``), of axes :math:`K`, the sum of the
