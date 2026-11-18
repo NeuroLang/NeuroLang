@@ -97,9 +97,9 @@ QUERIES = {
     "noisy_or": (("s",), [("pf", ("v",)), ("act", ("v", "s"))]),
 }
 # Those of the first solver, computed as contractions.
-# Noisy-or (an independent projection, a fact variable out of any choice)
-# is not a sum of products: these plans are left to relational algebra.
-CONTRACTED = set(QUERIES) - {"noisy_or", "repeated_variable_in_atom"}
+# Every shape is computed as contractions, noisy-or (an independent
+# projection over a fact variable out of any choice) included.
+CONTRACTED = set(QUERIES)
 
 
 def _random_program(seed):

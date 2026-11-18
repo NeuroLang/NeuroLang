@@ -40,6 +40,7 @@ from ..relational_algebra.linear_algebra.expressions import (
     Contraction,
     Diagonal,
     Factor,
+    NoisyOrContraction,
     RenameAxes,
     SliceAxis,
     TensorProduct,
@@ -51,6 +52,8 @@ from ..relational_algebra.linear_algebra.rewrites import (
 )
 from ..relational_algebra.linear_algebra.scipy_backend import evaluate
 from ..relational_algebra_provenance import (
+    DisjointProjection,
+    IndependentProjection,
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
 )
@@ -227,6 +230,20 @@ class ContractionPlan(PatternWalker):
             term = RenameAxes(term, tuple(renames.items()))
             keep = tuple(range(len(keep)))
         return Contraction(term, keep)
+
+    @add_match(IndependentProjection)
+    def independent_projection(self, projection):
+        if projection.attributes is Ellipsis:
+            raise NotApplicable(f"{projection} keeps no named columns")
+        term = self.walk(projection.relation)
+        keep = tuple(a.value for a in projection.attributes)
+        if not set(keep) <= set(term.axes) or _unnamed(term):
+            raise NotApplicable(f"{projection} keeps no columns of its own")
+        return NoisyOrContraction(term, keep)
+
+    @add_match(DisjointProjection)
+    def disjoint_projection(self, projection):
+        return self.project(projection)
 
     @add_match(NaturalJoinInverse)
     def natural_join_inverse(self, join):

@@ -53,7 +53,7 @@ class RenameSummedAxesApart(ExpressionWalker):
             for a in contraction.term.axes
             if a not in contraction.keep and not isinstance(a, SummedAxis)
         )
-        return Contraction(
+        return type(contraction)(
             RenameAxes(contraction.term, renames), contraction.keep
         )
 
@@ -92,7 +92,7 @@ class PushAxisOperationsToFactors(ExpressionWalker):
         ):  # a summed axis named as a kept one: rename it first
             raise NotApplicable("a renaming onto a summed axis")
         inner = tuple((a, n) for a, n in renames.items() if a in contraction.keep)
-        return self.walk(Contraction(
+        return self.walk(type(contraction)(
             RenameAxes(contraction.term, inner),
             tuple(renames.get(a, a) for a in contraction.keep),
         ))
@@ -126,7 +126,7 @@ class PushAxisOperationsToFactors(ExpressionWalker):
         contraction = expression.term
         if expression.axis not in contraction.keep:
             return contraction
-        return self.walk(Contraction(
+        return self.walk(type(contraction)(
             SliceAxis(contraction.term, expression.axis, expression.constant),
             contraction.keep,
         ))

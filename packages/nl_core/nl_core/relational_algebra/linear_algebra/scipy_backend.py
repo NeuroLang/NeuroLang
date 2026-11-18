@@ -28,6 +28,7 @@ from .encoding import EntityIndex, views_of_columns
 from .expressions import (
     Contraction,
     Factor,
+    NoisyOrContraction,
     TensorExpression,
     TensorProduct,
     TensorRatio,
@@ -360,6 +361,27 @@ class ScipyTensorSolver(PatternWalker):
     @add_match(TensorProduct)
     def product(self, product):
         return self._products(product.terms, product.axes)
+
+    @add_match(NoisyOrContraction)
+    def noisy_or(self, contraction):
+        """``1 - exp(sum log(1 - p))``: a probability of 1 gives a log of
+        ``-inf`` and a noisy-or of 1; absent entries, of probability 0,
+        add nothing."""
+        term = contraction.term
+        terms = term.terms if isinstance(term, TensorProduct) else (term,)
+        evaluation = self.evaluation
+        tensor = self._products(terms, term.axes)
+        with np.errstate(divide="ignore"):
+            logs = np.log1p(-np.minimum(tensor.values, 1.))
+        sums = evaluation.sum_out(
+            _Tensor(tensor.groups, tensor.codes, logs),
+            evaluation.groups(contraction.keep),
+        )
+        values = -np.expm1(sums.values)
+        present = values != 0
+        return _Tensor(
+            sums.groups, [c[present] for c in sums.codes], values[present]
+        )
 
     @add_match(Contraction)
     def contraction(self, contraction):

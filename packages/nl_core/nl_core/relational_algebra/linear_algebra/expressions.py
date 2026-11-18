@@ -15,7 +15,8 @@ The expressions of this module write such a plan:
 - :class:`TensorProduct`, the product of tensors over the union of their
   axes (a natural join);
 - :class:`Contraction`, the sum of a tensor over the axes it does not
-  keep (a projection);
+  keep (a projection), and :class:`NoisyOrContraction`, their noisy-or
+  ``1 - prod(1 - p)`` (an independent projection);
 - :class:`TensorRatio`, a tensor divided by another over the axes of the
   latter (a natural join dividing the numbers);
 - :class:`RenameAxes`, :class:`SliceAxis` and :class:`Diagonal`, a tensor
@@ -115,6 +116,19 @@ class Contraction(TensorExpression):
 
     def __repr__(self):
         return f"\N{N-ARY SUMMATION}_{self.keep}{self.term!r}"
+
+
+class NoisyOrContraction(Contraction):
+    """
+    The noisy-or of the tensor *term* over its axes not in *keep*: at
+    each kept entry, ``1 - prod(1 - p)`` of the entries *p* it merges,
+    the probability that one of independent events holds (an independent
+    projection of a lifted plan). Entries absent from *term* are events
+    of probability 0.
+    """
+
+    def __repr__(self):
+        return f"\N{N-ARY COPRODUCT}_{self.keep}{self.term!r}"
 
 
 class TensorRatio(TensorExpression):
