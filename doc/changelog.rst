@@ -146,6 +146,17 @@ Unreleased
   of its query. A REPL session kept 0.6 GB more after each query decoding
   an image on ``neurosynth_iit``; the caches are now each chase's own
   (the same hits), and that session keeps 0.18 GB, however many queries.
+- Example programs that did not work: the start-up example of the
+  Neurosynth and NeuroStore engines joining the Cognitive Atlas subclasses
+  of *working memory* with the mentions returned no row (none of its seven
+  subclass labels is a term of Neurosynth), it now takes those of
+  *attention* (574 studies); two assistant examples on structural
+  connectivity defined a probabilistic choice named ``ends_in``, a
+  predicate of the vocabulary of tractography, and failed with
+  ``ForbiddenDisjunctionError`` (renamed ``ending_region``); and the
+  assistant example of the left uncinate fasciculus, which compared the
+  definitions of the 583 Cognitive Atlas concepts with the 14,371 studies
+  and timed out, takes the 21 kinds of *memory*.
 
 
 v0.1a23 (2026-11-15)
