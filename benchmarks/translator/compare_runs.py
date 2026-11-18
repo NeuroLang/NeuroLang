@@ -9,7 +9,8 @@ of OTHER in each mode (on, off) with that of REFERENCE in
 floats within rtol 1e-9, as ``compare_modes.py`` compares two modes. A
 change that applies in both modes of a run (a rewrite before the solver)
 is checked against another code this way. Then the median times and peaks
-of each mode of each run, for the queries that differ by more than 20%.
+of each mode of each run, for the queries answered (not failing) that
+differ by more than 20%.
 """
 import argparse
 import collections
@@ -25,7 +26,7 @@ def runs(directory):
     times = collections.defaultdict(lambda: collections.defaultdict(list))
     for line in open(Path(directory) / "times.jsonl"):
         row = json.loads(line)
-        if not row.get("profiled"):
+        if not row.get("profiled") and not row.get("error"):
             times[row["name"]][row["mode"]].append(
                 (row["seconds"], row["peak_mb"])
             )
