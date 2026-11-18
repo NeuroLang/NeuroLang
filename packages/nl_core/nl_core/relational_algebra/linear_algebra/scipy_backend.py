@@ -243,6 +243,29 @@ class _Evaluation:
             return tensor.matrix.T
         return None
 
+    def matrix_vector(self, held, vector, keep):
+        """Return the product of the matrix *held* and the tensor *vector*
+        of one of its two groups, summed over that group, as a sparse
+        matrix-vector product with a dense vector: the matrix (an
+        engine's view) is read as it is, never copied; None if they are
+        not such a pair."""
+        if (
+            held.matrix is None or len(vector.groups) != 1
+            or vector.groups[0] not in held.groups
+            or vector.groups[0] in keep
+        ):
+            return None
+        group = vector.groups[0]
+        other = held.groups[1 - held.groups.index(group)]
+        if other not in keep:
+            return None
+        dense = np.zeros(self.size(group))
+        dense[vector.codes[0]] = vector.values
+        matrix = held.matrix if held.groups[1] == group else held.matrix.T
+        out = matrix @ dense
+        codes = np.flatnonzero(out)
+        return _Tensor((other,), [codes], out[codes])
+
     def contract(self, left, right, keep):
         """Return the product of *left* and *right* summed over their
         groups not in *keep*."""
@@ -255,6 +278,10 @@ class _Evaluation:
         for big, small in ((left, right), (right, left)):
             if set(small.groups) <= set(big.groups) & set(keep):
                 return self.scale(big, small)
+        for held, vector in ((left, right), (right, left)):
+            product = self.matrix_vector(held, vector, keep)
+            if product is not None:
+                return product
         shared = [g for g in left.groups if g in right.groups]
         batch = [g for g in shared if g in keep]
         rows = batch + [g for g in left.groups if g not in shared]
@@ -392,7 +419,16 @@ class ScipyTensorSolver(PatternWalker):
     def _products(self, terms, axes):
         evaluation = self.evaluation
         keep = evaluation.groups(axes)
-        tensors = [self.walk(t) for t in terms]
+        # The smallest tensors first, the matrices of views last: the small
+        # ones combine into a vector before the large one is read, which a
+        # product with a vector then reads as it is.
+        tensors = sorted(
+            (self.walk(t) for t in terms),
+            key=lambda t: (
+                (True, t.matrix.nnz) if t.matrix is not None
+                else (False, len(t.values))
+            ),
+        )
         result = tensors.pop(0)
         while tensors:
             later = {g for t in tensors[1:] for g in t.groups}
