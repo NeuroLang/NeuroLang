@@ -1520,10 +1520,19 @@ class TestSparseViews:
         )
         assert view.matrix.nnz == 3  # the explicit zero of ('u', 2)
 
-    def test_the_engines_declare_no_views(self, small_neurosynth):
-        """Check the engines of the registry build no view: no query
-        reads them yet."""
-        assert small_neurosynth.sparse_views == {}
+    def test_the_engines_declare_the_views_contractions_read(
+        self, small_neurosynth
+    ):
+        """Check the coordinate-based engines build the voxel x study view
+        of ``activated``, which the probabilistic solver reads when it
+        computes sums of products as contractions; the views of atlases
+        the engine did not load are left out."""
+        views = small_neurosynth.sparse_views
+        assert "activated" in views
+        assert set(views) <= {
+            "activated", "schaefer_activated", "schaefer400_activated",
+            "destrieux_activated", "tian_activated",
+        }
 
     def test_no_view_of_a_predicate_the_engine_lacks(self, tmp_path):
         """Check the view of a predicate the engine does not define (left
