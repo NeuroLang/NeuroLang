@@ -48,6 +48,20 @@ Unreleased
   over the same indices, for products of views. Reading the rows of an
   empty relation of no columns no longer fails.
 
+- REPL in the browser: a *Network* tab draws an answer whose rows are edges
+  (two columns of the same sort, such as ``concept_1`` and ``concept_2``,
+  and a numeric weight) as a network laid out by force, with a slider for
+  the weakest edge shown; it starts with the strongest, two per node, and
+  says which edges and nodes it leaves out; of more than 40 nodes it names
+  the most linked, the others under the pointer. The size and the shade of
+  the nodes show a measure chosen (links, rows in a column, such as the
+  children of a parent, or the nodes under it in a hierarchy), the shade
+  of the edges their weight; a hierarchy can be drawn as a radial tree.
+  It zooms (Ctrl or ⌘ and the wheel, a pinch, buttons) and pans, naming
+  more nodes the closer; a node found by name or clicked is focused, with
+  its neighbours, and a panel lists them to go from one to the next.
+  The limits are in ``settings.yaml`` (``network``).
+
 - REPL server (``--users --local``): with ``--mcp``, it answers MCP
   clients, LLM agents such as Claude Code, at ``/mcp``, each user with a
   personal token of their account page (only its hash kept, in the users
@@ -117,7 +131,26 @@ Unreleased
   engine's own tractogram is listed first, never removed, its *Index*
   putting it back (:doc:`tutorial_decoding`).
 
+**Performance:**
+
+- Engine builds read the cached atlas activations as arrays instead of
+  rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
+  arrays as fixed-width bytes instead of through ``repr``; the cache
+  ``VERSION`` is 2, so caches kept by earlier versions are found again once.
+
 **Bug fixes:**
+
+- REPL server (``--users --local``): each engine has a builder process of
+  its own, started by a coordinator, rather than one builder for all: a
+  session of an engine built starts at once while another engine builds,
+  rather than after that build: on ``neurosynth_iit`` while
+  ``neurostore_iit`` builds, in 1.4-1.6 s rather than 96-98 s. A builder
+  that dies fails the starts of its engine only, is told in the log, and
+  the next session of its engine builds it again, rather than no session
+  starting until a restart. One engine still builds at a time, in the
+  order asked. The coordinator and each builder's own interpreter take
+  about 0.5 GB more memory than one builder did (resident and private,
+  both engines built, on Linux).
 
 - The relational-algebra chase no longer keeps every chase that ran: three
   of its rewritings were cached with ``lru_cache`` on the method, a cache

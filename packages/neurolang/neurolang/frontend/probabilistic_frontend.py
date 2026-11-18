@@ -79,6 +79,7 @@ from nl_core.probabilistic.cplogic.program import CPLogicMixin
 from nl_core.probabilistic.expressions import PROB, Condition
 from .resampling import (
     ResampledProgram,
+    relation_sums,
     resampling_relation,
     rewrite_resample_markers,
 )
@@ -1601,7 +1602,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         choice : str
             name of a probabilistic choice of the program.
         n : int, optional
-            number of replicates, by default 1000.
+            number of replicates, at least 1, by default 1000.
         scheme : str, optional
             ``"bayesian"`` (Dirichlet weights, the Bayesian bootstrap),
             ``"multinomial"`` (the classical bootstrap) or ``"poisson"``,
@@ -1632,10 +1633,22 @@ class NeurolangPDL(QueryBuilderDatalog):
         choices = self.program_ir.probabilistic_choices()
         if choice_symbol not in choices:
             raise ValueError(f"{choice} is not a probabilistic choice")
+        if n < 1:
+            raise ValueError(f"A resampling needs replicates, not n={n}")
         rows = choices[choice_symbol].value.as_pandas_dataframe()
-        relation, sums = resampling_relation(rows, n, scheme, seed)
+
+        def compute():
+            return resampling_relation(rows, n, scheme, seed)
+
+        # The replicates follow from the choice and the draws only: a
+        # program may keep them (``derived_tables``, an engine's build), as
+        # it keeps the pairs of a Euclidean bound.
+        derived = getattr(self.program_ir, "derived_tables", None)
+        relation = compute() if derived is None else derived(
+            "resampling", [rows], (n, scheme, seed), compute
+        )
         symbol = self.add_tuple_set(relation, name=name)
-        self.resamplings[name] = choice_symbol, sums
+        self.resamplings[name] = choice_symbol, relation_sums(relation, n)
         return symbol
 
     def _expand_resamplings(self, rule):
