@@ -62,6 +62,18 @@ Unreleased
   and shared by the sessions. Reading the rows of an
   empty relation of no columns no longer fails.
 
+- The sparse views of an engine are kept with the tables of its build
+  (``derived_tables`` of the data directory, a ``.npy`` file per array,
+  named by a checksum of the relations they are built from) and read
+  memory-mapped by the next build: their arrays (13 bytes a tuple, 1.8
+  GB for neurostore_iit) are pages of the files, shared by the
+  processes, by the engines built from the same tables, and reclaimed by
+  the system when memory is short, rather than private memory of each
+  builder; a build no longer spends time building them (24 s for
+  neurostore_iit). A table a build reads back from its file is named,
+  for what is found from it, by the name of the file, without reading
+  its rows again.
+
 - REPL in the browser: a *Network* tab draws an answer whose rows are edges
   (two columns of the same sort, such as ``concept_1`` and ``concept_2``,
   and a numeric weight) as a network laid out by force, with a slider for

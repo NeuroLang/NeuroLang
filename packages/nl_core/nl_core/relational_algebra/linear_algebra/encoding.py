@@ -125,6 +125,23 @@ def _dictionary(series_list):
     ]
 
 
+def _stored(dictionary: pd.Index) -> np.ndarray:
+    """Return the values of *dictionary* as an array a file holds."""
+    if dictionary.dtype.kind in "iufb":
+        return dictionary.to_numpy()
+    values = dictionary.to_numpy(dtype=object)
+    if not all(isinstance(value, str) for value in values):
+        raise TypeError("a dictionary of values neither numbers nor texts")
+    return values.astype(str) if len(values) else np.array([], dtype="U1")
+
+
+def _loaded(values: np.ndarray) -> pd.Index:
+    """Return the dictionary of the array *values* (:func:`_stored`)."""
+    if values.dtype.kind == "U":
+        return pd.Index(values.astype(object), dtype="str")
+    return pd.Index(values, copy=False)
+
+
 class EntityIndex:
     """
     The entities of a sort, numbered ``0 … n - 1`` in the order of their
@@ -206,6 +223,39 @@ class EntityIndex:
                 number[mask] = scattered
             numbers.append(number)
         return numbers
+
+    def state(self) -> dict:
+        """
+        Return the arrays the index is made of, by name, for
+        :meth:`from_state`: numbers, and texts as fixed-width unicode,
+        arrays a file can hold and give back memory-mapped.
+
+        Raises
+        ------
+        TypeError
+            If a column holds values neither numbers nor texts.
+        """
+        arrays = {
+            "width": np.asarray(self.width),
+            "strides": np.asarray(self._strides, dtype=np.int64),
+            "entities": self._entities.to_numpy(),
+        }
+        for column, dictionary in enumerate(self._dictionaries):
+            arrays[f"dictionary{column}"] = _stored(dictionary)
+        return arrays
+
+    @classmethod
+    def from_state(cls, arrays: Mapping[str, np.ndarray]) -> "EntityIndex":
+        """Return the index whose :meth:`state` is *arrays*."""
+        index = cls.__new__(cls)
+        index.width = int(arrays["width"])
+        index._strides = np.asarray(arrays["strides"])
+        index._entities = pd.Index(arrays["entities"], copy=False)
+        index._dictionaries = tuple(
+            _loaded(arrays[f"dictionary{column}"])
+            for column in range(index.width)
+        )
+        return index
 
     def __len__(self):
         return len(self._entities)
@@ -357,6 +407,45 @@ class SparseView:
                 "column entities"
             )
 
+    def state(self) -> dict:
+        """
+        Return the arrays of the view's matrix and of its float64
+        :meth:`weighted` matrix, by name, for :meth:`from_state`.
+        """
+        return {
+            "indptr": self.matrix.indptr, "indices": self.matrix.indices,
+            "data": self.matrix.data, "weighted": self.weighted().data,
+        }
+
+    @classmethod
+    def from_state(
+        cls, arrays: Mapping[str, np.ndarray], rows: Sequence,
+        columns: Sequence, row_index: EntityIndex,
+        column_index: EntityIndex, value=None,
+    ) -> "SparseView":
+        """
+        Return the view whose :meth:`state` is *arrays*, of the columns
+        *rows* and *columns* (and *value*) of its relation, numbered by
+        the indices: its matrices are those of the arrays, not copies
+        (when the arrays are mapped from a file, their pages are the
+        file's, shared by the processes reading it).
+        """
+        view = cls.__new__(cls)
+        view.rows, view.columns = tuple(rows), tuple(columns)
+        view.value = value
+        view.row_index, view.column_index = row_index, column_index
+        shape = (len(row_index), len(column_index))
+
+        def matrix(data):
+            return sparse.csr_array(
+                (data, arrays["indices"], arrays["indptr"]), shape=shape,
+                copy=False,
+            )
+
+        view.matrix = matrix(arrays["data"])
+        view._weighted = {np.dtype(np.float64): matrix(arrays["weighted"])}
+        return view
+
     def weighted(self, dtype=np.float64):
         """
         Return the matrix with its entries as numbers of *dtype*: 1 for
@@ -497,11 +586,21 @@ def sparse_view(
     seen by its number of rows. The arguments are those of
     :class:`SparseView`.
     """
+    return _registered(
+        relation,
+        (tuple(rows), tuple(columns), value, row_index, column_index),
+        lambda: SparseView(
+            relation, rows, columns, row_index, column_index, value, codes
+        ),
+    )
+
+
+def _registered(relation, key, make) -> SparseView:
+    """Return the view *key* of the frame of *relation*, or *make()*,
+    kept with the frame (:func:`sparse_view`)."""
     frame = relation.as_pandas_dataframe()
     if frame is None:
-        return SparseView(
-            relation, rows, columns, row_index, column_index, value, codes
-        )
+        return make()
     views = _VIEWS.get(id(frame))
     if views is None:
         views = _VIEWS[id(frame)] = {}
@@ -509,12 +608,9 @@ def sparse_view(
         if identity is not None:
             _FRAMES[identity] = weakref.ref(frame)
         weakref.finalize(frame, _forget, id(frame), identity)
-    key = (tuple(rows), tuple(columns), value, row_index, column_index)
     view = views.get(key)
     if view is None or view.matrix.nnz != len(frame):
-        view = views[key] = SparseView(
-            relation, rows, columns, row_index, column_index, value, codes
-        )
+        view = views[key] = make()
     return view
 
 
@@ -576,7 +672,7 @@ class ViewDeclaration(NamedTuple):
 
 
 def build_sparse_views(
-    symbol_table, declarations: Mapping[str, ViewDeclaration]
+    symbol_table, declarations: Mapping[str, ViewDeclaration], keep=None,
 ) -> dict:
     """
     Build the declared views of the predicates of *symbol_table*.
@@ -593,6 +689,12 @@ def build_sparse_views(
         or a renaming of a stored one (see :func:`stored_relation`).
     declarations : mapping
         :class:`ViewDeclaration` by predicate name.
+    keep : callable, optional
+        ``keep(frames, parameters, compute)``, which returns the arrays,
+        by name, *compute()* gives, found from the tables *frames* and
+        the text *parameters* only: kept (memory-mapped from a file, as
+        an engine's build keeps them) or computed. The views are then
+        those of the arrays it returns.
 
     Returns
     -------
@@ -604,6 +706,70 @@ def build_sparse_views(
         name: stored_relation(symbol_table, Symbol(name))
         for name in declarations
     }
+    sorts = {}
+    for declaration in declarations.values():
+        for axis in declaration[:2]:
+            sorts.setdefault(axis.sort, len(sorts))
+    frames = [
+        relation.as_pandas_dataframe() for relation, _ in stored.values()
+    ]
+    if keep is None or any(frame is None for frame in frames):
+        indices, views = _built_views(stored, declarations)
+    else:
+        def state():
+            arrays = {}
+            indices, views = _built_views(stored, declarations)
+            for sort, index in indices.items():
+                for name, array in index.state().items():
+                    arrays[f"sort{sorts[sort]}.{name}"] = array
+            for name, view in views.items():
+                for part, array in view.state().items():
+                    arrays[f"view.{name}.{part}"] = array
+            return arrays
+
+        arrays = keep(frames, repr(sorted(
+            (name, tuple(declaration), tuple(stored[name][1]))
+            for name, declaration in declarations.items()
+        )), state)
+        indices = {
+            sort: EntityIndex.from_state({
+                name.split(".", 1)[1]: array for name, array in arrays.items()
+                if name.startswith(f"sort{number}.")
+            })
+            for sort, number in sorts.items()
+        }
+        views = {}
+        for name, (rows, columns, value) in declarations.items():
+            positions = stored[name][1]
+            views[name] = SparseView.from_state(
+                {
+                    part: arrays[f"view.{name}.{part}"]
+                    for part in ("indptr", "indices", "data", "weighted")
+                },
+                [positions[c] for c in rows.columns],
+                [positions[c] for c in columns.columns],
+                indices[rows.sort], indices[columns.sort],
+                None if value is None else positions[value],
+            )
+    for name, view in views.items():
+        views[name] = _registered(
+            stored[name][0],
+            (view.rows, view.columns, view.value, view.row_index,
+             view.column_index),
+            lambda view=view: view,
+        )
+        views[name].weighted()  # the matrix products take, made once
+    # Hashing Arrow strings leaves their buffers in Arrow's memory pool,
+    # which keeps them from the system (0.8 GiB for activated of
+    # neurostore_iit) unless told otherwise.
+    if "pyarrow" in sys.modules:
+        sys.modules["pyarrow"].default_memory_pool().release_unused()
+    return views
+
+
+def _built_views(stored, declarations):
+    """Return the indices, by sort, and the views, by predicate, of the
+    *declarations* of the *stored* relations, built from their rows."""
     columns_of_sort = {}
     for name, declaration in declarations.items():
         relation, positions = stored[name]
@@ -621,7 +787,7 @@ def build_sparse_views(
     views = {}
     for name, (rows, columns, value) in declarations.items():
         relation, positions = stored[name]
-        views[name] = sparse_view(
+        views[name] = SparseView(
             relation,
             [positions[c] for c in rows.columns],
             [positions[c] for c in columns.columns],
@@ -629,10 +795,4 @@ def build_sparse_views(
             None if value is None else positions[value],
             (codes[name, 0], codes[name, 1]),
         )
-        views[name].weighted()  # the matrix products take, made once
-    # Hashing Arrow strings leaves their buffers in Arrow's memory pool,
-    # which keeps them from the system (0.8 GiB for activated of
-    # neurostore_iit) unless told otherwise.
-    if "pyarrow" in sys.modules:
-        sys.modules["pyarrow"].default_memory_pool().release_unused()
-    return views
+    return indices, views
