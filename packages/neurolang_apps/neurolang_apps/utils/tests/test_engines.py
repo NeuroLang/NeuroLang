@@ -1541,6 +1541,19 @@ class TestSparseViews:
         nl = self._engine(tmp_path, "{p: [b, a, w], absent: [a, b]}")
         assert set(nl.sparse_views) == {"p"}
 
+    def test_no_views_without_contractions(self, tmp_path):
+        """Check no view is built when the probabilistic solver does not
+        compute contractions, the only reader of the views."""
+        from nl_expr.config import config
+
+        previous = config.get("PROBABILISTIC_SOLVER", "contractions")
+        config.set("PROBABILISTIC_SOLVER", "contractions", "False")
+        try:
+            nl = self._engine(tmp_path, "{p: [b, a, w]}")
+        finally:
+            config.set("PROBABILISTIC_SOLVER", "contractions", previous)
+        assert nl.sparse_views == {}
+
     def test_no_views_declared(self, tmp_path):
         """Check an engine without ``sparse_views`` has none."""
         from neurolang_apps.utils import engine_registry
