@@ -101,7 +101,7 @@ YAML file of their password hashes (``--hash-password`` prints one;
 and, for each user or group, the variables of their sessions (``env``: the
 key of their assistant; a user's own over their group's). With
 ``--local``, each tab of a user has a session of its own, in a process
-forked from a builder's that builds each engine once
+forked from that of the builder of its engine, which builds it once
 (``neurolang_apps.utils.tui.sessions``), at most ``--max-sessions`` at once,
 ended after ``--idle-minutes`` unused. Each user changes their password at
 ``/account``. The users of the group ``admin``
