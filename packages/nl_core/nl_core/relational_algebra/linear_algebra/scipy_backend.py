@@ -322,6 +322,13 @@ class _Evaluation:
                 (right.values, (inner_right, column_keys)),
                 shape=(inner_size, column_size),
             )
+        if left_matrix.format != right_matrix.format:
+            # a view transposed is a CSC matrix: the other operand, not the
+            # view, is converted to its layout
+            if left_matrix.nnz <= right_matrix.nnz:
+                left_matrix = left_matrix.asformat(right_matrix.format)
+            else:
+                right_matrix = right_matrix.asformat(left_matrix.format)
         product = sparse.coo_array(left_matrix @ right_matrix)
         row_keys = product.row.astype(np.int64)
         column_keys = product.col.astype(np.int64)

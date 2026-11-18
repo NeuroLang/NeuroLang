@@ -316,3 +316,70 @@ def test_relations_the_translator_declines(
     assert set(result) == set(expected)
     for key, value in expected.items():
         assert result[key] == pytest.approx(value, rel=1e-12)
+
+
+@pytest.mark.parametrize("body, head", [
+    ("activated(i, j, k, s) & sel(s)", "i, j, k"),
+    ("activated(i, j, k, s) & sel(s) // term(s, t) & sel(s)", "i, j, k, t"),
+])
+def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
+    """A relation of an engine's sparse view is read as its matrix,
+    neither copied nor converted to another layout (a transposed view is
+    a CSC matrix: the other operand of a product is converted to it; of
+    a product of two views, one is), with the answers of relational
+    algebra."""
+    from scipy import sparse
+
+    from nl_core.relational_algebra.linear_algebra import (
+        Axis,
+        ViewDeclaration,
+        build_sparse_views,
+    )
+
+    rng = np.random.default_rng(0)
+    voxels = list(itertools.product(range(3), range(2), range(2)))
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [v + (s,) for v in voxels for s in range(5) if rng.random() < .5],
+        name="activated",
+    )
+    nl.add_tuple_set(
+        [(0, "pain"), (1, "pain"), (2, "fear"), (3, "fear"), (4, "pain")],
+        name="term",
+    )
+    nl.add_tuple_set([(0, 0, 0), (1, 1, 1), (2, 0, 1)], name="region")
+    nl.add_probabilistic_choice_from_tuples(
+        [(.1, 0), (.2, 1), (.3, 2), (.15, 3), (.25, 4)], name="sel"
+    )
+    nl.sparse_views = build_sparse_views(
+        nl.program_ir.symbol_table,
+        {"activated": ViewDeclaration(
+            Axis("voxel", (0, 1, 2)), Axis("study", (3,))
+        )},
+    )
+    view_nnz = nl.sparse_views["activated"].matrix.nnz
+    converted = []
+    for kind, method in (
+        (sparse.csc_array, "tocsr"), (sparse.csr_array, "tocsc")
+    ):
+        convert = getattr(kind, method)
+        monkeypatch.setattr(
+            kind, method, lambda self, *a, convert=convert, **k: (
+                converted.append(self.nnz) or convert(self, *a, **k)
+            ),
+        )
+    previous = config.get("PROBABILISTIC_SOLVER", "dense_cells")
+    config.set("PROBABILISTIC_SOLVER", "dense_cells", "0")
+    try:
+        program = (
+            f"q({head}, p) :- PROB[{body}] = p\n"
+            f"ans({head}, p) :- q({head}, p)"
+        )
+        contracted = _solve(nl, program)
+        assert contractions and view_nnz not in converted
+        relational = _solve(nl, program, contract=False)
+    finally:
+        config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)
+    assert set(contracted) == set(relational)
+    for key, value in relational.items():
+        assert contracted[key] == pytest.approx(value, rel=1e-12)
