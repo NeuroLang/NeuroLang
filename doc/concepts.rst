@@ -208,7 +208,7 @@ module handles YAML loading, MNI mask retrieval, and delegating to the
 engine's init script.
 
 **Init phases.**  When :func:`~neurolang.utils.engine_registry.build_engine`
-builds an engine, it runs up to ten phases, in this order:
+builds an engine, it runs up to eleven phases, in this order:
 
 #. **Builtins** (``builtins``) — registers known functions (``exp``,
    ``log``, ``startswith``) as callable symbols.  Simple list in YAML::
@@ -378,6 +378,13 @@ builds an engine, it runs up to ten phases, in this order:
          selected_study:
            source: study
            description: "Uniform choice over studies"
+
+#. **Sparse views** (``sparse_views``) — builds, last, the relations kept
+   as well as sparse matrices over the entities of two sorts of their
+   arguments (see :doc:`engine_configuration`)::
+
+       sparse_views:
+         activated: [voxel, study]
 
 All phases are optional — include only what your engine needs.
 If ``use_base_symbols`` and the declarative YAML fields (``atlases``,

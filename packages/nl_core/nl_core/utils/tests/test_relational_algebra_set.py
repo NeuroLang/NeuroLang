@@ -37,6 +37,11 @@ def test_relational_algebra_set_semantics_empty(ra_module):
     assert ras.arity == 2
 
 
+def test_rows_of_an_empty_set(ra_module):
+    frame = ra_module.RelationalAlgebraFrozenSet().as_pandas_dataframe()
+    assert frame is None or len(frame) == 0
+
+
 def test_projection_of_an_empty_set_keeps_the_columns_projected(ra_module):
     empty = ra_module.NamedRelationalAlgebraFrozenSet(("a", "b"), [])
     unnamed = empty.to_unnamed()

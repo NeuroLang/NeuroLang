@@ -592,9 +592,27 @@ def small_neurosynth():
     return _build_small_neurosynth()
 
 
-def _build_small_neurosynth(free_text=True):
+# The sparse views of the coordinate meta-analysis engines, those of the
+# comment of ``engines.yaml``.
+COORDINATE_VIEWS = {
+    "activated": ["voxel", "study"],
+    "schaefer_activated": ["label", "study"],
+    "schaefer400_activated": ["schaefer400_label", "study"],
+    "destrieux_activated": ["destrieux_label", "study"],
+    "tian_activated": ["tian_label", "study"],
+}
+
+
+@pytest.fixture(scope="module")
+def small_neurosynth_views():
+    """Build the neurosynth engine on tiny mock data, with the sparse
+    views of :data:`COORDINATE_VIEWS`."""
+    return _build_small_neurosynth(sparse_views=COORDINATE_VIEWS)
+
+
+def _build_small_neurosynth(free_text=True, sparse_views=None):
     """Build the neurosynth engine on tiny data, with the free-text rules
-    of its configuration or without."""
+    of its configuration or without, and the *sparse_views*, if any."""
     import nibabel as nib
 
     from neurolang_apps.utils import engine_registry
@@ -628,12 +646,15 @@ def _build_small_neurosynth(free_text=True):
             patch.object(engine_registry, "_phase_relations",
                          _fake_relations), \
             patch(f"{init}.fetch_pubmed_abstracts", _fake_abstracts):
-        if free_text:
+        if free_text and not sparse_views:
             return engine_registry.build_engine("neurosynth", DATA_DIR)
         config = engine_registry.get_engine_config
 
         def get_config(name, yaml_path=None):
-            return _without_free_text_rules(config(name, yaml_path))
+            cfg = config(name, yaml_path)
+            if not free_text:
+                cfg = _without_free_text_rules(cfg)
+            return {**cfg, "sparse_views": sparse_views or {}}
 
         with patch.object(engine_registry, "get_engine_config", get_config):
             return engine_registry.build_engine("neurosynth", DATA_DIR)
@@ -1418,3 +1439,119 @@ def test_the_kernel_radius_is_written_in_the_atlases_and_the_guidance():
         } == {radius}
         assert f"<= {radius})" in cfg["assistant_guidance"]
         assert "{kernel_radius_mm}" not in str(cfg)
+
+
+class TestSparseViews:
+    """Check the engine builds the sparse views it declares."""
+
+    def test_activated_is_a_voxel_by_study_view(
+        self, small_neurosynth_views
+    ):
+        """Check the view of ``activated`` holds its tuples, its voxels
+        and studies numbered by the view's entity indices."""
+        nl = small_neurosynth_views
+        view = nl.sparse_views["activated"]
+        with nl.scope as e:
+            rows = nl.query(
+                (e.i, e.j, e.k, e.s), nl.symbols.activated(e.i, e.j, e.k, e.s)
+            ).as_pandas_dataframe()
+        assert view.matrix.shape == (
+            len(view.row_index), len(view.column_index)
+        )
+        assert view.matrix.nnz == len(rows) > 0
+        tuples = view.to_frame()
+        expected = {tuple(row) for row in rows.itertuples(index=False)}
+        assert {
+            tuple(row) for row in tuples[list(view.rows) + list(
+                view.columns
+            )].itertuples(index=False)
+        } == expected
+
+    def test_the_atlases_share_the_studies_of_activated(
+        self, small_neurosynth_views
+    ):
+        """Check the region x study views of the atlases number the
+        studies as ``activated`` does, and hold their relation's tuples."""
+        from nl_expr.expressions import Symbol
+
+        small_neurosynth = small_neurosynth_views
+        views = small_neurosynth.sparse_views
+        for name in (
+            "schaefer_activated", "schaefer400_activated",
+            "destrieux_activated", "tian_activated",
+        ):
+            view = views[name]
+            assert view.column_index is views["activated"].column_index
+            rows = small_neurosynth.program_ir.symbol_table[
+                Symbol(name)
+            ].value.as_pandas_dataframe()
+            assert view.matrix.nnz == len(rows) > 0
+            assert {
+                tuple(row) for row in view.to_frame().itertuples(index=False)
+            } == {tuple(row) for row in rows.itertuples(index=False)}
+
+    @staticmethod
+    def _engine(tmp_path, views, body="p(x, y, w) :- q(x, y, w)"):
+        from neurolang_apps.utils import engine_registry
+
+        (tmp_path / "q.csv").write_text("x,y,w\nu,1,.5\nv,2,.25\nu,2,0\n")
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n"
+            "    sorts:\n"
+            "      a: {columns: [x], type: str}\n"
+            "      b: {columns: [y], type: int}\n"
+            "      w: {columns: [w], type: float}\n"
+            "    predicates:\n"
+            "      p: {arguments: [a, b, w]}\n"
+            "    relations: {q: q.csv}\n"
+            f"    datalog_init: '{body}'\n"
+            f"    sparse_views: {views}\n"
+        )
+        return engine_registry.build_engine("e", tmp_path, yaml_path=path)
+
+    def test_a_view_with_a_value(self, tmp_path):
+        """Check a third sort is the value of the entries, of a rule
+        renaming a stored relation."""
+        nl = self._engine(tmp_path, "{p: [b, a, w]}")
+        view = nl.sparse_views["p"]
+        np.testing.assert_array_equal(
+            view.matrix.toarray(), [[0.5, 0], [0, 0.25]]
+        )
+        assert view.matrix.nnz == 3  # the explicit zero of ('u', 2)
+
+    def test_the_engines_declare_no_views(self, small_neurosynth):
+        """Check the engines of the registry build no view: no query
+        reads them yet."""
+        assert small_neurosynth.sparse_views == {}
+
+    def test_no_view_of_a_predicate_the_engine_lacks(self, tmp_path):
+        """Check the view of a predicate the engine does not define (left
+        out of a lightweight engine, of an atlas not loaded) is not built,
+        and the others are."""
+        nl = self._engine(tmp_path, "{p: [b, a, w], absent: [a, b]}")
+        assert set(nl.sparse_views) == {"p"}
+
+    def test_no_views_declared(self, tmp_path):
+        """Check an engine without ``sparse_views`` has none."""
+        from neurolang_apps.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text("engines:\n  e:\n    description: bare\n")
+        nl = engine_registry.build_engine("e", tmp_path, yaml_path=path)
+        assert nl.sparse_views == {}
+
+    @pytest.mark.parametrize("views, body, match", [
+        ("{p: [a]}", "p(x, y, w) :- q(x, y, w)", "rows, of its columns"),
+        ("{p: [a, c]}", "p(x, y, w) :- q(x, y, w)", "sort 'c'"),
+        ("{p: [a, b]}", "p(x, y, w) :- q(x, y, w)", "spans each column"),
+        ("{p: [a, w]}", "p(x, y, w) :- q(x, y, w) & (w > 0)",
+         "not a stored relation"),
+    ])
+    def test_a_bad_declaration_is_a_clear_error(
+        self, tmp_path, views, body, match
+    ):
+        """Check a view of too few sorts, of a sort the predicate lacks,
+        leaving out a column or of a derived relation is refused."""
+        with pytest.raises(ValueError, match=match):
+            self._engine(tmp_path, views, body)

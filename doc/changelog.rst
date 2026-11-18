@@ -19,6 +19,23 @@ Unreleased
 
 **New features:**
 
+- ``nl_core.relational_algebra.linear_algebra``, the encoding of
+  relations for linear algebra: ``EntityIndex`` numbers the entities of a
+  sort (a voxel ``(i, j, k)`` is one; strings through a dictionary) and
+  back, and ``SparseView`` holds a relation between two entities, with
+  the value of a third column or not, as a ``scipy.sparse`` CSR matrix
+  with int32 indices, under set semantics, built once for the frame of
+  its rows (``sparse_view``). An engine declares the views it builds with
+  it, before the REPL server forks its sessions, which share them, in
+  ``sparse_views`` of ``engines.yaml`` (``activated: [voxel, study]``),
+  the entities of a sort numbered alike in all; the views of predicates
+  the engine does not define (left out of a lightweight engine) are not
+  built. The engines of the registry declare none yet, as no query reads
+  them. ``SparseView.weighted()`` gives the matrix with float64 entries
+  over the same indices, for products of views, made once with the views
+  and shared by the sessions. Reading the rows of an
+  empty relation of no columns no longer fails.
+
 - REPL in the browser: a *Network* tab draws an answer whose rows are edges
   (two columns of the same sort, such as ``concept_1`` and ``concept_2``,
   and a numeric weight) as a network laid out by force, with a slider for

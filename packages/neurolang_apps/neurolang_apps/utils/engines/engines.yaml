@@ -702,6 +702,16 @@ engines:
     # voxel index).  They stay usable when typed; ``reports`` and
     # ``labels`` are the forms that read as SQUALL verbs.
     hidden_predicates: [peak_reported, schaefer_voxels]
+    # No ``sparse_views`` yet: no query reads them, and they would cost
+    # each build 0.2-0.7 GiB and 8-30 s.  The evaluation of sums of
+    # products over them is to declare ``activated`` as a voxel x study
+    # matrix and the activations of the atlases as region x study ones:
+    #   sparse_views:
+    #     activated: [voxel, study]
+    #     schaefer_activated: [label, study]
+    #     schaefer400_activated: [schaefer400_label, study]
+    #     destrieux_activated: [destrieux_label, study]
+    #     tian_activated: [tian_label, study]
     # The sorts of the entities the predicates relate, declared once: the
     # columns an entity spans and their type.  A sort of N > 1 columns
     # reads ``in ND`` in SQUALL (``every Voxel in 3D``).
