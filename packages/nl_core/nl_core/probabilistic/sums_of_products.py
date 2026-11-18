@@ -14,6 +14,7 @@ and computes them with a backend
 (:mod:`~..relational_algebra.linear_algebra.scipy_backend`). Plans of
 other operations are left to relational algebra.
 """
+import logging
 from typing import AbstractSet
 
 from nl_expr.config import config
@@ -63,6 +64,8 @@ from .probabilistic_ra_utils import (
     ProbabilisticFactSet,
 )
 
+LOG = logging.getLogger(__name__)
+
 
 def _is_value(constant):
     return not isinstance(constant.value, Column)
@@ -71,6 +74,13 @@ def _is_value(constant):
 def _unnamed(term):
     """Whether the axes of *term* are the numbers of its columns."""
     return set(term.axes) == set(range(len(term.axes)))
+
+
+def _of(term, *axes):
+    """Return *term*, if *axes* are distinct axes of it."""
+    if len(set(axes)) < len(axes) or not set(axes) <= set(term.axes):
+        raise NotApplicable(f"{axes} are not distinct axes of {term}")
+    return term
 
 
 class ContractionPlan(PatternWalker):
@@ -141,14 +151,19 @@ class ContractionPlan(PatternWalker):
     )))
     def diagonal(self, selection):
         first, second = (c.value for c in selection.formula.args)
-        return Diagonal(self._unnamed(selection.relation), first, second)
+        return Diagonal(
+            _of(self._unnamed(selection.relation), first, second),
+            first, second,
+        )
 
     @add_match(Selection(..., FunctionApplication(
         eq_, (Constant[ColumnStr], Constant[ColumnStr])
     )))
     def diagonal_axes(self, selection):
         first, second = (c.value for c in selection.formula.args)
-        return Diagonal(self.walk(selection.relation), first, second)
+        return Diagonal(
+            _of(self.walk(selection.relation), first, second), first, second
+        )
 
     @add_match(
         Selection(..., FunctionApplication(eq_, (Constant[ColumnInt], ...))),
@@ -157,7 +172,8 @@ class ContractionPlan(PatternWalker):
     def slice_column(self, selection):
         column, constant = selection.formula.args
         return SliceAxis(
-            self._unnamed(selection.relation), column.value, constant.value
+            _of(self._unnamed(selection.relation), column.value),
+            column.value, constant.value,
         )
 
     @add_match(
@@ -167,14 +183,18 @@ class ContractionPlan(PatternWalker):
     def slice_axis(self, selection):
         axis, constant = selection.formula.args
         return SliceAxis(
-            self.walk(selection.relation), axis.value, constant.value
+            _of(self.walk(selection.relation), axis.value),
+            axis.value, constant.value,
         )
 
     @add_match(NameColumns)
     def name_columns(self, name_columns):
         term = self.walk(name_columns.relation)
         names = [c.value for c in name_columns.column_names]
-        if not _unnamed(term) or len(term.axes) != len(names):
+        if (
+            not _unnamed(term) or len(term.axes) != len(names)
+            or len(set(names)) < len(names)
+        ):
             raise NotApplicable(f"{name_columns} names no columns")
         return RenameAxes(term, tuple(enumerate(names)))
 
@@ -284,6 +304,11 @@ class SolveAsContractions:
                 "PROBABILISTIC_SOLVER", "dense_cells"
             ))
         except (NotApplicable, NeuroLangPatternMatchingNoMatch):
+            return expression
+        except Exception:  # a bug: relational algebra still answers
+            LOG.warning(
+                "The plan was not computed as contractions", exc_info=True
+            )
             return expression
         return ProvenanceAlgebraSet(
             Constant[AbstractSet](

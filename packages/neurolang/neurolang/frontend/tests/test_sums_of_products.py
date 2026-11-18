@@ -16,6 +16,16 @@ from nl_core.probabilistic import sums_of_products
 from nl_expr.config import config
 
 
+@pytest.fixture(autouse=True)
+def no_failed_contractions(caplog):
+    """A plan whose contraction fails, rather than declines, is computed
+    by relational algebra, with a warning: a test fails on it."""
+    yield
+    assert not [
+        r for r in caplog.records if r.name == sums_of_products.LOG.name
+    ]
+
+
 @pytest.fixture
 def contractions(monkeypatch):
     """The plans computed as contractions, by solve."""

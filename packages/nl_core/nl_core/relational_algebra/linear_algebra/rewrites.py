@@ -149,6 +149,8 @@ class PushAxisOperationsToFactors(ExpressionWalker):
     @add_match(Diagonal(Factor, ..., ...))
     def diagonal_factor(self, expression):
         factor = expression.term
+        if not {expression.first, expression.second} <= set(factor.axes):
+            raise NotApplicable("a diagonal of an axis the factor lacks")
         first, second = (
             factor.positions[factor.axes.index(a)]
             for a in (expression.first, expression.second)

@@ -558,7 +558,11 @@ def _plan(expression):
         axes = frame.iloc[:, list(factor.positions)]
         if axes.isna().to_numpy().any():  # joined with each other
             raise NotApplicable("missing values in a column of axes")
-        if factor.value is not None and axes.duplicated().any():
+        try:
+            duplicated = factor.value is not None and axes.duplicated().any()
+        except TypeError as error:  # values without a hash
+            raise NotApplicable(str(error)) from error
+        if duplicated:
             raise NotApplicable("a tuple of two probabilities")
         for axis, position in zip(factor.axes, factor.positions):
             kinds.setdefault(axis, set()).add(frame.dtypes.iloc[position].kind)
@@ -575,8 +579,8 @@ def _plan(expression):
             g: i if g in viewed else EntityIndex([i])
             for g, i in indices.items()
         }
-    except TypeError as error:  # values without an order to number them
-        raise NotApplicable(str(error)) from error
+    except (TypeError, ValueError) as error:  # values without an order,
+        raise NotApplicable(str(error)) from error  # or too many
     return set(group_of.values()), indices, frames, views
 
 

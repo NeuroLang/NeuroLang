@@ -2358,6 +2358,11 @@ walker, computes a normal form:
    the denominator at their common entries.
 5. The non-zero entries are decoded into the rows of a provenance set.
 
+The translator declines a selection or a diagonal of a column which is
+not an axis (a probability) and a naming of two columns alike. Any other
+error of the step is a bug: it is logged, and the plan is computed by
+relational algebra.
+
 With contractions on, magic sets leave the predicates of the engine's
 sparse views unbound (``magic_rewrite``'s ``unbound_predicates``): the
 plan reads such a relation whole, as its matrix, rather than a copy
