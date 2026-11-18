@@ -166,6 +166,11 @@ Unreleased
 
 **Bug fixes:**
 
+- With the Polars backend, a probabilistic query computed as contractions
+  failed (``IndexError``): the named relation sets of Polars take the rows
+  of a pandas frame, as those of pandas do, columns in the set's order;
+  columns of values Polars does not hold natively are read row by row.
+
 - REPL server (``--users --local``): each engine has a builder process of
   its own, started by a coordinator, rather than one builder for all: a
   session of an engine built starts at once while another engine builds,
