@@ -367,16 +367,25 @@ class SparseView:
         taken over it: the boolean ``matrix`` multiplies as a logical
         or, and ``R @ R.T`` would not count the studies two regions
         share.
+
+        The matrix of each *dtype* is made once and kept with the view:
+        one made before the REPL server forks its sessions
+        (:func:`build_sparse_views` makes that of float64) is shared by
+        them, rather than made again by each query of each session.
         """
-        data = self.matrix.data
-        data = (
-            np.ones(len(data), dtype=dtype) if self.value is None
-            else data.astype(dtype, copy=False)
-        )
-        return sparse.csr_array(
-            (data, self.matrix.indices, self.matrix.indptr),
-            shape=self.matrix.shape, copy=False,
-        )
+        dtype = np.dtype(dtype)
+        kept = self.__dict__.setdefault("_weighted", {})
+        if dtype not in kept:
+            data = self.matrix.data
+            data = (
+                np.ones(len(data), dtype=dtype) if self.value is None
+                else data.astype(dtype, copy=False)
+            )
+            kept[dtype] = sparse.csr_array(
+                (data, self.matrix.indices, self.matrix.indptr),
+                shape=self.matrix.shape, copy=False,
+            )
+        return kept[dtype]
 
     def __repr__(self):
         shape = "x".join(map(str, self.matrix.shape))
@@ -544,6 +553,7 @@ def build_sparse_views(
             None if value is None else positions[value],
             (codes[name, 0], codes[name, 1]),
         )
+        views[name].weighted()  # the matrix products take, made once
     # Hashing Arrow strings leaves their buffers in Arrow's memory pool,
     # which keeps them from the system (0.8 GiB for activated of
     # neurostore_iit) unless told otherwise.
