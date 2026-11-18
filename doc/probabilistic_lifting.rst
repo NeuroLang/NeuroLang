@@ -2365,10 +2365,10 @@ not an axis (a probability) and a naming of two columns alike. Any other
 error of the step is a bug: it is logged, and the plan is computed by
 relational algebra.
 
-Magic sets restrict a stored relation with a rule (see *Restrictions of
-magic sets left to the plans* below), which the plan joins: a relation
-held as a sparse view is read as its matrix, and the join with the magic
-predicate selects its rows in the product, without a restricted copy.
+With contractions on, magic sets leave the predicates of the engine's
+sparse views unbound (``magic_rewrite``'s ``unbound_predicates``): the
+plan reads such a relation whole, as its matrix, rather than a copy
+restricted to the bindings of the query.
 
 Correctness
 ~~~~~~~~~~~
@@ -2415,7 +2415,9 @@ denotes.
 
 The relational algebra keeps rows of probability 0 that the backend may
 leave out; the provenance solver filters them out of the answers in both
-cases. :math:`\square`
+cases. Leaving a predicate unbound by magic sets computes it whole, which
+the rewritten query restricts as it restricts any relation: the answers
+are those of the bound rewriting. :math:`\square`
 
 The tests (``packages/neurolang/neurolang/frontend/tests/test_sums_of_products.py``)
 solve random programs — a choice with weights of 0, facts of probability
@@ -2425,66 +2427,6 @@ noisy-or and resampling — with contractions, with relational algebra and
 by summing over every possible world, and compare the three to a relative
 :math:`10^{-12}`; ``linear_algebra/tests/test_tensor_expressions.py``
 tests the rewrites and the backend.
-
-Restrictions of magic sets left to the plans
---------------------------------------------
-
-Magic sets (``nl_core.datalog.magic_sets``) restrict a predicate to the
-bindings its uses pass to it. Of a predicate defined by a stored relation,
-as ``activated`` of the table of the voxels within reach of each peak,
-the restriction is a rule
-
-.. math::
-
-   p^{a}(\bar x) \leftarrow \mathit{magic\_p}^{a}(\bar x_b) \wedge
-   r(\bar x)
-
-of the variables :math:`\bar x_b` bound by the adornment :math:`a`. A
-bottom-up evaluation computes :math:`p^a` as a new relation, a copy of
-the rows of :math:`r` the magic predicate keeps: 20 million rows of
-``activated`` for the decoding of a mask, at each query, read by the plans
-of the rules using it without the view the engine holds of :math:`r`.
-
-``unfold_restrictions``, the last step of ``magic_rewrite``, substitutes
-the body of such a rule for each use of :math:`p^a` and drops the rule
-when nothing uses it any more. A rule is unfolded when it is the only rule
-of :math:`p^a`, :math:`p^a` is not the goal, its head is of distinct
-variables, its body is :math:`\mathit{magic\_p}^a` and one positive atom
-of a deterministic relation of the extensional database, and
-:math:`p^a` is not used under a negation. The use
-:math:`p^a(\bar t)` becomes
-:math:`\mathit{magic\_p}^a(\bar t_b) \wedge r(\bar t)`, the free
-variables of the rule renamed apart and a constant or a repeated variable
-of :math:`\bar t` an equality (``FlattenQueryInNonRecursiveUCQ``). The
-plan of each rule then joins :math:`r` with the magic predicate as it
-joins any relation: relational algebra as a join, the contractions as a
-product with the matrix of the view of :math:`r`, which selects its rows
-without copying them.
-
-**Proposition.** The program with the restrictions unfolded has the
-answers of the program rewritten by magic sets.
-
-*Proof.* :math:`p^a` is defined by one rule whose body uses neither
-:math:`p^a` nor any predicate defined in terms of it (its atoms are a magic
-predicate, defined from the bodies of the rules using :math:`p^a`, left of
-them, and a stored relation), so in every model of the program
-:math:`p^a(\bar t)` holds exactly when
-:math:`\exists \bar y\, \mathit{magic\_p}^a(\bar t_b) \wedge r(\bar t)`,
-:math:`\bar y` the variables of the body not in the head, none here.
-Replacing a positive atom by a formula equivalent to it in every model
-leaves the minimal model of a stratified program unchanged, and the uses
-under negation, which would change the strata, are not replaced. A
-probabilistic rule using :math:`p^a` joins the same deterministic tuples
-with its probabilistic atoms: the probabilities of its answers are the
-same. :math:`\square`
-
-The tests (``packages/nl_core/nl_core/datalog/tests/test_magic_sets.py``)
-compare the answers of the rewritten programs with those of the programs
-without magic sets: restrictions bound by a relation, by a constant, by
-a repeated variable, used twice; a restriction under negation, of a
-recursive predicate and the goal are kept. Of a probabilistic query, the
-plan reads the view and has the answers of relational algebra
-(``test_sums_of_products.py``).
 
 References
 ----------

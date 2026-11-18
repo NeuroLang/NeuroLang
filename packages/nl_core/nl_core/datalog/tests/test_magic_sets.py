@@ -1,13 +1,10 @@
 import operator
 
-import pytest
 from pytest import raises
 
 from nl_expr import expression_walker, expressions
 from nl_expr.logic import Negation, Union as LogicUnion
-from .. import (
-    Conjunction, DatalogProgram, Fact, Implication, extract_logic_predicates,
-)
+from .. import DatalogProgram, Fact, Implication, Conjunction
 from ..aggregation import (
     AGG_COUNT,
     BuiltinAggregationMixin,
@@ -67,8 +64,6 @@ a = C_("a")
 b = C_("b")
 c = C_("c")
 d = C_("d")
-u = S_("u")
-v = S_("v")
 eq = C_(operator.eq)
 
 aq = AdornedSymbol(q, "f", 0)
@@ -205,78 +200,31 @@ def test_resolution_works():
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
 
 
-def _magic_and_chase(code, edb, query):
-    """The rules magic sets rewrite *code* into, and whether the goal's
-    answers are those of the query of *code* without them."""
-    dl = Datalog()
-    dl.walk(code)
-    dl.walk(edb)
-    expected = Chase(dl).build_chase_solution()[query.functor].value
-    goal, mr = magic_rewrite(query, dl)
-    dl = Datalog()
-    dl.walk(mr)
-    dl.walk(edb)
-    assert Chase(dl).build_chase_solution()[goal].value == expected
-    return mr
-
-
-def _heads(rules):
-    return {rule.consequent.functor.name for rule in rules.formulas}
-
-
-sel = S_("sel")
-chosen = S_("chosen")
-anc_edb = Eb_([
-    F_(par(u, v)) for u, v in ((a, b), (b, c), (c, d), (a, d), (b, b))
-] + [F_(sel(u)) for u in (a, b, c)])
-
-
-@pytest.mark.parametrize("body", [
-    chosen(x) & anc(x, y),  # bound by a relation
-    anc(a, y),  # bound by a constant
-    chosen(x) & anc(x, x) & eq(y, x),  # a repeated variable
-    chosen(x) & anc(x, y) & anc(y, y),  # used twice
-])
-def test_restrictions_of_stored_relations_are_unfolded(body):
-    """A restriction of a stored relation, ``anc^bf(x, y) :- magic_anc^bf(x),
-    par(x, y)``, is not a rule of the rewritten program: its body is in
-    the rules that use it, with the answers of the program."""
+def test_unbound_predicates_are_computed_whole():
+    """A predicate given as unbound is not restricted to the bindings of
+    the query: no adorned version of it, its own rules kept, and the same
+    answers."""
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
     code = Eb_([
-        Imp_(q(y), body), Imp_(anc(x, y), par(x, y)),
-        Imp_(chosen(x), sel(x)),
-    ])
-    mr = _magic_and_chase(code, anc_edb, q(y))
-    assert not any(h.startswith("anc^") for h in _heads(mr))
-    assert any(
-        atom.functor.name.startswith("magic_anc^")
-        for rule in mr.formulas
-        for atom in extract_logic_predicates(rule.antecedent)
-    )
-
-
-def test_restrictions_not_unfolded():
-    """A restriction used under negation, one of a predicate of several
-    rules, of a recursive one, or the goal is kept."""
-    negated = Eb_([
-        Imp_(q(y), chosen(y) & chosen(x) & Negation(anc(x, y))),
-        Imp_(anc(x, y), par(x, y)),
-        Imp_(chosen(x), sel(x)),
-    ])
-    mr = _magic_and_chase(negated, anc_edb, q(y))
-    assert any(h.startswith("anc^") for h in _heads(mr))
-    recursive = Eb_([
-        Imp_(q(y), anc(a, y)),
+        Imp_(q(x), anc2(a, x)),
+        Imp_(anc2(x, y), anc(x, y)),
         Imp_(anc(x, y), par(x, y)),
         Imp_(anc(x, y), anc(x, z) & par(z, y)),
     ])
-    mr = _magic_and_chase(recursive, anc_edb, q(y))
-    assert any(h.startswith("anc^") for h in _heads(mr))
     dl = Datalog()
-    dl.walk(Eb_([Imp_(anc(x, y), par(x, y))]))
-    dl.walk(anc_edb)
-    goal, mr = magic_rewrite(anc(a, y), dl)
-    assert goal.name.startswith("anc^")
-    assert goal.name in _heads(mr)
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x), dl, unbound_predicates=(anc,))
+    heads = {rule.consequent.functor.name for rule in mr.formulas}
+    assert "anc2^bf_0" in heads  # restricted to the bindings of the query
+    assert "anc_0" in heads  # computed whole, without bindings
+    assert not any(h.startswith("anc^") for h in heads)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
 
 
 def test_resolution_works_2():
