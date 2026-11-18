@@ -40,9 +40,15 @@ def run_child(nl, name, text, mode, out, profile=False):
     from nl_expr.config import config
 
     config.set("PROBABILISTIC_SOLVER", "contractions", str(mode == "on"))
-    ran = []
+    from nl_core.relational_algebra.linear_algebra import scipy_backend
+
+    ran, viewed = [], []
     evaluate = sums_of_products.evaluate
     sums_of_products.evaluate = lambda *a: ran.append(1) or evaluate(*a)
+    view_of = scipy_backend._view_of
+    scipy_backend._view_of = lambda f: (
+        lambda found: viewed.append(found is not None) or found
+    )(view_of(f))
     try:
         with open("/proc/self/clear_refs", "w") as f:
             f.write("5")
@@ -70,7 +76,8 @@ def run_child(nl, name, text, mode, out, profile=False):
         f.write(json.dumps({
             "name": name, "mode": mode, "seconds": seconds,
             "peak_mb": (vm("VmHWM") - start) / 2**20,
-            "contractions": len(ran), "error": error,
+            "contractions": len(ran), "views_read": sum(viewed),
+            "error": error,
             "profiled": profile,
         }) + "\n")
 
