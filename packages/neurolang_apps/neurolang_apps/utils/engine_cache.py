@@ -234,6 +234,39 @@ def frame_digest(frame) -> str:
     )
 
 
+def _arrays_identity(frame):
+    """
+    Return what identifies the rows of *frame* while the arrays of its
+    columns live: the address, offset, size and type of each, in order,
+    so that a frame of the same arrays under other column names (the
+    relation of a rule renaming a stored one) is recognised; the frame's
+    id if an array is not known.
+    """
+    import pandas as pd
+
+    parts = [len(frame)]
+    for name in frame.columns:
+        array = frame[name].array
+        arrow = getattr(array, "_pa_array", None)
+        if arrow is not None:
+            parts.append((str(arrow.type),) + tuple(
+                (chunk.offset, len(chunk)) + tuple(
+                    (buffer.address, buffer.size)
+                    for buffer in chunk.buffers() if buffer is not None
+                )
+                for chunk in arrow.chunks
+            ))
+        elif isinstance(array, pd.arrays.NumpyExtensionArray):
+            values = array.to_numpy()
+            parts.append((
+                values.dtype.str, values.shape, values.strides,
+                values.__array_interface__["data"][0],
+            ))
+        else:
+            return id(frame)
+    return tuple(parts)
+
+
 class DerivedTables:
     """
     The tables of an engine's build, kept in *directory* as Arrow files named
@@ -265,9 +298,10 @@ class DerivedTables:
         self._digests = {}
 
     def _digest(self, frame) -> str:
-        if id(frame) not in self._digests:
-            self._digests[id(frame)] = frame, frame_digest(frame)
-        return self._digests[id(frame)][1]
+        identity = _arrays_identity(frame)
+        if identity not in self._digests:
+            self._digests[identity] = frame, frame_digest(frame)
+        return self._digests[identity][1]
 
     def __call__(self, kind: str, frames, parameters, compute):
         """Return the table derived as *kind* from the tables *frames* with
@@ -292,7 +326,7 @@ class DerivedTables:
     def _known(self, frame, key):
         """Return *frame*, the table named *key*: tables found from it
         are named from *key*, without reading its rows again."""
-        self._digests[id(frame)] = frame, key
+        self._digests[_arrays_identity(frame)] = frame, key
         return frame
 
     def arrays(self, kind: str, frames, parameters, compute):

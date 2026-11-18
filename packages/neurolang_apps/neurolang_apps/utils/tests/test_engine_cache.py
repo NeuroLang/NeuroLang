@@ -535,6 +535,12 @@ def test_a_table_read_back_is_named_without_its_rows(tmp_path, monkeypatch):
         engine_cache, "frame_digest", lambda f: pytest.fail("rows read")
     )
     derived.arrays("views", [kept], "p", lambda: {"a": np.arange(2)})
+    # the same arrays under another name, as a rule renaming it has them
+    renamed = kept.rename(columns={"i": "j"})
+    derived.arrays("views", [renamed], "p", lambda: {"a": np.arange(2)})
+    monkeypatch.undo()
+    # other rows of the same arrays are other rows
+    assert derived._digest(kept.iloc[1:3]) != derived._digest(kept.iloc[2:4])
 
 
 # -- The source tables of a build, kept as the derived ones ---------------
