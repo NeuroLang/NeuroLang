@@ -19,36 +19,32 @@ Unreleased
 
 **New features:**
 
-- REPL server (``--users --local``): the engines its builder holds share
-  their tables, and building ahead stays within the memory, after the six
-  engines of a server built ahead (#1334) took 32 GB of its 31 GB and were
-  killed again at each start. A table identical to one of an engine built
-  before is held once (``neurolang_apps.utils.shared_tables``); the tables
-  an engine derives while it is built (``activated``, 5.6 GB for
-  ``neurostore``) are kept in ``DATA_DIR/derived_tables`` as Arrow files
-  named by a checksum of their source tables, read memory-mapped rather
-  than computed again (see :doc:`engine_configuration`); an engine is
-  built ahead only while ``--prebuild-reserve`` (0.35) of the memory stays
-  for the queries, the others by their first session. The service
-  installed on Linux has ``OOMPolicy=continue``: a session killed for
-  memory no longer stops the server, and the server stops, for systemd to
-  start it again, if its builder is killed.
-- Engine builds keep their large source tables as they keep the tables
-  they derive (#1337): the studies activating and covering the regions of
-  the atlases and the points of the regions, the relation files, the
-  bootstrap replicates and NeuroStore's peaks, TF-IDF and labels are kept
-  in ``DATA_DIR/derived_tables`` as Arrow files named by a checksum of
-  what each is found from, and the next build maps them rather than
-  finding them again (see :doc:`engine_configuration`). On Margaret, with
-  the files kept, ``neurostore_iit`` builds in 23-25 s instead of 44-46 s
-  (76-84 s on master) with 1.2 GB of private memory instead of 3.1 GB
-  (8.9 GB), and ``neurosynth_iit`` in 14-23 s instead of 24-32 s
-  (22-50 s) with 0.7 GB instead of 1.1 GB (2.5 GB); their tables hold
-  the rows of master's, and the example and benchmark queries that run
-  on master (143 and 113) give its answers. The builds of the browser's bundle keep
-  no Arrow file (``build_engine(..., map_tables=False)``), which the
-  bundle's data zip carried since #1337. ``add_resampling`` refuses
-  ``n`` below 1.
+- REPL server (``--users --local``): with ``--mcp``, it answers MCP
+  clients, LLM agents such as Claude Code, at ``/mcp``, each user with a
+  personal token of their account page (only its hash kept, in the users
+  file), in a session of their own whose REPL answers in plain text: the
+  tools of ``neurolang-query --mcp`` over the network. The login page tells
+  how to add the server to a client; the files of the answers (viewer,
+  images, rows, query, graph) are kept in ``--mcp-results-dir`` and served
+  to the users logged in, the pages sandboxed. The server's builder and
+  sessions draw with matplotlib without a window: on macOS its default
+  backend aborted a forked session drawing a glass brain.
+
+- ``neurolang-query --mcp`` serves a session of the interactive REPL to an
+  MCP client, such as Claude Code, over stdin and stdout (extra ``mcp``).
+  The client's model answers questions as the query assistant does, in
+  Datalog: ``ask`` gives the assistant's prompt for a question, the
+  assistant's tools find the predicates and values and run queries, and
+  ``final_answer`` checks the answer as the assistant's, then returns its
+  explanation, the query with a comment on each rule, its first rows, glass
+  brains of its images and the links to its viewer, images, rows, query and
+  graph (``--results-dir``). ``--build-on-first-call`` builds the engine at
+  the first tool call, and ``--log FILE`` writes the build and each tool
+  call, with its time and outcome, to a file. ``ask`` with ``refine``
+  changes an answer, or the last query run, for a new question; ``repl``
+  runs statements and dot-commands in the session. See *From an MCP
+  client* in the LLM Query Assistant documentation.
+
 - REPL server (``--users --local``): the builder builds the engines the
   page offers when the server starts, the default first, and an engine
   the admin console turns on when it does, so that no session waits for
