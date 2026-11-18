@@ -2338,9 +2338,15 @@ walker, computes a normal form:
    of a voxel are one entity), every other axis a group of its own; each
    group's entities are numbered, by the view's index or by the values of
    the smallest factor holding the axis. It declines an expression in
-   which an axis summed by a contraction is read outside it.
+   which an axis summed by a contraction is read outside it, and one of
+   a factor with a missing value in an axis (relational algebra joins
+   missing values with each other), with a tuple of two probabilities
+   (two facts, whose noisy-or it would not compute, or two outcomes of a
+   choice) or with values without an order to number them.
 2. A factor is the view's sparse matrix, or its rows, sliced and tied,
-   their entities encoded; a row whose entity has no number is left out.
+   their entities encoded; a row whose entity has no number, a value
+   absent from the smallest factor holding the axis, joins no row of
+   that factor and is left out.
 3. The terms of a product are multiplied in order, each axis no later
    term reads summed out as soon as possible: by scaling when the axes of
    one are kept axes of the other, by a dense ``einsum`` when the

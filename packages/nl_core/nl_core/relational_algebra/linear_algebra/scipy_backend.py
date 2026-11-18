@@ -512,6 +512,11 @@ def _plan(expression):
     and a group is numbered by one index. The other axes are each a
     group, numbered by an index of the values of the smallest factor of
     it: the natural join keeps no other.
+
+    Relational algebra is left the factors of missing values in an axis
+    (which it joins with each other), of a tuple of two probabilities
+    (two facts, or two outcomes of a choice) and of values without an
+    order: :class:`NotApplicable`.
     """
     factors = _factors(expression)
     for contraction in _contractions(expression):
@@ -550,6 +555,11 @@ def _plan(expression):
         if id(factor) in views:
             continue
         frames[id(factor)] = frame = _rows(factor)
+        axes = frame.iloc[:, list(factor.positions)]
+        if axes.isna().to_numpy().any():  # joined with each other
+            raise NotApplicable("missing values in a column of axes")
+        if factor.value is not None and axes.duplicated().any():
+            raise NotApplicable("a tuple of two probabilities")
         for axis, position in zip(factor.axes, factor.positions):
             kinds.setdefault(axis, set()).add(frame.dtypes.iloc[position].kind)
             group = group_of.setdefault(axis, (axis,))
@@ -560,9 +570,13 @@ def _plan(expression):
                 indices[group] = columns
     if any(len(k) > 1 for k in kinds.values()):
         raise NotApplicable("an axis of values of different kinds")
-    indices = {
-        g: i if g in viewed else EntityIndex([i]) for g, i in indices.items()
-    }
+    try:
+        indices = {
+            g: i if g in viewed else EntityIndex([i])
+            for g, i in indices.items()
+        }
+    except TypeError as error:  # values without an order to number them
+        raise NotApplicable(str(error)) from error
     return set(group_of.values()), indices, frames, views
 
 

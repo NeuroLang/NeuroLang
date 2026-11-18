@@ -245,3 +245,64 @@ def test_random_programs(seed, name, contractions):
         for key, value in expected.items():
             assert result[key] == pytest.approx(value, rel=1e-12, abs=0)
     assert bool(contractions) == (name in CONTRACTED), contractions
+
+
+class _Unordered:
+    """A value with equality and a hash but no order, as a region."""
+
+    def __init__(self, n):
+        self.n = n
+
+    def __eq__(self, other):
+        return isinstance(other, _Unordered) and other.n == self.n
+
+    def __hash__(self):
+        return hash(self.n)
+
+
+_A, _B = _Unordered(0), _Unordered(1)
+_NAN = float("nan")
+
+
+@pytest.mark.parametrize("dense_cells", [0, 1000000])
+@pytest.mark.parametrize("act, sel, pf, body, head, expected", [
+    # values without an order: no index of them to number
+    ([(0, _A), (1, _B), (2, _B)], [(.4, _A), (.6, _B)], [(.3, _A)],
+     "act(v, s) & sel(s)", "v", {(0,): .4, (1,): .6, (2,): .6}),
+    ([(0, _A), (1, _B), (2, _B)], [(.4, _A), (.6, _B)], [(.3, _A)],
+     "act(v, s) & pf(s)", "v", {(0,): .3}),
+    ([(0, 0), (1, "a")], [(.5, 0), (.5, "a")], [(.3, 0)],
+     "act(v, s) & sel(s)", "v", {(0,): .5, (1,): .5}),
+    # a tuple of two probabilities: two facts, two outcomes of the choice
+    ([(0, 0), (0, 1), (1, 1), (2, 0)], [(.5, 0), (.5, 1)],
+     [(.3, 0), (.5, 0), (.6, 1)],
+     "pf(v) & act(v, s)", "s", {(0,): 1 - .7 * .5, (1,): 1 - .7 * .5 * .4}),
+    ([(0, 0), (1, 1), (2, 0)], [(.2, 0), (.3, 0), (.5, 1)], [(.3, 0)],
+     "act(v, s) & sel(s)", "v", {(0,): .5, (1,): .5, (2,): .5}),
+    # missing values, which relational algebra joins with each other
+    ([(0, 0.), (1, _NAN), (2, 1.)], [(.5, 0.), (.5, _NAN)], [(.3, 0.)],
+     "act(v, s) & sel(s)", "v", {(0,): .5, (1,): .5}),
+    ([(0, "a"), (1, None)], [(.5, "a"), (.5, None)], [(.3, "a")],
+     "act(v, s) & sel(s)", "v", {(0,): .5, (1,): .5}),
+])
+def test_relations_the_translator_declines(
+    act, sel, pf, body, head, expected, dense_cells
+):
+    """Values without an order, tuples of two probabilities and missing
+    values in a joined column are left to relational algebra, whose
+    answers they keep."""
+    previous = config.get("PROBABILISTIC_SOLVER", "dense_cells")
+    config.set("PROBABILISTIC_SOLVER", "dense_cells", str(dense_cells))
+    nl = NeurolangPDL()
+    nl.add_tuple_set(act, name="act")
+    nl.add_probabilistic_choice_from_tuples(sel, name="sel")
+    nl.add_probabilistic_facts_from_tuples(pf, name="pf")
+    try:
+        result = _solve(
+            nl, f"q({head}, p) :- PROB[{body}] = p\nans(x, p) :- q(x, p)"
+        )
+    finally:
+        config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)
+    assert set(result) == set(expected)
+    for key, value in expected.items():
+        assert result[key] == pytest.approx(value, rel=1e-12)
