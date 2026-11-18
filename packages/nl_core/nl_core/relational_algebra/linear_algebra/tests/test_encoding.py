@@ -396,3 +396,70 @@ def test_weighted_view_of_values():
     np.testing.assert_array_equal(
         view.weighted(np.float32).toarray(), [[0.5], [2.0]]
     )
+
+
+def _declared_views(activated, tfidf):
+    table = _symbol_table(activated, "ijks", "ijks")
+    table[Symbol("tfidf")] = _constant(tfidf)
+    return table, {
+        "activated": ViewDeclaration(
+            Axis("voxel", (0, 1, 2)), Axis("study", (3,))
+        ),
+        "tfidf": ViewDeclaration(
+            Axis("study", (0,)), Axis("term", (1,)), value=2
+        ),
+    }
+
+
+def test_build_sparse_views_kept_are_mapped(tmp_path):
+    """Views kept (as an engine's build keeps them, in files) are those
+    built from the rows, their matrices the arrays given back, mapped
+    from the files, not copies; they are computed once."""
+    def tfidf():
+        return NamedRelationalAlgebraFrozenSet(
+            ("study", "term", "w"),
+            [("s4", "pain", 0.5), ("s1", "pain", 0.25), ("s2", "fear", 1.)],
+        )
+
+    kept, computed = {}, []
+
+    def keep(frames, parameters, compute):
+        if parameters not in kept:
+            computed.append(parameters)
+            arrays = compute()
+            for number, array in enumerate(arrays.values()):
+                np.save(tmp_path / f"{number}.npy", array)
+            kept[parameters] = {
+                name: np.load(tmp_path / f"{number}.npy", mmap_mode="r")
+                for number, name in enumerate(arrays)
+            }
+        return kept[parameters]
+
+    built = build_sparse_views(*_declared_views(_activated(), tfidf()))
+    for _ in range(2):
+        views = build_sparse_views(
+            *_declared_views(_activated(), tfidf()), keep=keep
+        )
+        for name, view in views.items():
+            reference = built[name]
+            assert (view.rows, view.columns, view.value) == (
+                reference.rows, reference.columns, reference.value
+            )
+            for index, other in (
+                (view.row_index, reference.row_index),
+                (view.column_index, reference.column_index),
+            ):
+                pd.testing.assert_frame_equal(
+                    index.decode(range(len(index))),
+                    other.decode(range(len(other))),
+                )
+            assert (view.matrix != reference.matrix).nnz == 0
+            assert (view.weighted() != reference.weighted()).nnz == 0
+            mapped = [a for arrays in kept.values() for a in arrays.values()]
+            for array in (
+                view.weighted().data, view.matrix.data, view.matrix.indices,
+                view.matrix.indptr,
+            ):
+                assert any(np.shares_memory(array, m) for m in mapped)
+        assert views["activated"].column_index is views["tfidf"].row_index
+    assert len(computed) == 1

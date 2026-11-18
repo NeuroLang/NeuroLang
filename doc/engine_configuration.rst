@@ -168,7 +168,9 @@ may specify the following keys, all of them optional:
   the engine does not define (one a lightweight engine leaves out) is
   not built.  The probabilistic solver reads them when it computes sums
   of products as contractions; with ``[PROBABILISTIC_SOLVER]
-  contractions`` off in the configuration, no view is built.  The
+  contractions`` off in the configuration, no view is built.  A build
+  keeps the views with its tables (``derived_tables``) and the next one
+  reads them memory-mapped, shared by the processes.  The
   engines of ``coordinate_meta_analysis`` declare ``activated`` and the
   activations of the atlases
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or

@@ -2035,12 +2035,18 @@ def _phase_sparse_views(nl, cfg):
     from nl_core.relational_algebra.linear_algebra import build_sparse_views
 
     predicates = _declared_predicates(cfg)
+    tables = getattr(nl.program_ir, "derived_tables", None)
     nl.sparse_views = build_sparse_views(
         symbol_table,
         {
             name: _view_declaration(name, sorts, predicates)
             for name, sorts in declared.items()
         },
+        # kept with the build's tables, read memory-mapped: their pages are
+        # shared by the processes, and by engines of the same tables
+        None if tables is None else functools.partial(
+            tables.arrays, "sparse_views"
+        ),
     )
 
 

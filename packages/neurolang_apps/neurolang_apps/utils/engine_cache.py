@@ -110,6 +110,23 @@ def image_digest(img) -> str:
     )
 
 
+def _write_directory(path: Path, arrays: Dict[str, np.ndarray]) -> None:
+    """Write the directory *path* of *arrays*, a ``.npy`` file each, in one
+    piece or not at all."""
+    import shutil
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.mkdir()
+        for number, array in enumerate(arrays.values()):
+            np.save(temporary / f"{number}.npy", array, allow_pickle=False)
+        (temporary / "names.json").write_text(json.dumps(list(arrays)))
+        os.replace(temporary, path)
+    finally:
+        shutil.rmtree(temporary, ignore_errors=True)
+
+
 def _write(path: Path, write: Callable) -> None:
     """Write the file *path* with *write(file)*, in one piece or not at all."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -261,15 +278,55 @@ class DerivedTables:
         path = self.directory / f"{kind}-{key}.arrow"
         if path.exists():
             try:
-                return self._read(path)
+                return self._known(self._read(path), key)
             except Exception:  # damaged, or written by another version
                 pass
         frame = compute()
         try:
             _write(path, lambda file: self._write(file, frame))
-            return self._read(path)  # mapped: its pages are shared
+            # mapped: its pages are shared
+            return self._known(self._read(path), key)
         except Exception:
             return frame
+
+    def _known(self, frame, key):
+        """Return *frame*, the table named *key*: tables found from it
+        are named from *key*, without reading its rows again."""
+        self._digests[id(frame)] = frame, key
+        return frame
+
+    def arrays(self, kind: str, frames, parameters, compute):
+        """
+        Return the arrays, by name, found as *kind* from the tables
+        *frames* with *parameters*: those kept, memory-mapped, or
+        *compute()*, kept for the next time (a directory of a ``.npy``
+        file per array, the arrays numbers or fixed-width texts). As for
+        a table, a directory that cannot be written to, or files that
+        cannot be read, only mean that they are computed again.
+        """
+        key = digest(kind, parameters, *map(self._digest, frames))
+        path = self.directory / f"{kind}-{key}"
+        if path.is_dir():
+            try:
+                return self._read_arrays(path)
+            except Exception:  # damaged, or written by another version
+                pass
+        arrays = compute()
+        try:
+            _write_directory(path, arrays)
+            return self._read_arrays(path)
+        except Exception:
+            return arrays
+
+    @staticmethod
+    def _read_arrays(path: Path):
+        names = json.loads((path / "names.json").read_text())
+        return {
+            name: np.load(
+                path / f"{number}.npy", mmap_mode="r", allow_pickle=False
+            )
+            for number, name in enumerate(names)
+        }
 
     @staticmethod
     def _write(file, frame) -> None:
