@@ -19,6 +19,20 @@ Unreleased
 
 **New features:**
 
+- REPL in the browser: a *Network* tab draws an answer whose rows are edges
+  (two columns of the same sort, such as ``concept_1`` and ``concept_2``,
+  and a numeric weight) as a network laid out by force, with a slider for
+  the weakest edge shown; it starts with the strongest, two per node, and
+  says which edges and nodes it leaves out; of more than 40 nodes it names
+  the most linked, the others under the pointer. The size and the shade of
+  the nodes show a measure chosen (links, rows in a column, such as the
+  children of a parent, or the nodes under it in a hierarchy), the shade
+  of the edges their weight; a hierarchy can be drawn as a radial tree.
+  It zooms (Ctrl or ⌘ and the wheel, a pinch, buttons) and pans, naming
+  more nodes the closer; a node found by name or clicked is focused, with
+  its neighbours, and a panel lists them to go from one to the next.
+  The limits are in ``settings.yaml`` (``network``).
+
 - REPL server (``--users --local``): with ``--mcp``, it answers MCP
   clients, LLM agents such as Claude Code, at ``/mcp``, each user with a
   personal token of their account page (only its hash kept, in the users
