@@ -43,10 +43,10 @@ from .constraints_representation import (
 )
 from .expression_processing import (
     FlattenQueryInNonRecursiveUCQ,
-    _strongly_connected_components,
     any_body_preds_in_set,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
+    strongly_connected_components,
 )
 
 
@@ -484,7 +484,7 @@ def check_stratified(rules, origins=None) -> None:
             edges[head].add(functor)
             if negated or aggregates:
                 strict.add((head, functor))
-    component = _strongly_connected_components(edges)
+    component = strongly_connected_components(edges)
     for head, functor in strict:
         if component.get(head) is not None and (
             component.get(head) == component.get(functor)
