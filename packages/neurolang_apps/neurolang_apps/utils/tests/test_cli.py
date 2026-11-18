@@ -230,10 +230,12 @@ class TestEngineRegistry:
         assert set(nl.symbols["rel"].value) == {(1, "x")}
 
     def test_phase_relations_unsupported(self, tmp_path):
+        from neurolang.frontend import NeurolangPDL
+
         cfg = {"relations": {"rel": "r.txt"}}
         with pytest.raises(ValueError, match="Relation 'rel': Unsupported"):
             engine_registry._phase_relations(
-                None, cfg, "e", tmp_path, tmp_path
+                NeurolangPDL(), cfg, "e", tmp_path, tmp_path
             )
 
     def test_datalog_init_in_config(self):

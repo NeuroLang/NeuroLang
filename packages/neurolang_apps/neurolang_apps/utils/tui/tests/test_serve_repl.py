@@ -686,7 +686,7 @@ def test_the_systemd_unit_runs_the_command(serve, tmp_path):
     assert f"WorkingDirectory={tmp_path}\n" in unit
     assert "WantedBy=default.target" in unit
     # Restarted after a failure, not as fast as systemd stops restarting.
-    assert "Restart=on-failure\nRestartSec=5\n" in unit
+    assert "Restart=on-failure\nRestartSec=5\nOOMPolicy=continue\n" in unit
 
 
 def test_the_systemd_unit_runs_any_path_as_it_is(serve, tmp_path, monkeypatch):
