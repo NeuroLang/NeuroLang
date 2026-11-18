@@ -63,7 +63,7 @@ def run_child(nl, name, text, mode, out, profile=False):
             if profiler:
                 profiler.enable()
             result = nl.execute_datalog_program(text)
-        frame = None if result is None else result.as_pandas_dataframe()
+        frame = frames(result)
     except Exception as e:  # recorded, compared as such
         frame, error = None, f"{type(e).__name__}: {e}"[:300]
     if profiler:
@@ -82,10 +82,32 @@ def run_child(nl, name, text, mode, out, profile=False):
         }) + "\n")
 
 
+def frames(result):
+    """The answer of a query as a frame, or of named answers (``ans[name]``)
+    as a dict of frames, by name."""
+    if result is None:
+        return None
+    if isinstance(result, dict):
+        return {name: r.as_pandas_dataframe() for name, r in result.items()}
+    return result.as_pandas_dataframe()
+
+
 def same(a, b):
     (fa, ea), (fb, eb) = a, b
     if ea or eb:
         return ea == eb, f"errors {ea!r} / {eb!r}"
+    if isinstance(fa, dict) or isinstance(fb, dict):
+        if not (isinstance(fa, dict) and isinstance(fb, dict)) or (
+            set(fa) != set(fb)
+        ):
+            return False, "named answers"
+        notes = []
+        for name in sorted(fa):
+            ok, note = same((fa[name], None), (fb[name], None))
+            if not ok:
+                return False, f"{name}: {note}"
+            notes.append(f"{name}: {note}")
+        return True, "; ".join(notes)
     if fa is None or fb is None:
         return fa is None and fb is None, "none"
     if fa.shape != fb.shape:
