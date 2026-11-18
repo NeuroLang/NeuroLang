@@ -200,6 +200,33 @@ def test_resolution_works():
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
 
 
+def test_unbound_predicates_are_computed_whole():
+    """A predicate given as unbound is not restricted to the bindings of
+    the query: no adorned version of it, its own rules kept, and the same
+    answers."""
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_([
+        Imp_(q(x), anc2(a, x)),
+        Imp_(anc2(x, y), anc(x, y)),
+        Imp_(anc(x, y), par(x, y)),
+        Imp_(anc(x, y), anc(x, z) & par(z, y)),
+    ])
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x), dl, unbound_predicates=(anc,))
+    heads = {rule.consequent.functor.name for rule in mr.formulas}
+    assert "anc2^bf_0" in heads  # restricted to the bindings of the query
+    assert "anc_0" in heads  # computed whole, without bindings
+    assert not any(h.startswith("anc^") for h in heads)
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
+
+
 def test_resolution_works_2():
     """
     Reverse Same Generation from Abiteboul et al. 1995.
