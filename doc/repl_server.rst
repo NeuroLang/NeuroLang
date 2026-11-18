@@ -58,14 +58,19 @@ On a Linux server, from a checkout of NeuroLang, with `uv
    loginctl enable-linger $USER   # keep it running after you log out
 
 Then open ``https://SERVER:8443/``, log in as ``ann``, and open the admin
-console at ``https://SERVER:8443/admin`` to add the other users.  Before
-serving, the server prepares each engine: it downloads its data into
-``--data-dir`` and finds the tables it takes long to find, kept there, which
-takes a few minutes the first time and is quicker after; an engine it
-cannot prepare (a source down) is told in the log, and its first session
-tries again.  A session then starts from the data kept, without the
-network: the first one of an engine takes the time of a build (about a
-minute for Neurosynth with ``--light``), the next ones under a second.
+console at ``https://SERVER:8443/admin`` to add the other users.  The
+server answers at once and prepares each engine meanwhile, those the page
+offers first: it downloads its data into ``--data-dir`` and finds the
+tables it takes long to find, kept there, which takes a few minutes the
+first time (up to half an hour for the six engines of the Inria server
+after an update that changes the tables) and is quicker after.  A session
+of an engine not yet prepared waits for it, its page telling that the
+server is preparing the engine; the log tells *The engine NAME is ready*.
+An engine it cannot prepare (a source down) is told in the log, and its
+first session tries again.  A session then starts from the data kept,
+without the network: the first one of an engine takes the time of a build
+(about a minute for Neurosynth with ``--light``), the next ones under a
+second.
 
 
 Requirements
@@ -105,8 +110,9 @@ Serving
    The engines' data directory (default ``neurolang_data``, relative to
    where the command runs; give an absolute path for a service).
 ``--no-prepare``
-   Do not prepare the engines before serving; the first session of each
-   downloads what it lacks.
+   Do not prepare the engines; the first session of each downloads what it
+   lacks.  Without it, the server with ``--users`` serves while it prepares
+   them; one without ``--users`` prepares them before serving.
 ``--no-preload-embeddings``
    Do not load an engine's text embeddings when it is built (with
    ``--users``, before forking its sessions): its first query of them

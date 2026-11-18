@@ -19,6 +19,13 @@ Unreleased
 
 **New features:**
 
+- REPL server (``--users --local``): it answers at once and prepares the
+  engines in the background (those the page offers first), instead of
+  after their preparation, which took minutes after an update that
+  changed the tables kept (the page did not answer meanwhile). A session
+  of an engine not yet prepared waits for it, its page telling so; the
+  others start at once. Without ``--users`` the engines are still
+  prepared before serving.
 - REPL in the browser: a *Network* tab draws an answer whose rows are edges
   (two columns of the same sort, such as ``concept_1`` and ``concept_2``,
   and a numeric weight) as a network laid out by force, with a slider for
