@@ -196,6 +196,13 @@ def test_digest_names_the_same_values_the_same_way_on_any_platform():
         engine_cache.digest(np.array(["a", "c"]))
     )
     assert engine_cache.digest(2.0, "a") != engine_cache.digest(2.0, "b")
+    # strings: the same however the array holds them, and not run together
+    assert engine_cache.digest(np.array(["a", "bc"])) == (
+        engine_cache.digest(np.array(["a", "bc"], dtype=object))
+    )
+    assert engine_cache.digest(np.array(["ab", "c"])) != (
+        engine_cache.digest(np.array(["a", "bc"]))
+    )
 
 
 def test_the_grid_of_an_image_names_it_not_its_voxels():

@@ -45,7 +45,7 @@ import numpy as np
 # version of what they are made of: raise it when the way they are found
 # changes.
 DIRECTORY = "engine_cache"
-VERSION = 1
+VERSION = 2
 
 
 def cache_dir(data_dir, engine_name: str) -> Path:
@@ -77,9 +77,19 @@ def digest(*parts) -> str:
             elif part.dtype.kind == "f":
                 part = np.round(part * 1000).astype("<i8")
             else:
-                part = np.array([str(item) for item in part.ravel()])
-                hasher.update(repr(part.tolist()).encode())
-                continue
+                # the distinct items, in order, as fixed-width UTF-32 little
+                # endian, and the position of each: the same bytes anywhere,
+                # without a Python string for each of millions of items
+                import pandas as pd
+
+                codes, items = pd.factorize(
+                    part.ravel(), use_na_sentinel=False
+                )
+                items = np.asarray(items).astype(str)
+                hasher.update(items.astype(
+                    f"<U{max(items.dtype.itemsize // 4, 1)}"
+                ).tobytes() + f"{part.shape}".encode())
+                part = codes.astype("<i8")
             hasher.update(f"{part.shape}".encode() + part.tobytes())
         else:
             hasher.update(repr(part).encode())
