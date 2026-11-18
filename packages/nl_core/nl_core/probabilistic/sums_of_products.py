@@ -6,10 +6,13 @@ relations, its sums pushed through its joins
 (:class:`~.query_resolution.PushSumsThroughJoins`), gives each tuple of
 the result the sum, over the tuples of the join of the relations it
 merges, of the product of their probabilities (1 for a deterministic
-tuple). :class:`ContractionPlan` writes it in the tensor expressions of
-:mod:`~..relational_algebra.linear_algebra.contraction`, which
+tuple). :class:`ContractionPlan` translates it into the tensor expressions of
+:mod:`~..relational_algebra.linear_algebra.expressions`;
 :class:`SolveAsContractions`, a step of the provenance query solver,
-computes; plans of other operations are left to relational algebra.
+normalises them (:mod:`~..relational_algebra.linear_algebra.rewrites`)
+and computes them with a backend
+(:mod:`~..relational_algebra.linear_algebra.scipy_backend`). Plans of
+other operations are left to relational algebra.
 """
 from typing import AbstractSet
 
@@ -33,16 +36,20 @@ from ..relational_algebra import (
     str2columnstr_constant,
 )
 from ..relational_algebra.relational_algebra import Column
-from ..relational_algebra.linear_algebra.contraction import (
+from ..relational_algebra.linear_algebra.expressions import (
     Contraction,
+    Diagonal,
     Factor,
-    NotApplicable,
-    Product,
-    Ratio,
-    evaluate,
-    rename,
-    select,
+    RenameAxes,
+    SliceAxis,
+    TensorProduct,
+    TensorRatio,
 )
+from ..relational_algebra.linear_algebra.rewrites import (
+    NotApplicable,
+    normal_form,
+)
+from ..relational_algebra.linear_algebra.scipy_backend import evaluate
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
@@ -130,26 +137,25 @@ class ContractionPlan(PatternWalker):
         eq_, (Constant[ColumnInt], Constant[ColumnInt])
     )))
     def diagonal(self, selection):
-        factor = self._unnamed(selection.relation)
-        first, second = (
-            factor.positions[factor.axes.index(c.value)]
-            for c in selection.formula.args
-        )
-        return factor._replace(
-            diagonals=factor.diagonals + ((first, second),)
-        )
+        first, second = (c.value for c in selection.formula.args)
+        return Diagonal(self._unnamed(selection.relation), first, second)
+
+    @add_match(Selection(..., FunctionApplication(
+        eq_, (Constant[ColumnStr], Constant[ColumnStr])
+    )))
+    def diagonal_axes(self, selection):
+        first, second = (c.value for c in selection.formula.args)
+        return Diagonal(self.walk(selection.relation), first, second)
 
     @add_match(
         Selection(..., FunctionApplication(eq_, (Constant[ColumnInt], ...))),
         lambda selection: _is_value(selection.formula.args[1]),
     )
     def slice_column(self, selection):
-        factor = self._unnamed(selection.relation)
         column, constant = selection.formula.args
-        return factor._replace(slices=factor.slices + (
-            (factor.positions[factor.axes.index(column.value)],
-             constant.value),
-        ))
+        return SliceAxis(
+            self._unnamed(selection.relation), column.value, constant.value
+        )
 
     @add_match(
         Selection(..., FunctionApplication(eq_, (Constant[ColumnStr], ...))),
@@ -157,7 +163,7 @@ class ContractionPlan(PatternWalker):
     )
     def slice_axis(self, selection):
         axis, constant = selection.formula.args
-        return select(
+        return SliceAxis(
             self.walk(selection.relation), axis.value, constant.value
         )
 
@@ -167,7 +173,7 @@ class ContractionPlan(PatternWalker):
         names = [c.value for c in name_columns.column_names]
         if not _unnamed(term) or len(term.axes) != len(names):
             raise NotApplicable(f"{name_columns} names no columns")
-        return rename(term, dict(enumerate(names)))
+        return RenameAxes(term, tuple(enumerate(names)))
 
     @add_match(RenameColumn)
     def rename_column(self, rename_column):
@@ -186,7 +192,7 @@ class ContractionPlan(PatternWalker):
         axes = [renames.get(a, a) for a in term.axes]
         if len(set(axes)) < len(axes):
             raise NotApplicable("a renaming merging columns")
-        return rename(term, renames)
+        return RenameAxes(term, tuple(renames.items()))
 
     @add_match(
         NaturalJoin, lambda join: type(join) is NaturalJoin
@@ -202,10 +208,10 @@ class ContractionPlan(PatternWalker):
         terms = []
         for relation in relations:
             term = self.walk(relation)
-            terms += term.terms if isinstance(term, Product) else [term]
+            terms += term.terms if isinstance(term, TensorProduct) else [term]
         if any(isinstance(a, int) for t in terms for a in t.axes):
             raise NotApplicable("a join of unnamed columns")
-        return Product(tuple(terms))
+        return TensorProduct(tuple(terms))
 
     @add_match(Projection)
     def project(self, projection):
@@ -218,12 +224,13 @@ class ContractionPlan(PatternWalker):
             renames.update(
                 (a, Symbol.fresh().name) for a in term.axes if a not in keep
             )
-            term, keep = rename(term, renames), tuple(range(len(keep)))
+            term = RenameAxes(term, tuple(renames.items()))
+            keep = tuple(range(len(keep)))
         return Contraction(term, keep)
 
     @add_match(NaturalJoinInverse)
     def natural_join_inverse(self, join):
-        return Ratio(
+        return TensorRatio(
             self.walk(join.relation_left), self.walk(join.relation_right)
         )
 
@@ -248,7 +255,9 @@ class SolveAsContractions:
 
     def walk(self, expression):
         try:
-            plan = ContractionPlan(self.symbol_table).walk(expression)
+            plan = normal_form(
+                ContractionPlan(self.symbol_table).walk(expression)
+            )
             if isinstance(plan, Factor) or any(
                 not isinstance(a, str) for a in plan.axes
             ):

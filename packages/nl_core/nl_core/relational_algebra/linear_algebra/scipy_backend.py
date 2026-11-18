@@ -1,37 +1,18 @@
 """
-Sums of products of relations as contractions of sparse tensors.
+A backend computing tensor expressions (:mod:`.expressions`) in normal
+form (:mod:`.rewrites`) with scipy's sparse matrices and numpy.
 
-A relation whose tuples carry a number, a probability or 1, is a tensor
-with an axis per column: its entry at a tuple is the tuple's number, and
-0 off the relation. A natural join multiplies the numbers of the tuples
-it pairs, a projection sums those of the tuples it merges: over the
-semiring ``(+, ×)`` of the reals, a plan of joins and projections is a
-contraction of the tensors of its relations, the axes it projects away
-summed, the others kept.
-
-The plan is written in the expressions of this module:
-
-- :class:`Factor`, a relation, its tuples sliced by constants, with the
-  numbers of a column of it, or 1;
-- :class:`Product`, the product of tensors over the union of their axes
-  (a natural join);
-- :class:`Contraction`, the sum of a tensor over the axes it does not
-  keep (a projection);
-- :class:`Ratio`, a tensor divided by another over the axes of the
-  latter (a natural join dividing the numbers).
-
-:func:`evaluate` computes one. An axis name is one variable: the
-entities of the axes that one engine's view groups (a voxel ``(i, j,
-k)``) are numbered by the view's :class:`~.encoding.EntityIndex`, and
-the values of each other axis by an index of its own. The terms of a
-product are multiplied pairwise, in their order, the axes no later term
-reads summed out as soon as possible: each pair as a sparse matrix
-product (SpGEMM) of the two tensors laid out as matrices of their kept
-axes by their shared ones, as a scaling when the axes of one are kept
-ones of the other, or as a dense ``numpy.einsum`` when both and the
-result are small. A relation held by an engine's
-:class:`~.encoding.SparseView` (same columns) is read as its matrix.
-Numbers are float64; entries of 0 may be left out of the result.
+Axes are grouped and numbered: the axes an engine's view groups (a voxel
+``(i, j, k)``) are numbered by the view's :class:`~.encoding.EntityIndex`,
+each other axis by an index of its values. The terms of a product are
+multiplied pairwise, in their order, the axes no later term reads summed
+out as soon as possible: each pair as a sparse matrix product (SpGEMM) of
+the two tensors laid out as matrices of their kept axes by their shared
+ones, as a scaling when the axes of one are kept ones of the other, or as
+a dense ``numpy.einsum`` when both and the result are small. A relation
+held by an engine's :class:`~.encoding.SparseView` (same columns) is read
+as its matrix. Numbers are float64; entries of 0 may be left out of the
+result.
 """
 import math
 import string
@@ -41,119 +22,29 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+from nl_expr.expression_walker import PatternWalker, add_match
+
 from .encoding import EntityIndex, views_of_columns
-
-
-class NotApplicable(Exception):
-    """The expression is not a sum of products :func:`evaluate`
-    computes."""
-
-
-class Factor(NamedTuple):
-    """
-    The tensor of *relation*: an axis per column of *positions*, named
-    by *axes*, its entry at a tuple the number in the column *value*, or
-    1 without one.
-
-    Its tuples are those of the relation equal to the constant of each
-    ``(position, constant)`` of *slices*, and with equal values in the
-    two columns of each ``(position, position)`` of *diagonals*.
-    """
-
-    relation: Any
-    axes: Tuple
-    positions: Tuple[int, ...]
-    value: Optional[int] = None
-    slices: Tuple = ()
-    diagonals: Tuple = ()
-
-
-class Product(NamedTuple):
-    """The product of the tensors of *terms*, over the union of their
-    axes."""
-
-    terms: Tuple
-
-    @property
-    def axes(self):
-        return tuple(dict.fromkeys(a for t in self.terms for a in t.axes))
-
-
-class Contraction(NamedTuple):
-    """The sum of the tensor *term* over its axes not in *keep*, the
-    axes of the result, in that order."""
-
-    term: Any
-    keep: Tuple
-
-    @property
-    def axes(self):
-        return self.keep
-
-
-class Ratio(NamedTuple):
-    """The tensor *numerator* divided by *denominator*, of axes the
-    numerator has, at the entries of both."""
-
-    numerator: Any
-    denominator: Any
-
-    @property
-    def axes(self):
-        return self.numerator.axes
+from .expressions import (
+    Contraction,
+    Factor,
+    TensorExpression,
+    TensorProduct,
+    TensorRatio,
+)
+from .rewrites import NotApplicable
 
 
 def _children(expression):
     if isinstance(expression, Contraction):
         return (expression.term,)
-    if isinstance(expression, Product):
+    if isinstance(expression, TensorProduct):
         return expression.terms
-    if isinstance(expression, Ratio):
+    if isinstance(expression, TensorRatio):
         return (expression.numerator, expression.denominator)
-    return ()
-
-
-def _rebuild(expression, children):
-    if isinstance(expression, Contraction):
-        return expression._replace(term=children[0])
-    if isinstance(expression, Product):
-        return Product(tuple(children))
-    return Ratio(*children)
-
-
-def rename(expression, renames):
-    """Return *expression* with its axes renamed by *renames*, a mapping
-    of the axes to rename to their new names (axes it sums are not)."""
     if isinstance(expression, Factor):
-        return expression._replace(
-            axes=tuple(renames.get(a, a) for a in expression.axes)
-        )
-    if isinstance(expression, Contraction):
-        inner = {a: n for a, n in renames.items() if a in expression.keep}
-        return Contraction(
-            rename(expression.term, inner),
-            tuple(renames.get(a, a) for a in expression.keep),
-        )
-    return _rebuild(expression, [
-        rename(child, renames) for child in _children(expression)
-    ])
-
-
-def select(expression, axis, constant):
-    """Return *expression* restricted to its entries whose *axis* is
-    *constant*: each factor of the axis sliced."""
-    if isinstance(expression, Factor):
-        if axis not in expression.axes:
-            return expression
-        position = expression.positions[expression.axes.index(axis)]
-        return expression._replace(
-            slices=expression.slices + ((position, constant),)
-        )
-    if isinstance(expression, Contraction) and axis not in expression.keep:
-        return expression
-    return _rebuild(expression, [
-        select(child, axis, constant) for child in _children(expression)
-    ])
+        return ()
+    raise NotApplicable(f"{expression} is not in normal form")
 
 
 def _factors(expression):
@@ -438,28 +329,6 @@ class _Evaluation:
         codes = list(np.nonzero(result))
         return _Tensor(out, codes, result[tuple(codes)])
 
-    def evaluate(self, expression):
-        if isinstance(expression, Factor):
-            return self.leaf(expression)
-        if isinstance(expression, Ratio):
-            return self.scale(
-                self.evaluate(expression.numerator),
-                self.evaluate(expression.denominator), divide=True,
-            )
-        keep = self.groups(expression.axes)
-        terms = expression.terms if isinstance(expression, Product) else (
-            expression.term.terms if isinstance(expression.term, Product)
-            else (expression.term,)
-        )
-        tensors = [self.evaluate(t) for t in terms]
-        result = tensors.pop(0)
-        while tensors:
-            later = {g for t in tensors[1:] for g in t.groups}
-            result = self.contract(
-                result, tensors.pop(0), set(keep) | later
-            )
-        return self.sum_out(result, keep)
-
     def frame(self, tensor, axes, value):
         """Return the entries of *tensor*, its axes in the order of
         *axes*, and its numbers as the column *value*."""
@@ -469,6 +338,51 @@ class _Evaluation:
         ]
         parts.append(pd.DataFrame({value: tensor.values}))
         return pd.concat(parts, axis=1)[list(axes) + [value]]
+
+class ScipyTensorSolver(PatternWalker):
+    """Compute a tensor expression in normal form as a :class:`_Tensor`,
+    over the groups, indices, rows and views of *evaluation*."""
+
+    def __init__(self, evaluation):
+        self.evaluation = evaluation
+
+    @add_match(Factor)
+    def factor(self, factor):
+        return self.evaluation.leaf(factor)
+
+    @add_match(TensorRatio)
+    def ratio(self, ratio):
+        return self.evaluation.scale(
+            self.walk(ratio.numerator), self.walk(ratio.denominator),
+            divide=True,
+        )
+
+    @add_match(TensorProduct)
+    def product(self, product):
+        return self._products(product.terms, product.axes)
+
+    @add_match(Contraction)
+    def contraction(self, contraction):
+        term = contraction.term
+        terms = term.terms if isinstance(term, TensorProduct) else (term,)
+        return self._products(terms, contraction.keep)
+
+    def _products(self, terms, axes):
+        evaluation = self.evaluation
+        keep = evaluation.groups(axes)
+        tensors = [self.walk(t) for t in terms]
+        result = tensors.pop(0)
+        while tensors:
+            later = {g for t in tensors[1:] for g in t.groups}
+            result = evaluation.contract(
+                result, tensors.pop(0), set(keep) | later
+            )
+        return evaluation.sum_out(result, keep)
+
+    @add_match(TensorExpression)
+    def other(self, expression):
+        raise NotApplicable(f"{expression} is not in normal form")
+
 
 def _compact(*keys, size):
     """Return *keys* numbered in the order of their distinct values when
@@ -595,7 +509,7 @@ def _plan(expression):
 
 
 def _ratios(expression):
-    found = [expression] if isinstance(expression, Ratio) else []
+    found = [expression] if isinstance(expression, TensorRatio) else []
     return found + [
         r for child in _children(expression) for r in _ratios(child)
     ]
@@ -607,9 +521,10 @@ def evaluate(expression, value, dense_cells=0):
 
     Parameters
     ----------
-    expression : Factor, Product, Contraction or Ratio
-        The tensor; an axis is one variable, each name is summed by at
-        most one contraction, over the factors it holds.
+    expression : TensorExpression
+        The tensor, in the normal form of :mod:`.rewrites`; an axis is one
+        variable, each name is summed by at most one contraction, over
+        the factors it holds.
     value : str
         Name of the column of the entries.
     dense_cells : int
@@ -632,5 +547,5 @@ def evaluate(expression, value, dense_cells=0):
         computed then.
     """
     evaluation = _Evaluation(*_plan(expression), dense_cells)
-    tensor = evaluation.evaluate(expression)
+    tensor = ScipyTensorSolver(evaluation).walk(expression)
     return evaluation.frame(tensor, expression.axes, value)
