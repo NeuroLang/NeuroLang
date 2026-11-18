@@ -1,16 +1,20 @@
 """Run queries with and without the translator to tensor contractions.
 
     python benchmarks/translator/compare_modes.py ENGINE OUT [--file q.dl ...]
-        [--grep REGEX] [--reps N]
+        [--grep REGEX] [--reps N] [--profile REGEX]
 
 Builds the engine once, then for each query forks a child per mode
 (contractions on, off), alternating, as the REPL server forks sessions.
 Each child records its wall time, peak memory above its start (Linux
 VmHWM after /proc/self/clear_refs) and whether a contraction ran, and
 pickles its answer. The parent then compares the answers of the two
-modes: same rows, floats within rtol 1e-9.
+modes: same rows, floats within rtol 1e-9. The children of the queries
+named by ``--profile`` run under cProfile and keep their statistics in
+``OUT/NAME-MODE.prof`` (the profiler slows them: their times are not
+comparable to the others').
 """
 import argparse
+import cProfile
 import json
 import os
 import pickle
@@ -31,7 +35,7 @@ def vm(field):
     return 0
 
 
-def run_child(nl, name, text, mode, out):
+def run_child(nl, name, text, mode, out, profile=False):
     from nl_core.probabilistic import sums_of_products
     from nl_expr.config import config
 
@@ -47,12 +51,18 @@ def run_child(nl, name, text, mode, out):
     start = vm("VmRSS")
     t = time.perf_counter()
     error = None
+    profiler = cProfile.Profile() if profile else None
     try:
         with nl.scope:
+            if profiler:
+                profiler.enable()
             result = nl.execute_datalog_program(text)
         frame = None if result is None else result.as_pandas_dataframe()
     except Exception as e:  # recorded, compared as such
         frame, error = None, f"{type(e).__name__}: {e}"[:300]
+    if profiler:
+        profiler.disable()
+        profiler.dump_stats(out / f"{name}-{mode}.prof")
     seconds = time.perf_counter() - t
     with open(out / f"{name}-{mode}.pkl", "wb") as f:
         pickle.dump((frame, error), f)
@@ -61,6 +71,7 @@ def run_child(nl, name, text, mode, out):
             "name": name, "mode": mode, "seconds": seconds,
             "peak_mb": (vm("VmHWM") - start) / 2**20,
             "contractions": len(ran), "error": error,
+            "profiled": profile,
         }) + "\n")
 
 
@@ -94,6 +105,7 @@ def main():
     parser.add_argument("--file", action="append", default=[])
     parser.add_argument("--grep")
     parser.add_argument("--reps", type=int, default=1)
+    parser.add_argument("--profile")
     args = parser.parse_args()
     from neurolang_apps.utils.engine_registry import build_engine
     from neurolang_apps.utils import engine_registry
@@ -115,7 +127,11 @@ def main():
                 pid = os.fork()
                 if pid == 0:
                     try:
-                        run_child(nl, name, text, mode, out)
+                        run_child(
+                            nl, name, text, mode, out, profile=bool(
+                                args.profile and re.fullmatch(args.profile, name)
+                            ) and rep == args.reps - 1,
+                        )
                     finally:
                         os._exit(0)
                 os.waitpid(pid, 0)
