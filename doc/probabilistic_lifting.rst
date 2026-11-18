@@ -2250,6 +2250,171 @@ The tests of the rules of `Negations and comparisons sharing relations`_
 their plans with an enumeration of the possible worlds of small
 databases.
 
+Computing the plans as tensor contractions
+------------------------------------------
+
+The provenance plan of a query, its sums pushed through its joins, is
+computed as relational algebra: joins materialised, then grouped and
+summed. When the plan is a sum of products — joins, projections and
+selections of relations annotated with probabilities, and the
+projections and divisions of the lifted plans — the step
+``SolveAsContractions`` of the provenance solver
+(``packages/nl_core/nl_core/probabilistic/sums_of_products.py``) computes
+it instead as a contraction of sparse tensors, with the same answers. It
+is on by default (``[PROBABILISTIC_SOLVER] contractions`` in
+``config.ini``); a plan it cannot write as a contraction is computed by
+relational algebra, unchanged.
+
+A *tensor* has named axes; its entry at a tuple of values of its axes is
+a non-negative real, 0 off its support. A relation annotated with
+probabilities (a deterministic relation with 1) is the tensor of an axis
+per column whose entry at a tuple is the tuple's probability. The
+expressions of tensors (``nl_core.relational_algebra.linear_algebra.expressions``)
+are NeuroLang expressions:
+
+* :math:`F_R` (``Factor``), the tensor of a relation :math:`R`;
+* :math:`T_1 \times \dots \times T_k` (``TensorProduct``), of axes the
+  union of theirs, the product of their entries;
+* :math:`\Sigma_K T` (``Contraction``), of axes :math:`K`, the sum of the
+  entries of :math:`T` that agree on :math:`K`;
+* :math:`\amalg_K T` (``NoisyOrContraction``), of axes :math:`K`,
+  :math:`1 - \prod (1 - p)` over the entries :math:`p` of :math:`T` that
+  agree on :math:`K`;
+* :math:`T_1 \div T_2` (``TensorRatio``), the axes of :math:`T_2` among
+  those of :math:`T_1`, the quotient at the entries of both;
+* :math:`\rho_r T`, :math:`\sigma_{a=c} T`, :math:`\sigma_{a=b} T`
+  (``RenameAxes``, ``SliceAxis``, ``Diagonal``): axes renamed, entries
+  with axis :math:`a` equal to the constant :math:`c`, entries with axes
+  :math:`a` and :math:`b` equal.
+
+Translation
+~~~~~~~~~~~
+
+``ContractionPlan``, a pattern walker, maps a provenance plan :math:`P`
+to a tensor expression :math:`T(P)`, or declines it:
+
+=========================================================  =============================================
+plan                                                       tensor
+=========================================================  =============================================
+deterministic relation :math:`R`                           :math:`F_R`, entries 1
+probabilistic facts or choice :math:`R`, probability       :math:`F_R` on the other columns, entries
+column :math:`c`                                           the column :math:`c`
+provenance set :math:`R`, provenance column :math:`p`      :math:`F_R` on the other columns, entries :math:`p`
+:math:`\sigma_{a=c}(P)`, :math:`\sigma_{a=b}(P)`           :math:`\sigma_{a=c} T(P)`, :math:`\sigma_{a=b} T(P)`
+renaming of columns of :math:`P`                           :math:`\rho T(P)`, unless two columns merge
+:math:`P_1 \bowtie P_2`, :math:`P_1 \times P_2`            :math:`T(P_1) \times T(P_2)`
+:math:`\pi_K(P)`, disjoint projection :math:`\pi_K(P)`     :math:`\Sigma_K T(P)`
+independent projection :math:`\pi_K(P)`                    :math:`\amalg_K T(P)`
+``NaturalJoinInverse`` :math:`(P_1, P_2)`                  :math:`T(P_1) \div T(P_2)`
+any other operation                                        declined
+=========================================================  =============================================
+
+A plan whose translation is a single factor, or has unnamed axes, is left
+to relational algebra.
+
+Normal form
+~~~~~~~~~~~
+
+``normal_form`` (``linear_algebra/rewrites.py``) rewrites :math:`T(P)`,
+by equivalences only, into the form the backend computes: summed axes
+named apart (``RenameSummedAxesApart``: each axis a contraction sums is
+renamed to a name of its own, as the variables bound by a quantifier),
+then renamings, slices and diagonals moved onto the factors and products
+flattened (``PushAxisOperationsToFactors``). A renaming of a contraction
+renames the axes it keeps only; a slice of a contraction on an axis it
+sums is the contraction; a slice or a renaming of a product or a ratio is
+that of each term; a diagonal of a product is the diagonal of the one
+term holding both axes, and if no term holds both the expression has no
+normal form and the plan is left to relational algebra.
+
+Evaluation
+~~~~~~~~~~
+
+``ScipyTensorSolver`` (``linear_algebra/scipy_backend.py``), a pattern
+walker, computes a normal form:
+
+1. It groups the axes: the row axes and the column axes of a relation
+   held by an engine's sparse view are a group each (the three columns
+   of a voxel are one entity), every other axis a group of its own; each
+   group's entities are numbered, by the view's index or by the values of
+   the smallest factor holding the axis. It declines an expression in
+   which an axis summed by a contraction is read outside it.
+2. A factor is the view's sparse matrix, or its rows, sliced and tied,
+   their entities encoded; a row whose entity has no number is left out.
+3. The terms of a product are multiplied in order, each axis no later
+   term reads summed out as soon as possible: by scaling when the axes of
+   one are kept axes of the other, by a dense ``einsum`` when the
+   operands and the result are small (``dense_cells``), else by a sparse
+   matrix product of the two laid out as kept-by-shared and shared-by-kept
+   matrices.
+4. A noisy-or contraction is :math:`1 - \exp(\sum \log(1 - p))` of the
+   product of its terms; a ratio scales the numerator by the inverse of
+   the denominator at their common entries.
+5. The non-zero entries are decoded into the rows of a provenance set.
+
+With contractions on, magic sets leave the predicates of the engine's
+sparse views unbound (``magic_rewrite``'s ``unbound_predicates``): the
+plan reads such a relation whole, as its matrix, rather than a copy
+restricted to the bindings of the query.
+
+Correctness
+~~~~~~~~~~~
+
+**Proposition.** For a plan :math:`P` that is translated, the rows of
+the provenance set computed from the normal form of :math:`T(P)` are the
+rows of non-zero probability of the provenance set computed by
+relational algebra, with the same probabilities.
+
+*Proof.* By induction on :math:`P`, the tensor of the provenance set of
+:math:`P` computed by relational algebra is the tensor :math:`T(P)`
+denotes.
+
+* A relation annotated with probabilities and its factor have the same
+  entries by definition; a selection keeps the tuples whose column
+  equals a constant or another column, as the slice and the diagonal keep
+  those entries.
+* The provenance solver computes a join as the product of the
+  probabilities of the tuples it pairs, a projection as the sum of the
+  probabilities of the tuples it merges, the independent projection as
+  :math:`1 - \prod(1 - p)` and ``NaturalJoinInverse`` as the quotient
+  (`Operations of the lifted plans`_): these are, entry by entry, the
+  product, contraction, noisy-or contraction and ratio of the tensors of
+  the operands. The translation follows the plan: it neither assumes the
+  events disjoint or independent nor checks it; the lifted plan has
+  established which (`Correctness of the plans`_).
+* Renaming a summed axis apart, and moving a renaming, a slice or a
+  diagonal through a product, a ratio or a contraction, give tensors of
+  the same entries: a contraction binds the axes it sums, so renaming
+  them consistently does not change its value, and a slice or a diagonal
+  on axes that a product or a ratio carries restricts each operand that
+  carries them, the others being constant along those axes.
+* The backend computes the same sums in another order: grouping the
+  axes of an entity is a bijection between the entities and their
+  numbers; summing an axis out of an operand before multiplying is the
+  distributivity of the product over the sum, valid because no later
+  term reads the axis; the sparse product of the two laid-out matrices
+  is, entry by entry, the sum over the shared axes of the products. Rows
+  left out because an entity has no number pair with no tuple of the
+  smallest factor holding the axis, so the natural join excludes them.
+  For the noisy-or, :math:`1 - \prod(1 - p) = 1 - \exp(\sum \log(1 - p))`,
+  an entry :math:`p = 1` giving :math:`\log 0 = -\infty` and a noisy-or
+  of 1, an absent entry (:math:`p = 0`) adding :math:`\log 1 = 0`.
+
+The relational algebra keeps rows of probability 0 that the backend may
+leave out; the provenance solver filters them out of the answers in both
+cases. Leaving a predicate unbound by magic sets computes it whole, which
+the rewritten query restricts as it restricts any relation: the answers
+are those of the bound rewriting. :math:`\square`
+
+The tests (``packages/neurolang/neurolang/frontend/tests/test_sums_of_products.py``)
+solve random programs — a choice with weights of 0, facts of probability
+0 and 1, deterministic relations with duplicate rows; marginals,
+conditionals, pairs, constants in bodies and heads, repeated variables,
+noisy-or and resampling — with contractions, with relational algebra and
+by summing over every possible world, and compare the three to a relative
+:math:`10^{-12}`; ``linear_algebra/tests/test_tensor_expressions.py``
+tests the rewrites and the backend.
+
 References
 ----------
 
