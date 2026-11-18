@@ -45,7 +45,8 @@ Unreleased
   the engine does not define (left out of a lightweight engine) are not
   built. The engines of the registry declare none yet, as no query reads
   them. ``SparseView.weighted()`` gives the matrix with float64 entries
-  over the same indices, for products of views. Reading the rows of an
+  over the same indices, for products of views, made once with the views
+  and shared by the sessions. Reading the rows of an
   empty relation of no columns no longer fails.
 
 - REPL in the browser: a *Network* tab draws an answer whose rows are edges

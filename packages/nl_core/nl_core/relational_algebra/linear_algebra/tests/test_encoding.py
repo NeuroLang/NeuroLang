@@ -349,6 +349,12 @@ def test_build_sparse_views_share_the_index_of_a_sort():
     # views is the join on the study, summed over it.
     product = views["activated"].matrix @ views["tfidf"].matrix
     np.testing.assert_array_equal(product.toarray(), [[.25], [0], [0]])
+    # The float64 matrices of the products are made with the views (before
+    # the sessions are forked from the engine) and kept.
+    for view in views.values():
+        assert view.__dict__["_weighted"][np.dtype(np.float64)] is (
+            view.weighted()
+        )
 
 
 def test_weighted_view_counts_in_products():
@@ -364,6 +370,7 @@ def test_weighted_view_counts_in_products():
     )
     weighted = view.weighted()
     assert weighted.dtype == np.float64
+    assert view.weighted() is weighted
     assert np.shares_memory(weighted.indices, view.matrix.indices)
     assert np.shares_memory(weighted.indptr, view.matrix.indptr)
     shared = (weighted @ weighted.T).toarray()
