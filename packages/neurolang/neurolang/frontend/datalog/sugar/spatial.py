@@ -616,6 +616,13 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
     symbol is then replaced by the built-in ``euclidean`` function, unless
     the program defines it. A program defining its own ``euclidean``
     function keeps it: its rules are not rewritten.
+
+    The pairs are derived from the stored relations ranging the points and
+    from the bound only. A program with a ``derived_tables`` attribute,
+    called as ``derived_tables(kind, frames, parameters, compute)``, takes
+    them from it: it may return pairs it kept for the same *frames* and
+    *parameters* rather than call *compute* (see
+    :class:`neurolang_apps.utils.engine_cache.DerivedTables`).
     """
 
     @add_match(
@@ -875,10 +882,37 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
             self._range_table(atom, point, absorb)
             for atom, point, absorb in zip(ranges, bound.points, absorbed)
         ]
-        pairs = euclidean_join(
-            *tables, bound.radius, bound.strict,
-            [variable.name for variable in variables], bound.distance.name,
-        )
+        names = [variable.name for variable in variables]
+
+        def compute():
+            return euclidean_join(
+                *tables, bound.radius, bound.strict, names,
+                bound.distance.name,
+            )
+
+        # The pairs follow from the tables and the bound only: a program may
+        # keep them (``derived_tables``), named by those, rather than find
+        # them again (an engine's ``activated``, at each of its builds).
+        derived = getattr(self, "derived_tables", None)
+        if derived is None:
+            pairs = compute()
+        else:
+            # By the place of each variable, not its name, which may be
+            # fresh, another at each build.
+            place = {}
+
+            def at(name):
+                return place.setdefault(name, f"c{len(place)}")
+
+            pairs = derived(
+                "euclidean_pairs",
+                [frame.set_axis([at(c) for c in frame.columns], axis=1)
+                 for frame, _ in tables],
+                (bound.radius, bound.strict, [at(n) for n in names],
+                 at(bound.distance.name),
+                 [[at(c) for c in coordinates] for _, coordinates in tables]),
+                compute,
+            ).set_axis(names, axis=1)
         return Implication(
             rule.consequent,
             Conjunction(

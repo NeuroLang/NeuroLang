@@ -111,6 +111,14 @@ Serving
    Do not load an engine's text embeddings when it is built (with
    ``--users``, before forking its sessions): its first query of them
    does; see `Sessions`_.
+``--no-prebuild``
+   With ``--users``, do not build the engines the page offers when the
+   server starts: the first session of each builds it, and waits for it;
+   see `Sessions`_.
+``--prebuild-reserve FRACTION``
+   With ``--users``, build an engine ahead only while the share FRACTION of
+   the memory stays for the queries of the sessions (default 0.35); see
+   `Sessions`_.
 ``--resolution MM``
    The resolution of the engines' MNI grid (default 2).
 ``--light``
@@ -205,6 +213,10 @@ Who may use it
    starts, and removes the folders of the sessions whose process died.  A
    file takes at most MB megabytes (50), all those of a session together
    at most MB (200).
+``--mcp``, ``--mcp-results-dir DIR``
+   With ``--users`` and ``--local``: answer MCP clients at ``/mcp``, each
+   user with the token of their account page, the files of the answers in
+   DIR (``~/.cache/neurolang/repl-mcp``); see `MCP clients`_.
 ``--guests``, ``--max-guest-sessions N``
    With ``--users`` and ``--local``: let visitors in as guests, without an
    account, at most N sessions of guests at once (2); see `Guests`_.
@@ -288,6 +300,7 @@ log and the dashboard go there too::
    max_uploads_mb: 200
    activity_db: activity.sqlite
    dashboard: true             # needs the dashboard extra
+   mcp: true                   # MCP clients at /mcp, with the users' tokens
    engines: [neurosynth_iit, neurostore_iit]  # prepared and offered
    default_engine: neurostore_iit             # the one the page starts with
 
@@ -561,6 +574,41 @@ those of the users.  A guest's login ends when they log out, after 7
 days, and when the server restarts; a guest who logs in again is another
 guest, with sessions of their own.
 
+MCP clients
+-----------
+
+With ``--mcp``, the server answers MCP clients, LLM agents such as Claude
+Code, at ``/mcp``: the client's model answers questions on the engines as
+the query assistant does, with its tools, in a session of the user's own
+(see *From an MCP client* in :doc:`query_assistant`, the same server over
+the network). The login page says so, and each user creates their token on
+their account page, which also gives the command that adds the server to
+Claude Code::
+
+   claude mcp add --scope user --transport http neurolang \
+       https://repl.example.org/mcp --header "Authorization: Bearer nlmcp_..."
+
+- **The token** is the user's, shown once; only its hash is kept, in the
+  users file (``mcp_token``), so it outlives the server's restarts. A new
+  one replaces it, and *Revoke it* removes it. ``/mcp`` takes no cookie,
+  only the token; neither goes to the session.
+- **The session** is a session of the user's like a tab's (it counts in
+  ``--max-sessions`` and ends unused after ``--idle-minutes``), on the
+  default engine, or another of the page's with ``/mcp?engine=NAME``; its
+  REPL answers in plain text. A session that ended starts again at the
+  next request, and its first ``ask`` gives the whole prompt again.
+- **The files** of the answers (the viewer, the images, the rows, the query
+  and its graph) are kept in ``--mcp-results-dir``, a folder per session
+  with a random name, removed after 7 days, and linked as
+  ``https://HOST/mcp/files/...``: they open for the users logged in. The
+  pages (the viewer, the graph) are sandboxed, away from the site's cookies;
+  the other files are downloaded.
+- **Limits**: a session's statements are confined as a tab's, and its
+  queries run within the assistant's time and memory limits
+  (``llm.yaml``) and the server's ``--query-minutes``. The answers are
+  JSON, without event streams: a client's cancel does not stop a query
+  that runs.
+
 Accounts
 --------
 
@@ -603,10 +651,41 @@ With ``--users`` and ``--local``, each tab of each user has a session of its
 own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
 
 - A *builder* process, started anew before the server answers, builds each
-  engine once (the first start of an engine takes the time of a build; the
-  next start in another tab takes under a second), then forks a process per
-  session from it.  The sessions share the memory of the engine's data, as
-  forked processes do until they write it.
+  engine once, then forks a process per session from it, in under two
+  seconds.  The sessions share the memory of the engine's data, as forked
+  processes do until they write it.
+- When the server starts, the builder builds the engines the page offers
+  (those the admin console did not turn off), the default first, and an
+  engine the console turns on when it does: a first session finds its
+  engine built (about 25 s for ``neurosynth_iit``, 75 s for
+  ``neurostore_iit``, from the tables kept in ``--data-dir``), unless it
+  comes while the builder is still at work.  The builder also finds the
+  names of the engine's relations (its terms, studies, regions), which a
+  query's notes on a misspelled name look up, so that no session finds
+  them again at its first query (12 s for ``neurostore_iit``).  The engines then hold their
+  memory from the start, as they would after their first session; an
+  engine turned off stays built until the server restarts.
+  ``--no-prebuild`` (``prebuild: false``) leaves each engine to its first
+  session.  An engine that cannot be built is told in the log, and its
+  first session tries again.
+- The builder builds an engine ahead only while it leaves the share
+  ``--prebuild-reserve`` (``prebuild_reserve``, 0.35) of the memory to the
+  queries: the memory Linux says is available (``MemAvailable``, or the
+  limit of the service's control group), less one and a half times the
+  most a build took.  An engine past it is told in the log ("Did not build
+  the engine …") and built by its first session.  35% of 31 GB is 11 GB:
+  the 8 queries that run at once on 8 CPUs (``max_running``) decoding an
+  image on ``neurosynth_iit`` take 1.4 GB each.
+- The engines the builder holds share their tables: a table identical to
+  one of an engine built before (the studies, terms and peaks of
+  ``neurostore`` and ``neurostore_iit``) is held once
+  (:mod:`neurolang_apps.utils.shared_tables`), and the tables an engine
+  derives from its own while it is built (``activated``, the voxels within
+  reach of each peak) and its large source tables (the studies of the
+  regions of the atlases, the TF-IDF of the terms, the peaks, the bootstrap
+  replicates) are kept as files of ``DATA_DIR/derived_tables`` that the
+  builder and the sessions map, rather than copy (see
+  :doc:`engine_configuration`).
 - Before its first fork, the builder loads the engine's text embeddings
   (those of its documents, from their cache, and the query model), which
   its sessions then share, rather than each load them, in memory of its
@@ -623,6 +702,10 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   neurolang.utils.text_embeddings --engine NAME`` does it ahead of time,
   best on a GPU).  What cannot be loaded is logged, and loaded by each
   session at its first query, as before.
+- After each query, once it has replied, a session frees what the query
+  left (``gc.collect``, then, on Linux, ``malloc_trim``): 13 ms, and a
+  session that decoded an image on ``neurosynth_iit`` keeps 90 MB of its
+  own rather than 0.8 GB.
 - Each session has its own rules, assistant, queries (which run at the same
   time as those of the others) and files; *Stop* and *Restart* end that
   session's process only, and the page starts it again.
@@ -811,7 +894,11 @@ other options given:
 
 - on Linux, a unit of systemd's user manager,
   :file:`~/.config/systemd/user/neurolang-repl.service`; ``loginctl
-  enable-linger $USER`` keeps it running when you are logged out;
+  enable-linger $USER`` keeps it running when you are logged out.  A
+  process killed for lack of memory (a session's query) does not stop the
+  service (``OOMPolicy=continue``): its session ends, the others go on.  If
+  the builder itself is killed, the server stops, and systemd starts it
+  again;
 - on macOS, a launchd agent,
   :file:`~/Library/LaunchAgents/org.neurolang.repl.plist`.
 

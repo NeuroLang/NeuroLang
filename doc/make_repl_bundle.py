@@ -38,7 +38,9 @@ NeuroStore release only the columns of three of its tables. The
 tables that take the engine long to build are kept in the data directory by
 its build (``neurolang_apps.utils.engine_cache``) and so are in the zip: the
 page starts in about 30 s instead of 2 min. The engine is built again from the
-result, with the tables and without them, to check that it suffices.
+result, with the tables and without them, to check that it suffices. Its
+builds keep none of the Arrow files a build reads its tables from natively
+(``DATA_DIR/derived_tables``), which the page does not read.
 
 Usage::
 
@@ -197,7 +199,8 @@ def _build_engine(
 
     try:
         return engine_registry.build_engine(
-            engine, data_dir, RESOLUTION, use_cache=use_cache
+            engine, data_dir, RESOLUTION, use_cache=use_cache,
+            map_tables=False,
         )
     except requests.exceptions.SSLError:
         system = next((c for c in SYSTEM_CERTIFICATES if c.is_file()), None)
@@ -205,7 +208,8 @@ def _build_engine(
             raise
         os.environ["REQUESTS_CA_BUNDLE"] = str(system)
         return engine_registry.build_engine(
-            engine, data_dir, RESOLUTION, use_cache=use_cache
+            engine, data_dir, RESOLUTION, use_cache=use_cache,
+            map_tables=False,
         )
 
 
@@ -413,7 +417,9 @@ def export_embeddings(
     torch = text_embeddings._torch_available()
     files = {}
     try:
-        nl = engine_registry.build_engine(engine, data_dir, RESOLUTION)
+        nl = engine_registry.build_engine(
+            engine, data_dir, RESOLUTION, map_tables=False
+        )
         for name, index in nl.text_embedding_indexes.items():
             model = index.encoder.numpy_path
             if not model.exists() and torch:

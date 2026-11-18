@@ -1,7 +1,7 @@
 import logging
 import operator
 from collections import defaultdict
-from functools import lru_cache
+from functools import wraps
 from typing import AbstractSet, Callable
 
 
@@ -34,6 +34,34 @@ LOG = logging.getLogger(__name__)
 
 invert = Constant(operator.invert)
 eq = Constant(operator.eq)
+
+
+def _cached_in_chase(method, maxsize=1024):
+    """
+    Cache *method* in the chase it is called on, as ``lru_cache`` would,
+    keeping at most *maxsize* results.
+
+    ``lru_cache`` on a method is a cache of the class, whose keys hold the
+    chase: it kept every chase that ran alive, with its program and the
+    relations of its query (a forked REPL session kept 0.6 GB more after
+    each query decoding an image on neurosynth). A key with the chase only
+    ever matched that chase, so a cache of its own finds the same.
+    """
+    attribute = f"_cache_{method.__name__}"
+
+    @wraps(method)
+    def cached(self, *args, **kwargs):
+        cache = self.__dict__.setdefault(attribute, {})
+        key = (args, tuple(sorted(kwargs.items())))
+        try:
+            return cache[key]
+        except KeyError:
+            if len(cache) >= maxsize:
+                cache.clear()
+            value = cache[key] = method(self, *args, **kwargs)
+            return value
+
+    return cached
 
 
 class ChaseRelationalAlgebraPlusCeriMixin:
@@ -199,7 +227,7 @@ class ChaseNamedRelationalAlgebraMixin:
                 "wrong number of arguments."
             )
 
-    @lru_cache(1024)
+    @_cached_in_chase
     def rewrite_constants_in_consequent(self, rule):
         new_equalities = []
         new_args = tuple()
@@ -215,7 +243,7 @@ class ChaseNamedRelationalAlgebraMixin:
             )
         return rule
 
-    @lru_cache(1024)
+    @_cached_in_chase
     def rewrite_antecedent_equalities(self, rule):
         if not isinstance(rule.antecedent, Conjunction):
             return rule
@@ -408,7 +436,7 @@ class ChaseNamedRelationalAlgebraMixin:
 
         return substitutions
 
-    @lru_cache(1024)
+    @_cached_in_chase
     def translate_conjunction_to_named_ra(self, conjunction, columns=None):
         if not hasattr(self, "_builtins"):
             self._builtins = self.datalog_program.builtins()

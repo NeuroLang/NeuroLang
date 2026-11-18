@@ -297,21 +297,26 @@ class Toolbox:
         self, context: EngineContext, language: str, preview_rows: int = 10,
         query_timeout: Optional[float] = None,
         query_memory_mb: Optional[float] = None,
+        max_cells: Optional[int] = None,
     ):
         self.context = context
         self.language = language
         self.preview_rows = preview_rows
         self.query_timeout = query_timeout
         self.query_memory_mb = query_memory_mb
+        # The most cells of a result kept whole (validation.Preview.frames),
+        # MAX_KEPT_CELLS if None.
+        self.max_cells = max_cells
         # Queries whose answer of no rows, or with notes on its
         # constants, has been confirmed.
         self.confirmed_empty = set()
         # The queries run with run_query that gave rows, in order.
         self.queries_with_rows = []
-        # The first rows of the answer final_answer accepted last, and its
-        # whole result (see validation.Preview.frames).
+        # The first rows of the answer final_answer accepted last, its
+        # whole result (see validation.Preview.frames), and its preview.
         self.answer_rows = ""
         self.answer_frames = None
+        self.answer_preview = None
         # The observations of the calls, by tool and arguments.
         self.observations = {}
         # The facts search_values found, and its calls finding none new.
@@ -403,7 +408,7 @@ class Toolbox:
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
             self.context.engine_name if self.context.declared else "",
-            self.query_timeout, self.query_memory_mb,
+            self.query_timeout, self.query_memory_mb, self.max_cells,
         )
         if preview.ok and preview.rows:
             self.queries_with_rows.append(query.strip())
@@ -423,7 +428,7 @@ class Toolbox:
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
             self.context.engine_name if self.context.declared else "",
-            self.query_timeout, self.query_memory_mb,
+            self.query_timeout, self.query_memory_mb, self.max_cells,
         )
         if not preview.ok:
             return (
@@ -453,6 +458,7 @@ class Toolbox:
             return message, None
         self.answer_rows = preview.text
         self.answer_frames = preview.frames
+        self.answer_preview = preview
         return "Accepted.", (query.strip(), explanation.strip())
 
 
@@ -498,8 +504,12 @@ class Agent:
         self.guidance = guidance
         self.previous = None
 
-    def system_prompt(self, question: str, text_tools: bool = False) -> str:
-        """Return the system prompt for *question*."""
+    def system_prompt(
+        self, question: str, text_tools: bool = False,
+        schema: Optional[str] = None,
+    ) -> str:
+        """Return the system prompt for *question*, with the predicates of
+        the engine, or *schema* in their place if given."""
         bank = self.examples
         if bank is None:
             bank = load_examples(self.engine_name)
@@ -508,7 +518,9 @@ class Agent:
             exclude=self.exclude_question,
         )
         return prompts.system_prompt(
-            self.language, self.context.schema_summary(), examples,
+            self.language,
+            self.context.schema_summary() if schema is None else schema,
+            examples,
             self.strategy, text_tools,
             self._engine_text(self.description, "description"),
             self._engine_text(self.guidance, "assistant_guidance"),

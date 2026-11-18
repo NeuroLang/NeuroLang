@@ -1831,3 +1831,16 @@ def test_region_contains_constant_point(frontend_class):
     )
 
     assert set(res.to_unnamed()) == {("A",)}
+
+
+def test_a_string_constant_ending_in_a_backslash_stays_a_string():
+    """A string compared in a selection is a literal of the expression the
+    backend evaluates: its backslashes are escaped, else ``'z\\'`` would
+    escape its closing quote and the rest of the expression be code."""
+    nl = frontend.NeurolangDL()
+    nl.add_tuple_set([("a\\",), ("q",)], name="r")
+    nl.execute_datalog_program("q(x) :- r(x) & (x != 'z\\')\n"
+                               "p(x) :- r(x) & (x != 'a\\')")
+    solution = nl.solve_all()
+    assert set(solution["q"].as_pandas_dataframe()["x"]) == {"a\\", "q"}
+    assert set(solution["p"].as_pandas_dataframe()["x"]) == {"q"}

@@ -1,5 +1,6 @@
 """Tests of the sessions of the REPL page, each in a process of its own."""
 
+import json
 import os
 import signal
 import subprocess
@@ -19,6 +20,9 @@ from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui.sessions import (  # noqa: E402
     SessionEnded,
     Sessions,
+    _room_for_another,
+    available_memory,
+    free_memory,
 )
 
 
@@ -26,6 +30,8 @@ def build(name, say):
     """An engine of the registry's name with a test's relations (imported
     by name in the builder, which is started anew); neurosynth takes 2 s."""
     say(f"Building {name}")
+    if name == "broken":
+        raise RuntimeError("no data")
     if name == "neurosynth":
         time.sleep(2)
     nl = NeurolangPDL()
@@ -176,6 +182,79 @@ def test_the_steps_of_a_start_are_told(sessions):
     while not listener.empty():
         messages.append(listener.get())
     assert any("Building neurostore" in m for m in messages)
+
+
+def test_an_engine_built_before_its_sessions_starts_them_at_once(
+        sessions, capsys):
+    """The engines built when the server starts, the broken one told in the
+    log: a first session of neurosynth starts without a build, and another
+    engine still starts."""
+    sessions.prebuild(["broken", "neurosynth"])
+    deadline = time.monotonic() + 30
+    while "neurosynth in" not in capsys.readouterr().out:
+        assert time.monotonic() < deadline
+        time.sleep(0.1)
+    ann = sessions.session("ann", "1")
+    listener = ann.listen()
+    ann.start("neurosynth")
+    messages = []
+    while not listener.empty():
+        messages.append(listener.get())
+    assert not any("Building" in m for m in messages)
+    sessions.prebuild(["neurosynth"])  # built already: not again
+    bob = sessions.session("bob", "1")
+    bob.start("neurostore")
+    assert bob.pid is not None
+
+
+def test_a_query_leaves_no_garbage(sessions):
+    """A session frees what its query left, after replying; freeing is
+    harmless where malloc_trim does not exist (not glibc)."""
+    free_memory()
+    ann = sessions.session("ann", "1")
+    ann.start("neurostore")
+    assert sorted(_rows(ann.submit("ans(x) :- person(x, a)"))) == [
+        ["alice"], ["bob"]]
+    assert _rows(ann.submit("ans(x) :- person(x, 5)")) == [["bob"]]
+
+
+def test_an_engine_is_built_ahead_while_memory_stays_for_the_queries():
+    gb = 2**30
+    # the first engine, or without knowing the memory: built
+    assert _room_for_another(0, 0.35, (1 * gb, 31 * gb))
+    assert _room_for_another(9 * gb, 0.35, None)
+    # 1.5 times the largest build, and 35% of 31 GB (10.9 GB) left
+    assert _room_for_another(4 * gb, 0.35, (17 * gb, 31 * gb))
+    assert not _room_for_another(4 * gb, 0.35, (16 * gb, 31 * gb))
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"),
+                    reason="the memory is read from /proc")
+def test_the_memory_is_that_of_the_machine_or_of_the_control_group():
+    available, total = available_memory()
+    assert 0 < available <= total
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"),
+                    reason="the memory is read from /proc")
+def test_an_engine_that_would_leave_too_little_memory_is_not_built_ahead(
+        tmp_path, capsys):
+    """With all the memory kept for the queries, the default engine is
+    built ahead, the next is left to its first session."""
+    sessions = Sessions(tmp_path, build=build, prebuild_reserve=1.0)
+    try:
+        sessions.prebuild(["neurostore", "destrieux"])
+        deadline, out = time.monotonic() + 60, ""
+        while "Did not build the engine destrieux" not in out:
+            assert time.monotonic() < deadline, out
+            out += capsys.readouterr().out
+            time.sleep(0.1)
+        assert "Built the engine neurostore" in out
+        ann = sessions.session("ann", "1")
+        ann.start("destrieux")  # its first session builds it
+        assert ann.pid is not None
+    finally:
+        sessions.close()
 
 
 def test_no_process_is_left_when_the_server_ends(tmp_path):
@@ -858,3 +937,44 @@ def test_the_text_embeddings_may_be_left_to_the_sessions(tmp_path):
             "ans(n) :- engine(e), (n == loads(e))")) == [[0]]
     finally:
         sessions.close()
+
+
+def _mcp(session, tmp_path, method, params=None):
+    """The answer of the MCP server of *session* to a JSON-RPC request."""
+    status, headers, body = session.mcp(
+        verb="POST", path="/mcp", headers={
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "host": "repl.example.org",
+            "mcp-protocol-version": "2025-06-18",
+        },
+        body=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method,
+                         "params": params or {}}).encode(),
+        base_url="https://repl.example.org/mcp/files/",
+        results_dir=str(tmp_path / "mcp"),
+    )
+    assert status == 200, body
+    return json.loads(body)["result"]
+
+
+def test_an_mcp_client_has_a_session_in_plain_text(sessions, tmp_path):
+    pytest.importorskip("mcp")
+    session = sessions.session("ann", "mcp")
+    session.start("neurostore", text=True)
+    assert "NeuroLang" in _mcp(session, tmp_path, "initialize", {
+        "protocolVersion": "2025-06-18", "capabilities": {},
+        "clientInfo": {"name": "test", "version": "1"},
+    })["instructions"]
+    text = _mcp(session, tmp_path, "tools/call", {
+        "name": "repl", "arguments": {"text": "ans(x) :- person(x, 5)"},
+    })["content"][0]["text"]
+    assert "bob" in text and "<span" not in text  # text, not HTML
+    answer = _mcp(session, tmp_path, "tools/call", {
+        "name": "final_answer", "arguments": {
+            "query": "ans(x) :- person(x, 5)", "explanation": "Bob.",
+            "comments": ["the person of 5"],
+        },
+    })
+    links = answer["structuredContent"]["links"]
+    assert links["rows"].startswith("https://repl.example.org/mcp/files/")
+    assert list((tmp_path / "mcp").glob("*/a1/rows.csv"))

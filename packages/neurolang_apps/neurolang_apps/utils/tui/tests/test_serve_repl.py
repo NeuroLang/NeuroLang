@@ -686,7 +686,7 @@ def test_the_systemd_unit_runs_the_command(serve, tmp_path):
     assert f"WorkingDirectory={tmp_path}\n" in unit
     assert "WantedBy=default.target" in unit
     # Restarted after a failure, not as fast as systemd stops restarting.
-    assert "Restart=on-failure\nRestartSec=5\n" in unit
+    assert "Restart=on-failure\nRestartSec=5\nOOMPolicy=continue\n" in unit
 
 
 def test_the_systemd_unit_runs_any_path_as_it_is(serve, tmp_path, monkeypatch):
@@ -1223,6 +1223,10 @@ class _FakeSessions:
 
     def __init__(self):
         self.asked = []
+        self.prebuilds, self.built = True, []
+
+    def prebuild(self, engines):
+        self.built.append(list(engines))
 
     def session(self, user, tab):
         self.asked.append((user, tab))
@@ -1721,7 +1725,10 @@ def test_the_admin_console_chooses_the_engines_of_the_page(serve, tmp_path):
                       {"on": ["nowhere"], "default": "nowhere"}):
             assert _status(port, change, _basic("ann-pw", "ann"), "POST",
                            wrong) == 400
+        assert engines.to_build() == ["neurostore", "neurosynth"]
         assert _json_of(port, change, "ann", "ann-pw", body) == {"ok": True}
+        # the engines turned on are built, those turned off are not
+        assert sessions.built == [["neurosynth"]]
         page = json.loads(bundle.read_text())
         assert (list(page["engines"]), page["default"]) == (
             ["neurosynth"], "neurosynth")
@@ -2518,7 +2525,7 @@ def _json_at(port, method, path, headers=None, body=None):
 def test_a_user_signs_in_with_orcid(orcid_server):
     port, users = orcid_server
     assert _json_at(port, "GET", "/login/options")[1] == {
-        "guests": False, "orcid": True}
+        "guests": False, "orcid": True, "mcp": False}
     status, headers = _http(port, "GET", "/login/orcid?next=/admin")
     location = headers["Location"]
     assert location.startswith("https://orcid.example/authorize?")
@@ -3282,3 +3289,122 @@ def test_without_an_activity_log_the_page_says_how(serve, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+class _FakeMcpSession:
+    """The session of an MCP client: it records how it starts and what it
+    is asked."""
+
+    def __init__(self):
+        self.pid = self.engine = None
+        self.starts, self.requests = [], []
+
+    def start(self, engine, text=False):
+        self.pid, self.engine = 1, engine
+        self.starts.append((engine, text))
+
+    def mcp(self, **request):
+        self.requests.append(request)
+        return 200, [("content-type", "application/json"),
+                     ("mcp-session-id", "x")], b'{"jsonrpc": "2.0"}'
+
+
+class _McpSessions(_FakeSessions):
+    def __init__(self):
+        super().__init__()
+        self.mcp_session = _FakeMcpSession()
+
+    def session(self, user, tab):
+        self.asked.append((user, tab))
+        return self.mcp_session if tab == "mcp" else _FakeBackend()
+
+
+@pytest.fixture
+def mcp_server(serve, tmp_path):
+    (tmp_path / "bundle.json").write_text("{}")
+    sessions = _McpSessions()
+    users = _users(serve, tmp_path, ann=("annannann", []),
+                   bob=("bobbobbob", []))
+    results = tmp_path / "results"
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users, mcp_results=results)
+    with _serving(server) as port:
+        yield port, users, sessions, results
+
+
+def _mcp_post(port, headers):
+    return _http(port, "POST", "/mcp", headers,
+                 {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+
+
+def test_an_mcp_client_needs_its_users_token(mcp_server, serve, tmp_path):
+    port, users, sessions, _ = mcp_server
+    status, headers = _mcp_post(port, {})
+    assert status == 401 and headers["WWW-Authenticate"].startswith("Bearer")
+    assert _mcp_post(port, _basic("annannann", "ann"))[0] == 401
+    assert _mcp_post(port, {"Authorization": "Bearer nope"})[0] == 401
+    token = users.new_mcp_token("ann")
+    assert token not in (tmp_path / "users.yaml").read_text()
+    status, headers = _mcp_post(port, {"Authorization": f"Bearer {token}"})
+    assert status == 200 and headers["mcp-session-id"] == "x"
+    assert sessions.asked == [("ann", serve.MCP_TAB)]
+    [request] = sessions.mcp_session.requests
+    assert "authorization" not in {k.lower() for k in request["headers"]}
+    assert request["base_url"].endswith("/mcp/files/")
+    assert sessions.mcp_session.starts == [("", True)]  # text, once
+    # kept in the users file: a new server knows it; a new token revokes it
+    assert serve.Users(tmp_path / "users.yaml").mcp_user(token) == "ann"
+    users.new_mcp_token("ann")
+    assert _mcp_post(port, {"Authorization": f"Bearer {token}"})[0] == 401
+
+
+def test_the_account_page_gives_and_revokes_the_token(mcp_server):
+    port, users, _, _ = mcp_server
+    status, _ = _http(port, "POST", "/account/api/mcp-token",
+                      _basic("annannann", "ann"), {})
+    assert status == 200 and users.has_mcp_token("ann")
+    _http(port, "POST", "/account/api/mcp-token",
+          _basic("annannann", "ann"), {"revoke": True})
+    assert not users.has_mcp_token("ann")
+
+
+def test_the_files_of_mcp_answers_are_for_the_users_logged_in(mcp_server):
+    port, _, _, results = mcp_server
+    folder = results / ("20261117-120000-" + "ab" * 16) / "a1"
+    folder.mkdir(parents=True)
+    (folder / "view.html").write_text("<html></html>")
+    (folder / "rows.csv").write_text("a\n1\n")
+    (results.parent / "secret.txt").write_text("no")
+    base = f"/mcp/files/{folder.parent.name}/a1"
+    login = _basic("bobbobbob", "bob")
+    assert _http(port, "GET", f"{base}/view.html")[0] == 401
+    status, headers = _http(port, "GET", f"{base}/view.html", login)
+    assert status == 200
+    assert headers["Content-Security-Policy"] == "sandbox allow-scripts"
+    assert headers["X-Content-Type-Options"] == "nosniff"
+    status, headers = _http(port, "GET", f"{base}/rows.csv", login)
+    assert headers["Content-Disposition"].startswith("attachment")
+    assert _http(port, "GET", "/mcp/files/../secret.txt", login)[0] == 404
+    assert _http(port, "GET", "/mcp/files/%2e%2e/secret.txt", login)[0] \
+        == 404
+
+
+def test_the_login_page_tells_of_mcp(mcp_server):
+    port = mcp_server[0]
+    import http.client
+
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    connection.request("GET", "/login/options")
+    assert json.loads(connection.getresponse().read())["mcp"] is True
+
+
+def test_mcp_needs_users_and_local(serve, tmp_path, monkeypatch):
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--mcp"])
+    monkeypatch.chdir(tmp_path)
+    command = serve.service_command(serve.parse_args([
+        "--local", "--users", "users.yaml", "--mcp", "--daemon", "install",
+    ]))
+    assert "--mcp" in command
+    assert dict(zip(command, command[1:]))["--mcp-results-dir"].endswith(
+        "repl-mcp")
