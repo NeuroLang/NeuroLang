@@ -45,7 +45,7 @@ import numpy as np
 # version of what they are made of: raise it when the way they are found
 # changes.
 DIRECTORY = "engine_cache"
-VERSION = 1
+VERSION = 2
 
 
 def cache_dir(data_dir, engine_name: str) -> Path:
@@ -77,9 +77,19 @@ def digest(*parts) -> str:
             elif part.dtype.kind == "f":
                 part = np.round(part * 1000).astype("<i8")
             else:
-                part = np.array([str(item) for item in part.ravel()])
-                hasher.update(repr(part.tolist()).encode())
-                continue
+                # the distinct items, in order, as fixed-width UTF-32 little
+                # endian, and the position of each: the same bytes anywhere,
+                # without a Python string for each of millions of items
+                import pandas as pd
+
+                codes, items = pd.factorize(
+                    part.ravel(), use_na_sentinel=False
+                )
+                items = np.asarray(items).astype(str)
+                hasher.update(items.astype(
+                    f"<U{max(items.dtype.itemsize // 4, 1)}"
+                ).tobytes() + f"{part.shape}".encode())
+                part = codes.astype("<i8")
             hasher.update(f"{part.shape}".encode() + part.tobytes())
         else:
             hasher.update(repr(part).encode())
@@ -179,18 +189,136 @@ def keep_json(directory, kind: str, key: str, compute: Callable):
     return keep(directory, f"{kind}-{key}.json", read, write, compute)
 
 
+#: The directory, in the data directory, of the tables of the builds of the
+#: engines (:class:`DerivedTables`): one for all engines, as engines of a
+#: family read and derive the same, and not in the browser's bundle.
+DERIVED_DIRECTORY = "derived_tables"
+
+
+def file_digest(path) -> str:
+    """Return a name for what the file *path* holds: its bytes."""
+    hasher = hashlib.sha256()
+    with open(path, "rb") as file:
+        for chunk in iter(lambda: file.read(1 << 20), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def frame_digest(frame) -> str:
+    """Return a name for what the table *frame* holds: its column names,
+    their types and every value, row by row."""
+    import pandas as pd
+
+    rows = pd.util.hash_pandas_object(frame, index=False).to_numpy()
+    return digest(
+        [str(name) for name in frame.columns],
+        [str(dtype) for dtype in frame.dtypes],
+        hashlib.sha256(np.ascontiguousarray(rows).tobytes()).hexdigest(),
+    )
+
+
+class DerivedTables:
+    """
+    The tables of an engine's build, kept in *directory* as Arrow files named
+    by a checksum of what each is found from (:func:`frame_digest`,
+    :func:`file_digest`, :func:`digest`): those its program derives from its
+    source tables (the pairs of points of a Euclidean bound: ``activated``,
+    the voxels within reach of each peak) and its large source tables, read
+    from files (the peaks, the TF-IDF of the terms, the relation files) or
+    found from them (the studies activating the regions of the atlases, the
+    bootstrap replicates). A change of the data makes another one, and
+    engines finding the same table from the same data (``neurostore``,
+    ``neurostore_iit``...) find the same file.
+
+    A table kept is read memory-mapped: in under a second rather than
+    computed again (35 s for the ``activated`` of ``neurostore``), its
+    columns views of the file, whose pages the processes reading it (the
+    engines of the builder of the REPL server and the sessions forked from
+    it) share, and which the system may drop and read again when memory is
+    short. Assign one to ``program_ir.derived_tables`` (see
+    :class:`~neurolang.frontend.datalog.sugar.spatial.TranslateEuclideanDistanceBoundMatrixMixin`
+    and :func:`keep_table`).
+    """
+
+    def __init__(self, directory):
+        self.directory = Path(directory)
+        # The checksums of the source tables, by their id, with the table,
+        # whose id is then no other's: a table is read once per build (the
+        # peaks, which the regions of each atlas are found from).
+        self._digests = {}
+
+    def _digest(self, frame) -> str:
+        if id(frame) not in self._digests:
+            self._digests[id(frame)] = frame, frame_digest(frame)
+        return self._digests[id(frame)][1]
+
+    def __call__(self, kind: str, frames, parameters, compute):
+        """Return the table derived as *kind* from the tables *frames* with
+        *parameters*: the one kept, or *compute()*, kept for the next time.
+        A directory that cannot be written to, or a file that cannot be
+        read, only means that it is computed again."""
+        key = digest(kind, parameters, *map(self._digest, frames))
+        path = self.directory / f"{kind}-{key}.arrow"
+        if path.exists():
+            try:
+                return self._read(path)
+            except Exception:  # damaged, or written by another version
+                pass
+        frame = compute()
+        try:
+            _write(path, lambda file: self._write(file, frame))
+            return self._read(path)  # mapped: its pages are shared
+        except Exception:
+            return frame
+
+    @staticmethod
+    def _write(file, frame) -> None:
+        import pyarrow as pa
+        import pyarrow.ipc as ipc
+
+        table = pa.Table.from_pandas(frame, preserve_index=False)
+        with ipc.new_file(file, table.schema) as writer:
+            writer.write_table(table)
+
+    @staticmethod
+    def _read(path: Path):
+        import pyarrow as pa
+        import pyarrow.ipc as ipc
+
+        table = ipc.open_file(pa.memory_map(str(path))).read_all()
+        return table.to_pandas(split_blocks=True)
+
+
+def keep_table(program, kind: str, frames, parameters: Callable, compute):
+    """
+    Return the table *compute()* gives, found as *kind* from the tables
+    *frames* and the *parameters()* (texts, numbers, :func:`file_digest`...),
+    which are all it depends on: the one kept by the ``derived_tables`` of
+    *program* (a :class:`DerivedTables`, while an engine is built), or else
+    *compute()*, without naming it (in a browser, the parameters are not
+    computed).
+    """
+    tables = getattr(program, "derived_tables", None)
+    if tables is None:
+        return compute()
+    return tables(kind, frames, parameters(), compute)
+
+
 def prebuild(
     engine_name: str, data_dir, resolution: Optional[float] = None,
     yaml_path=None,
 ) -> List[Path]:
     """
     Build the engine so that its tables are kept in the data directory, and
-    return the files they are in.
+    return the files they are in. They are all found and written, none read
+    from the Arrow files of the builds (:class:`DerivedTables`), which the
+    browser does not read.
     """
     from neurolang_apps.utils import engine_registry
 
     engine_registry.build_engine(
-        engine_name, Path(data_dir), resolution, yaml_path, use_cache=True
+        engine_name, Path(data_dir), resolution, yaml_path, use_cache=True,
+        map_tables=False,
     )
     return cached_files(data_dir, engine_name)
 
