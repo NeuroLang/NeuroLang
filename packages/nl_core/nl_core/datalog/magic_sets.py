@@ -495,7 +495,8 @@ def check_stratified(rules, origins=None) -> None:
 
 
 def magic_rewrite(
-    query: Expression, datalog: DatalogProgram, seed_from_edb: bool = True
+    query: Expression, datalog: DatalogProgram, seed_from_edb: bool = True,
+    unbound_predicates: Iterable[Symbol] = (),
 ) -> Tuple[Symbol, Union]:
     """
     Implementation of the Magic Sets method of optimization for datalog
@@ -513,6 +514,10 @@ def magic_rewrite(
         whether a literal of the extensional database with a constant
         binds the variables of the literals right of it, see
         :class:`LeftToRightSIPS`
+    unbound_predicates : Iterable[Symbol]
+        predicates left unbound, computed whole rather than restricted to
+        the bindings of the query (e.g. those a backend reads as a whole,
+        as a sparse matrix)
 
     Returns
     -------
@@ -522,7 +527,7 @@ def magic_rewrite(
     # A predicate whose binding would put an aggregation or a negation in a
     # cycle of the rewritten program is left unbound, and the rewrite done
     # again: it is then computed whole, the others still bound.
-    unbound = set()
+    unbound = set(unbound_predicates)
     while True:
         try:
             return _magic_rewrite(query, datalog, seed_from_edb, unbound)

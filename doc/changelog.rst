@@ -19,6 +19,19 @@ Unreleased
 
 **New features:**
 
+- Probabilistic queries whose plans are sums of products (joins,
+  projections and selections over choices, probabilistic facts and
+  deterministic relations, the independent and disjoint projections of
+  lifted plans, and conditionals) are computed as contractions of sparse
+  tensors: the provenance plan is translated into tensor expressions
+  (``nl_core.relational_algebra.linear_algebra.expressions``), rewritten
+  into a normal form, and computed with ``scipy.sparse``, reading the
+  engines' sparse views (``activated``, the atlas activations) as
+  matrices. Plans it cannot write so are computed as before. With it,
+  magic sets leave the predicates of sparse views unbound. Answers are
+  unchanged (see :doc:`probabilistic_lifting`, *Computing the plans as
+  tensor contractions*); ``[PROBABILISTIC_SOLVER] contractions = False``
+  in ``config.ini`` turns it off.
 - ``nl_core.relational_algebra.linear_algebra``, the encoding of
   relations for linear algebra: ``EntityIndex`` numbers the entities of a
   sort (a voxel ``(i, j, k)`` is one; strings through a dictionary) and

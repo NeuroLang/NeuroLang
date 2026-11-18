@@ -2013,15 +2013,23 @@ def _phase_sparse_views(nl, cfg):
     one numbering of the entities of each sort shared by all. The views
     of the predicates the engine does not define (those a lightweight
     engine leaves out, the activations of atlases it does not load) are
-    not built.
+    not built, nor any when the probabilistic solver, which reads them,
+    does not compute contractions (``[PROBABILISTIC_SOLVER] contractions``
+    of the configuration).
     """
+    from nl_expr.config import config
+
+    nl.sparse_views = {}
+    if not config.getboolean(
+        "PROBABILISTIC_SOLVER", "contractions", fallback=False
+    ):
+        return
     symbol_table = nl.program_ir.symbol_table
     declared = {
         name: sorts
         for name, sorts in (cfg.get("sparse_views") or {}).items()
         if name in symbol_table
     }
-    nl.sparse_views = {}
     if not declared:
         return
     from nl_core.relational_algebra.linear_algebra import build_sparse_views

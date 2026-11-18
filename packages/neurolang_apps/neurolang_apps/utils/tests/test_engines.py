@@ -1520,10 +1520,19 @@ class TestSparseViews:
         )
         assert view.matrix.nnz == 3  # the explicit zero of ('u', 2)
 
-    def test_the_engines_declare_no_views(self, small_neurosynth):
-        """Check the engines of the registry build no view: no query
-        reads them yet."""
-        assert small_neurosynth.sparse_views == {}
+    def test_the_engines_declare_the_views_contractions_read(
+        self, small_neurosynth
+    ):
+        """Check the coordinate-based engines build the voxel x study view
+        of ``activated``, which the probabilistic solver reads when it
+        computes sums of products as contractions; the views of atlases
+        the engine did not load are left out."""
+        views = small_neurosynth.sparse_views
+        assert "activated" in views
+        assert set(views) <= {
+            "activated", "schaefer_activated", "schaefer400_activated",
+            "destrieux_activated", "tian_activated",
+        }
 
     def test_no_view_of_a_predicate_the_engine_lacks(self, tmp_path):
         """Check the view of a predicate the engine does not define (left
@@ -1531,6 +1540,19 @@ class TestSparseViews:
         and the others are."""
         nl = self._engine(tmp_path, "{p: [b, a, w], absent: [a, b]}")
         assert set(nl.sparse_views) == {"p"}
+
+    def test_no_views_without_contractions(self, tmp_path):
+        """Check no view is built when the probabilistic solver does not
+        compute contractions, the only reader of the views."""
+        from nl_expr.config import config
+
+        previous = config.get("PROBABILISTIC_SOLVER", "contractions")
+        config.set("PROBABILISTIC_SOLVER", "contractions", "False")
+        try:
+            nl = self._engine(tmp_path, "{p: [b, a, w]}")
+        finally:
+            config.set("PROBABILISTIC_SOLVER", "contractions", previous)
+        assert nl.sparse_views == {}
 
     def test_no_views_declared(self, tmp_path):
         """Check an engine without ``sparse_views`` has none."""

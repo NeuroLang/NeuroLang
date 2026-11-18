@@ -37,6 +37,7 @@ from nl_core.datalog.constraints_representation import (
     iter_implications,
 )
 from nl_core.datalog.exceptions import InvalidMagicSetError
+from nl_expr.config import config
 from nl_expr.exceptions import SymbolNotFoundError
 from nl_core.datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
@@ -1073,13 +1074,28 @@ class NeurolangPDL(QueryBuilderDatalog):
         """
         with self.scope:
             goal, magic_rules = magic_rewrite(
-                query.consequent, self.program_ir, seed_from_edb
+                query.consequent, self.program_ir, seed_from_edb,
+                self._whole_predicates(),
             )
             self.program_ir.walk(magic_rules)
             magic_query = self.program_ir.symbol_table[goal].formulas[0]
             return probabilistic_postprocess_magic_rules(
                 self.program_ir, magic_query, magic_rules
             )
+
+    def _whole_predicates(self):
+        """
+        The predicates magic sets leave unbound: those of the engine's
+        sparse views (``sparse_views``), when the probabilistic solver
+        computes sums of products as contractions, which read them whole
+        as matrices instead of a copy restricted to the query's bindings.
+        """
+        views = getattr(self, "sparse_views", None) or {}
+        if not views or not config.getboolean(
+            "PROBABILISTIC_SOLVER", "contractions", fallback=False
+        ):
+            return ()
+        return tuple(ir.Symbol(name) for name in views)
 
     def _show_ra_query(
         self, query, options, show_rewritten, dry_run, query_atom

@@ -166,8 +166,11 @@ may specify the following keys, all of them optional:
   float64 entries over the same indices, is the one to multiply: ``R @
   R.T`` counts the studies two regions share).  A view of a predicate
   the engine does not define (one a lightweight engine leaves out) is
-  not built.  The engines of the registry declare no view yet: no query
-  reads them, and they cost each build their memory and time
+  not built.  The probabilistic solver reads them when it computes sums
+  of products as contractions; with ``[PROBABILISTIC_SOLVER]
+  contractions`` off in the configuration, no view is built.  The
+  engines of ``coordinate_meta_analysis`` declare ``activated`` and the
+  activations of the atlases
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of
