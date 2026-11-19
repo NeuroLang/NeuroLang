@@ -309,6 +309,9 @@ class SolveAsContractions(PatternWalker):
             frame = evaluate(tensor, column, config.getint(
                 "PROBABILISTIC_SOLVER", "dense_cells"
             ))
+            answer = NamedRelationalAlgebraFrozenSet(
+                tuple(frame.columns), frame
+            )
         except (NotApplicable, NeuroLangPatternMatchingNoMatch):
             return plan
         except Exception:  # a bug: relational algebra still answers
@@ -317,10 +320,7 @@ class SolveAsContractions(PatternWalker):
             )
             return plan
         return ProvenanceAlgebraSet(
-            Constant[AbstractSet](
-                NamedRelationalAlgebraFrozenSet(tuple(frame.columns), frame)
-            ),
-            str2columnstr_constant(column),
+            Constant[AbstractSet](answer), str2columnstr_constant(column)
         )
 
     @add_match(...)
