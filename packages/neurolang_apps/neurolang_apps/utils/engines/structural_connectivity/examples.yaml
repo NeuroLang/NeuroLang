@@ -127,10 +127,10 @@ assistant_examples:
     topic: "Structural connectivity and tractography"
     datalog: |-
       strength(sum(n)) :- schaefer400_tian_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l, n)
-      ends_in(l) ^ (n / t) :- schaefer400_tian_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l, n), strength(t)
+      ending_region(l) ^ (n / t) :- schaefer400_tian_structural_connectivity('17Networks LH DefaultA pCunPCC 1', l, n), strength(t)
       default(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
       default(l) :- schaefer400(l, r), startswith('17Networks RH Default', l)
-      in_default(x) :- ends_in(l), default(l), (x == 'default')
+      in_default(x) :- ending_region(l), default(l), (x == 'default')
       ans(probability) :- PROB[in_default(x)] = probability
 
   - question: Taking each structural connection as present with probability 1 - exp(-n / 500), what is the probability that each region is structurally connected to the left default mode network?

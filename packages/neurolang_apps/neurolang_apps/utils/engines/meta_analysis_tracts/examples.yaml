@@ -10,7 +10,7 @@
 # (endpoint_point) are joined to. A bundle is the rules of the vocabulary
 # (traverses, endpoint_in...), as the uncinate of uncinate.dl.
 assistant_examples:
-  - question: Which Cognitive Atlas concepts are most probably studied by the studies that activate the cortical parcels connected by the left uncinate fasciculus?
+  - question: Which kinds of memory of the Cognitive Atlas are most probably studied by the studies that activate the cortical parcels connected by the left uncinate fasciculus?
     datalog: |-
       uncinate(x, h) :- (traverses(x, "orbitofrontalgyrus", h) | traverses(x, "middle_frontal_gyrus", h) | traverses(x, "inferior_frontal_gyrus", h)), endpoint_in(x, e, "temporal", h), endpoint_anterior_of(x, e, "amygdala", h), traverses(x, "insula", h), ~traverses(x, "occipital", h), ~traverses(x, "parietal", h), ~traverses(x, "cingular", h), ~posterior_of(x, "putamen", h), opposite_hemisphere(h, o), ~in_hemisphere(x, o)
       uf_end_near(x, e, n) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez), schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
@@ -18,8 +18,7 @@ assistant_examples:
       uf_ends(count(x, e)) :- uncinate(x, "left"), endpoint_point(x, e, ex, ey, ez)
       uf_parcel(n) :- uf_parcel_ends(n, c), uf_ends(t), (c >= 0.05 * t)
       uf_study(s) :- uf_parcel(n), schaefer_activated(n, s), selected_study(s)
-      measuring(c) :- cogat_measures(c, x)
-      cogat_concept(c, t) :- cogat_term(c, t), cogat_subclass_of(c, <http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00001>), ~measuring(c)
+      cogat_concept(c, t) :- cogat_term(m, 'memory'), cogat_subclass_of(c, m), cogat_term(c, t)
       concept_definition(t, d) :- cogat_concept(c, t), skos:definition(c, d)
       about(t, s) :- concept_definition(t, d), similar_study(d, s), selected_study(s)
       p_concept_given_uf(t, PROB) :- about(t, s) // uf_study(s)
