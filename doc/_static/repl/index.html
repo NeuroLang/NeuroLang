@@ -117,6 +117,12 @@
   /* Asking in English. */
   #ask { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: start; }
   #question { width: 100%; min-height: 2.5rem; max-height: 9rem; field-sizing: content; resize: vertical; font: 15px/1.45 var(--sans); padding: .5rem .75rem; }
+  /* The copy button of a box, at its top right, over a margin the text keeps clear. */
+  .box { position: relative; }
+  .copy { position: absolute; top: .3rem; right: .3rem; z-index: 1; min-height: 0; width: 1.9rem; height: 1.9rem; padding: 0; display: grid; place-items: center; background: none; border-color: transparent; color: var(--muted); }
+  .copy:hover:not(:disabled) { color: var(--text); background: var(--hover); border-color: transparent; }
+  .copy.copied { color: var(--ok); }
+  #question { padding-right: 2.5rem; }
   #ask-run { min-height: 2.5rem; padding-inline: 1.1rem; }
   .ask-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: .4rem .75rem; flex-wrap: wrap; }
   #ask-note { flex: 1 1 16rem; }
@@ -181,7 +187,7 @@
   #summary-reads { font-style: italic; }
   /* The code box: a transparent textarea over a <pre> with the same text, coloured. */
   .editor { position: relative; }
-  .editor pre, .editor textarea { margin: 0; padding: .7rem .85rem; border: 1px solid var(--control); border-radius: var(--radius); font: 13.5px/1.6 var(--mono); tab-size: 4;
+  .editor pre, .editor textarea { margin: 0; padding: .7rem 2.5rem .7rem .85rem; border: 1px solid var(--control); border-radius: var(--radius); font: 13.5px/1.6 var(--mono); tab-size: 4;
     white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; letter-spacing: 0; scrollbar-gutter: stable; }
   .editor pre { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: var(--sunken); color: var(--text); }
   .editor textarea { position: relative; display: block; width: 100%; min-height: 9.5rem; resize: vertical; max-height: 28rem; background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--accent); }
@@ -537,7 +543,10 @@
     <section class="card" aria-labelledby="ask-title">
       <div class="card-head"><h2 id="ask-title">Ask in English</h2></div>
       <form id="ask">
-        <textarea id="question" rows="1" placeholder="Ask in English, e.g. which studies mention pain?" aria-label="Question for the AI assistant" aria-describedby="ask-help" disabled></textarea>
+        <div class="box">
+          <textarea id="question" rows="1" placeholder="Ask in English, e.g. which studies mention pain?" aria-label="Question for the AI assistant" aria-describedby="ask-help" disabled></textarea>
+          <button id="copy-question" type="button" class="copy" title="Copy the question" aria-label="Copy the question"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
+        </div>
         <button id="ask-run" class="ghost" disabled title="Add an API key to use the assistant">Ask</button>
         <div class="ask-foot">
           <p id="ask-note" class="note">Asking needs your own API key from an AI provider. It stays in this tab: click <em>API key</em>.</p>
@@ -600,6 +609,7 @@
         <div class="editor">
           <pre id="mirror" aria-hidden="true"></pre>
           <textarea id="input" spellcheck="false" aria-describedby="hint run-help" placeholder="ans(s) :- mentions(s, &quot;pain&quot;)" aria-label="Query"></textarea>
+          <button id="copy-query" type="button" class="copy" title="Copy the query" aria-label="Copy the query"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
         </div>
         <p id="hint" class="note" aria-live="polite"></p>
         <div class="toolbar">

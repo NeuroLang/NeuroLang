@@ -1122,6 +1122,49 @@ def tracts(tiny):
     return tiny
 
 
+class TestViewThresholdedQuery:
+    """
+    Check .view shows all the voxels of a result whose query thresholds
+    its value, ``(w > 0.3)``, rather than their top 5%.
+    """
+
+    def _threshold(self, app, query, calls):
+        app._execute_and_display(query)
+        app._handle_dot_command(".view")
+        out = _output(app)
+        if "viewer to: " in out:
+            Path(out.split("viewer to: ")[-1].split()[0]).unlink()
+        return calls[-1]["threshold"]
+
+    @pytest.mark.parametrize("query", [
+        "ans(i, j, k, w) :- weight(i, j, k, w), (w > 0.3)",
+        "ans(i, j, k, w) :- weight(i, j, k, w), (0.3 <= w)",
+    ])
+    def test_a_thresholded_value_is_shown_whole(
+        self, tiny, view_calls, query
+    ):
+        assert self._threshold(tiny, query, view_calls) == 0.0
+
+    @pytest.mark.parametrize("query", [
+        "ans(i, j, k, w) :- weight(i, j, k, w)",
+        "ans(i, j, k, w) :- weight(i, j, k, w), (k > 0)",
+    ])
+    def test_otherwise_its_top_5_percent(self, tiny, view_calls, query):
+        assert self._threshold(tiny, query, view_calls) == "95%"
+
+    def test_thresholded_columns(self, tiny):
+        from neurolang_apps.utils.tui.provenance import thresholded_columns
+
+        assert thresholded_columns(
+            tiny._nl,
+            "ans(i, j, k, w) :- weight(i, j, k, w), (w > 0.3), (k > 0)",
+            squall=False,
+        ) == {"": {2, 3}}
+        assert thresholded_columns(
+            tiny._nl, "ans(i, j, k, w) :- weight(i, j, k, w)", squall=False
+        ) == {"": set()}
+
+
 class TestViewStreamlines:
     """Check .view draws a result of streamline ids as streamlines."""
 
