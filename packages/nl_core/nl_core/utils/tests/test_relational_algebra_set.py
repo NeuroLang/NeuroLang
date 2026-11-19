@@ -1685,6 +1685,50 @@ def test_count_distinct_counts_values(backend, values):
     assert _rows(result) == {(2,)}
 
 
+def test_copies_share_no_writes(ra_module):
+    """Writing to a set or to what it was made from reaches neither."""
+    if ra_module is not pandas:
+        pytest.skip("pandas copies")
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+    named = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), frame)
+    frame.iloc[0, 0] = 99
+    assert set(named) == {(1, 3), (2, 4)}
+
+    named._container.iloc[0, 0] = 77
+    assert frame.iloc[0, 0] == 99
+
+    projected = named.extended_projection(
+        {"x": ra_module.RelationalAlgebraStringExpression("x + 1"),
+         "z": RelationalAlgebraColumnStr("y")}
+    )
+    projected._container.iloc[0, 0] = 55
+    assert set(named) == {(77, 3), (2, 4)}
+
+    unnamed = ra_module.RelationalAlgebraFrozenSet([(1, 2), (3, 4)])
+    copied = unnamed.copy()
+    copied._container.iloc[0, 0] = 9
+    assert (1, 2) in unnamed
+
+    other = ra_module.RelationalAlgebraSet([(1, 2)])
+    target = ra_module.RelationalAlgebraSet()
+    target |= other
+    target._container.iloc[0, 0] = 9
+    assert set(other) == {(1, 2)}
+    target |= ra_module.RelationalAlgebraSet([(5, 6)])
+    assert set(other) == {(1, 2)}
+
+
+def test_left_join_without_common_columns_does_not_write_through(ra_module):
+    left = ra_module.NamedRelationalAlgebraFrozenSet(("x",), [(1,), (2,)])
+    right = ra_module.NamedRelationalAlgebraFrozenSet(("y",), [])
+    joined = left.left_naturaljoin(right)
+    assert joined.columns == ("x", "y")
+    assert left.columns == ("x",)
+    assert set(left) == {(1,), (2,)}
+
+
 def test_named_set_from_a_pandas_frame(ra_module):
     """A named set takes the rows of a pandas frame, its columns in the
     set's order whatever their names (the answer of the contractions of

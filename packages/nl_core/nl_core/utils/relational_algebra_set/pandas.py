@@ -42,6 +42,12 @@ def _copy_on_write() -> bool:
 # from, which cannot change it; without, it copies them.
 _COPY_ON_WRITE = _copy_on_write()
 
+
+def _copy(frame):
+    """A copy of the frame that later writes to either cannot reach."""
+    return frame.copy(deep=not _COPY_ON_WRITE)
+
+
 # Operations on many rows go by chunks of this many rows, not to hold
 # arrays as long as the relation: the activations of the voxels by the
 # studies are tens of millions of rows.
@@ -104,7 +110,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 # A deep copy would also join the columns in one block: a
                 # second copy of the rows, gigabytes for those of a
                 # Euclidean bound.
-                self._container = iterable.copy(deep=not _COPY_ON_WRITE)
+                self._container = _copy(iterable)
             else:
                 self._container = pd.DataFrame(iterable)
 
@@ -451,7 +457,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def copy(self):
         output = self._empty_set_same_structure()
         if len(self) > 0:
-            output._container = self._container.copy()
+            output._container = _copy(self._container)
         return output
 
     def __repr__(self):
@@ -620,7 +626,7 @@ class NamedRelationalAlgebraFrozenSet(
             self._initialize_from_unnamed_ra_set(iterable)
             self._might_have_duplicates = iterable._might_have_duplicates
         elif isinstance(iterable, pd.DataFrame):
-            self._container = iterable.copy()
+            self._container = _copy(iterable)
             self._container.columns = self._columns
         else:
             self._container = pd.DataFrame(iterable, columns=self._columns)
@@ -863,7 +869,7 @@ class NamedRelationalAlgebraFrozenSet(
 
         if len(on) == 0:
             if other.is_empty():
-                new_container = self._container.copy()
+                new_container = _copy(self._container)
                 for c in other.columns:
                     new_container[c] = pd.NA
             else:
@@ -1269,7 +1275,7 @@ class NamedRelationalAlgebraFrozenSet(
         if any(callable(op) for op in eval_expressions.values()):
             # Python callables run once per row: don't run them on duplicates
             self._drop_duplicates_if_needed()
-        new_container = self._container.copy()
+        new_container = _copy(self._container)
         new_container = new_container.infer_objects()
         seen_pure_columns = set()
         for dst_column, operation in eval_expressions.items():
@@ -1472,7 +1478,7 @@ class RelationalAlgebraSet(
             if other.is_empty() or other.arity == 0:
                 return self
             if self.is_empty():
-                self._container = other._container.copy()
+                self._container = _copy(other._container)
                 self._might_have_duplicates = other._might_have_duplicates
                 return self
             if other.arity != self.arity:

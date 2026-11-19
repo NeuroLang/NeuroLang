@@ -159,6 +159,13 @@ Unreleased
 
 **Performance:**
 
+- The pandas relational-algebra sets share the columns of the frames they
+  are made from, or copy, under copy-on-write (pandas 3): ``copy()``, the
+  named set made from a data frame, ``extended_projection``, the left
+  join without common columns and ``|=`` onto an empty set no longer copy
+  the rows when no write reaches them (a write copies the column it
+  changes). Before pandas 3, the copies are deep as before.
+
 - Engine builds read the cached atlas activations as arrays instead of
   rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
   arrays as fixed-width bytes instead of through ``repr``; the cache
