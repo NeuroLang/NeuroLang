@@ -34,6 +34,12 @@ Unreleased
   shared, nor is one whose constraints of the engine read the session's.
   See *Results shared by the sessions* in :doc:`repl_server`.
 
+- REPL page: the question and query boxes have a copy button at their top
+  right, and keep their own history of edits: Ctrl or Cmd Z undoes a run of
+  typing at a time (the browser's undid a character at a time in Chrome) and
+  also what the page wrote in the box (an example, the History menu, the
+  assistant's query, Format); Shift Ctrl or Cmd Z, and Ctrl Y, redo.
+  
 - NeuroStore engine: a build no longer depends on the network when it has
   what it needs.  The listing of the releases is kept in the data directory
   for ``release_listing_ttl_hours`` (24, in ``engines.yaml``), a downloaded
