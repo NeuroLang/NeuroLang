@@ -79,7 +79,9 @@ def resampling_relation(choice_rows, n, scheme="bayesian", seed=0):
     """
     The rows ``(b, c..., w)`` of a resampling of the choice whose rows are
     ``(p, c...)``, ordered by outcome so that a seed always gives the same
-    replicates, and the aggregation of :func:`replicate_sums` over them.
+    replicates: those of replicate ``b`` are rows ``b N`` to ``(b + 1) N``
+    of the ``N`` outcomes, in the same order in each (see
+    :func:`relation_sums`).
     """
     choice = pd.DataFrame(choice_rows).sort_values(
         by=list(range(1, len(choice_rows.columns)))
@@ -91,7 +93,19 @@ def resampling_relation(choice_rows, n, scheme="bayesian", seed=0):
     for i, column in enumerate(outcomes.columns):
         columns[f"c{i}"] = np.tile(outcomes[column].to_numpy(), n)
     columns["w"] = ratios.ravel()
-    return pd.DataFrame(columns), replicate_sums(outcomes, ratios)
+    return pd.DataFrame(columns)
+
+
+def relation_sums(relation, n):
+    """
+    The aggregation of :func:`replicate_sums` over the *n* replicates of
+    the rows *relation* of :func:`resampling_relation`: its outcomes are
+    the rows of its first replicate and its ratios its ``w``, replicate by
+    replicate, so that a relation kept gives the same sums.
+    """
+    size = len(relation) // n
+    ratios = relation.iloc[:, -1].to_numpy().reshape(n, size)
+    return replicate_sums(relation.iloc[:size, 1:-1], ratios)
 
 
 def replicate_sums(outcomes, ratios):

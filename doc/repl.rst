@@ -242,6 +242,33 @@ Its *Plot* button draws the rows the filter keeps: bars of a column (a
 probability by region, the most probable in red) or of how many rows each
 value has, a histogram of a numeric column, or two numeric columns as
 points or a line; the values of a mark show under the pointer.
+An answer whose rows are edges, two columns of the same sort and a
+weight (``ans(concept_1, concept_2, correlation)``), also shows in the
+*Network* tab: its nodes and edges, the stronger an edge the thicker
+(dashed if negative), from the weight its slider sets; it starts with
+the strongest edges, two per node. Its controls size and shade the nodes
+by their links, their rows in each column (the children of a parent, in
+``ans(concept, parent)``) or, of a hierarchy, the nodes under each, and
+shade the edges by their weight; a hierarchy (an edge per node, and a
+root) can be drawn as a radial tree, as it is at first if small.
+
+The network zooms with Ctrl or ⌘ and the wheel, a pinch or its buttons
+(*Fit* shows it whole) and moves with a drag; the farther, the fewer
+names, those of the most linked nodes. A node found by name in the box
+above it, or clicked, is focused: it and its neighbours stand out, the
+others fade, and a panel lists its measures and its neighbours, the
+strongest first, each a button to go to it; Escape, or a click beside
+the nodes, ends the focus.
+
+.. image:: _static/network/network-ontology-focus.png
+   :alt: The Network tab: the concepts of the Cognitive Atlas under their
+         root, Concept, with memory focused: its 18 neighbours stand out
+         and the panel on the right lists them.
+
+.. image:: _static/network/network-coactivation-focus.png
+   :alt: The Network tab, dark: the kinds of memory linked by the
+         correlation of their activations, visual memory focused, its
+         neighbours listed with their correlations, the strongest first.
 
 
 The query assistant
