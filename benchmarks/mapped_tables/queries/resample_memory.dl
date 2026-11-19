@@ -1,0 +1,6 @@
+active(l, s) :- destrieux_activated(l, s), selected_study(s)
+memory(s) :- mentions(s, 'memory'), selected_study(s)
+p_active_given_memory(l, PROB) :- active(l, s) // memory(s)
+p_replicate(b, l, p) :- RESAMPLE[boot_studies](p_active_given_memory(l, p)) = b
+interval(p, percentile(x, 2.5), percentile(x, 97.5)) :- p_active_given_memory('L G temp sup Lateral', p), p_replicate(b, 'L G temp sup Lateral', x)
+ans(probability, ci_low, ci_high) :- interval(probability, ci_low, ci_high)
