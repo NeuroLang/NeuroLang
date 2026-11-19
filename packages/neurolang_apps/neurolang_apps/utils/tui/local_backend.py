@@ -26,7 +26,7 @@ from typing import Callable, Optional
 
 from neurolang.confine import lifted
 from neurolang_apps.utils import engine_registry
-from neurolang_apps.utils.tui import session, web
+from neurolang_apps.utils.tui import constant_notes, session, web
 from neurolang_apps.utils.tui.interrupt import _raise_in_thread
 
 
@@ -60,6 +60,15 @@ RATING_NOTE = (
     "answer of the assistant the question and its steps, on this server, "
     "with your user name and groups."
 )
+
+
+def _is_initialize(body: bytes) -> bool:
+    """Whether the JSON-RPC *body* of an MCP client starts a session."""
+    try:
+        message = json.loads(body)
+    except ValueError:
+        return False
+    return isinstance(message, dict) and message.get("method") == "initialize"
 
 
 def apply_env(env: dict) -> None:
@@ -104,6 +113,9 @@ class LocalBackend:
         self._build = build or self._build_engine
         self.preload_embeddings = preload_embeddings
         self.repl: Optional[web.WebRepl] = None
+        self._engine = ""
+        # The MCP server on the REPL, once a client asked (see mcp).
+        self._mcp = None
         self._page_key = False  # whether the page gave the assistant's key
         # The values the variables of the user's identity had before it
         # (see use_identity).
@@ -149,7 +161,9 @@ class LocalBackend:
         from their cache or computed into it, and the query model), so
         that its first query of them does not, nor do the sessions forked
         from this process (see
-        :func:`~neurolang_apps.utils.text_embeddings.preload`)."""
+        :func:`~neurolang_apps.utils.text_embeddings.preload`); and find the
+        values of its string sorts, which the notes of a query look up
+        (:func:`~neurolang_apps.utils.tui.constant_notes.prepare`)."""
         nl = self._build(name, say)
         if self.preload_embeddings and \
                 getattr(nl, "text_embedding_indexes", None):
@@ -157,6 +171,8 @@ class LocalBackend:
 
             say("Loading the text embeddings")
             text_embeddings.preload(nl)
+        say("Finding the names of the engine")
+        constant_notes.prepare(nl, name)
         return nl
 
     def _build_engine(self, name: str, say: Callable):
@@ -191,15 +207,17 @@ class LocalBackend:
         _raise_in_thread(worker, KeyboardInterrupt)
         return True
 
-    def start(self, engine: str) -> dict:
+    def start(self, engine: str, text: bool = False) -> dict:
         """
         Build the engine *engine* and a REPL on it, and return what the page
         is told when it is ready. Each start builds them anew, as the page
-        does when it restarts: the rules of a session are not kept.
+        does when it restarts: the rules of a session are not kept. With
+        *text*, the REPL answers in plain text, not in HTML (that of an MCP
+        client, see :meth:`mcp`).
         """
-        return self._working(lambda: self._start(engine))
+        return self._working(lambda: self._start(engine, text))
 
-    def _start(self, engine: str) -> dict:
+    def _start(self, engine: str, text: bool = False) -> dict:
         with lifted():  # the engine's commands are the server's
             nl = self.build(engine, self.say)
         self.say("Starting the REPL")
@@ -217,7 +235,9 @@ class LocalBackend:
             except Exception:
                 pass
         self._page_key = False
-        repl = web.WebRepl(nl, engine, self.resolution, **options)
+        repl = web.WebRepl(
+            nl, engine, self.resolution, html=not text, **options
+        )
         repl.app.uploads = session.Uploads(**self.uploads)
         repl.set_event_sink(lambda text: self.emit(json.loads(text)))
         self._use_machine_llm(repl)
@@ -229,6 +249,7 @@ class LocalBackend:
             repl.set_feedback(*self.feedback)
             can_rate = repl.can_rate()
         self.repl = repl
+        self._engine = engine
         from neurolang_apps.utils.llm.browser import providers_for_form
         import neurolang
         return {
@@ -254,6 +275,31 @@ class LocalBackend:
             # predates it leaves it out)
             "assistant": getattr(repl, "assistant_ready", lambda: False)(),
         }
+
+    def mcp(self, verb: str, path: str, headers: dict, body: bytes,
+            base_url: str, results_dir: str) -> tuple:
+        """
+        Answer the HTTP request of an MCP client, (status, headers, body),
+        with the MCP server on the REPL (see
+        :mod:`~neurolang_apps.utils.mcp_server`), made at the first: the
+        files of its answers in a folder of *results_dir*, linked under
+        *base_url*. A client's ``initialize`` starts a conversation.
+        """
+        from neurolang_apps.utils import mcp_server
+
+        repl = self._repl()
+        if self._mcp is None or self._mcp[0] is not repl:
+            session = mcp_server.McpSession(
+                self._engine, repl=repl, results_dir=Path(results_dir),
+                token_bytes=16,
+            )
+            bridge = mcp_server.HttpBridge(mcp_server.http_app(session))
+            self._mcp = (repl, session, bridge)
+        _, session, bridge = self._mcp
+        session.store.base_url = base_url
+        if _is_initialize(body):
+            session.new_conversation()
+        return bridge.call(verb, path, headers, body)
 
     def _repl(self) -> web.WebRepl:
         if self.repl is None:

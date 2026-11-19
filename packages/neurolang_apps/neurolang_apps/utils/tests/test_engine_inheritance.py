@@ -316,9 +316,16 @@ def test_the_schaefer_400_atlas_is_its_own_atlas_of_the_connectivity():
     cfg = get_engine_config("neurosynth")
     atlases = cfg["atlases"]
     assert atlases["schaefer"]["n_rois"] == 100
+    # The connectivity's atlas, with the activations and coverage the
+    # meta-analysis engines add to it.
     assert atlases["schaefer400"] == {
         "kind": "schaefer", "predicate_name": "schaefer400", "n_rois": 400,
-        "resolution_mm": 2, "yeo_networks": 17}
+        "resolution_mm": 2, "yeo_networks": 17,
+        "activated": {"predicate_name": "schaefer400_activated",
+                      "radius_mm": 6},
+        "covered": {"predicate_name": "schaefer400_covered"}}
+    assert "activated" not in get_engine_config(
+        "structural_connectivity")["atlases"]["schaefer400"]
     assert cfg["sorts"]["schaefer400_label"]["atlas"] == "schaefer400"
     assert "schaefer400" not in get_engine_config("destrieux")["atlases"]
 

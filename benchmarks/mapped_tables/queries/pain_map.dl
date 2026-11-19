@@ -1,0 +1,3 @@
+activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+term_association(s, t) :- mentions(s, t), selected_study(s)
+ans(i, j, k, probability) :- PROB[activation(i, j, k, s) // term_association(s, 'pain')] = probability

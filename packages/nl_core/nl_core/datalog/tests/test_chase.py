@@ -977,3 +977,26 @@ def test_semi_naive_first_iteration_sees_the_tuples_of_earlier_strata():
     )))
     solution = Chase(dl).build_chase_solution()
     assert set(solution[Q].value) == {(1, 2), (2, 1)}
+
+
+def test_a_chase_that_ran_is_not_kept(chase_class):
+    """Nothing keeps a chase once its query is solved: not the caches of
+    its rewritings, which hold its program and the relations of its
+    query."""
+    import gc
+    import weakref
+
+    datalog_program = Eb_((
+        F_(Q(a)),
+        Imp_(T(x), Q(x)),
+    ))
+    dl = Datalog()
+    dl.walk(datalog_program)
+    dc = chase_class(dl)
+    dc.chase_step(
+        MapInstance(dl.extensional_database()), datalog_program.expressions[-1]
+    )
+    chase = weakref.ref(dc)
+    del dc
+    gc.collect()
+    assert chase() is None

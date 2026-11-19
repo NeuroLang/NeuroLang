@@ -49,6 +49,7 @@ dependencies = [
 apps = ["neurolang-apps"]
 tui = ["neurolang-apps[tui]"]
 llm = ["neurolang-apps[llm]"]
+mcp = ["neurolang-apps[mcp]"]
 embeddings = ["neurolang-apps[embeddings]"]
 ras-polars = ["nl-core[ras-polars]"]
 dev = [

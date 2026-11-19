@@ -340,8 +340,8 @@
   #tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); }
   #tabs button { min-height: 2.25rem; margin-bottom: -1px; background: none; color: var(--muted); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: .35rem .85rem; font-weight: 500; font-size: .875rem; }
   #tabs button:hover { color: var(--text); background: none; }
-  #results[data-tab=table] #tab-table, #results[data-tab=brain] #tab-brain, #results[data-tab=graph] #tab-graph { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-  #results:not([data-tab=table]) #table, #results:not([data-tab=brain]) #brain, #results:not([data-tab=graph]) #graph { display: none; }
+  #results[data-tab=table] #tab-table, #results[data-tab=network] #tab-network, #results[data-tab=brain] #tab-brain, #results[data-tab=graph] #tab-graph { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  #results:not([data-tab=table]) #table, #results:not([data-tab=network]) #network, #results:not([data-tab=brain]) #brain, #results:not([data-tab=graph]) #graph { display: none; }
   #table { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
   /* the answers of a program with several queries (ans[name]), a tab each */
   .answer-tabs { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .6rem; }
@@ -349,6 +349,61 @@
   .answer-tabs button:hover { color: var(--text); background: var(--sunken); }
   .answer-tabs button[aria-selected=true] { color: var(--text); border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
   #graph > .note { margin-bottom: .5rem; font-size: .8125rem; }
+  .networks { display: grid; gap: 1.5rem; }
+  .network { display: grid; gap: .6rem; }
+  .network-title { margin: 0; font-size: .875rem; }
+  .network .plot-controls input[type=range] { width: 12rem; }
+  .network-bar { display: flex; flex-wrap: wrap; gap: .5rem .75rem; align-items: center; font-size: .8125rem; }
+  .network-search { width: 16rem; max-width: 100%; }
+  .network-zoom { display: inline-flex; }
+  .network-button { min-width: 2rem; min-height: 2rem; padding: 0 .6rem; border: 1px solid var(--control); background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
+  .network-zoom .network-button + .network-button { margin-left: -1px; }
+  .network-zoom .network-button:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .network-zoom .network-button:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+  .network-button:hover { background: var(--hover); }
+  .network-button:focus-visible, .network-details button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; position: relative; }
+  .network-hint { color: var(--muted); }
+  .network-status { color: var(--warn); }
+  .network-stage { position: relative; display: grid; gap: .75rem; }
+  .network-figure { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .network-svg { display: block; width: 100%; height: auto; aspect-ratio: 900 / 640; max-height: 75vh; cursor: grab; touch-action: none; user-select: none; }
+  .network-svg.network-panning { cursor: grabbing; }
+  .network-line { stroke: var(--accent); stroke-opacity: .55; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .network-negative .network-line { stroke: var(--answer); stroke-dasharray: 5 4; stroke-linecap: butt; }
+  .network-hit { stroke: transparent; stroke-width: 10; vector-effect: non-scaling-stroke; }
+  .network-edge:hover .network-line { stroke-opacity: 1; }
+  .network-node { cursor: pointer; }
+  .network-node circle { fill: var(--accent); stroke: var(--panel); stroke-width: 2; vector-effect: non-scaling-stroke; }
+  .network-node text { fill: var(--text); font-size: calc(13px / var(--k, 1)); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .network-alone circle { fill: var(--muted); }
+  .network-alone text { fill: var(--muted); }
+  .network-small circle { stroke-width: 1; }
+  .network-unnamed text { visibility: hidden; }
+  .network-unnamed:hover text { visibility: visible; }
+  .network-node:hover circle { stroke: var(--text); }
+  .network-node, .network-edge { transition: opacity .15s; }
+  .network-focusing .network-node:not(.network-focus):not(.network-near) { opacity: .2; }
+  .network-focusing .network-edge:not(.network-near) { opacity: .08; }
+  .network-near .network-line { stroke-opacity: 1; }
+  .network-focus circle { stroke: var(--text); stroke-width: 3; }
+  .network-focus text { font-weight: 700; }
+  @media (prefers-reduced-motion: reduce) { .network-node, .network-edge { transition: none; } }
+  .network-details { display: grid; align-content: start; gap: .5rem; overflow: auto; padding: .7rem .8rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--raised); box-shadow: var(--shadow); font-size: .8125rem; }
+  @media (min-width: 761px) { .network-details { position: absolute; top: .5rem; right: .5rem; width: 16rem; max-height: calc(100% - 1rem); } }
+  .network-details-head { display: flex; gap: .5rem; align-items: start; justify-content: space-between; }
+  .network-details h4 { margin: 0; font-size: .9375rem; overflow-wrap: anywhere; }
+  .network-details dl { display: grid; grid-template-columns: auto auto; gap: .15rem .75rem; margin: 0; }
+  .network-details dt { color: var(--muted); }
+  .network-details dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .network-details-title { margin: 0; color: var(--muted); }
+  .network-details ul { list-style: none; margin: 0; padding: 0; display: grid; }
+  .network-details li { display: flex; justify-content: space-between; gap: .5rem; align-items: baseline; }
+  .network-details li button { padding: .2rem 0; border: 0; background: none; color: var(--accent); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+  .network-details li button:hover { text-decoration: underline; }
+  .network-details li span { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .network-legend { display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; color: var(--muted); font-size: .8125rem; }
+  .network-legend > span { display: inline-flex; gap: .4rem; align-items: center; }
+  .network-swatch circle { fill: var(--accent); }
   iframe { display: block; width: 100%; height: 34rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); } /* 34rem until the page in it says how tall it is */
   .brain-bar { margin-bottom: .6rem; }
   #rate { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .75rem .9rem; background: var(--sunken); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -672,8 +727,9 @@
     <p id="failed" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg><span id="failed-text"></span></p>
     <div id="out" aria-live="polite"></div>
     <section id="results" data-tab="table">
-      <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button><button id="tab-graph" type="button" role="tab" aria-controls="graph" aria-selected="false" tabindex="-1" hidden title="Where the answer of the query comes from: its data, rules and probabilities">Graph</button></div>
+      <div id="tabs" role="tablist" aria-label="Result view"><button id="tab-table" type="button" role="tab" aria-controls="table" aria-selected="true">Table</button><button id="tab-network" type="button" role="tab" aria-controls="network" aria-selected="false" tabindex="-1" hidden title="The answer as a network: an edge a row, between its two values of the same sort">Network</button><button id="tab-brain" type="button" role="tab" aria-controls="brain" aria-selected="false" tabindex="-1" hidden>Brain</button><button id="tab-graph" type="button" role="tab" aria-controls="graph" aria-selected="false" tabindex="-1" hidden title="Where the answer of the query comes from: its data, rules and probabilities">Graph</button></div>
       <div id="table" role="tabpanel" aria-labelledby="tab-table"></div>
+      <div id="network" role="tabpanel" aria-labelledby="tab-network"></div>
       <div id="brain" role="tabpanel" aria-labelledby="tab-brain"></div>
       <div id="graph" role="tabpanel" aria-labelledby="tab-graph"></div>
     </section>

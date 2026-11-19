@@ -558,6 +558,11 @@ engines:
       schaefer:
         activated: {predicate_name: schaefer_activated}
         covered: {predicate_name: schaefer_covered}
+      # The 400 parcels of the connectivity engines this one extends
+      # (connectivity_atlases): the Schaefer atlas of the questions.
+      schaefer400:
+        activated: {predicate_name: schaefer400_activated}
+        covered: {predicate_name: schaefer400_covered}
       destrieux:
         activated: {predicate_name: destrieux_activated}
         covered: {predicate_name: destrieux_covered}
@@ -697,6 +702,17 @@ engines:
     # voxel index).  They stay usable when typed; ``reports`` and
     # ``labels`` are the forms that read as SQUALL verbs.
     hidden_predicates: [peak_reported, schaefer_voxels]
+    # The relations the probabilistic solver reads as sparse matrices when
+    # it computes sums of products as contractions: ``activated`` as a
+    # voxel x study matrix, the activations of the atlases as region x
+    # study ones.  Built once with the engine (0.2-0.7 GiB, 8-30 s) and
+    # shared by the REPL's sessions.
+    sparse_views:
+      activated: [voxel, study]
+      schaefer_activated: [label, study]
+      schaefer400_activated: [schaefer400_label, study]
+      destrieux_activated: [destrieux_label, study]
+      tian_activated: [tian_label, study]
     # The sorts of the entities the predicates relate, declared once: the
     # columns an entity spans and their type.  A sort of N > 1 columns
     # reads ``in ND`` in SQUALL (``every Voxel in 3D``).
@@ -1045,6 +1061,14 @@ engines:
         arguments:
           - label
           - study
+      schaefer400_activated:
+        description: >-
+          Studies activating a parcel of the Schaefer atlas of 400 parcels,
+          17 networks (schaefer400): one of their peaks is within
+          {kernel_radius_mm} mm of a voxel of the parcel
+        arguments:
+          - schaefer400_label
+          - study
       destrieux_activated:
         description: >-
           Studies activating a Destrieux region: one of their peaks is within
@@ -1067,6 +1091,14 @@ engines:
         probability: true
         arguments:
           - label
+          - study
+      schaefer400_covered:
+        description: >-
+          How much a study covers a parcel of the Schaefer atlas of 400
+          parcels, as a probability (see schaefer_covered)
+        probability: true
+        arguments:
+          - schaefer400_label
           - study
       destrieux_covered:
         description: >-
@@ -1121,6 +1153,11 @@ engines:
       abstracts, plus the abstracts, titles and LLM-extracted cognitive
       concepts and domains of the studies.
     python_init: "neurolang_apps.utils.engines.neurostore.init"
+    python_init_options:
+      # How long a build uses the kept listing of NeuroStore's releases
+      # before asking the network again (NEUROLANG_NEUROSTORE_UPDATE=1
+      # lists them at once).
+      release_listing_ttl_hours: 24
     acknowledgements:
       - >-
         NeuroStore (https://neurostore.org), the database of Neurosynth

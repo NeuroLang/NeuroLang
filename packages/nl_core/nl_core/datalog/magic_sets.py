@@ -15,7 +15,10 @@ from nl_expr.expressions import (
     Symbol,
 )
 from nl_expr.expression_walker import ExpressionWalker
-from nl_expr.expression_pattern_matching import add_match
+from nl_expr.expression_pattern_matching import (
+    NeuroLangPatternMatchingNoMatch,
+    add_match,
+)
 from nl_expr.logic import Negation
 from ..probabilistic.expressions import ProbabilisticQuery
 from . import extract_logic_predicates, DatalogProgram
@@ -39,10 +42,11 @@ from .constraints_representation import (
     reachable_code,
 )
 from .expression_processing import (
-    _strongly_connected_components,
+    FlattenQueryInNonRecursiveUCQ,
     any_body_preds_in_set,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
+    strongly_connected_components,
 )
 
 
@@ -480,7 +484,7 @@ def check_stratified(rules, origins=None) -> None:
             edges[head].add(functor)
             if negated or aggregates:
                 strict.add((head, functor))
-    component = _strongly_connected_components(edges)
+    component = strongly_connected_components(edges)
     for head, functor in strict:
         if component.get(head) is not None and (
             component.get(head) == component.get(functor)
@@ -580,7 +584,113 @@ def _magic_rewrite(query, datalog, seed_from_edb, unbound_predicates):
         unadorned_predicate_symbol(rule.consequent.functor)
         for rule in magic_rules
     })
-    return goal, Union(unadorned_code)
+    # 6. Restrictions of stored relations are left to the rules using them
+    return goal, Union(unfold_restrictions(unadorned_code, datalog, goal))
+
+
+def _body_functors(rule):
+    """The functors of the atoms of the body of *rule*, negated or not."""
+    return {
+        atom.functor for atom, _ in _literals(rule.antecedent)
+        if isinstance(atom, FunctionApplication)
+    }
+
+
+class _Restrictions:
+    """The rules of the restrictions to unfold, as a program's."""
+
+    def __init__(self, rules):
+        self._idb = {
+            rule.consequent.functor: Union((rule,)) for rule in rules
+        }
+
+    def intensional_database(self):
+        return self._idb
+
+
+def _restriction(rule, rules_of, edb, probabilistic, goal):
+    """Whether *rule* is a restriction of a stored relation: the only rule
+    of its predicate, not the goal, of a head of distinct variables, its
+    body the magic predicate of its head and one positive atom of a
+    deterministic relation of the extensional database."""
+    head = rule.consequent
+    body = rule.antecedent
+    atoms = body.formulas if isinstance(body, Conjunction) else ()
+    return (
+        head.functor != goal
+        and rules_of[head.functor] == 1
+        and all(isinstance(arg, Symbol) for arg in head.args)
+        and len(set(head.args)) == len(head.args)
+        and len(atoms) == 2
+        and all(
+            isinstance(atom, FunctionApplication)
+            and isinstance(atom.functor, Symbol)
+            for atom in atoms
+        )
+        and atoms[0].functor.name == f"magic_{head.functor.name}"
+        and atoms[1].functor in edb
+        and atoms[1].functor not in probabilistic
+    )
+
+
+def unfold_restrictions(rules, datalog, goal):
+    """
+    Return *rules*, a program rewritten by magic sets of goal *goal*, with
+    the restrictions of stored relations unfolded into the rules using
+    them.
+
+    Magic sets restrict a predicate to the bindings of its magic predicate
+    with a rule, ``p^bf(x, y) :- magic_p^bf(x), r(x, y)`` of a stored
+    relation ``r``, which a bottom-up evaluation computes as a new
+    relation, a copy of the rows of ``r`` it keeps. Substituting the
+    rule's body for each use of ``p^bf`` (an equivalence: the rule is the
+    only one of its predicate, and not recursive) leaves the join to the
+    plan of each rule using it, where a backend applies it as it applies
+    any join: as a semijoin, or, of a relation held as a sparse matrix, by
+    a product selecting its rows, without the copy. A restriction used
+    under negation, or by a rule the substitution does not reach, is kept.
+    """
+    rules_of = {}
+    for rule in rules:
+        functor = rule.consequent.functor
+        rules_of[functor] = rules_of.get(functor, 0) + 1
+    edb = set(datalog.extensional_database())
+    probabilistic = probabilistic_symbols(datalog)
+    restrictions = [
+        rule for rule in rules
+        if _restriction(rule, rules_of, edb, probabilistic, goal)
+    ]
+    negated = {
+        atom.functor
+        for rule in rules for atom, is_negated in _literals(rule.antecedent)
+        if is_negated and isinstance(atom, FunctionApplication)
+    }
+    restrictions = [
+        rule for rule in restrictions
+        if rule.consequent.functor not in negated
+    ]
+    if not restrictions:
+        return tuple(rules)
+    flatten = FlattenQueryInNonRecursiveUCQ(_Restrictions(restrictions))
+    unfolded = set(rule.consequent.functor for rule in restrictions)
+    result = []
+    for rule in rules:
+        if rule not in restrictions and _body_functors(rule) & unfolded:
+            try:
+                rule = Implication(
+                    rule.consequent, flatten.walk(rule.antecedent)
+                )
+            except NeuroLangPatternMatchingNoMatch:  # a body it does not
+                pass  # reach: kept, with the restriction
+        result.append(rule)
+    used = {
+        functor for rule in result if rule not in restrictions
+        for functor in _body_functors(rule)
+    }
+    return tuple(
+        rule for rule in result
+        if rule not in restrictions or rule.consequent.functor in used
+    )
 
 
 def order_rules_definitions_first(rules):

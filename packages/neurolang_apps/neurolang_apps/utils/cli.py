@@ -613,6 +613,55 @@ def _build_parser() -> argparse.ArgumentParser:
         "if one fails).",
     )
     parser.add_argument(
+        "--mcp",
+        action="store_true",
+        help="Serve a session of the interactive REPL on the engine to an "
+        "MCP client (an LLM such as Claude) over stdin and stdout: its "
+        "model answers questions in Datalog as the query assistant does, "
+        "with the assistant's instructions and tools, and gets the "
+        "explanation, the commented query, rows, images and the links to "
+        "the viewer of each answer. A query given as argument or with "
+        "--file is run first.",
+    )
+    parser.add_argument(
+        "--results-dir",
+        default=None,
+        help="With --mcp, the folder where the files of the answers are "
+        "kept: the viewer, the images, the rows, the query and its graph "
+        "(default: ~/.cache/neurolang/mcp).",
+    )
+    parser.add_argument(
+        "--keep-results",
+        type=float,
+        default=7,
+        metavar="DAYS",
+        help="With --mcp, remove at start the answers' files of the "
+        "sessions older than DAYS days in --results-dir (default: 7; 0 "
+        "keeps them all).",
+    )
+    parser.add_argument(
+        "--unconfined",
+        action="store_true",
+        help="With --mcp, let the statements of the session read and write "
+        "any file the server can: by default they read the engine's data "
+        "and the answers' files only (--data-dir, --results-dir), and write "
+        "none: the server writes the answers' files.",
+    )
+    parser.add_argument(
+        "--build-on-first-call",
+        action="store_true",
+        help="With --mcp, build the engine at the first tool call instead of "
+        "when the server starts (the call then waits for the build).",
+    )
+    parser.add_argument(
+        "--log",
+        metavar="FILE",
+        default=None,
+        help="With --mcp, write what the server does to FILE: the build of "
+        "the engine, and each tool call with its arguments, time and "
+        "outcome (follow it with tail -f).",
+    )
+    parser.add_argument(
         "--ask",
         metavar="QUESTION",
         default=None,
@@ -1368,12 +1417,12 @@ _NOT_INTERACTIVE_FLAGS = (
 )
 
 
-def _check_interactive_flags(args) -> None:
-    """Exit with an error when ``args`` combines -i with a listing flag."""
+def _check_interactive_flags(args, mode: str = "--interactive") -> None:
+    """Exit with an error when ``args`` combines *mode* with a listing flag."""
     for flag, dest in _NOT_INTERACTIVE_FLAGS:
         if getattr(args, dest):
             print(
-                f"Error: {flag} cannot be used with --interactive.",
+                f"Error: {flag} cannot be used with {mode}.",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -1469,6 +1518,37 @@ def _run_interactive(args, argv=()) -> None:
     status = tui.main(nl, settings, initial_program=program)
     if status:
         sys.exit(status)
+
+
+# The MNI grid of the MCP server's engine unless --resolution gives one.
+MCP_RESOLUTION = 2.0
+
+
+def _run_mcp(args) -> None:
+    """Build the engine and serve the REPL on it to an MCP client."""
+    for flag, dest in (
+        ("--interactive", "interactive"), ("--ask", "ask"),
+        ("--squall", "squall"),
+    ):
+        if getattr(args, dest):
+            print(f"Error: --mcp cannot be used with {flag}.", file=sys.stderr)
+            sys.exit(1)
+    _check_interactive_flags(args, "--mcp")
+    _check_flag_dependencies(args)
+    _check_engine_name(args)
+    dependencies = ("mcp", "httpx", *TUI_DEPENDENCIES)
+    try:
+        from neurolang_apps.utils import mcp_server
+    except ImportError as exc:
+        _exit_missing(
+            exc, dependencies, "the MCP server needs the optional "
+            f"dependencies {', '.join(dependencies)}", "mcp",
+        )
+    if args.resolution is None:
+        # A grid of 2 mm, as the REPL server's: a session of a quarter of the
+        # memory (3 GB for neurosynth, not 12) and maps quicker to answer.
+        args.resolution = MCP_RESOLUTION
+    mcp_server.main(args, _program_argument(args))
 
 
 def _ask_language(args, config) -> str:
@@ -1663,6 +1743,9 @@ def main(argv: Optional[list] = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    if args.mcp:
+        _run_mcp(args)
+        return
     if args.interactive:
         _run_interactive(args, sys.argv[1:] if argv is None else argv)
         return

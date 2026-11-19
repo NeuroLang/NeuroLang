@@ -6,6 +6,7 @@ import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { answerTabs, imageButtons, renderTable } from "./table_view.js";
+import { networkViews } from "./network_view.js";
 import { removedUploads, uploadRows, uploadsSummary } from "./uploads.js";
 import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
@@ -30,7 +31,7 @@ const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
 const llmForm = $("llm");
 const results = $("results");
-const TABS = ["table", "brain", "graph"]; // the tabs of the results, in order
+const TABS = ["table", "network", "brain", "graph"]; // the tabs of the results, in order
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("refine-run"), $("session-open"), $("upload")];
 // The code box colours its text as the language of the mode select.
@@ -538,6 +539,8 @@ function start({ restore = null } = {}) {
   $("table").replaceChildren();
   $("brain").replaceChildren();
   $("tab-brain").hidden = true;
+  $("network").replaceChildren();
+  $("tab-network").hidden = true;
   selectTab("table");
   $("fatal").hidden = $("failed").hidden = true;
   $("boot").hidden = false;
@@ -835,6 +838,15 @@ function showTables({ tables, prompt }) {
   });
   if (tables.length > 1) show("table", answerTabs(tables, render));
   else show("table", ...tables.map(render));
+  showNetwork(tables);
+}
+
+// The network of the answers whose rows are edges (concept_1, concept_2,
+// weight), in the network tab; an answer that is none hides that of the last.
+function showNetwork(tables) {
+  const view = networkViews(tables);
+  $("network").replaceChildren(...(view ? [view] : []));
+  $("tab-network").hidden = !view;
 }
 
 // The brain viewer page of a reply, in the brain tab, with the buttons of the images of the tables.
