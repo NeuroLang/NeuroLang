@@ -394,6 +394,7 @@ def vocabulary_engine():
         [
             (10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4),
             (10, "spatial working memory", 0.5),
+            (11, "selective attention", 0.5),
         ],
         name="term_in_study_tfidf",
     )

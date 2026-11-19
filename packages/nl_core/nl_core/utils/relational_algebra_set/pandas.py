@@ -199,7 +199,10 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     @staticmethod
     def _drop_duplicates(container):
-        if len(container) == 0 or len(container.columns) == 0:
+        if (
+            container is None or len(container) == 0
+            or len(container.columns) == 0
+        ):
             return container
         container = container.drop_duplicates()
         return container

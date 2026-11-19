@@ -115,6 +115,10 @@ Serving
    With ``--users``, do not build the engines the page offers when the
    server starts: the first session of each builds it, and waits for it;
    see `Sessions`_.
+``--prebuild-reserve FRACTION``
+   With ``--users``, build an engine ahead only while the share FRACTION of
+   the memory stays for the queries of the sessions (default 0.35); see
+   `Sessions`_.
 ``--resolution MM``
    The resolution of the engines' MNI grid (default 2).
 ``--light``
@@ -433,7 +437,7 @@ refusal (403).  It shows:
 - **Sessions**: the user, tab and engine of each, how long it has been
   unused, whether it works, the CPU seconds and the memory of its process
   (see `Activity and usage`_); it ends one.  Above them, the memory of the
-  builder, which the sessions share.
+  builders, which the sessions share.
 - **Uploads**: with ``--uploads-dir``, the files the pages uploaded, by
   session (its user and tab, or *session ended* for a folder whose
   session is gone), with their size and age, the space they take and that
@@ -646,16 +650,26 @@ Sessions
 With ``--users`` and ``--local``, each tab of each user has a session of its
 own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
 
-- A *builder* process, started anew before the server answers, builds each
-  engine once, then forks a process per session from it, in under two
-  seconds.  The sessions share the memory of the engine's data, as forked
-  processes do until they write it.
-- When the server starts, the builder builds the engines the page offers
+- Each engine has a *builder* process of its own, which builds the engine
+  once, then forks a process per session from it, in under two seconds.
+  The sessions share the memory of the engine's data, as forked processes
+  do until they write it.  A *coordinator* process, started anew before
+  the server answers, starts the builder of an engine, anew too, at its
+  first request, and passes the requests on.  One engine builds at a
+  time, in the order asked (the builds' memory does not add up); a
+  session of an engine built starts at once, whatever builds meanwhile,
+  rather than wait for that build (up to 90 s for ``neurostore_iit``).
+- A builder that dies (out of memory, most often) ends its engine only:
+  the starts it had not answered fail, which their pages tell, the log
+  says *The builder of the engine NAME ended*, and the sessions it forked,
+  and the other engines, go on.  The next session of that engine has a
+  new builder, which builds the engine again.
+- When the server starts, the builders build the engines the page offers
   (those the admin console did not turn off), the default first, and an
   engine the console turns on when it does: a first session finds its
   engine built (about 25 s for ``neurosynth_iit``, 75 s for
   ``neurostore_iit``, from the tables kept in ``--data-dir``), unless it
-  comes while the builder is still at work.  The builder also finds the
+  comes while its builder is still at work.  The builder also finds the
   names of the engine's relations (its terms, studies, regions), which a
   query's notes on a misspelled name look up, so that no session finds
   them again at its first query (12 s for ``neurostore_iit``).  The engines then hold their
@@ -664,6 +678,24 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   ``--no-prebuild`` (``prebuild: false``) leaves each engine to its first
   session.  An engine that cannot be built is told in the log, and its
   first session tries again.
+- The coordinator has an engine built ahead only while it leaves the share
+  ``--prebuild-reserve`` (``prebuild_reserve``, 0.35) of the memory to the
+  queries: the memory Linux says is available (``MemAvailable``, or the
+  limit of the service's control group), less one and a half times the
+  most a build took (each builder tells it).  An engine past it is told in
+  the log ("Did not build the engine …") and built by its first session.
+  35% of 31 GB is 11 GB: the 8 queries that run at once on 8 CPUs
+  (``max_running``) decoding an image on ``neurosynth_iit`` take 1.4 GB
+  each.
+- The engines of the builders share their tables through files, as each
+  is a process of its own: the tables an engine derives from its own
+  while it is built (``activated``, the voxels within reach of each peak)
+  and its large source tables (the studies of the regions of the atlases,
+  the TF-IDF of the terms, the peaks, the bootstrap replicates) are kept
+  as files of ``DATA_DIR/derived_tables`` that the builders and the
+  sessions map, rather than copy: the system holds one copy of a table
+  that ``neurostore`` and ``neurostore_iit`` have in common (see
+  :doc:`engine_configuration`).
 - Before its first fork, the builder loads the engine's text embeddings
   (those of its documents, from their cache, and the query model), which
   its sessions then share, rather than each load them, in memory of its
@@ -718,14 +750,15 @@ Activity and usage
 ------------------
 
 The server takes, every 10 seconds, the CPU seconds and the memory of each
-session's process and of the builder, which the console shows.  A
-session's memory is its own, *private* memory: what it adds to the
-machine's beyond the engine's data, which it shares with the builder (its
-resident memory, ``rss``, counts those shared pages, and so overstates it).
-The builder's resident memory is that of the engines' data.  This is read
-from :file:`/proc` and so on Linux only; elsewhere the console shows ``-``.
+session's process and of the builders (with their coordinator, summed),
+which the console shows.  A session's memory is its own, *private* memory:
+what it adds to the machine's beyond the engine's data, which it shares
+with its engine's builder (its resident memory, ``rss``, counts those
+shared pages, and so overstates it).  The builders' resident memory is
+that of the engines' data.  This is read from :file:`/proc` and so on
+Linux only; elsewhere the console shows ``-``.
 Together they tell how many sessions a machine holds: about (its memory −
-the builder's) / a session's own, at its most.
+the builders') / a session's own, at its most.
 
 With ``--activity-db activity.sqlite``, the server also logs, in that
 SQLite database (in WAL mode, as the feedback's), for each user: the start
@@ -872,7 +905,11 @@ other options given:
 
 - on Linux, a unit of systemd's user manager,
   :file:`~/.config/systemd/user/neurolang-repl.service`; ``loginctl
-  enable-linger $USER`` keeps it running when you are logged out;
+  enable-linger $USER`` keeps it running when you are logged out.  A
+  process killed for lack of memory (a session's query) does not stop the
+  service (``OOMPolicy=continue``): its session ends, the others go on.  If
+  the builder itself is killed, the server stops, and systemd starts it
+  again;
 - on macOS, a launchd agent,
   :file:`~/Library/LaunchAgents/org.neurolang.repl.plist`.
 
@@ -967,8 +1004,12 @@ The page says *The engine could not start*
    ``--data-dir`` at its first session: check that the server reaches the
    internet (and its sources, OSF and GitHub, are up) and has room.
 *The builder of the engines ended*
-   The process building the engines died (out of memory, most often): see
-   the log, and give the server more memory or ``--light``.
+   The process that starts the engines' builders died: no session starts
+   until the server restarts.  See the log, and give the server more
+   memory or ``--light``.
+*The builder of NAME ended*
+   The process of that engine died (out of memory, most often): the next
+   session of the engine builds it again; the other engines go on.
 The assistant does not answer
    The console's *AI assistant* column says whose key a user has; *none*
    means that they give theirs in the page.  A key saved on the account
