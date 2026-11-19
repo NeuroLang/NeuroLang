@@ -111,6 +111,46 @@ def test_init_engine(data_dir):
     assert rel("cognitive_task") == {("t1", "n-back", "d")}
 
 
+def test_the_tables_of_a_release_are_read_mapped_by_the_next_build(
+    data_dir, tmp_path, monkeypatch
+):
+    """While an engine is built (``derived_tables``), the peaks, the TF-IDF
+    and the labels of the studies are read from the Arrow files the first
+    build kept, by the files of the release, not found again."""
+    from neurolang_apps.utils import engine_cache
+
+    def build():
+        with patch.object(
+            NeurolangPDL, "__init__", keeping(NeurolangPDL.__init__)
+        ):
+            nl = _build(data_dir)
+        return {
+            name: sorted(nl.symbols[name].value)
+            for name in ("peak_reported", "term_in_study_tfidf",
+                         "study_concept", "study_domain", "study")
+        }
+
+    def keeping(init):
+        def keeping_init(self, *args, **kwargs):
+            init(self, *args, **kwargs)
+            self.program_ir.derived_tables = engine_cache.DerivedTables(
+                tmp_path / "tables"
+            )
+        return keeping_init
+
+    first = build()
+    for name in ("process_peaks", "_tfidf_table", "_extract_labels"):
+        monkeypatch.setattr(
+            neurostore_init, name, lambda *a, **k: pytest.fail("found again")
+        )
+    assert build() == first and first["study_concept"]
+    kinds = sorted(
+        path.name.split("-")[0] for path in (tmp_path / "tables").iterdir()
+    )
+    assert kinds == ["neurostore_labels", "neurostore_labels",
+                     "neurostore_peaks", "neurostore_tfidf"]
+
+
 def test_unknown_space_studies_are_kept_as_mni(data_dir):
     nl = _build(data_dir)
 

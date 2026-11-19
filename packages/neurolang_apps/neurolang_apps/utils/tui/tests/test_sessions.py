@@ -20,18 +20,23 @@ from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui.sessions import (  # noqa: E402
     SessionEnded,
     Sessions,
+    _room_for_another,
+    available_memory,
     free_memory,
 )
 
 
 def build(name, say):
     """An engine of the registry's name with a test's relations (imported
-    by name in the builder, which is started anew); neurosynth takes 2 s."""
+    by name in the builder, which is started anew); neurosynth takes 2 s,
+    slow 60 s."""
     say(f"Building {name}")
     if name == "broken":
         raise RuntimeError("no data")
     if name == "neurosynth":
         time.sleep(2)
+    if name == "slow":
+        time.sleep(60)
     nl = NeurolangPDL()
     nl.add_tuple_set([("alice", 3), ("bob", 5)], name="person")
     nl.add_tuple_set([(name,)], name="engine")
@@ -216,13 +221,53 @@ def test_a_query_leaves_no_garbage(sessions):
     assert _rows(ann.submit("ans(x) :- person(x, 5)")) == [["bob"]]
 
 
+def test_an_engine_is_built_ahead_while_memory_stays_for_the_queries():
+    gb = 2**30
+    # the first engine, or without knowing the memory: built
+    assert _room_for_another(0, 0.35, (1 * gb, 31 * gb))
+    assert _room_for_another(9 * gb, 0.35, None)
+    # 1.5 times the largest build, and 35% of 31 GB (10.9 GB) left
+    assert _room_for_another(4 * gb, 0.35, (17 * gb, 31 * gb))
+    assert not _room_for_another(4 * gb, 0.35, (16 * gb, 31 * gb))
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"),
+                    reason="the memory is read from /proc")
+def test_the_memory_is_that_of_the_machine_or_of_the_control_group():
+    available, total = available_memory()
+    assert 0 < available <= total
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"),
+                    reason="the memory is read from /proc")
+def test_an_engine_that_would_leave_too_little_memory_is_not_built_ahead(
+        tmp_path, capsys):
+    """With all the memory kept for the queries, the default engine is
+    built ahead, the next is left to its first session."""
+    sessions = Sessions(tmp_path, build=build, prebuild_reserve=1.0)
+    try:
+        sessions.prebuild(["neurostore", "destrieux"])
+        deadline, out = time.monotonic() + 60, ""
+        while "Did not build the engine destrieux" not in out:
+            assert time.monotonic() < deadline, out
+            out += capsys.readouterr().out
+            time.sleep(0.1)
+        assert "Built the engine neurostore" in out
+        ann = sessions.session("ann", "1")
+        ann.start("destrieux")  # its first session builds it
+        assert ann.pid is not None
+    finally:
+        sessions.close()
+
+
 def test_no_process_is_left_when_the_server_ends(tmp_path):
     sessions = Sessions(tmp_path, build=build)
     ann = sessions.session("ann", "1")
     ann.start("neurostore")
     pid, builder = ann.pid, sessions._builder
+    engine_builder = sessions.builders["neurostore"]
     sessions.close()
-    assert _ends(pid) and _ends(builder.pid)
+    assert _ends(pid) and _ends(builder.pid) and _ends(engine_builder)
 
 
 def test_an_idle_session_ends(tmp_path):
@@ -261,7 +306,7 @@ def test_a_start_given_up_leaves_no_process(sessions):
     assert first, "the start given up still waits"
     ann.start("neurosynth")
     assert _rows(ann.submit("ans(x) :- person(x, a)"))
-    builder = sessions._builder.pid
+    builder = sessions.builders["neurosynth"]
     deadline = time.monotonic() + 10
     while _children(builder) != {ann.pid} and time.monotonic() < deadline:
         time.sleep(0.05)
@@ -383,16 +428,9 @@ def test_a_busy_session_is_not_ended_for_another(tmp_path):
         sessions.close()
 
 
-def test_without_the_builder_a_start_fails(sessions):
-    sessions._builder.kill()
-    sessions._builder.join(10)
-    with pytest.raises(RuntimeError, match="builder"):
-        sessions.session("ann", "1").start("neurostore")
-
-
-def _start(session, engine):
+def _starting(session, engine):
     """Start *session* in a thread; return what it gave, or raised, and
-    whether it still waits after 30 s."""
+    the thread."""
     done = []
 
     def run():
@@ -403,6 +441,94 @@ def _start(session, engine):
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
+    return done, thread
+
+
+def _until(condition, seconds=30.0):
+    deadline = time.monotonic() + seconds
+    while not condition():
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+
+
+def test_a_build_does_not_hold_up_the_sessions_of_an_engine_built(sessions):
+    """Each engine has a builder of its own: a session of an engine built
+    starts while another engine builds, its start not behind that build."""
+    sessions.session("ann", "1").start("neurostore")
+    building, thread = _starting(sessions.session("bob", "1"), "slow")
+    _until(lambda: "slow" in sessions.builders)  # building, for 60 s
+    carl = sessions.session("carl", "1")
+    carl.start("neurostore")
+    assert thread.is_alive() and not building  # still building
+    assert _rows(carl.submit("ans(x) :- engine(x)")) == [["neurostore"]]
+    assert sessions.builders["slow"] != sessions.builders["neurostore"]
+
+
+def test_a_builder_that_ends_ends_its_engine_only(sessions, capsys):
+    """The end of the builder of an engine (killed, out of memory) fails
+    the starts it had not answered, is told in the log, and leaves the
+    sessions it forked and the other engines; the next start of its engine
+    has a new builder."""
+    ann = sessions.session("ann", "1")
+    ann.start("neurostore")
+    bob = sessions.session("bob", "1")
+    building, thread = _starting(bob, "slow")
+    _until(lambda: "slow" in sessions.builders)
+    os.kill(sessions.builders["slow"], signal.SIGKILL)
+    thread.join(30)
+    assert isinstance(building[0], RuntimeError)
+    assert "builder of slow ended" in str(building[0])
+    _until(lambda: "slow" not in sessions.builders)
+    assert "The builder of the engine slow ended" in capsys.readouterr().out
+    old = sessions.builders["neurostore"]
+    os.kill(old, signal.SIGKILL)
+    _until(lambda: "neurostore" not in sessions.builders)
+    assert _rows(ann.submit("ans(x) :- engine(x)")) == [["neurostore"]]
+    bob.start("neurosynth")
+    carl = sessions.session("carl", "1")
+    carl.start("neurostore")  # built again
+    assert sessions.builders["neurostore"] != old
+    assert _rows(carl.submit("ans(x) :- engine(x)")) == [["neurostore"]]
+    assert not sessions.dead
+
+
+def test_the_engines_build_one_at_a_time_in_their_order(sessions, capsys):
+    """neurosynth takes 2 s, neurostore none: built at once, neurostore
+    would be first."""
+    sessions.prebuild(["neurosynth", "neurostore"])
+    out = ""
+    deadline = time.monotonic() + 30
+    while "neurostore in" not in out:
+        assert time.monotonic() < deadline
+        time.sleep(0.1)
+        out += capsys.readouterr().out
+    assert out.index("neurosynth in") < out.index("neurostore in")
+
+
+def test_a_failing_coordinator_ends_its_builders(sessions):
+    """An error of the coordinator ends it with its builders, rather than
+    leave them: no session starts any more, which the server tells."""
+    sessions.session("ann", "1").start("neurostore")
+    builder = sessions.builders["neurostore"]
+    sessions._builder_conn.send(("fork",))  # not a request
+    sessions._builder.join(10)
+    assert not sessions._builder.is_alive() and _ends(builder)
+    _until(lambda: sessions.dead)
+    with pytest.raises(RuntimeError, match="builder"):
+        sessions.session("bob", "1").start("neurostore")
+
+
+def test_without_the_builder_a_start_fails(sessions):
+    sessions._builder.kill()
+    sessions._builder.join(10)
+    with pytest.raises(RuntimeError, match="builder"):
+        sessions.session("ann", "1").start("neurostore")
+
+
+def _start(session, engine):
+    """Start *session* in a thread; return what it gave, or raised, and
+    whether it still waits after 30 s."""
+    done, thread = _starting(session, engine)
     thread.join(30)
     return done, thread.is_alive()
 

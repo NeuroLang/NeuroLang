@@ -70,6 +70,7 @@ def test_subclasses_are_iris_of_classes(engine):
         (cogat + "CAO_00587", cogat + "CAO_00001"),
         (cogat + "CAO_00588", cogat + "CAO_00587"),
         (cogat + "CAO_00588", cogat + "CAO_00001"),
+        (cogat + "CAO_00032", cogat + "CAO_00031"),
     }
 
 

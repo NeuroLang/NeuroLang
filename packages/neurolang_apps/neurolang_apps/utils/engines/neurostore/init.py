@@ -42,6 +42,7 @@ logged message. Setting ``NEUROLANG_NEUROSTORE_UPDATE=1`` ignores the kept
 listing and lists the releases again.
 """
 
+import functools
 import hashlib
 import json
 import logging
@@ -376,23 +377,29 @@ def _tfidf_table(arrays: dict) -> pd.DataFrame:
     )
 
 
-def _kept_tfidf_terms(abstracts, release, cache_dir) -> pd.DataFrame:
+def _kept_tfidf_terms(
+    abstracts, release, cache_dir, program=None
+) -> pd.DataFrame:
     """
     The TF-IDF of the terms of *abstracts*, kept in *cache_dir* (if any)
-    for the same release and settings.
+    for the same release and settings, and by *program* while the engine
+    is built (:func:`~neurolang_apps.utils.engine_cache.keep_table`).
 
     It takes about 20 s, and more than a minute and a lot of memory in a
     browser; what is kept is arrays, which any Python reads (see
-    :mod:`~neurolang_apps.utils.engine_cache`).
+    :mod:`~neurolang_apps.utils.engine_cache`), and natively the table,
+    read mapped rather than made from them (10 million rows).
     """
     key = engine_cache.digest(
         "neurostore-tfidf", release, MIN_TERM_STUDIES, NGRAM_RANGE,
         TFIDF_THRESHOLD, np.array(abstracts.index.values, dtype=str),
     )
-    arrays = engine_cache.keep_arrays(
-        cache_dir, "tfidf", key, lambda: _tfidf_arrays(abstracts)
+    return engine_cache.keep_table(
+        program, "neurostore_tfidf", [], lambda: (key,),
+        lambda: _tfidf_table(engine_cache.keep_arrays(
+            cache_dir, "tfidf", key, lambda: _tfidf_arrays(abstracts)
+        )),
     )
-    return _tfidf_table(arrays)
 
 
 def _annotation_columns(path) -> List[str]:
@@ -434,10 +441,17 @@ def init_engine(
 
     """
     release_dir = fetch_neurostore_dir(data_dir, release_listing_ttl_hours)
-    coordinates = pd.read_parquet(release_dir / "coordinates.parquet")
-    peak_data = process_peaks(
-        _peaks_from_coordinates(coordinates), mask, study_id_type=str,
-        unknown_space=unknown_space,
+    # The large tables are kept while the engine is built, by the files of
+    # the release they are read from (keep_table).
+    coordinates = release_dir / "coordinates.parquet"
+    peak_data = engine_cache.keep_table(
+        nl.program_ir, "neurostore_peaks", [],
+        lambda: (engine_cache.file_digest(coordinates), unknown_space,
+                 engine_cache.grid_digest(mask)),
+        lambda: process_peaks(
+            _peaks_from_coordinates(pd.read_parquet(coordinates)), mask,
+            study_id_type=str, unknown_space=unknown_space,
+        ),
     )
     study_ids = peak_data["study_id"].drop_duplicates()
 
@@ -445,7 +459,9 @@ def init_engine(
     texts = studies_table.set_index("study_id").reindex(study_ids.values)
     abstracts = texts["description"].fillna("")
     abstracts = abstracts[abstracts.str.strip() != ""]
-    tfidf = _kept_tfidf_terms(abstracts, release_dir.name, cache_dir)
+    tfidf = _kept_tfidf_terms(
+        abstracts, release_dir.name, cache_dir, nl.program_ir
+    )
     register_tables(
         nl, mask, data_dir, peak_data,
         tfidf[["study_id", "term", "tfidf"]],
@@ -466,13 +482,27 @@ def init_engine(
     }).merge(identifiers, on="study_id", how="left"))
 
     annotations_path = release_dir / "annotations.parquet"
-    annotations = pd.read_parquet(
-        annotations_path, columns=_annotation_columns(annotations_path)
-    )
-    studies = set(study_ids)
-    for label, suffix in (("concept", "Concepts"), ("domain", "Domain")):
-        table = _extract_labels(annotations, suffix).rename(
+
+    @functools.cache
+    def annotations():
+        return pd.read_parquet(
+            annotations_path, columns=_annotation_columns(annotations_path)
+        )
+
+    def labels(label, suffix):
+        table = _extract_labels(annotations(), suffix).rename(
             columns={suffix: label}
         )
-        table = table[table["study_id"].isin(studies)]
-        nl.add_tuple_set(table[["study_id", label]], name=f"study_{label}")
+        table = table[table["study_id"].isin(set(study_ids))]
+        return table[["study_id", label]]
+
+    annotated = functools.cache(
+        lambda: engine_cache.file_digest(annotations_path)
+    )
+    studies = study_ids.to_frame()
+    for label, suffix in (("concept", "Concepts"), ("domain", "Domain")):
+        nl.add_tuple_set(engine_cache.keep_table(
+            nl.program_ir, "neurostore_labels", [studies],
+            lambda label=label, suffix=suffix: (annotated(), label, suffix),
+            functools.partial(labels, label, suffix),
+        ), name=f"study_{label}")
