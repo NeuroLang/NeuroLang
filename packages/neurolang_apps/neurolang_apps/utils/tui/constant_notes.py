@@ -36,7 +36,7 @@ def _column_values(rows, position: int) -> frozenset:
     """Return the strings of the column *position* of the relation *rows*."""
     cached = _COLUMN_VALUES.get((id(rows), position))
     if cached is None or cached[0] is not rows:
-        values = rows.as_pandas_dataframe().iloc[:, position].unique()
+        values = rows.unique_values(position)
         cached = rows, frozenset(v for v in values if isinstance(v, str))
         _COLUMN_VALUES[id(rows), position] = cached
     return cached[1]

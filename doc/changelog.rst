@@ -159,6 +159,12 @@ Unreleased
 
 **Performance:**
 
+- The REPL server's notes on constants take the distinct values of a
+  relation column straight from its container
+  (``RelationalAlgebraFrozenSet.unique_values``), without deduplicating
+  the whole relation first: the values of a column do not depend on
+  duplicate rows. Same notes.
+
 - Engine builds read the cached atlas activations as arrays instead of
   rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
   arrays as fixed-width bytes instead of through ``repr``; the cache
