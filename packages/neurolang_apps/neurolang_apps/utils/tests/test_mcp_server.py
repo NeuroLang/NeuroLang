@@ -647,7 +647,7 @@ def test_a_cancelled_call_stops_the_query_it_runs(monkeypatch):
     assert freed.wait(1)
 
 
-def test_stop_queries_stops_a_running_query(monkeypatch):
+def test_stop_queries_stops_a_running_query(forking, monkeypatch):
     import threading
     import time
 
@@ -668,7 +668,12 @@ def test_stop_queries_stops_a_running_query(monkeypatch):
     thread.start()
     while not validation._RUNNING and time.monotonic() - start < 10:
         time.sleep(0.05)
-    assert validation.stop_queries() == 1
+    assert validation.stop_queries() == 1, (
+        f"no query in a child process after {time.monotonic() - start:.1f}"
+        f" s (the query thread {'is' if thread.is_alive() else 'is not'}"
+        " running: without a child, it runs in a thread, which cannot be"
+        " stopped)"
+    )
     thread.join(10)
     assert raised == [True] and time.monotonic() - start < 10
     assert not validation._RUNNING and not validation._STOPPED

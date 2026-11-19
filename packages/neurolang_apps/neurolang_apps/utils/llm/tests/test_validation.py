@@ -345,20 +345,6 @@ def test_aggregation_well_used(nl):
     assert check_query(nl, query, "datalog").ok
 
 
-@pytest.fixture
-def forking():
-    """Skip the test where the system refuses to fork (no memory left)."""
-    import os
-
-    try:
-        pid = os.fork()
-    except (AttributeError, OSError) as exc:
-        pytest.skip(f"cannot fork: {exc}")
-    if pid == 0:
-        os._exit(0)
-    os.waitpid(pid, 0)
-
-
 def test_previews_stop_slow_queries(forking, nl, monkeypatch):
     import time
 
