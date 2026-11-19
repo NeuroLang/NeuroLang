@@ -727,3 +727,36 @@ def test_the_refinement_leaves_out_what_is_not_known(nl):
     assert "# Previous question" not in message
     assert "# What happened when it ran" not in message
     assert f"# Previous Datalog query\n{PAIN_DATALOG}" in message
+
+
+def test_final_answer_without_a_query_gives_the_last_one_run(nl):
+    """final_answer with an explanation only answers with the query run
+    last; the step records that query; without one run, it is refused."""
+    replies = [
+        'Action: final_answer\nAction Input: {"explanation": "Pain."}',
+        'Action: run_query\nAction Input: {"query": "' + PAIN_DATALOG + '"}',
+        'Action: final_answer\nAction Input: {"explanation": "Pain."}',
+    ]
+    react, steps = agent(nl, ReactAgent, replies, language="datalog")
+    result = react.run("Which studies mention pain?")
+    assert "No query" in steps[0].observation
+    assert result.valid and result.query == PAIN_DATALOG
+    assert steps[-1].action == "final_answer"
+    assert steps[-1].arguments["query"] == PAIN_DATALOG
+    assert steps[-1].observation == "Accepted."
+
+
+def test_verification_on_its_own_provider(nl):
+    """With verify_provider, the two requests of the verification go to
+    its client, the agent's requests to the agent's."""
+    react, _ = agent(nl, ReactAgent, [answer(PAIN_DATALOG)],
+                     language="datalog", verify_rounds=1,
+                     verify_provider=provider("text"))
+    react.verify_client = ScriptedClient([
+        "The studies that mention the term pain.", "VERDICT: yes",
+    ])
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.verified is True
+    assert len(react.client.requests) == 1
+    assert len(react.verify_client.requests) == 2
+    assert result.calls == 3

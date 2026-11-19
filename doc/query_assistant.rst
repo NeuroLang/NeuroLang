@@ -130,7 +130,9 @@ and text-to-SPARQL systems.
       resolution);
     - ``check_query``;
     - ``run_query``, which shows the number of rows and the first ones;
-    - ``final_answer``, accepted only if the query passes the checks.
+    - ``final_answer``, accepted only if the query passes the checks;
+      given an explanation only, it answers with the query run last, which
+      the model need not write again.
 
     The tools are called with the provider's native tool calls, or with a
     Thought / Action / Observation text protocol that any chat model can
@@ -147,6 +149,9 @@ and text-to-SPARQL systems.
     default, 0 to turn the check off) is the number of answers the check
     may reject; after them, the answer is kept with a warning. The REPL
     and ``neurolang-query --ask`` show the English reading of the query.
+    With ``verify_provider: NAME``, a provider of the file, the two
+    requests of the check go to that provider: a smaller model checks
+    faster than the one writing the query.
 
 With ``samples`` above 1, either strategy answers that many times, at a
 temperature of at least 0.7, and the answer whose rows most of them give
@@ -279,6 +284,7 @@ order:
       timeout: 60
       preview_rows: 10
       verify_rounds: 1       # ReAct: answers back-translation may reject
+      # verify_provider: anthropic   # the provider of that check
       comment_rules: true    # a comment line on each rule of the query
 
 The ``api`` of a provider is one of:

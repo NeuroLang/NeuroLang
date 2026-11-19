@@ -174,6 +174,12 @@ Unreleased
 
 **Performance:**
 
+- Query assistant (ReAct): ``final_answer`` with an explanation only
+  answers with the query ``run_query`` ran last, so the model does not
+  write the query again (a third of what the tool calls of a question
+  write on the server); ``verify_provider: NAME`` sends the two requests of the check
+  of an answer to a provider of their own, a smaller model.
+
 - Engine builds read the cached atlas activations as arrays instead of
   rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
   arrays as fixed-width bytes instead of through ``repr``; the cache

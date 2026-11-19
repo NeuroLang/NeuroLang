@@ -310,8 +310,10 @@ class Toolbox:
         # Queries whose answer of no rows, or with notes on its
         # constants, has been confirmed.
         self.confirmed_empty = set()
-        # The queries run with run_query that gave rows, in order.
+        # The queries run with run_query that gave rows, in order, and the
+        # last one run, which final_answer gives when it names none.
         self.queries_with_rows = []
+        self.last_run_query = None
         # The first rows of the answer final_answer accepted last, its
         # whole result (see validation.Preview.frames), and its preview.
         self.answer_rows = ""
@@ -405,6 +407,7 @@ class Toolbox:
         check = check_query(self.context.nl, query, self.language)
         if not check.ok:
             return f"The query fails:\n{check.message}", None
+        self.last_run_query = query.strip()
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
             self.context.engine_name if self.context.declared else "",
@@ -414,7 +417,12 @@ class Toolbox:
             self.queries_with_rows.append(query.strip())
         return preview.text, None
 
-    def tool_final_answer(self, query: str, explanation: str = ""):
+    def tool_final_answer(self, query: str = "", explanation: str = ""):
+        if not query.strip():
+            return (
+                "No query: give it with final_answer, or run it with "
+                "run_query first."
+            ), None
         result = check_query(
             self.context.nl, query, self.language,
             self.context.engine_name if self.context.declared else "",
@@ -539,14 +547,16 @@ class Agent:
         return {}
 
     def _complete(self, result: AgentResult, messages, tools=None,
-                  temperature=None):
+                  temperature=None, client=None):
         """
-        Return the model's reply to *messages*, counting its usage. An
-        empty reply (all the tokens spent on reasoning, or a glitch of
-        the provider) is asked for again once.
+        Return the model's reply to *messages*, counting its usage, from
+        *client*, by default the agent's. An empty reply (all the tokens
+        spent on reasoning, or a glitch of the provider) is asked for
+        again once.
         """
+        client = client or self.client
         for _ in range(2):
-            reply = self.client.complete(
+            reply = client.complete(
                 messages, tools, self.config.temperature
                 if temperature is None else temperature,
             )
@@ -860,6 +870,16 @@ class ReactAgent(Agent):
         )
         return result
 
+    def _verify_client(self):
+        """The client of the verification: that of the configuration's
+        ``verify_provider``, made once, or else the agent's."""
+        provider = self.config.verify_provider
+        if provider is None:
+            return self.client
+        if getattr(self, "verify_client", None) is None:
+            self.verify_client = make_client(provider, self.config.timeout)
+        return self.verify_client
+
     def _verify(self, result, question: str, query: str, rows: str):
         """
         Translate *query* back into English and judge whether it answers
@@ -873,15 +893,16 @@ class ReactAgent(Agent):
             description = self._engine_text(self.description, "description")
             guidance = self._engine_text(self.guidance, "assistant_guidance")
             schema = self.context.schema_summary()
+            client = self._verify_client()
             english = self._complete(
                 result, prompts.back_translation_request(
                     query, self.language, schema, rows, description,
-                ),
+                ), client=client,
             ).text.strip()
             verdict, reason = parse_verdict(self._complete(
                 result, prompts.verification_request(
                     question, english, rows, schema, description, guidance,
-                ),
+                ), client=client,
             ).text)
         except LLMError as exc:
             self._step(result, AgentStep(
@@ -903,7 +924,13 @@ class ReactAgent(Agent):
         return None
 
     def _call(self, result, toolbox, thought, name, arguments):
-        """Call a tool, record the step and return (observation, final)."""
+        """Call a tool, record the step and return (observation, final).
+        A final answer naming no query gives the last one run."""
+        if (
+            name == "final_answer" and toolbox.last_run_query
+            and not str(arguments.get("query") or "").strip()
+        ):
+            arguments = {**arguments, "query": toolbox.last_run_query}
         observation, final = toolbox.call(name, arguments)
         observation = truncate(observation)
         self._step(result, AgentStep(thought, name, arguments, observation))
