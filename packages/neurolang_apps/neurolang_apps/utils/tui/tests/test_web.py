@@ -605,6 +605,18 @@ class TestStudyLinks:
     def test_a_column_of_studies_tells_its_sort(self, studies_repl):
         [table] = studies_repl.submit("ans(s, t) :- mentions(s, t)").tables
         assert table["sorts"] == ["study", "term"]
+        assert table["positions"] == [0, 0]
+
+    def test_the_columns_of_a_voxel_tell_their_position(self, studies_repl):
+        studies_repl.submit(
+            "peak_reported(i, j, k, s) :- (i == 1), (j == 2), (k == 3), "
+            "study(s)"
+        )
+        [table] = studies_repl.submit(
+            "ans(i, j, k, s) :- peak_reported(i, j, k, s)"
+        ).tables
+        assert table["sorts"][:3] == ["voxel"] * 3
+        assert table["positions"] == [0, 1, 2, 0]
 
     def test_the_records_of_the_studies_shown_come_with_the_table(
         self, studies_repl

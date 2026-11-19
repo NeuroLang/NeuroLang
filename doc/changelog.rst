@@ -181,6 +181,12 @@ Unreleased
 
 **Bug fixes:**
 
+- REPL in the browser: a map of voxels, such as ``ans(i, j, k, lift)``,
+  no longer gets a *Network* tab: its ``i`` and ``j``, of the one sort of
+  a voxel, were taken for the two ends of an edge. A sort of several
+  columns now ends no edge; the page is sent the position of each column
+  in its sort.
+
 - A probabilistic plan computed as contractions whose answer could not be
   built as a relation set failed the query: the building of the answer is
   within the fallback, which logs the error and computes the plan by

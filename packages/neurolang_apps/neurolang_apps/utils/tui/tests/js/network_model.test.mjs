@@ -18,6 +18,12 @@ test("the answers that are no network have none", () => {
   const lift = payload(["term", "lift", "studies"], ["str", "float", "int"], ["cogat_term", null, null], [["fear", 2, 40]]);
   const titles = payload(["study", "title"], ["int", "str"], ["study", "text"], [[1, "a"]]);
   assert.equal(networkColumns(lift), null);
+  // a map of voxels: i, j and k are of one sort, of three columns
+  const map = { ...payload(["i", "j", "k", "lift"], ["int", "int", "int", "float"], ["voxel", "voxel", "voxel", null], [[1, 2, 3, 2.5]]), positions: [0, 1, 2, null] };
+  assert.equal(networkColumns(map), null);
+  assert.equal(networkOf(map), null);
+  const labels = { ...payload(["label_a", "label_b", "r"], ["str", "str", "float"], ["label", "label", null], [["a", "b", 0.5]]), positions: [0, 0, null] };
+  assert.deepEqual(networkColumns(labels), { source: 0, target: 1, weight: 2 });
   assert.equal(networkOf(titles), null);
 });
 

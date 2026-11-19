@@ -7,14 +7,17 @@ const NUMERIC = new Set(["int", "float"]);
 const { max_nodes: MAX_NODES, max_edges: MAX_EDGES, edges_per_node: EDGES_PER_NODE, layout_steps: STEPS, labels: LABELS } = SETTINGS.network;
 
 // The columns of the ends of the edges of *payload*, and of their weight (-1
-// without one), or null: the first two columns of the same sort, else named
-// as one with the suffixes 1 and 2 (region_1, region_2); the weight is the
-// last numeric column of the others.
-export function networkColumns({ columns, kinds, sorts = [] }) {
+// without one), or null: the first two columns of the same sort, one column
+// wide, else named as one with the suffixes 1 and 2 (region_1, region_2); the
+// weight is the last numeric column of the others. A sort of several columns,
+// the voxel (i, j, k) of a map, whose *positions* among them go beyond 0, ends
+// no edge.
+export function networkColumns({ columns, kinds, sorts = [], positions = [] }) {
+  const wide = new Set(sorts.filter((sort, i) => sort && positions[i] > 0));
   const pair = () => {
     for (let i = 0; i < columns.length; i++) {
       for (let j = i + 1; j < columns.length; j++) {
-        if (sorts[i] && sorts[i] === sorts[j]) return [i, j];
+        if (sorts[i] && sorts[i] === sorts[j] && !wide.has(sorts[i])) return [i, j];
       }
     }
     for (let i = 0; i < columns.length; i++) {
