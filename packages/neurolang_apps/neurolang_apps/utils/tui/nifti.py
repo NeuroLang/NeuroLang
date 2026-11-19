@@ -51,7 +51,7 @@ from neurolang_apps.utils import engine_registry
 
 from . import brain_viewer
 from .commands import HELP_TOPICS, command
-from .provenance import COMPUTED
+from .provenance import COMPUTED, thresholded_columns
 
 SAVE_USAGE = ".save PATH [--value COLUMN] [--voxel I J K | --mm X Y Z]"
 
@@ -1949,7 +1949,8 @@ def last_results_layers(app, request: ViewRequest):
     drawn. A block that cannot be drawn among several, as a table of
     terms beside regions, is told and left out. The *request*'s threshold
     (the top 5% by default) is 0 for results neither of voxels nor of
-    regions with a value (regions alone, networks, streamlines), unless
+    regions with a value (regions alone, networks, streamlines), nor of
+    values their query compares with a constant, ``(lift > 2)``, unless
     it is given: the one the viewer starts all the layers with.
     """
     if not app.results:
@@ -1976,8 +1977,13 @@ def last_results_layers(app, request: ViewRequest):
             continue
         if not _one_of_a_kind(extra, found, app.console, block.title):
             continue
-        kinds.add(kind)
         titles.append(block.title)
+        # a value its query thresholds, (lift > 2): all its voxels
+        if kind in ("voxels", "regions") and _thresholded_by_query(
+            app, block
+        ):
+            kind = "thresholded"
+        kinds.add(kind)
         # regions with a value, not a mask: their top 5% as voxels'
         if kind == "regions" and any(
             name != "mask" for name, _ in block_layers
@@ -2000,6 +2006,31 @@ def last_results_layers(app, request: ViewRequest):
         # the answers are told apart by the colours of their overlays
         extra["regions"] = extra["regions"]._replace(coloured=False)
     return layers, extra, request, titles
+
+
+def _thresholded_by_query(app, block) -> bool:
+    """
+    Whether the query of the result *block* compares one of its values
+    with a constant, ``ans(i, j, k, lift) :- ..., (lift > 2)``: the
+    viewer then shows all of its voxels, not its top 5%.
+    """
+    program, squall = app.results_query or (None, False)
+    if program is None:
+        return False
+    compared = thresholded_columns(app._nl, program, squall).get(
+        block.title, set()
+    )
+    try:
+        points = set(point_columns(
+            block.frame, _engine_sorts(app.settings.engine_name),
+            block.sorts,
+        ).columns)
+    except SaveError:
+        points = set()
+    columns = list(block.frame.columns)
+    return any(
+        n < len(columns) and columns[n] not in points for n in compared
+    )
 
 
 def _readable(app, path) -> bool:
