@@ -28,7 +28,7 @@ assistant_examples:
 
   - question: Which voxels do the studies of the domain executive cognitive control activate?
     datalog: |-
-      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      activation(i, j, k, s) :- activated(i, j, k, s), cortical_mask(i, j, k), selected_study(s)
       control(s) :- study_domain(s, 'Executive cognitive control'), selected_study(s)
       ans(i, j, k, probability) :- PROB[activation(i, j, k, s) // control(s)] = probability
 
