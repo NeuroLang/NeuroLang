@@ -14,8 +14,8 @@ examples:
   datalog:
     - "ans(study) :- mentions(study, 'pain')"
     - "ans(study, tfidf) :- weighted_mention(study, 'pain', tfidf), (tfidf > 0.1)"
-    - "ans(i, j, k, uniformity) :- uniformity('pain', i, j, k, uniformity), cortical_mask(i, j, k)"
-    - "ans(i, j, k, uniformity) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, uniformity), cortical_mask(i, j, k)"
+    - "ans(i, j, k, uniformity) :- uniformity('pain', i, j, k, uniformity)"
+    - "ans(i, j, k, uniformity) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, uniformity)"
     - "ans(concept) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, concept)"
     - "ans(study) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(study, t)"
   squall:
