@@ -449,3 +449,28 @@ ans(t, p) :- q(t, p)
     assert set(contracted) == set(relational)
     for key, value in relational.items():
         assert contracted[key] == pytest.approx(value, rel=1e-12)
+
+
+def test_a_contraction_failing_falls_back(caplog, monkeypatch):
+    """A contraction that fails, its answer's set included (a backend's
+    set not taking the frame), is logged, and the plan computed by
+    relational algebra: the answers do not change."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(0, 0), (0, 1), (1, 1)], name="act")
+    nl.add_probabilistic_choice_from_tuples(
+        [(.4, 0), (.6, 1)], name="sel"
+    )
+    program = "q(v, p) :- PROB[act(v, s) & sel(s)] = p\nans(v, p) :- q(v, p)"
+    expected = _solve(nl, program, contract=False)
+
+    def failing(*args):
+        raise RuntimeError("a set not taking the frame")
+
+    monkeypatch.setattr(
+        sums_of_products, "NamedRelationalAlgebraFrozenSet", failing
+    )
+    assert _solve(nl, program) == pytest.approx(expected)
+    assert any(
+        r.name == sums_of_products.LOG.name for r in caplog.records
+    )
+    caplog.clear()

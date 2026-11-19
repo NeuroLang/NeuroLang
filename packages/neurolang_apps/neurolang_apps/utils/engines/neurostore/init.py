@@ -31,16 +31,27 @@ since NeuroStore ships no term table — plus:
 The release can be chosen with the ``NEUROLANG_NEUROSTORE_RELEASE``
 environment variable (``latest``, ``nightly`` or a version such as
 ``2026-10``); the default is ``latest``, the newest monthly release.
+
+A build does not ask the network when it has what it needs: the listing of
+the releases is kept in the data directory (``neurostore/releases.json``)
+for ``release_listing_ttl_hours`` (the engine's ``python_init_options``),
+and a release already downloaded is used as it is; a nightly release is
+downloaded again only when a fresh listing says it was rebuilt. Without the
+network, the newest downloaded release matching the request is used, with a
+logged message. Setting ``NEUROLANG_NEUROSTORE_UPDATE=1`` ignores the kept
+listing and lists the releases again.
 """
 
 import functools
 import hashlib
 import json
+import logging
 import os
 import shutil
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 import warnings
 from pathlib import Path
@@ -58,9 +69,14 @@ from neurolang_apps.utils.engines.neurosynth.init import (
     register_tables,
 )
 
+LOG = logging.getLogger(__name__)
+
 NEUROSTORE_URL = "https://neurostore.org"
 RELEASES_PATH = "/api/neurostore-studyset-releases/"
 RELEASE_ENV_VAR = "NEUROLANG_NEUROSTORE_RELEASE"
+UPDATE_ENV_VAR = "NEUROLANG_NEUROSTORE_UPDATE"
+LISTING_FILE = "releases.json"
+BUILT_AT_FILE = ".built_at"
 STUDIES_PATH = "/api/studies/"
 # The studies of a page of NeuroStore's listing of its studies.
 LISTING_PAGE = 10000
@@ -117,6 +133,8 @@ def _download_release(release: Dict[str, Any], target: Path) -> None:
             else:  # Python without extraction filters
                 tar.extractall(extracted)
         (studyset_json,) = extracted.rglob("studyset.json")
+        # The old copy goes only once the new one is downloaded.
+        shutil.rmtree(target, ignore_errors=True)
         shutil.move(str(studyset_json.parent), str(target))
 
 
@@ -129,11 +147,38 @@ def _cached_release(root: Path, version: str):
     return cached[-1].parent if cached else None
 
 
-def fetch_neurostore_dir(data_dir: Path) -> Path:
+def _release_listing(root: Path, ttl_hours: float, refresh=False):
+    """The releases listing and whether it was just fetched.
+
+    The listing kept in *root* is used for *ttl_hours* unless *refresh* or
+    the ``UPDATE_ENV_VAR`` environment variable is set; an unreadable kept
+    listing is listed again.
+    """
+    path = root / LISTING_FILE
+    update = refresh or os.environ.get(UPDATE_ENV_VAR, "") not in ("", "0")
+    if not update and path.exists():
+        if time.time() - path.stat().st_mtime < ttl_hours * 3600:
+            try:
+                return json.loads(path.read_text()), False
+            except ValueError:
+                LOG.warning("Ignoring the unreadable listing %s", path)
+    releases = _fetch_releases()
+    root.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", dir=root, suffix=".tmp", delete=False
+    ) as f:
+        json.dump(releases, f)
+    os.replace(f.name, path)
+    return releases, True
+
+
+def fetch_neurostore_dir(data_dir: Path, release_listing_ttl_hours=0) -> Path:
     """Return the directory of the selected release, downloading it once.
 
-    In a browser (Pyodide) the release is the one that came with the page: the
-    network is not asked.
+    The network is asked only for a listing older than
+    *release_listing_ttl_hours* (see the module documentation), and, without
+    it, the newest downloaded release matching the request is used. In a
+    browser (Pyodide) the release is the one that came with the page.
     """
     version = os.environ.get(RELEASE_ENV_VAR, "latest")
     root = Path(data_dir) / "neurostore"
@@ -142,19 +187,34 @@ def fetch_neurostore_dir(data_dir: Path) -> Path:
         if bundled is not None:
             return bundled
     try:
-        release = _select_release(_fetch_releases(), version)
-    except OSError:
-        # Offline: reuse the newest cached release matching the request.
+        releases, listed = _release_listing(root, release_listing_ttl_hours)
+        try:
+            release = _select_release(releases, version)
+        except ValueError:
+            if listed:
+                raise
+            # A release published since the kept listing was fetched.
+            releases, listed = _release_listing(root, 0, refresh=True)
+            release = _select_release(releases, version)
+        target = root / release["version"]
+        # Nightly builds change under the same name.
+        built_at = str(release["built_at"])
+        stale = release["release_type"] == "nightly" and listed and not (
+            (target / BUILT_AT_FILE).exists()
+            and (target / BUILT_AT_FILE).read_text() == built_at
+        )
+        if stale or not (target / "coordinates.parquet").exists():
+            _download_release(release, target)
+            (target / BUILT_AT_FILE).write_text(built_at)
+    except OSError as error:
         cached = _cached_release(root, version)
         if cached is None:
             raise
+        LOG.warning(
+            "NeuroStore could not be reached (%s): using the downloaded "
+            "release %s", error, cached.name,
+        )
         return cached
-    target = root / release["version"]
-    # Nightly builds change under the same name.
-    if release["release_type"] == "nightly" and target.exists():
-        shutil.rmtree(target)
-    if not (target / "coordinates.parquet").exists():
-        _download_release(release, target)
     return target
 
 
@@ -355,7 +415,8 @@ def _annotation_columns(path) -> List[str]:
 
 def init_engine(
     nl: NeurolangPDL, mask: nib.Nifti1Image, data_dir: Path,
-    unknown_space: str = "mni", cache_dir=None
+    unknown_space: str = "mni", cache_dir=None,
+    release_listing_ttl_hours: float = 0
 ) -> None:
     """Populate a fresh engine with NeuroStore data.
 
@@ -373,9 +434,13 @@ def init_engine(
         ``python_init_options``.
     cache_dir :
         Directory where the TF-IDF table is kept, if any.
+    release_listing_ttl_hours :
+        How long the kept listing of the releases is used before the
+        network is asked again (see :func:`fetch_neurostore_dir`); the
+        engine's ``python_init_options``.
 
     """
-    release_dir = fetch_neurostore_dir(data_dir)
+    release_dir = fetch_neurostore_dir(data_dir, release_listing_ttl_hours)
     # The large tables are kept while the engine is built, by the files of
     # the release they are read from (keep_table).
     coordinates = release_dir / "coordinates.parquet"
