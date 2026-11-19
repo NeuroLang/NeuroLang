@@ -844,6 +844,15 @@ def test_rerun_warnings_are_short_notes(app, capsys, command):
     assert "warnings.warn" not in out + captured.out + captured.err
 
 
+@pytest.mark.parametrize("command", [".ra", ".rewritten"])
+def test_rerun_adds_the_facts_of_the_query_to_no_relation(app, command):
+    app._execute_and_display("person('carol').\nans(x) :- person(x)")
+    _command(app, command)
+    _command(app, command)
+    app._execute_and_display("ans(x) :- person(x)")
+    assert sorted(app.results[0].frame.iloc[:, 0]) == ["alice", "bob"]
+
+
 @pytest.fixture
 def studies():
     """Return a SQUALL REPL over a small neurosynth-like engine."""

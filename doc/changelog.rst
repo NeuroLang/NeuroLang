@@ -19,6 +19,21 @@ Unreleased
 
 **New features:**
 
+- REPL server (``--local``): the results of the queries that read nothing
+  of their session, the same in every session (the examples of the page,
+  the queries of its example questions: 3.4 to 10.5 s each on
+  ``neurosynth_iit``, 0.4 to 0.9 s when kept), are kept as Arrow files in ``--result-cache-dir``,
+  at most ``--result-cache-mb`` megabytes, the least recently used going
+  first, and shown to the sessions of every user that run them again,
+  tables, downloads and viewers included
+  (``neurolang_apps.utils.result_cache``). A file is named by the engine
+  (name, resolution, configuration, the files of its data and of
+  NeuroLang, the versions of the libraries), the program as parsed and the
+  query backend. A query that reads a rule, relation, fact or upload of its
+  session, has a command, or runs in a session that ran one, is never
+  shared, nor is one whose constraints of the engine read the session's.
+  See *Results shared by the sessions* in :doc:`repl_server`.
+
 - REPL page: the question and query boxes have a copy button at their top
   right, and keep their own history of edits: Ctrl or Cmd Z undoes a run of
   typing at a time (the browser's undid a character at a time in Chrome) and
@@ -180,6 +195,11 @@ Unreleased
   ``VERSION`` is 2, so caches kept by earlier versions are found again once.
 
 **Bug fixes:**
+
+- REPL: ``.ra`` and ``.rewritten``, which run the last query again, added
+  the facts of a query whose rules are local to it (``.scope on``) to
+  their relation of the session or of the engine, for good (twice, after
+  both): they now go to a copy, discarded with the query, as when it ran.
 
 - A probabilistic plan computed as contractions whose answer could not be
   built as a relation set failed the query: the building of the answer is

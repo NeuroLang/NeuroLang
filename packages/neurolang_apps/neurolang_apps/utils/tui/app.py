@@ -293,15 +293,18 @@ class InteractiveTuiApp:
         self._left_out_used = {
             left_out_symbol(self._nl, message) for message in messages
         } - {""}
-        notes = dict.fromkeys(
+        self._print_note_lines(dict.fromkeys(
             warning_note(message, known) for message in messages
             if not left_out_symbol(self._nl, message)
-        )
-        self.last_notes = list(notes)
-        for note in notes:
-            self.err_console.print(note, style="yellow", markup=False)
+        ))
         for name in sorted(self._left_out_used):
             self._print_not_available(name)
+
+    def _print_note_lines(self, notes) -> None:
+        """Print the *notes* of the last query, and keep them."""
+        self.last_notes = list(notes)
+        for note in self.last_notes:
+            self.err_console.print(note, style="yellow", markup=False)
 
     @property
     def left_out_predicates(self) -> frozenset:
@@ -584,18 +587,17 @@ class InteractiveTuiApp:
         query, facts = submission_outline(
             self._nl, program, self.settings.squall
         )
-        run = self.agent_run
-        if query and run and run.squall == self.settings.squall and (
-            program.strip() == run.program.strip()
-        ):
+        key = self._shared_key(program, query)
+        kept = self._kept_result(program, query, key)
+        if kept:
+            frames, notes, message = kept
             self.last_query = (program, self.settings.squall)
+            self.last_error = None
             self.last_added_rules = {}
-            self.show_frames(run.frames, program)
+            self._print_note_lines(notes)
+            self.show_frames(frames, program)
             self.results_query = self.last_query
-            self.err_console.print(
-                "[dim]The assistant ran this query: its result, not run "
-                "again.[/dim]"
-            )
+            self.err_console.print(f"[dim]{message}[/dim]")
             return
         if query:
             self.last_query = (program, self.settings.squall)
@@ -609,6 +611,53 @@ class InteractiveTuiApp:
             self.err_console.print(
                 f"[dim]Query completed in {elapsed:.2f} s[/dim]"
             )
+            if key and len(self.results) == 1 and not self.results[0].title \
+                    and not (self._left_out_used or self.settings.sort_by):
+                cache = self._nl.result_cache
+                # A note may name a predicate of the session ("did you
+                # mean"): such notes are not kept.
+                if not self.last_notes or cache.session_symbols(
+                        self._nl) == set():
+                    cache.put(key, self.results[0].frame, self.last_notes)
+
+    def _shared_key(self, program: str, query: bool):
+        """
+        Return the key of the result of *program* that every session
+        shares (see :mod:`~neurolang_apps.utils.result_cache`), or None: a
+        Datalog query whose rules are local to it (``.scope on``), run to
+        show its result (not ``.ra`` nor ``.rewritten``), on an engine whose
+        results are kept.
+        """
+        cache = getattr(self._nl, "result_cache", None)
+        if cache is None:
+            return None
+        # Whatever the settings: it notes a command, which changes the
+        # engine.
+        key = cache.key(self._nl, program, self.settings.join_profile)
+        settings = self.settings
+        if query and not settings.squall and settings.scope_queries and not (
+            settings.show_ra or settings.show_rewritten
+        ):
+            return key
+        return None
+
+    def _kept_result(self, program: str, query: bool, key):
+        """
+        Return the result of the query *program* that need not run, as
+        ``(frames, notes, message)``, or None: that the assistant ran, or
+        that kept as *key* for every session.
+        """
+        run = self.agent_run
+        if query and run and run.squall == self.settings.squall and (
+            program.strip() == run.program.strip()
+        ):
+            return (run.frames, [], "The assistant ran this query: its "
+                    "result, not run again.")
+        kept = key and self._nl.result_cache.get(key)
+        if kept:
+            return ([("", kept.frame)], kept.notes, "The same result in "
+                    "every session, kept from an earlier run: not run again.")
+        return None
 
     def _handle_dot_command(self, line: str) -> None:
         """Run the dot-command on *line*."""

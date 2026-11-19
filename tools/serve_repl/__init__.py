@@ -245,6 +245,7 @@ DEFAULT_EMBEDDINGS = Path(DEFAULTS["embeddings"]).expanduser()
 DEFAULT_DOWNLOADS = Path(DEFAULTS["downloads"]).expanduser()
 DEFAULT_UPLOADS = Path(DEFAULTS["uploads_dir"]).expanduser()
 DEFAULT_MCP_RESULTS = Path(DEFAULTS["mcp_results_dir"]).expanduser()
+DEFAULT_RESULT_CACHE = Path(DEFAULTS["result_cache_dir"]).expanduser()
 # The repository whose CI uploads the site of each pull request, and the
 # artifacts holding it (.github/workflows/docs.yml).
 REPOSITORY = "NeuroLang/NeuroLang"
@@ -3018,6 +3019,8 @@ def service_command(args) -> list:
         command += [] if args.preload_embeddings else [
             "--no-preload-embeddings"]
         command += [] if args.prebuild else ["--no-prebuild"]
+        command += ["--result-cache-dir", str(args.result_cache_dir.resolve()),
+                    "--result-cache-mb", str(args.result_cache_mb)]
         command += ["--prebuild-reserve", str(args.prebuild_reserve)]
     command += ["--max-upload-mb", str(args.max_upload_mb),
                 "--max-uploads-mb", str(args.max_uploads_mb)]
@@ -3364,6 +3367,22 @@ def parse_args(argv=None):
         help="with --users and --local, the directory of the files the "
         "pages upload, a folder per session, removed when it ends (stopped, "
         "or idle for --idle-minutes); emptied when the server starts "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--result-cache-dir", type=Path, default=DEFAULT_RESULT_CACHE,
+        metavar="DIR",
+        help="with --local, the directory of the results of the queries "
+        "that read nothing of their session, the same in every session: "
+        "kept for all the sessions, and for the next starts of the server "
+        "while the engine, its data and NeuroLang are the same "
+        "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--result-cache-mb", type=float,
+        default=float(DEFAULTS["result_cache_mb"]), metavar="MB",
+        help="with --local, the results kept take at most MB megabytes, the "
+        "least recently used going first; 0 keeps none "
         "(default: %(default)s)",
     )
     parser.add_argument(
@@ -3849,7 +3868,11 @@ def main(argv=None) -> None:
                 embeddings=args.preload_embeddings,
             )
         options = dict(resolution=args.resolution, light=args.light,
-                       feedback=feedback_target())
+                       feedback=feedback_target(),
+                       result_cache={
+                           "directory": str(args.result_cache_dir),
+                           "most_mb": args.result_cache_mb,
+                       } if args.result_cache_mb > 0 else None)
         if users:
             from neurolang_apps.utils.tui.sessions import Sessions
 

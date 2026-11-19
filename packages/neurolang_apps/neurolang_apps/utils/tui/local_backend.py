@@ -95,15 +95,20 @@ class LocalBackend:
     by default
     :func:`~neurolang_apps.utils.engine_registry.build_engine`. With
     *preload_embeddings*, an engine built has its text embeddings loaded
-    too (see :meth:`build`).
+    too (see :meth:`build`). With *result_cache*, ``{"directory": ...,
+    "most_mb": ...}``, the results every session would find the same are
+    kept there, for all of them (see
+    :mod:`~neurolang_apps.utils.result_cache`).
     """
 
     def __init__(
         self, data_dir, resolution: float = 2.0, light: bool = False,
         feedback: Optional[tuple] = None, build: Optional[Callable] = None,
         preload_embeddings: bool = False, uploads: Optional[dict] = None,
+        result_cache: Optional[dict] = None,
     ):
         self.data_dir = Path(data_dir).resolve()
+        self.result_cache = result_cache or {}
         # Where the page's uploads go and how large they may be
         # (session.Uploads), in memory without a directory.
         self.uploads = uploads or {}
@@ -163,8 +168,17 @@ class LocalBackend:
         from this process (see
         :func:`~neurolang_apps.utils.text_embeddings.preload`); and find the
         values of its string sorts, which the notes of a query look up
-        (:func:`~neurolang_apps.utils.tui.constant_notes.prepare`)."""
+        (:func:`~neurolang_apps.utils.tui.constant_notes.prepare`); with
+        ``result_cache``, give it the results the sessions share (see
+        :func:`~neurolang_apps.utils.result_cache.attach`)."""
         nl = self._build(name, say)
+        if self.result_cache:
+            from neurolang_apps.utils import result_cache
+
+            result_cache.attach(
+                nl, name, self.resolution, self.data_dir, light=self.light,
+                **self.result_cache,
+            )
         if self.preload_embeddings and \
                 getattr(nl, "text_embedding_indexes", None):
             from neurolang_apps.utils import text_embeddings

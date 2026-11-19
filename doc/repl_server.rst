@@ -213,6 +213,12 @@ Who may use it
    starts, and removes the folders of the sessions whose process died.  A
    file takes at most MB megabytes (50), all those of a session together
    at most MB (200).
+``--result-cache-dir DIR``, ``--result-cache-mb MB``
+   With ``--local``: the results of the queries that read nothing of their
+   session, the same in every session, are kept in DIR
+   (``~/.cache/neurolang/repl-results``) for all the sessions and the next
+   starts of the server, at most MB megabytes of them (1024; 0, none), the
+   least recently used going first; see `Results shared by the sessions`_.
 ``--mcp``, ``--mcp-results-dir DIR``
    With ``--users`` and ``--local``: answer MCP clients at ``/mcp``, each
    user with the token of their account page, the files of the answers in
@@ -744,6 +750,47 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   back at the next input.
 
 Without ``--users``, one session serves everyone, in the server's process.
+
+Results shared by the sessions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A query that reads nothing of its session has the same answer in every
+session: the examples of the page, the queries of its example questions,
+shown to every user, take 3.4 to 10.5 s each on ``neurosynth_iit``
+(0.4 to 0.9 s when kept).  The
+server keeps the rows of such a result in an Arrow file of
+``--result-cache-dir`` (``neurolang_apps.utils.result_cache``), and a session
+running the same query again, of any user, shows them in place of running
+it, saying so ("The same result in every session, kept from an earlier
+run"), with the notes its run printed; its tables, downloads and viewers
+are those of the rows kept.
+
+- A result is shared when its program is a Datalog query whose rules are
+  local to it (``.scope on``), run to show its result (not ``.ra`` nor
+  ``.rewritten``), with no command (``.load_csv(...)``,
+  ``.index_tracts(...)``...), and no predicate it reads, through its rules
+  and the engine's rules and constraints, is defined in the session: a
+  rule, a relation loaded or uploaded, an image, a fact added to one of the
+  engine's (a constraint of the session is read by every query).  Any other query runs,
+  and its result is never kept: one user's rules and data never reach
+  another's page.  After a command, which may change the engine in ways
+  its predicates do not tell, the session's engine shares nothing more.
+  SQUALL queries, and those with several answers (``ans[name]``), are not
+  shared.
+- The file of a result is named by the engine (its name, resolution and
+  configuration, the files of ``--data-dir`` and of NeuroLang, by path,
+  size and time of change, and the versions of numpy, scipy, pandas,
+  pyarrow and polars), the program as parsed (comments and spaces apart)
+  and the query backend: a change of any of them makes another file, and
+  the files outlive a restart of the server.  The data an engine reads
+  from outside ``--data-dir`` (nilearn's downloads, a model of text
+  embeddings) is taken to stay the same: empty DIR after changing it.
+- A result is kept only if Arrow holds its columns as they are (none of
+  Python objects, each of the same type back), if its file reads back
+  equal to them, if it alone is within the limit, if its session does not
+  sort the results (``.sort``), a session reading it sorting it as it
+  sorts its own, and if its notes, which may name the session's
+  predicates ("did you mean"), come from a session that defined none.
 
 
 Activity and usage

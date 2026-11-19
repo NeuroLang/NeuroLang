@@ -3223,6 +3223,9 @@ def test_the_defaults_of_the_options_are_those_of_their_file(serve):
     assert f"in DIR (``{defaults['uploads_dir']}``)" in server
     assert f"at most MB megabytes ({defaults['max_upload_mb']})" in server
     assert f"together at most MB ({defaults['max_uploads_mb']})" in server
+    assert f"in DIR (``{defaults['result_cache_dir']}``)" in server
+    assert f"at most MB megabytes of them ({defaults['result_cache_mb']};" \
+        in server
     contributing = " ".join((docs / "contributing.rst").read_text().split())
     assert f"``--max-sessions`` ({defaults['max_sessions']}," in contributing
     assert f"``--idle-minutes`` ({defaults['idle_minutes']}," in contributing
