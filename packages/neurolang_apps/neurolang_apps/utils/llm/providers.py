@@ -214,9 +214,18 @@ class OpenAIChatClient(ChatClient):
             ]
         # OpenRouter caches the prompts of Claude only when asked to (it
         # caches those of OpenAI, DeepSeek and others by itself); other
-        # look-alikes of the API may reject the field.
+        # look-alikes of the API may reject the field. The field marks
+        # the end of the conversation; each system message is marked as
+        # well, as with the Anthropic API, so that requests starting with
+        # the same message share it.
         if self.provider.model.startswith("anthropic/"):
             payload["cache_control"] = CACHED
+            for message in payload["messages"]:
+                if message["role"] == "system":
+                    message["content"] = [{
+                        "type": "text", "text": message["content"],
+                        "cache_control": CACHED,
+                    }]
         return payload
 
     def _reply(self, data: dict) -> Reply:
