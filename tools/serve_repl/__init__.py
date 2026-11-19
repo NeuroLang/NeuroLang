@@ -3095,6 +3095,7 @@ def service_command(args) -> list:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes),
                     "--query-minutes", str(args.query_minutes),
+                    "--session-memory-mb", str(args.session_memory_mb),
                     "--uploads-dir", str(args.uploads_dir.resolve())]
         if args.mcp:
             command += ["--mcp", "--mcp-results-dir",
@@ -3463,6 +3464,13 @@ def parse_args(argv=None):
         "%(default)s)",
     )
     parser.add_argument(
+        "--session-memory-mb", type=float,
+        default=float(DEFAULTS["session_memory_mb"]), metavar="MB",
+        help="with --users and --local, on Linux, stop a query taking its "
+        "session's process more than MB megabytes of memory of its own, "
+        "the session staying (0: never; default: %(default)s)",
+    )
+    parser.add_argument(
         "--feedback-db", type=Path, metavar="FILE",
         help="with --local, store the ratings of the page in the SQLite "
         "database FILE (made if need be), with the name and the groups of "
@@ -3652,9 +3660,9 @@ def parse_args(argv=None):
     if args.max_sessions < 1 or not args.idle_minutes > 0:
         parser.error("--max-sessions is at least 1, --idle-minutes above 0")
     if (args.max_running is not None and args.max_running < 1) or \
-            not args.query_minutes >= 0:
-        parser.error("--max-running is at least 1, --query-minutes 0 or "
-                     "more")
+            not args.query_minutes >= 0 or not args.session_memory_mb >= 0:
+        parser.error("--max-running is at least 1, --query-minutes and "
+                     "--session-memory-mb 0 or more")
     if ((password or args.users) and not args.cert
             and args.host not in ("127.0.0.1", "localhost", "::1")):
         parser.error("a password goes in clear without --cert: give a "
@@ -3940,6 +3948,7 @@ def main(argv=None) -> None:
                 most=args.max_sessions, idle=args.idle_minutes * 60,
                 running=args.max_running,
                 query_seconds=args.query_minutes * 60,
+                memory_mb=args.session_memory_mb,
                 preload_embeddings=args.preload_embeddings,
                 prebuild_reserve=args.prebuild_reserve,
                 **options,

@@ -17,6 +17,7 @@ prebuild_reserve: 0.35        # --users --local: the share of the memory buildin
 max_sessions: 8               # --users --local: sessions at once
 idle_minutes: 120             # --users --local: an unused session ends
 query_minutes: 60             # --users --local: a query is stopped (0: never)
+session_memory_mb: 0          # --users --local: a query taking a session more memory of its own is stopped (0: never)
 max_guest_sessions: 2         # --guests: sessions of the guests at once
 uploads_dir: ~/.cache/neurolang/repl-uploads  # --users --local: a folder per session, removed when it ends
 mcp: false                    # --users --local: answer MCP clients at /mcp, with the users' tokens

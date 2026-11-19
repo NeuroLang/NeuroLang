@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+- REPL server (``--users --local``): ``--session-memory-mb`` stops, on Linux,
+  a query taking its session's process more than that much memory of its own,
+  with a message, the session staying, instead of the OOM killer taking the
+  builder or the server; ``doc/repl_server.rst`` gives the matching systemd
+  ``MemoryHigh``/``MemoryMax``.
+
 - REPL server (``--users --local``): it answers at once and prepares the
   engines in the background (those the page offers first), instead of
   after their preparation, which took minutes after an update that

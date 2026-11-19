@@ -44,6 +44,9 @@ def build(name, say):
     nl.add_tuple_set([(2,)], name="short")
     nl.add_tuple_set([(60,)], name="long")
     nl.add_symbol(wait, name="wait")
+    # grow(m) takes m MB of its own and holds them (a query out of memory).
+    nl.add_tuple_set([(800,)], name="big")
+    nl.add_symbol(grow, name="grow")
     if name in ("destrieux", "tracts"):
         # Text embeddings, which count their loads (and fail to load in
         # tracts).
@@ -79,6 +82,13 @@ class _Index:
 def wait(seconds: int) -> int:
     time.sleep(seconds)
     return seconds
+
+
+def grow(megabytes: int) -> int:
+    ballast = bytearray(b"x" * (megabytes << 20))
+    for _ in range(600):  # short sleeps: an interrupt runs between them
+        time.sleep(0.05)
+    return len(ballast)
 
 
 @pytest.fixture
@@ -1108,3 +1118,21 @@ def test_an_mcp_client_has_a_session_in_plain_text(sessions, tmp_path):
     links = answer["structuredContent"]["links"]
     assert links["rows"].startswith("https://repl.example.org/mcp/files/")
     assert list((tmp_path / "mcp").glob("*/a1/rows.csv"))
+
+
+@pytest.mark.skipif(not os.path.exists("/proc/self/smaps_rollup"),
+                    reason="the memory of a process is read on Linux")
+def test_a_query_over_the_memory_cap_stops_and_the_session_stays(tmp_path):
+    sessions = Sessions(tmp_path, build=build, memory_mb=300)
+    try:
+        session = sessions.session("ann", "1")
+        session.start("neurostore")
+        session.submit("old(x) :- person(x, a), (a > 4)")
+        began = time.monotonic()
+        reply = session.submit("ans(g) :- big(m), (g == grow(m))")
+        assert time.monotonic() - began < 20
+        assert reply["failed"]
+        assert "over the 300 MB a session may take" in reply["html"]
+        assert _rows(session.submit("ans(x) :- old(x)")) == [["bob"]]
+    finally:
+        sessions.close()

@@ -211,6 +211,10 @@ Who may use it
    With ``--users`` and ``--local``: the queries running at once, of all
    the sessions (the machine's CPUs, at least 1), and the minutes after
    which a query is stopped (60; 0, never); see `Sessions`_.
+``--session-memory-mb MB``
+   With ``--users`` and ``--local``, on Linux: a query taking its
+   session's process more than MB megabytes of memory of its own (0, never)
+   is stopped; see `Sessions`_.
 ``--uploads-dir DIR``, ``--max-upload-mb MB``, ``--max-uploads-mb MB``
    The files the pages upload (**Upload data**: tables, images): with
    ``--users`` and ``--local``, a session keeps them in a folder of its own
@@ -301,6 +305,7 @@ log and the dashboard go there too::
    idle_minutes: 120
    max_running: 4              # queries at once (the machine's CPUs)
    query_minutes: 60           # 0: no limit
+   session_memory_mb: 4096     # 0: no limit (Linux)
    uploads_dir: /srv/neurolang/uploads  # a folder per session, removed when it ends
    max_upload_mb: 50
    max_uploads_mb: 200
@@ -748,6 +753,26 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   process ends (which frees its CPU and memory at once, as no thread of
   Python can be stopped otherwise), and its page says so; its rules come
   back at the next input.
+- A query taking its session's process more than ``--session-memory-mb`` of
+  memory of its own (the *private* memory of ``/proc/PID/smaps_rollup``,
+  which leaves out the pages the session shares with the builder; read
+  every half second, on Linux, nothing elsewhere) is interrupted as the
+  **Stop** button does: the page says how much it took and the cap, and the
+  session stays, its rules too, its memory given back.  A query that
+  allocates faster than the reading, in one native call, may still go over
+  before it stops.  Set it so that ``--max-sessions`` times the cap, plus
+  the builder's memory (the engines' data), fits in the machine's memory:
+  otherwise the kernel's OOM killer picks, perhaps the builder or the
+  server.  As a second line, in the service run by systemd, limit the
+  whole unit (``systemctl --user edit neurolang-repl``)::
+
+     [Service]
+     MemoryHigh=48G   # above it, the unit is slowed down and its memory reclaimed
+     MemoryMax=56G    # above it, the kernel kills in the unit, not the machine's other services
+
+  The user manager must have the ``memory`` controller delegated
+  (``systemctl --user show -p Delegate``; on many distributions only
+  system units may set these).
 
 Without ``--users``, one session serves everyone, in the server's process.
 
