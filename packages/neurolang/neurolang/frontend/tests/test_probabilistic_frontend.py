@@ -25,7 +25,6 @@ from nl_core.probabilistic import (
 from nl_core.probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
     RepeatedTuplesInProbabilisticRelationError,
-    UnsupportedSolverError,
 )
 from ...regions import ExplicitVBR, SphericalVolume
 from nl_core.utils.relational_algebra_set import (
@@ -2385,28 +2384,49 @@ def _query_with_deterministic_existential(nl):
 
 @pytest.mark.parametrize("selected", ["facts", "choice"])
 @pytest.mark.parametrize(
-    "solvers", [None, dalvi_suciu_lift], ids=["default", "lift"]
+    "solvers",
+    [None, dalvi_suciu_lift, small_dichotomy_theorem_based_solver],
+    ids=["default", "lift", "small-dichotomy"]
 )
 def test_existential_variable_of_deterministic_relation_only(
     selected, solvers
 ):
     """P(∃y R(1, y) ∧ Selected(1)) is P(Selected(1)) however many rows
-    of the deterministic `R` witness ∃y: they are the same event."""
+    of the deterministic `R` witness ∃y: they are the same event. The
+    first solver projects y out of `R` before the sum."""
     nl = _engine_with_two_witnesses(selected, solvers)
     sol = _query_with_deterministic_existential(nl)
     assert len(sol) == 2
     assert_almost_equal(sol, {(1, 0.5), (2, 0.5)})
 
 
-@pytest.mark.parametrize("selected", ["facts", "choice"])
-def test_small_dichotomy_declines_existential_of_deterministic_relation(
-    selected
-):
-    nl = _engine_with_two_witnesses(
-        selected, small_dichotomy_theorem_based_solver
+def test_small_dichotomy_projects_a_variable_of_a_builtin():
+    """A variable of a deterministic atom and of a builtin known by its
+    name: the study is counted once whatever its labels."""
+    nl = NeurolangPDL(
+        probabilistic_solvers=(
+            small_dichotomy_theorem_based_solver.solve_succ_query,
+        ),
+        probabilistic_marg_solvers=(
+            small_dichotomy_theorem_based_solver.solve_marg_query,
+        ),
     )
-    with pytest.raises(UnsupportedSolverError):
-        _query_with_deterministic_existential(nl)
+    nl.add_tuple_set(
+        [("xa", 0), ("xb", 0), ("ya", 1), ("xc", 2)], name="act"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(0,), (1,), (2,)], name="sel"
+    )
+
+    @nl.add_symbol
+    def starts_with(prefix: str, label: str) -> bool:
+        return label.startswith(prefix)
+
+    res = nl.execute_datalog_program(
+        "ans(s, PROB) :- act(l, s) & sel(s) & starts_with('x', l)"
+    )
+    assert len(res) == 2
+    assert_almost_equal(res, {(0, 1 / 3), (2, 1 / 3)})
 
 
 def test_predicate_with_a_deterministic_and_a_choice_rule():

@@ -17,6 +17,14 @@ pages 144–155, New York, NY, USA, 2014. ACM.
 
 [^2]: Nilesh N. Dalvi and Dan Suciu. Efficient query evaluation on
 probabilistic databases. VLDB J., 16(4):523–544, 2007.
+
+Despite its name, `solve_succ_query` does not apply the theorem: it sums
+the join of a conjunctive query without negation nor self-join on the
+tuples of its probabilistic choices, which needs every existential
+variable in a choice but not a hierarchical query, the variables of
+deterministic atoms only being projected out first (see
+doc/probabilistic_lifting.rst, "Conjunctive queries summed on
+probabilistic choices").
 """
 
 import logging
@@ -58,6 +66,7 @@ from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from nl_expr.utils.various import log_performance
 from nl_expr.utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
+from .deterministic_subqueries import ProjectDeterministicExistentials
 from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     generate_probabilistic_symbol_table_for_query,
@@ -193,6 +202,9 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
         _verify_fact_and_choice_e_quantification(symbol_table, unified_query)
+        unified_query = ProjectDeterministicExistentials(
+            symbol_table, cpl_program.builtins()
+        ).walk(unified_query)
         _verify_deterministic_e_quantification(symbol_table, unified_query)
         original_symbols = set(symbol_table)
         shattered_query_antecedent = shatter_constants(
@@ -225,15 +237,23 @@ def solve_succ_query(query, cpl_program, run_relational_algebra_solver=True):
         deterministic_negated_atoms = _extract_deterministic_negated_atoms(
             shattered_query, probabilistic_predicates
         )
-        if deterministic_negated_atoms or not is_hierarchical_without_self_joins(
+        # The plan needs no hierarchy: every existential variable is in
+        # an atom of a choice. It needs independent atoms, without
+        # self-joins, and no negation.
+        has_self_joins, _ = extract_atom_sets_and_detect_self_joins(
             shattered_query_probabilistic_body
+        )
+        if deterministic_negated_atoms or has_self_joins or any(
+            isinstance(predicate, Negation)
+            for predicate in probabilistic_predicates
         ):
             LOG.info(
-                "Query with conjunctions %s not hierarchical",
+                "Query with conjunctions %s has a negation or a self-join",
                 shattered_query_probabilistic_body.formulas,
             )
             raise NotHierarchicalQueryException(
-                "Query not hierarchical, algorithm can't be applied"
+                "Query with a negation or a self-join, algorithm can't be "
+                "applied"
             )
 
         ra_query = TranslateToNamedRA().walk(shattered_query.antecedent)

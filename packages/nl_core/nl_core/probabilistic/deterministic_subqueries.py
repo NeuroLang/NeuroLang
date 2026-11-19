@@ -9,12 +9,18 @@ expression is not evaluated while planning: marked with `Materialise`,
 it is computed as a set when the plan is evaluated.
 """
 from itertools import chain
+from typing import AbstractSet
 
 from ..datalog.expression_processing import EQ, extract_logic_atoms
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from nl_expr.expression_walker import ReplaceSymbolWalker, add_match
 from nl_expr.expressions import Constant, FunctionApplication, Symbol
-from nl_expr.logic import Conjunction, ExistentialPredicate, Negation
+from nl_expr.logic import (
+    Conjunction,
+    ExistentialPredicate,
+    Implication,
+    Negation
+)
 from nl_expr.logic.expression_processing import extract_logic_free_variables
 from nl_expr.logic.transformations import LogicExpressionWalker
 from ..relational_algebra import (
@@ -26,6 +32,13 @@ from ..relational_algebra import (
 )
 from ..relational_algebra.optimisers import RelationalAlgebraOptimiser
 from .expression_processing import is_comparison
+from .probabilistic_ra_utils import (
+    DeterministicFactSet,
+    ProbabilisticChoiceSet,
+    ProbabilisticFactSet,
+    is_atom_a_probabilistic_choice_relation,
+    is_atom_a_probabilistic_fact_relation
+)
 
 
 class ReplaceDeterministicNegations(LogicExpressionWalker):
@@ -213,6 +226,47 @@ def materialised_relation(formula, columns, relations):
     return Materialise(NumberColumns(plan, column_names))
 
 
+def materialised_atom(formula, columns, symbol_table):
+    """The atom, on the variables `columns`, of a deterministic relation
+    of the tuples of `formula`, its relations being replaced by their
+    tuples, or None if one of them is not known as a set."""
+    relations = {
+        atom.functor: tuples_of(atom, symbol_table)
+        for atom in extract_logic_atoms(formula)
+        if isinstance(atom.functor, Symbol)
+    }
+    if any(r is None for r in relations.values()):
+        return None
+    relation, functor = Symbol.fresh(), Symbol.fresh()
+    symbol_table[relation] = materialised_relation(
+        formula, columns, relations
+    )
+    symbol_table[functor] = DeterministicFactSet(relation)
+    return functor(*columns)
+
+
+def tuples_of(atom, symbol_table):
+    """The set of the tuples of an atom, without their probabilities, or
+    None if it is not known as a set."""
+    entry = symbol_table[atom.functor]
+    relation = entry.relation
+    if isinstance(relation, Symbol):
+        relation = symbol_table[relation]
+    if isinstance(entry, DeterministicFactSet) and isinstance(
+        relation, (Constant[AbstractSet], Materialise)
+    ):
+        return relation
+    if (
+        isinstance(entry, (ProbabilisticChoiceSet, ProbabilisticFactSet)) and
+        isinstance(relation, Constant[AbstractSet]) and
+        entry.probability_column == int2columnint_constant(0)
+    ):
+        return Projection(relation, tuple(
+            int2columnint_constant(i) for i in range(1, len(atom.args) + 1)
+        ))
+    return None
+
+
 def _is_atom(formula):
     return (
         isinstance(formula, FunctionApplication) and
@@ -266,6 +320,96 @@ def _conjoin_within_existentials(formulas, formula):
     if isinstance(formula, Conjunction):
         return Conjunction(formulas + formula.formulas)
     return Conjunction(formulas + (formula,))
+
+
+class ProjectDeterministicExistentials(LogicExpressionWalker):
+    """
+    In a rule H(ȳ) ← B, B a conjunction whose quantified variables are
+    implicit, replace the conjuncts having a quantified variable which
+    occurs in no atom of a probabilistic relation, one set of them
+    connected by such variables z̄ at a time, by a fresh deterministic
+    relation
+
+        D(x̄) := ∃z̄ (D₁ ∧ … ∧ Dₙ),
+
+    x̄ being their other variables, as ∃z̄ (D₁ ∧ … ∧ Dₙ ∧ Q) ≡ D(x̄) ∧ Q,
+    z̄ not being free in Q. D is computed as a set: a value of x̄ is in it
+    once, however many values of z̄ give it. A set with a conjunct other
+    than an atom or a builtin, or a variable which none of its atoms of
+    relations binds, is left unchanged.
+
+    Parameters
+    ----------
+    symbol_table : Mapping
+        the symbol table of the lifted solver, to which the fresh
+        relations are added.
+    builtins : Mapping
+        the functions the program knows by name, and their values.
+    """
+
+    def __init__(self, symbol_table, builtins):
+        self.symbol_table = symbol_table
+        self.builtins = builtins
+
+    @add_match(Implication(FunctionApplication, Conjunction))
+    def rule(self, rule):
+        formulas = rule.antecedent.formulas
+        quantified = extract_logic_free_variables(rule.antecedent) - (
+            extract_logic_free_variables(rule.consequent) | {
+                arg for formula in formulas
+                if _is_atom(formula) and (
+                    is_atom_a_probabilistic_choice_relation(
+                        formula, self.symbol_table
+                    ) or is_atom_a_probabilistic_fact_relation(
+                        formula, self.symbol_table
+                    )
+                )
+                for arg in formula.args
+            }
+        )
+        for variable in quantified:
+            component = _connected_by(variable, formulas, quantified)
+            atom = self._relation(component, quantified)
+            if atom is not None:
+                formulas = tuple(
+                    formula for formula in formulas
+                    if formula not in component
+                ) + (atom,)
+        return rule.apply(rule.consequent, Conjunction(formulas))
+
+    def _relation(self, component, quantified):
+        formula = ReplaceSymbolWalker(self.builtins).walk(
+            Conjunction(component)
+        )
+        bound = {
+            arg for atom in formula.formulas if _is_atom(atom)
+            for arg in atom.args
+        }
+        if not component or not all(
+            isinstance(conjunct, FunctionApplication)
+            for conjunct in formula.formulas
+        ) or not extract_logic_free_variables(formula) <= bound:
+            return None
+        return materialised_atom(formula, sorted(
+            extract_logic_free_variables(formula) - quantified,
+            key=lambda v: v.name
+        ), self.symbol_table)
+
+
+def _connected_by(variable, formulas, variables):
+    """The formulas connected to `variable` through the `variables`."""
+    component, connecting = (), {variable}
+    while True:
+        connected = tuple(
+            formula for formula in formulas
+            if extract_logic_free_variables(formula) & connecting
+        )
+        if len(connected) == len(component):
+            return component
+        component = connected
+        connecting = variables & extract_logic_free_variables(
+            Conjunction(component)
+        )
 
 
 def replace_deterministic_negations(formula, program):

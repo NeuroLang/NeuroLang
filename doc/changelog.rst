@@ -19,6 +19,18 @@ Unreleased
 
 **New features:**
 
+- The first probabilistic solver, which sums a conjunctive query on its
+  probabilistic choices, projects out first the variables occurring in
+  deterministic atoms only, as a deterministic relation computed as a set,
+  rather than declining the query: ``dorsal(s) :- dorsal_label(l),
+  schaefer400_activated(l, s), selected_study(s)`` counts each study once,
+  whatever the number of its labels. It no longer requires the
+  probabilistic atoms to form a hierarchical query, which its plan does
+  not need, but still declines self-joins and negations. Such queries were
+  answered, with the same probabilities, by the Dalvi–Suciu solver, as was
+  every other probabilistic query of the program. See
+  :ref:`probabilistic-lifting`.
+
 - REPL page: the question and query boxes have a copy button at their top
   right, and keep their own history of edits: Ctrl or Cmd Z undoes a run of
   typing at a time (the browser's undid a character at a time in Chrome) and
