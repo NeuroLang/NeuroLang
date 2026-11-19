@@ -378,9 +378,9 @@ assistant_examples:
     datalog: |-
       ans(study, title) :- cogat_definition('response inhibition', d), similar_study(d, study), study_title(study, title)
 
-  - question: Which voxels do the studies about holding information in mind over a delay activate?
+  - question: Which voxels do the studies about maintenance of visual information during a delay period activate?
     datalog: |-
-      ans(i, j, k, probability) :- p_a_given_similar('holding information in mind over a delay', i, j, k, probability), cortical_mask(i, j, k)
+      ans(i, j, k, probability) :- p_a_given_similar('maintenance of visual information during a delay period', i, j, k, probability), cortical_mask(i, j, k)
 
   - question: Which voxels are associated with cortical responses to noxious heat applied to the skin, with a lift above 2?
     datalog: |-
