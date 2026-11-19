@@ -609,8 +609,9 @@ Claude Code::
   REPL answers in plain text. A session that ended starts again at the
   next request, and its first ``ask`` gives the whole prompt again.
 - **The files** of the answers (the viewer, the images, the rows, the query
-  and its graph) are kept in ``--mcp-results-dir``, a folder per session
-  with a random name, removed after 7 days, and linked as
+  and its graph) are kept in ``--mcp-results-dir``, in a folder per user
+  (the ``list_answers`` of an MCP client lists theirs only), a folder per
+  session with a random name, removed after 7 days, and linked as
   ``https://HOST/mcp/files/...``: they open for the users logged in. The
   pages (the viewer, the graph) are sandboxed, away from the site's cookies;
   the other files are downloaded.

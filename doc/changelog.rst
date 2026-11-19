@@ -19,6 +19,22 @@ Unreleased
 
 **New features:**
 
+- ``neurolang-query --mcp`` and the REPL server's ``/mcp``: an answer's
+  rows are shown by their value, highest first; its glass brain is a file
+  too, linked; a page lists the answers of the session with their glass
+  brains (``index.html``); the answers are kept (``answer.json``), and
+  ``list_answers`` lists those of the earlier sessions, which ``ask``
+  refines by their ids. New tools: ``examples`` (the assistant's example
+  questions by topic) and ``status`` (the engine, its grid, its folders,
+  whether it is built). ``--allow-dir DIR`` lets the confined statements
+  read a folder of one's own (``.load`` reads the files of the folders
+  they may read); the options may be kept in
+  ``~/.config/neurolang/mcp.yaml``; ``--print-mcp-command`` prints the
+  command adding the server to Claude Code; the data directory is
+  ``~/neurolang_data`` by default. On the REPL server, each user's answers
+  are in a folder of their own. The meta-analysis engines answer "where in
+  the brain is X reported" with the lift of each voxel of the cortex.
+  
 - REPL server (``--users --local``): ``--session-memory-mb`` stops, on Linux,
   a query taking its session's process more than that much memory of its own,
   with a message, the session staying, instead of the OOM killer taking the

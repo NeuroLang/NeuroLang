@@ -631,6 +631,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "(default: ~/.cache/neurolang/mcp).",
     )
     parser.add_argument(
+        "--allow-dir",
+        action="append",
+        metavar="DIR",
+        help="With --mcp, a folder whose files the session's statements may "
+        "read too (.load, .image), such as one of your own maps; repeat it. "
+        "They stay confined otherwise (--unconfined lifts it).",
+    )
+    parser.add_argument(
+        "--print-mcp-command",
+        action="store_true",
+        help="With --mcp, print the command that adds this server to Claude "
+        "Code, with absolute paths and the options given, and exit.",
+    )
+    parser.add_argument(
         "--keep-results",
         type=float,
         default=7,
@@ -1523,6 +1537,69 @@ def _run_interactive(args, argv=()) -> None:
 
 # The MNI grid of the MCP server's engine unless --resolution gives one.
 MCP_RESOLUTION = 2.0
+# Its data directory unless --data-dir gives one: not relative to where the
+# client starts it, which would build the engine anew there.
+MCP_DATA_DIR = Path("~/neurolang_data")
+# The file of its options (those of MCP_OPTIONS, named as the options, with
+# underscores), which those of the command line win over.
+MCP_CONFIG = Path("~/.config/neurolang/mcp.yaml")
+MCP_CONFIG_ENV = "NEUROLANG_MCP_CONFIG"
+MCP_OPTIONS = (
+    "engine", "data_dir", "resolution", "results_dir", "log", "keep_results",
+    "unconfined", "build_on_first_call", "allow_dir", "no_engine_cache",
+)
+
+
+def _mcp_options(args) -> None:
+    """Give *args* the options of the MCP server's file that the command
+    line does not (see MCP_CONFIG), its data directory, absolute, and its
+    grid."""
+    import yaml
+
+    path = Path(os.environ.get(MCP_CONFIG_ENV) or MCP_CONFIG).expanduser()
+    options = {}
+    if path.is_file():
+        try:
+            options = yaml.safe_load(path.read_text()) or {}
+        except yaml.YAMLError as error:
+            sys.exit(f"Error: {path} is not YAML: {error}")
+        unknown = set(options) - set(MCP_OPTIONS)
+        if not isinstance(options, dict) or unknown:
+            sys.exit(f"Error: {path} has options of the MCP server only: "
+                     f"{', '.join(MCP_OPTIONS)}")
+    defaults = _build_parser()
+    for name, value in options.items():
+        if getattr(args, name) == defaults.get_default(name):
+            setattr(args, name, value)
+    if args.data_dir == defaults.get_default("data_dir"):
+        args.data_dir = str(MCP_DATA_DIR)
+    args.data_dir = str(Path(args.data_dir).expanduser())
+    if args.resolution is None:
+        # A grid of 2 mm, as the REPL server's: a session of a quarter of the
+        # memory (3 GB for neurosynth, not 12) and maps quicker to answer.
+        args.resolution = MCP_RESOLUTION
+
+
+def mcp_command(args) -> str:
+    """The command adding the MCP server of *args* to Claude Code."""
+    command = [sys.executable, "-m", "neurolang_apps.utils.cli", "--mcp",
+               "--engine", args.engine, "--data-dir",
+               str(Path(args.data_dir).resolve()),
+               "--resolution", str(args.resolution)]
+    for option, value in (("--results-dir", args.results_dir),
+                          ("--log", args.log)):
+        if value:
+            command += [option, str(Path(value).expanduser().resolve())]
+    for directory in args.allow_dir or ():
+        command += ["--allow-dir", str(Path(directory).expanduser().resolve())]
+    if args.keep_results != 7:
+        command += ["--keep-results", str(args.keep_results)]
+    command += [flag for flag, on in (
+        ("--unconfined", args.unconfined),
+        ("--build-on-first-call", args.build_on_first_call),
+        ("--no-engine-cache", args.no_engine_cache),
+    ) if on]
+    return "claude mcp add --scope user neurolang -- " + shlex.join(command)
 
 
 def _run_mcp(args) -> None:
@@ -1534,6 +1611,10 @@ def _run_mcp(args) -> None:
         if getattr(args, dest):
             print(f"Error: --mcp cannot be used with {flag}.", file=sys.stderr)
             sys.exit(1)
+    _mcp_options(args)
+    if args.print_mcp_command:
+        print(mcp_command(args))
+        return
     _check_interactive_flags(args, "--mcp")
     _check_flag_dependencies(args)
     _check_engine_name(args)
@@ -1545,10 +1626,6 @@ def _run_mcp(args) -> None:
             exc, dependencies, "the MCP server needs the optional "
             f"dependencies {', '.join(dependencies)}", "mcp",
         )
-    if args.resolution is None:
-        # A grid of 2 mm, as the REPL server's: a session of a quarter of the
-        # memory (3 GB for neurosynth, not 12) and maps quicker to answer.
-        args.resolution = MCP_RESOLUTION
     mcp_server.main(args, _program_argument(args))
 
 

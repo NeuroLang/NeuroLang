@@ -2,6 +2,7 @@
 
 import base64
 import importlib.util
+import hashlib
 import json
 import os
 import re
@@ -3382,7 +3383,9 @@ def test_an_mcp_client_needs_its_users_token(mcp_server, serve, tmp_path):
     assert sessions.asked == [("ann", serve.MCP_TAB)]
     [request] = sessions.mcp_session.requests
     assert "authorization" not in {k.lower() for k in request["headers"]}
-    assert request["base_url"].endswith("/mcp/files/")
+    mine = hashlib.sha256(b"ann").hexdigest()[:16]
+    assert request["base_url"].endswith(f"/mcp/files/{mine}/")
+    assert request["results_dir"].endswith(mine)
     assert sessions.mcp_session.starts == [("", True)]  # text, once
     # kept in the users file: a new server knows it; a new token revokes it
     assert serve.Users(tmp_path / "users.yaml").mcp_user(token) == "ann"
