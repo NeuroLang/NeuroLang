@@ -25,6 +25,14 @@ Unreleased
   builder or the server; ``doc/repl_server.rst`` gives the matching systemd
   ``MemoryHigh``/``MemoryMax``.
 
+- REPL server (``--users --local``): it answers at once and prepares the
+  engines in the background (those the page offers first), instead of
+  after their preparation, which took minutes after an update that
+  changed the tables kept (the page did not answer meanwhile). A session
+  of an engine not yet prepared waits for it, its page telling so; the
+  others start at once. Without ``--users`` the engines are still
+  prepared before serving.
+  
 - REPL page: the question and query boxes have a copy button at their top
   right, and keep their own history of edits: Ctrl or Cmd Z undoes a run of
   typing at a time (the browser's undid a character at a time in Chrome) and

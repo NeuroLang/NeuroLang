@@ -42,10 +42,12 @@ The REPL with NeuroLang in the Python of this machine::
 builds no bundle: the page's worker sends what it is asked to this server,
 which builds the engine from DIR (``neurolang_data`` by default, as
 ``neurolang-query``), with all of its analyses unless ``--light``, and runs
-the REPL (``neurolang_apps.utils.tui.local_backend``). Before serving, it
-builds each engine once, in a process of its own, unless ``--no-prepare``:
-what it downloads and the tables it finds are kept in DIR, so that a
-session starts from them, without the network. The page starts with
+the REPL (``neurolang_apps.utils.tui.local_backend``). It builds each
+engine once, in a process of its own, unless ``--no-prepare``: what it
+downloads and the tables it finds are kept in DIR, so that a session
+starts from them, without the network. Without ``--users`` it does so
+before serving; with it, it serves at once and prepares the engines
+meanwhile, a session of one not yet prepared waiting for it. The page starts with
 ``--default-engine``; the admin console turns engines off and chooses
 another (:class:`EngineChoice`). The page is the same,
 in SITE/local, and it is as fast, and has as much memory, as this machine.
@@ -373,15 +375,25 @@ def _prepare_in_child(data_dir, resolution, light, embeddings):
     import multiprocessing
 
     context = multiprocessing.get_context("spawn")
+    children = []
 
     def run(name) -> bool:
         child = context.Process(
             target=_prepare_engine,
             args=(data_dir, name, resolution, light, embeddings),
         )
+        children[:] = [child]
         child.start()
         child.join()
         return child.exitcode == 0
+
+    def stop() -> None:
+        """Kill the engine being built, if one is."""
+        for child in children:
+            if child.is_alive():
+                child.kill()
+
+    run.stop = stop
     return run
 
 
@@ -414,6 +426,64 @@ def prepare_engines(
                   "its sessions download what it lacks, if they can",
                   flush=True)
     return failed
+
+
+class Preparation:
+    """
+    The engines the server prepares (:func:`prepare_engines`) while it
+    serves, in a thread of its own, in the order of *engines*: a session
+    of an engine not yet prepared waits for it (:meth:`wait`), rather
+    than build it too, as the server's builders would. *ready*, if
+    given, is called with the name of each engine as it is prepared (or
+    could not be), in that thread.
+    """
+
+    def __init__(self, data_dir: Path, engines, resolution: float = 2.0,
+                 light: bool = False, embeddings: bool = False, run=None,
+                 ready=None):
+        self.data_dir, self.engines = data_dir, list(engines)
+        self.resolution, self.light = resolution, light
+        self.embeddings = embeddings
+        self._pending = {name: threading.Event() for name in self.engines}
+        self._run = run or _prepare_in_child(
+            data_dir, resolution, light, embeddings
+        )
+        self._ready = ready
+        self.thread = None
+
+    def start(self) -> "Preparation":
+        """Prepare the engines, from now on, in a thread."""
+        self.thread = threading.Thread(
+            target=self._prepare, name="neurolang-repl-prepare", daemon=True
+        )
+        self.thread.start()
+        return self
+
+    def _prepare(self) -> None:
+        def run(name) -> bool:
+            try:
+                return self._run(name)
+            finally:
+                self._pending[name].set()
+                if self._ready is not None:
+                    self._ready(name)
+
+        prepare_engines(
+            self.data_dir, self.engines, self.resolution, self.light,
+            run=run, embeddings=self.embeddings,
+        )
+
+    def wait(self, engine: str, timeout: float) -> bool:
+        """Wait at most *timeout* seconds for *engine* to be prepared;
+        return whether it is (an engine not to be prepared is)."""
+        pending = self._pending.get(engine)
+        return pending is None or pending.wait(timeout)
+
+    def close(self) -> None:
+        """Stop preparing: kill the engine being built."""
+        stop = getattr(self._run, "stop", None)
+        if stop is not None:
+            stop()
 
 
 def prepare_local_site(site: Path, engines=None, users=False, default=None,
@@ -3849,12 +3919,11 @@ def main(argv=None) -> None:
               + (f": the admin console's choice, kept in {engines.saved}, "
                  "holds over the configuration's (remove the file to go "
                  "back to it)" if engines.overrides else ""), flush=True)
-        if args.prepare:
+        to_prepare = list(args.engines or bundle_engines())
+        if args.prepare and not users:
             prepare_engines(
-                args.data_dir.resolve(),
-                list(args.engines or bundle_engines()),
-                args.resolution, args.light,
-                embeddings=args.preload_embeddings,
+                args.data_dir.resolve(), to_prepare, args.resolution,
+                args.light, embeddings=args.preload_embeddings,
             )
         options = dict(resolution=args.resolution, light=args.light,
                        feedback=feedback_target())
@@ -3886,7 +3955,22 @@ def main(argv=None) -> None:
             )
             backend.prebuilds = args.prebuild
             backend.exit_without_builder = True
-            if args.prebuild:
+            if args.prepare:
+                # The server serves while the engines are prepared, those
+                # the page offers first, the default first of them; each
+                # is built ahead, if it is to be (see below), once it is
+                # prepared; a session of one not yet prepared waits.
+                offered = engines.to_build()
+                order = offered + [e for e in to_prepare if e not in offered]
+                backend.preparing = Preparation(
+                    args.data_dir.resolve(), order, args.resolution,
+                    args.light, embeddings=args.preload_embeddings,
+                    ready=lambda name: (
+                        args.prebuild and name in engines.on()
+                        and backend.prebuild([name])
+                    ),
+                ).start()
+            elif args.prebuild:
                 # Their sessions then start at once (a fork), the first
                 # ones too.
                 backend.prebuild(engines.to_build())

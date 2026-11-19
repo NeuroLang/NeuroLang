@@ -1331,6 +1331,7 @@ def _export_session(args, nl, result, column_names, program):
     return SimpleNamespace(
         settings=SimpleNamespace(engine_name=args.engine), _nl=nl,
         results=blocks, failed=False,
+        results_query=(program, bool(args.squall)),
         console=Console(stderr=True), err_console=Console(stderr=True),
     )
 

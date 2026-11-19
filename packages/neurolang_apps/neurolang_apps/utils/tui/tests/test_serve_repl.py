@@ -141,6 +141,37 @@ def test_the_local_engines_are_prepared_before_serving(serve, capsys):
     assert not serve.parse_args(["--local", "--no-prepare"]).prepare
 
 
+def test_the_engines_are_prepared_while_a_session_waits_for_its_own(serve):
+    """Preparation prepares in a thread, in order: wait returns once an
+    engine is, at once for one it does not prepare; ready is told each;
+    close stops the build."""
+    import threading
+
+    release = threading.Event()
+    told, stopped = [], []
+
+    def run(name):
+        if name == "neurostore":
+            release.wait(30)
+        return name != "broken"
+
+    run.stop = lambda: stopped.append(1)
+    preparation = serve.Preparation(
+        Path("data"), ["neurosynth", "neurostore", "broken"], run=run,
+        ready=told.append,
+    ).start()
+    assert preparation.wait("neurosynth", 30)
+    assert not preparation.wait("neurostore", 0.1)  # still building
+    assert preparation.wait("somewhere", 0)  # not one it prepares
+    release.set()
+    assert preparation.wait("neurostore", 30)
+    assert preparation.wait("broken", 30)  # failed: its sessions try
+    preparation.thread.join(30)
+    assert told == ["neurosynth", "neurostore", "broken"]
+    preparation.close()
+    assert stopped == [1]
+
+
 def test_the_bundle_is_built_with_the_engines_asked_for(
     serve, monkeypatch, tmp_path
 ):

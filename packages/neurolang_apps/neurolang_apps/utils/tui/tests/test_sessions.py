@@ -197,6 +197,51 @@ def test_the_steps_of_a_start_are_told(sessions):
     assert any("Building neurostore" in m for m in messages)
 
 
+class _Preparing:
+    """The engines a server prepares: neurostore until released."""
+
+    def __init__(self):
+        self.released = threading.Event()
+        self.closed = False
+
+    def wait(self, engine, timeout):
+        return engine != "neurostore" or self.released.wait(timeout)
+
+    def close(self):
+        self.closed = True
+
+
+def test_a_session_waits_for_the_engine_the_server_prepares(tmp_path):
+    """Its page is told the server is preparing the engine; the session
+    starts when it is prepared; an engine already prepared starts at once;
+    closing the sessions closes the preparation."""
+    sessions = Sessions(tmp_path, build=build)
+    preparing = sessions.preparing = _Preparing()
+    try:
+        bob = sessions.session("bob", "1")
+        bob.start("destrieux")  # not waited for
+        assert bob.pid is not None
+        ann = sessions.session("ann", "1")
+        listener = ann.listen()
+        started = threading.Thread(target=ann.start, args=("neurostore",))
+        started.start()
+        deadline = time.monotonic() + 30
+        messages = []
+        while not any("preparing the engine neurostore" in m
+                      for m in messages):
+            assert time.monotonic() < deadline, messages
+            while not listener.empty():
+                messages.append(listener.get())
+            time.sleep(0.05)
+        assert ann.pid is None  # waiting, no process yet
+        preparing.released.set()
+        started.join(60)
+        assert ann.pid is not None
+    finally:
+        sessions.close()
+    assert preparing.closed
+
+
 def test_an_engine_built_before_its_sessions_starts_them_at_once(
         sessions, capsys):
     """The engines built when the server starts, the broken one told in the
