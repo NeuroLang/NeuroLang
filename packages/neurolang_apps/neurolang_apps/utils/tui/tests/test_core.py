@@ -390,6 +390,10 @@ def vocabulary_engine():
     nl.add_tuple_set(
         [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
     )
+    nl.add_tuple_set([(10, 2001), (11, 2010)], name="study_year")
+    nl.add_tuple_set(
+        [(10, "Pain in the brain"), (11, "Fear")], name="study_title"
+    )
     nl.add_tuple_set(
         [
             (10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4),
@@ -471,22 +475,24 @@ def test_banner_lists_relations_and_example(vocabulary_engine):
 def test_banner_squall_example(vocabulary_engine):
     app = _app(vocabulary_engine, engine_name="neurosynth", squall=True)
     app._print_banner()
-    assert "Try: obtain every Study that mentions 'pain'." in _output(app)
+    # no SQUALL example is declared (deprecated): the first relation's
+    from neurolang_apps.utils.tui.commands import engine_examples
+
+    squall = engine_examples("neurosynth")["squall"][0]
+    assert f"Try: {squall}" in _output(app)
 
 
 def test_engine_examples_run_on_the_vocabulary(vocabulary_engine):
     from neurolang_apps.utils.tui.commands import engine_examples
 
     examples = engine_examples("neurosynth")
-    for language in ("datalog", "squall"):
-        app = _app(
-            vocabulary_engine, engine_name="neurosynth",
-            squall=language == "squall",
-        )
-        for query in examples[language]:
-            app._execute_and_display(query)
-            assert not app.failed, query
-            assert len(app.results[-1].frame) > 0, query
+    # the engine declares no SQUALL example (deprecated), only the
+    # fallback on its first relation, which this small engine lacks
+    app = _app(vocabulary_engine, engine_name="neurosynth")
+    for query in examples["datalog"]:
+        app._execute_and_display(query)
+        assert not app.failed, query
+        assert len(app.results[-1].frame) > 0, query
 
 
 def test_engine_examples_default_to_the_first_relation():
@@ -504,8 +510,7 @@ def test_help_examples_match_engine_columns(small_app):
     small_app._handle_dot_command(".help")
     out = _output(small_app)
     assert "term_in_study_tfidf(t, w, s)" not in out
-    assert "obtain every Study that mentions 'pain'." in out
-    assert "every Weighted_mention (?s; ?t; ?w)" in out
+    assert "obtain every Study that mentions 'pain'." not in out
     assert ".more" in out
 
 

@@ -37,7 +37,9 @@ assistant_examples:
   - question: Which regions is the left superior frontal gyrus structurally connected to?
     topic: "Structural connectivity and tractography"
     datalog: |-
-      ans(region, streamlines) :- destrieux_tian_structural_connectivity('L G front sup', region, streamlines)
+      region_label(l, name) :- destrieux_name(l, name)
+      region_label(l, name) :- tian_name(l, name)
+      ans(region, name, streamlines) :- destrieux_tian_structural_connectivity('L G front sup', region, streamlines), region_label(region, name), (streamlines > 1000)
 
   - question: What is the structural connectivity of the left angular gyrus, its connections of more than 500 white-matter streamlines?
     topic: "Structural connectivity and tractography"
@@ -53,7 +55,7 @@ assistant_examples:
     topic: "Structural connectivity and tractography"
     datalog: |-
       default_left(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
-      ans(l1, l2, streamlines) :- schaefer400_tian_structural_connectivity(l1, l2, streamlines), default_left(l1), default_left(l2), (l1 < l2), (streamlines > 100)
+      ans(l1, name1, l2, name2, streamlines) :- schaefer400_tian_structural_connectivity(l1, l2, streamlines), default_left(l1), default_left(l2), (l1 < l2), (streamlines > 100), schaefer400_name(l1, name1), schaefer400_name(l2, name2)
 
   - question: Which Schaefer parcels have the strongest structural connectivity?
     topic: "Structural connectivity and tractography"
@@ -82,7 +84,7 @@ assistant_examples:
     topic: "Structural connectivity and tractography"
     datalog: |-
       thalamus(t) :- tian(t, r), startswith('THA', t)
-      ans(region, sum(n)) :- schaefer400_tian_structural_connectivity(t, region, n), thalamus(t), schaefer400(region, r)
+      ans(region, name, sum(n)) :- schaefer400_tian_structural_connectivity(t, region, n), thalamus(t), schaefer400_name(region, name)
 
   - question: What is the structural network among the subcortical regions, its pairs of more than 100 streamlines?
     topic: "Structural connectivity and tractography"
@@ -100,8 +102,10 @@ assistant_examples:
   - question: What is the probability that a white-matter streamline leaving the left angular gyrus ends in each region?
     topic: "Structural connectivity and tractography"
     datalog: |-
+      region_label(l, name) :- destrieux_name(l, name)
+      region_label(l, name) :- tian_name(l, name)
       strength(l, sum(n)) :- destrieux_tian_structural_connectivity(l, l2, n)
-      ans(l2, probability) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l2, n), strength('L G pariet inf Angular', t), (probability == n / t)
+      ans(l2, name, probability) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l2, n), strength('L G pariet inf Angular', t), (probability == n / t), region_label(l2, name)
 
   - question: What fraction of the white-matter streamlines of the left posterior cingulate (precuneus) parcel go to each other region?
     topic: "Structural connectivity and tractography"

@@ -196,7 +196,8 @@ may specify the following keys, all of them optional:
   millimetres, the Destrieux atlas for the classical anatomy of the
   cortex and the Schaefer and Tian atlases for the functional anatomy
 - ``examples`` — example queries, as lists under ``datalog`` and
-  ``squall``; the interactive REPL suggests the first one of its language
+  ``squall`` (deprecated: the engines shipped no longer declare any);
+  the interactive REPL suggests the first one of its language
   at startup and lists them all in ``.help`` (by default it suggests
   obtaining the first declared predicate)
 - ``questions`` — questions in English that the REPL in the browser lists

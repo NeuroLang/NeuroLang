@@ -26,7 +26,7 @@ assistant_examples:
   - question: Which regions are functionally connected at rest with the left posterior cingulate (precuneus)?
     topic: "Functional connectivity"
     datalog: |-
-      ans(region, correlation) :- schaefer400_tian_functional_connectivity('17Networks LH DefaultA pCunPCC 1', region, correlation), (correlation > 0.3)
+      ans(region, name, correlation) :- schaefer400_tian_functional_connectivity('17Networks LH DefaultA pCunPCC 1', region, correlation), schaefer400_name(region, name), (correlation > 0.3)
 
   - question: What is the resting-state functional network of the left default mode network?
     topic: "Functional connectivity"
@@ -48,8 +48,9 @@ assistant_examples:
   - question: Which cortical regions is the left thalamus functionally connected to at rest?
     topic: "Functional connectivity"
     datalog: |-
-      left_thalamus(t) :- tian(t, x), startswith('THA', t), (t != 'THA DA rh'), (t != 'THA DP rh'), (t != 'THA VA rh'), (t != 'THA VP rh')
-      ans(structure, region, correlation) :- schaefer400_tian_functional_connectivity(structure, region, correlation), left_thalamus(structure), schaefer400(region, r), (correlation > 0.2)
+      left_thalamus(t) :- tian_name(t, name), str_contains(name, 'thalamus, left')
+      strongest(l, max(r)) :- schaefer400_tian_functional_connectivity(t, l, r), left_thalamus(t)
+      ans(region, name, correlation) :- strongest(region, correlation), schaefer400_name(region, name), (correlation > 0.15)
 
   - question: What is the resting-state functional connectivity among the subcortical regions, its pairs correlated above 0.2?
     topic: "Functional connectivity"
@@ -59,7 +60,9 @@ assistant_examples:
   - question: Which gyri and sulci are functionally connected at rest with the left hippocampus?
     topic: "Functional connectivity"
     datalog: |-
-      ans(region, correlation) :- destrieux_tian_functional_connectivity('aHIP lh', region, correlation), destrieux(region, r), (correlation > 0.2)
+      left_hippocampus(t) :- tian_name(t, name), str_contains(name, 'hippocampus, left')
+      strongest(l, max(r)) :- destrieux_tian_functional_connectivity(t, l, r), left_hippocampus(t)
+      ans(region, name, correlation) :- strongest(region, correlation), destrieux_name(region, name), (correlation > 0.2)
 
   - question: Which Schaefer parcels have the strongest resting-state functional connectivity, their positive correlations summed?
     topic: "Functional connectivity"

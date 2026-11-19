@@ -1,6 +1,12 @@
 SQUALL: Controlled English for NeuroLang
 =========================================
 
+.. deprecated:: Unreleased
+
+   SQUALL is deprecated and will be removed.  The REPL no longer suggests
+   SQUALL examples, and ``execute_squall_program`` (and ``neurolang-query
+   --squall``) warns.  Write Datalog instead (see :doc:`tutorial_datalog`).
+
 NeuroLang's SQUALL frontend (also referred to as NSQUALL, for NeuroLang
 SQUALL) lets you write NeuroLang queries and rules in plain English sentences
 instead of symbolic Datalog notation.  Under the hood, each sentence is
