@@ -4,7 +4,7 @@
 # bank of the query assistant below, the queries it shows (examples) and
 # the questions of the query assistant (assistant_examples).
 questions:
-  - Which studies mention pain?
+  - Which studies mention pain? Give their year and title.
   - Which gyri and sulci are activated by studies about language?
   - Which subcortical regions are activated by studies about fear?
   - What is the Bayes factor of fear for the activation of the left amygdala?
@@ -12,7 +12,7 @@ questions:
   - Where in the brain is working memory, by its definition in the Cognitive Atlas?
 examples:
   datalog:
-    - "ans(study) :- mentions(study, 'pain')"
+    - "ans(study, year, title) :- mentions(study, 'pain'), study_year(study, year), study_title(study, title)"
     - "ans(study, tfidf) :- weighted_mention(study, 'pain', tfidf), (tfidf > 0.1)"
     - "ans(i, j, k, uniformity) :- uniformity('pain', i, j, k, uniformity)"
     - "ans(i, j, k, uniformity) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, uniformity)"
@@ -64,9 +64,9 @@ examples:
 # boot_studies, and the interval is the percentiles 2.5 and 97.5 of the
 # replicates; two measures are compared on the same replicate b.
 assistant_examples:
-  - question: Which studies mention pain?
+  - question: Which studies mention pain? Give their year and title.
     datalog: |-
-      ans(study) :- mentions(study, 'pain')
+      ans(study, year, title) :- mentions(study, 'pain'), study_year(study, year), study_title(study, title)
 
   - question: Which terms are mentioned by the studies, and how often?
     datalog: |-
