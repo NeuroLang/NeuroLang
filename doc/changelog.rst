@@ -26,6 +26,71 @@ Unreleased
   of an engine not yet prepared waits for it, its page telling so; the
   others start at once. Without ``--users`` the engines are still
   prepared before serving.
+  
+- NeuroStore engine: a build no longer depends on the network when it has
+  what it needs.  The listing of the releases is kept in the data directory
+  for ``release_listing_ttl_hours`` (24, in ``engines.yaml``), a downloaded
+  release is used as it is, a nightly release is downloaded again (and the
+  old copy replaced only once the new one is there) when a fresh listing
+  says it was rebuilt, and without the network the newest downloaded
+  release is used with a logged message.  ``NEUROLANG_NEUROSTORE_UPDATE=1``
+  lists the releases again.
+
+- Magic sets no longer copy the rows of a stored relation they restrict:
+  a restriction rule, ``p^bf(x, y) :- magic_p^bf(x), r(x, y)`` of a
+  stored relation ``r``, is unfolded into the rules using it
+  (``unfold_restrictions``, the last step of ``magic_rewrite``), whose
+  plans join ``r`` with the magic predicate: relational algebra as any
+  join, the contractions as a product with the sparse view of ``r``.
+  Magic sets bind every predicate again, those of sparse views included
+  (no ``unbound_predicates``); the decoding of a mask reads
+  ``activated`` as its view, without the 20-million-row copy. See
+  :doc:`probabilistic_lifting`, *Restrictions of magic sets left to the
+  plans*.
+
+- Probabilistic queries whose plans are sums of products (joins,
+  projections and selections over choices, probabilistic facts and
+  deterministic relations, the independent and disjoint projections of
+  lifted plans, and conditionals) are computed as contractions of sparse
+  tensors: the provenance plan is translated into tensor expressions
+  (``nl_core.relational_algebra.linear_algebra.expressions``), rewritten
+  into a normal form, and computed with ``scipy.sparse``, reading the
+  engines' sparse views (``activated``, the atlas activations) as
+  matrices. Plans it cannot write so are computed as before. With it,
+  the restrictions of stored relations by magic sets are joined by the
+  plans rather than copied (see below). Answers are
+  unchanged (see :doc:`probabilistic_lifting`, *Computing the plans as
+  tensor contractions*); ``[PROBABILISTIC_SOLVER] contractions = False``
+  in ``config.ini`` turns it off.
+- ``nl_core.relational_algebra.linear_algebra``, the encoding of
+  relations for linear algebra: ``EntityIndex`` numbers the entities of a
+  sort (a voxel ``(i, j, k)`` is one; strings through a dictionary) and
+  back, and ``SparseView`` holds a relation between two entities, with
+  the value of a third column or not, as a ``scipy.sparse`` CSR matrix
+  with int32 indices, under set semantics, built once for the frame of
+  its rows (``sparse_view``). An engine declares the views it builds with
+  it, before the REPL server forks its sessions, which share them, in
+  ``sparse_views`` of ``engines.yaml`` (``activated: [voxel, study]``),
+  the entities of a sort numbered alike in all; the views of predicates
+  the engine does not define (left out of a lightweight engine) are not
+  built. The engines of the registry declare none yet, as no query reads
+  them. ``SparseView.weighted()`` gives the matrix with float64 entries
+  over the same indices, for products of views, made once with the views
+  and shared by the sessions. Reading the rows of an
+  empty relation of no columns no longer fails.
+
+- The sparse views of an engine are kept with the tables of its build
+  (``derived_tables`` of the data directory, a ``.npy`` file per array,
+  named by a checksum of the relations they are built from) and read
+  memory-mapped by the next build: their arrays (13 bytes a tuple, 1.8
+  GB for neurostore_iit) are pages of the files, shared by the
+  processes, by the engines built from the same tables, and reclaimed by
+  the system when memory is short, rather than private memory of each
+  builder; a build no longer spends time building them (24 s for
+  neurostore_iit). A table a build reads back from its file is named,
+  for what is found from it, by the name of the file, without reading
+  its rows again.
+
 - REPL in the browser: a *Network* tab draws an answer whose rows are edges
   (two columns of the same sort, such as ``concept_1`` and ``concept_2``,
   and a numeric weight) as a network laid out by force, with a slider for
@@ -118,6 +183,16 @@ Unreleased
 
 **Bug fixes:**
 
+- A probabilistic plan computed as contractions whose answer could not be
+  built as a relation set failed the query: the building of the answer is
+  within the fallback, which logs the error and computes the plan by
+  relational algebra, as for any error of the contraction.
+
+- With the Polars backend, a probabilistic query computed as contractions
+  failed (``IndexError``): the named relation sets of Polars take the rows
+  of a pandas frame, as those of pandas do, columns in the set's order;
+  columns of values Polars does not hold natively are read row by row.
+
 - REPL server (``--users --local``): each engine has a builder process of
   its own, started by a coordinator, rather than one builder for all: a
   session of an engine built starts at once while another engine builds,
@@ -136,6 +211,17 @@ Unreleased
   of its query. A REPL session kept 0.6 GB more after each query decoding
   an image on ``neurosynth_iit``; the caches are now each chase's own
   (the same hits), and that session keeps 0.18 GB, however many queries.
+- Example programs that did not work: the start-up example of the
+  Neurosynth and NeuroStore engines joining the Cognitive Atlas subclasses
+  of *working memory* with the mentions returned no row (none of its seven
+  subclass labels is a term of Neurosynth), it now takes those of
+  *attention* (574 studies); two assistant examples on structural
+  connectivity defined a probabilistic choice named ``ends_in``, a
+  predicate of the vocabulary of tractography, and failed with
+  ``ForbiddenDisjunctionError`` (renamed ``ending_region``); and the
+  assistant example of the left uncinate fasciculus, which compared the
+  definitions of the 583 Cognitive Atlas concepts with the 14,371 studies
+  and timed out, takes the 21 kinds of *memory*.
 
 
 v0.1a23 (2026-11-15)

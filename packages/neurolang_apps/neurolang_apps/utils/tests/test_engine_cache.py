@@ -492,6 +492,57 @@ def test_a_derived_table_that_cannot_be_kept_is_computed(tmp_path):
     assert damaged("pairs", [frame], (), lambda: frame).equals(frame)
 
 
+def test_derived_arrays_come_back_mapped(tmp_path):
+    import pandas as pd
+
+    frame = pd.DataFrame({"i": [1, 2, 3]})
+    arrays = {
+        "numbers": np.arange(4, dtype=np.int32),
+        "values": np.linspace(0, 1, 4),
+        "texts": np.array(["a", "é", "bc"]),
+        "scalar": np.asarray(3),
+    }
+    derived = engine_cache.DerivedTables(tmp_path)
+    kept = derived.arrays("views", [frame], "p", lambda: arrays)
+    again = derived.arrays("views", [frame], "p", lambda: pytest.fail("kept"))
+    for found in (kept, again):
+        assert list(found) == list(arrays)
+        for name, array in arrays.items():
+            np.testing.assert_array_equal(found[name], array)
+            assert found[name].dtype == array.dtype
+            # read from the file, mapped: not a copy
+            assert isinstance(found[name], np.memmap)
+    # other parameters, or other source rows, name others
+    derived.arrays("views", [frame], "q", lambda: arrays)
+    derived.arrays("views", [frame.iloc[:2]], "p", lambda: arrays)
+    assert len([p for p in tmp_path.glob("views-*") if p.is_dir()]) == 3
+    # a damaged directory is computed again
+    for path in tmp_path.glob("views-*/0.npy"):
+        path.write_bytes(b"damaged")
+    found = derived.arrays("views", [frame], "p", lambda: arrays)
+    np.testing.assert_array_equal(found["numbers"], arrays["numbers"])
+
+
+def test_a_table_read_back_is_named_without_its_rows(tmp_path, monkeypatch):
+    """A table the build kept is named, for the tables and arrays found
+    from it, by its own name: its rows are not read again."""
+    import pandas as pd
+
+    frame = pd.DataFrame({"i": np.arange(5)})
+    derived = engine_cache.DerivedTables(tmp_path)
+    kept = derived("pairs", [frame], (), lambda: frame)
+    monkeypatch.setattr(
+        engine_cache, "frame_digest", lambda f: pytest.fail("rows read")
+    )
+    derived.arrays("views", [kept], "p", lambda: {"a": np.arange(2)})
+    # the same arrays under another name, as a rule renaming it has them
+    renamed = kept.rename(columns={"i": "j"})
+    derived.arrays("views", [renamed], "p", lambda: {"a": np.arange(2)})
+    monkeypatch.undo()
+    # other rows of the same arrays are other rows
+    assert derived._digest(kept.iloc[1:3]) != derived._digest(kept.iloc[2:4])
+
+
 # -- The source tables of a build, kept as the derived ones ---------------
 
 def test_the_tables_of_an_atlas_are_read_mapped_by_the_next_build(

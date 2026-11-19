@@ -148,6 +148,31 @@ may specify the following keys, all of them optional:
   intervals, ``name: {choice: selected_study, n: 500, scheme: bayesian,
   seed: 0}``, queried with ``RESAMPLE[name](pred(x)) = b`` (see the
   tutorial :doc:`tutorial_datalog`, section 10.7)
+- ``sparse_views`` — relations also kept as sparse matrices, built with
+  the engine (so before the REPL server forks its sessions, which share
+  them): ``activated: [voxel, study]`` holds ``activated`` as a matrix
+  whose rows are its voxels and columns its studies, and a third sort,
+  of one column, gives the values of the entries (``term_in_study_tfidf:
+  [study, term, tfidf]``).  The sorts are those of the predicate's
+  ``arguments``, each once; the view spans all of them.  The predicate is
+  a stored relation or a rule renaming one (as the ``EUCLIDEAN`` rule of
+  ``activated``).  The entities of a sort are numbered alike in every
+  view (one :class:`~nl_core.relational_algebra.linear_algebra.EntityIndex`
+  per sort, a voxel ``(i, j, k)`` being one entity); the engine's
+  ``sparse_views`` holds the
+  :class:`~nl_core.relational_algebra.linear_algebra.SparseView` of each
+  predicate, a ``scipy.sparse`` CSR matrix with int32 indices, of
+  booleans when there is no value (its ``weighted()`` matrix, of
+  float64 entries over the same indices, is the one to multiply: ``R @
+  R.T`` counts the studies two regions share).  A view of a predicate
+  the engine does not define (one a lightweight engine leaves out) is
+  not built.  The probabilistic solver reads them when it computes sums
+  of products as contractions; with ``[PROBABILISTIC_SOLVER]
+  contractions`` off in the configuration, no view is built.  A build
+  keeps the views with its tables (``derived_tables``) and the next one
+  reads them memory-mapped, shared by the processes.  The
+  engines of ``coordinate_meta_analysis`` declare ``activated`` and the
+  activations of the atlases
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of
@@ -188,7 +213,8 @@ engine's directory next to it (see `Files of an engine`_).
 
 The init phases run in the order described in :doc:`concepts`: builtins,
 base symbols, Python init, downloads, templates, atlases, Datalog init,
-relations, text embeddings, probabilistic choices and ontologies.
+relations, text embeddings, probabilistic choices, ontologies and sparse
+views.
 
 Example — the ``neurosynth`` engine (abridged)::
 

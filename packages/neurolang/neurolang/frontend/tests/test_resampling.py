@@ -188,7 +188,9 @@ ans(b, r, p) :- rep(b, r, p).
     assert np.mean([after[(b, "r1")] for b in range(5)]) == pytest.approx(
         expected[("r1",)], abs=.2
     )
-    assert rows(nl, query.replace("rep", "rep3")) == after
+    # The same query again, under another name, sums in an order of its
+    # own: the same values to the last bits.
+    assert rows(nl, query.replace("rep", "rep3")) == pytest.approx(after)
 
 
 def test_resample_in_a_query(resampled):
