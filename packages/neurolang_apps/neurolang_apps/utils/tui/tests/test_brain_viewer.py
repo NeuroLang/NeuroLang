@@ -1095,6 +1095,42 @@ def test_the_threshold_sliders_follow_the_histogram(tmp_path):
         assert max(result[offsets]) < 2, (offsets, result[offsets])
     assert result["dragged"] >= 1.5  # half way along the values, not percentiles
 
+
+_OVERLAP_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var histogram = document.getElementById('threshold-histogram');
+  var out = {};
+  set('threshold', '2.9', 'change');  // the low thumb under the high one
+  set('threshold-high-slider', '500', 'input');  // dragged down
+  out.down = histogram.dataset.range;
+  set('threshold-high-slider', '900', 'input');  // dragged up
+  out.up = histogram.dataset.range;
+  set('threshold-slider', '950', 'input');  // the low one past the high one
+  out.past = histogram.dataset.range;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_overlapping_threshold_thumbs_can_both_be_dragged(tmp_path):
+    """Check the high thumb, on top of the low one when the thresholds
+    are close, moves the low threshold when dragged below it, and the
+    low thumb dragged above the high one moves the high threshold."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[0, 0, 3], data[1, 1, 3], data[2, 2, 3] = 1.0, 2.0, 3.0
+    html = brain_viewer.viewer_html(
+        _image(data), None, title="overlap", threshold=0.5, cmap="hot",
+        symmetric=False,
+    )
+    result = _run_in_chrome(tmp_path, html, _OVERLAP_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    assert result["down"] == "1.5 3"
+    assert result["up"] == "1.5 2.7"
+    assert result["past"] == "1.5 2.85"
+
 _EDGE_VALUE_CHECK = _CHECK_HELPERS + """
 <script>
 brainViewer.ready.then(function () {
