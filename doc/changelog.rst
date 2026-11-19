@@ -19,6 +19,15 @@ Unreleased
 
 **New features:**
 
+- NeuroStore engine: a build no longer depends on the network when it has
+  what it needs.  The listing of the releases is kept in the data directory
+  for ``release_listing_ttl_hours`` (24, in ``engines.yaml``), a downloaded
+  release is used as it is, a nightly release is downloaded again (and the
+  old copy replaced only once the new one is there) when a fresh listing
+  says it was rebuilt, and without the network the newest downloaded
+  release is used with a logged message.  ``NEUROLANG_NEUROSTORE_UPDATE=1``
+  lists the releases again.
+
 - Magic sets no longer copy the rows of a stored relation they restrict:
   a restriction rule, ``p^bf(x, y) :- magic_p^bf(x), r(x, y)`` of a
   stored relation ``r``, is unfolded into the rules using it
