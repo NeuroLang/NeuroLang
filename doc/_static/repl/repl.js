@@ -6,10 +6,12 @@ import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { answerTabs, imageButtons, renderTable } from "./table_view.js";
+import { networkViews } from "./network_view.js";
 import { removedUploads, uploadRows, uploadsSummary } from "./uploads.js";
 import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
+import { keepHistory } from "./undo.js";
 import { layoutQuery } from "./layout.js";
 import { exampleQuestion, renderGroupedQuestions, queryOf, questionOf, filterQuestions, renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
@@ -29,11 +31,14 @@ const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
 const llmForm = $("llm");
 const results = $("results");
-const TABS = ["table", "brain", "graph"]; // the tabs of the results, in order
+const TABS = ["table", "network", "brain", "graph"]; // the tabs of the results, in order
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("refine-run"), $("session-open"), $("upload")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
+// Undo and redo that keep what the page writes in the boxes (undo.js).
+keepHistory(input);
+keepHistory(question);
 // A query the page puts in the box, laid out for its width: a long rule a line
 // per atom of its body (layout.js). What the visitor typed is kept as it is.
 const laidOut = (text) => ($("mode").value === "squall" ? text : layoutQuery(text, editor.columns()));
@@ -534,6 +539,8 @@ function start({ restore = null } = {}) {
   $("table").replaceChildren();
   $("brain").replaceChildren();
   $("tab-brain").hidden = true;
+  $("network").replaceChildren();
+  $("tab-network").hidden = true;
   selectTab("table");
   $("fatal").hidden = $("failed").hidden = true;
   $("boot").hidden = false;
@@ -831,6 +838,15 @@ function showTables({ tables, prompt }) {
   });
   if (tables.length > 1) show("table", answerTabs(tables, render));
   else show("table", ...tables.map(render));
+  showNetwork(tables);
+}
+
+// The network of the answers whose rows are edges (concept_1, concept_2,
+// weight), in the network tab; an answer that is none hides that of the last.
+function showNetwork(tables) {
+  const view = networkViews(tables);
+  $("network").replaceChildren(...(view ? [view] : []));
+  $("tab-network").hidden = !view;
 }
 
 // The brain viewer page of a reply, in the brain tab, with the buttons of the images of the tables.
@@ -1105,14 +1121,36 @@ question.addEventListener("keydown", (event) => {
 $("share").addEventListener("click", async (event) => {
   const url = `${location.origin}${location.pathname}${location.search}#${encodeShare(editor.value, $("mode").value)}`;
   window.history.replaceState(null, "", url);
-  try {
-    await navigator.clipboard.writeText(url);
+  if (await copied(url, "Copy this link")) {
     event.target.textContent = "Copied";
     setTimeout(() => { event.target.textContent = "Copy link"; }, 1200);
-  } catch {
-    window.prompt("Copy this link", url); // no clipboard here, e.g. an unsecured address
   }
 });
+// Put *text* on the clipboard; without one (e.g. at an unsecured address) a
+// dialog, titled *title*, offers it to copy.
+async function copied(text, title) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    window.prompt(title, text);
+    return false;
+  }
+}
+// The copy buttons of the boxes, which work while a box waits for a reply.
+for (const [id, box] of [["copy-query", input], ["copy-question", question]]) {
+  const button = $(id);
+  const label = button.title;
+  button.addEventListener("click", async () => {
+    if (!box.value || !(await copied(box.value, label))) return;
+    button.classList.add("copied");
+    button.title = button.ariaLabel = "Copied";
+    setTimeout(() => {
+      button.classList.remove("copied");
+      button.title = button.ariaLabel = label;
+    }, 1200);
+  });
+}
 $("key").addEventListener("click", () => {
   const details = $("llm-details");
   details.open = !details.open;

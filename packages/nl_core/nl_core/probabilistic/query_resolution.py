@@ -10,6 +10,7 @@ from ..datalog.expression_processing import (
     extract_logic_free_variables
 )
 from ..datalog.instance import MapInstance, WrappedRelationalAlgebraFrozenSet
+from nl_expr.config import config
 from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import (
     ChainedWalker,
@@ -64,6 +65,7 @@ from .probabilistic_ra_utils import (
     ProbabilisticChoiceSet,
     ProbabilisticFactSet
 )
+from .sums_of_products import SolveAsContractions
 from .probabilistic_semiring_solver import (
     ProbSemiringToRelationalAlgebraSolver
 )
@@ -605,6 +607,12 @@ def generate_provenance_query_solver(
         RAQueryGOOOptimiser(symbol_table=symbol_table),
         PushSumsThroughJoins(),
         RAQueryOptimiser(),
+    ]
+    if run_relational_algebra_solver and config.getboolean(
+        "PROBABILISTIC_SOLVER", "contractions"
+    ):
+        steps.append(SolveAsContractions(symbol_table))
+    steps += [
         solver_class(symbol_table=symbol_table),
         LogExpression(LOG, "About to optimise RA query %s", logging.INFO),
         AddNeededProjections(needed_projections),

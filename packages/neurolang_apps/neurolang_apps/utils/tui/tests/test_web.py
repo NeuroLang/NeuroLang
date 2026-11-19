@@ -554,7 +554,10 @@ def test_the_examples_leave_out_the_missing_predicates(repl):
     assert examples["datalog"] and examples["squall"]
     for query in examples["datalog"] + examples["squall"]:
         assert "uniformity" not in query and "activated(" not in query
-    assert "ans(study) :- mentions(study, 'pain')" in examples["datalog"]
+    assert (
+        "ans(study, year, title) :- mentions(study, 'pain'), "
+        "study_year(study, year), study_title(study, title)"
+    ) in examples["datalog"]
 
 
 def test_the_banner_says_what_the_engine_leaves_out(repl):

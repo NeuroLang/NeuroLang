@@ -42,10 +42,12 @@ The REPL with NeuroLang in the Python of this machine::
 builds no bundle: the page's worker sends what it is asked to this server,
 which builds the engine from DIR (``neurolang_data`` by default, as
 ``neurolang-query``), with all of its analyses unless ``--light``, and runs
-the REPL (``neurolang_apps.utils.tui.local_backend``). Before serving, it
-builds each engine once, in a process of its own, unless ``--no-prepare``:
-what it downloads and the tables it finds are kept in DIR, so that a
-session starts from them, without the network. The page starts with
+the REPL (``neurolang_apps.utils.tui.local_backend``). It builds each
+engine once, in a process of its own, unless ``--no-prepare``: what it
+downloads and the tables it finds are kept in DIR, so that a session
+starts from them, without the network. Without ``--users`` it does so
+before serving; with it, it serves at once and prepares the engines
+meanwhile, a session of one not yet prepared waiting for it. The page starts with
 ``--default-engine``; the admin console turns engines off and chooses
 another (:class:`EngineChoice`). The page is the same,
 in SITE/local, and it is as fast, and has as much memory, as this machine.
@@ -101,7 +103,7 @@ YAML file of their password hashes (``--hash-password`` prints one;
 and, for each user or group, the variables of their sessions (``env``: the
 key of their assistant; a user's own over their group's). With
 ``--local``, each tab of a user has a session of its own, in a process
-forked from a builder's that builds each engine once
+forked from that of the builder of its engine, which builds it once
 (``neurolang_apps.utils.tui.sessions``), at most ``--max-sessions`` at once,
 ended after ``--idle-minutes`` unused. Each user changes their password at
 ``/account``. The users of the group ``admin``
@@ -373,15 +375,25 @@ def _prepare_in_child(data_dir, resolution, light, embeddings):
     import multiprocessing
 
     context = multiprocessing.get_context("spawn")
+    children = []
 
     def run(name) -> bool:
         child = context.Process(
             target=_prepare_engine,
             args=(data_dir, name, resolution, light, embeddings),
         )
+        children[:] = [child]
         child.start()
         child.join()
         return child.exitcode == 0
+
+    def stop() -> None:
+        """Kill the engine being built, if one is."""
+        for child in children:
+            if child.is_alive():
+                child.kill()
+
+    run.stop = stop
     return run
 
 
@@ -414,6 +426,64 @@ def prepare_engines(
                   "its sessions download what it lacks, if they can",
                   flush=True)
     return failed
+
+
+class Preparation:
+    """
+    The engines the server prepares (:func:`prepare_engines`) while it
+    serves, in a thread of its own, in the order of *engines*: a session
+    of an engine not yet prepared waits for it (:meth:`wait`), rather
+    than build it too, as the server's builders would. *ready*, if
+    given, is called with the name of each engine as it is prepared (or
+    could not be), in that thread.
+    """
+
+    def __init__(self, data_dir: Path, engines, resolution: float = 2.0,
+                 light: bool = False, embeddings: bool = False, run=None,
+                 ready=None):
+        self.data_dir, self.engines = data_dir, list(engines)
+        self.resolution, self.light = resolution, light
+        self.embeddings = embeddings
+        self._pending = {name: threading.Event() for name in self.engines}
+        self._run = run or _prepare_in_child(
+            data_dir, resolution, light, embeddings
+        )
+        self._ready = ready
+        self.thread = None
+
+    def start(self) -> "Preparation":
+        """Prepare the engines, from now on, in a thread."""
+        self.thread = threading.Thread(
+            target=self._prepare, name="neurolang-repl-prepare", daemon=True
+        )
+        self.thread.start()
+        return self
+
+    def _prepare(self) -> None:
+        def run(name) -> bool:
+            try:
+                return self._run(name)
+            finally:
+                self._pending[name].set()
+                if self._ready is not None:
+                    self._ready(name)
+
+        prepare_engines(
+            self.data_dir, self.engines, self.resolution, self.light,
+            run=run, embeddings=self.embeddings,
+        )
+
+    def wait(self, engine: str, timeout: float) -> bool:
+        """Wait at most *timeout* seconds for *engine* to be prepared;
+        return whether it is (an engine not to be prepared is)."""
+        pending = self._pending.get(engine)
+        return pending is None or pending.wait(timeout)
+
+    def close(self) -> None:
+        """Stop preparing: kill the engine being built."""
+        stop = getattr(self._run, "stop", None)
+        if stop is not None:
+            stop()
 
 
 def prepare_local_site(site: Path, engines=None, users=False, default=None,
@@ -3021,12 +3091,14 @@ def service_command(args) -> list:
         command += [] if args.preload_embeddings else [
             "--no-preload-embeddings"]
         command += [] if args.prebuild else ["--no-prebuild"]
+        command += ["--prebuild-reserve", str(args.prebuild_reserve)]
     command += ["--max-upload-mb", str(args.max_upload_mb),
                 "--max-uploads-mb", str(args.max_uploads_mb)]
     if args.users:
         command += ["--max-sessions", str(args.max_sessions),
                     "--idle-minutes", str(args.idle_minutes),
                     "--query-minutes", str(args.query_minutes),
+                    "--session-memory-mb", str(args.session_memory_mb),
                     "--uploads-dir", str(args.uploads_dir.resolve())]
         if args.mcp:
             command += ["--mcp", "--mcp-results-dir",
@@ -3087,6 +3159,9 @@ def systemd_unit(command: list, directory: Path) -> str:
         for name, value in service_environment(command[0]).items()
     )
     directory = str(directory).replace("%", "%%")
+    # A process killed for memory (a session's query, the builder) does not
+    # stop the server, as systemd's default (OOMPolicy=stop) would: the
+    # server tells the session, and the others go on.
     return (
         "[Unit]\n"
         "Description=The NeuroLang REPL (neurolang-repl-serve)\n"
@@ -3096,7 +3171,8 @@ def systemd_unit(command: list, directory: Path) -> str:
         f"WorkingDirectory={directory}\n"
         f"{environment}"
         "Restart=on-failure\n"
-        "RestartSec=5\n\n"
+        "RestartSec=5\n"
+        "OOMPolicy=continue\n\n"
         "[Install]\n"
         "WantedBy=default.target\n"
     )
@@ -3391,6 +3467,13 @@ def parse_args(argv=None):
         "%(default)s)",
     )
     parser.add_argument(
+        "--session-memory-mb", type=float,
+        default=float(DEFAULTS["session_memory_mb"]), metavar="MB",
+        help="with --users and --local, on Linux, stop a query taking its "
+        "session's process more than MB megabytes of memory of its own, "
+        "the session staying (0: never; default: %(default)s)",
+    )
+    parser.add_argument(
         "--feedback-db", type=Path, metavar="FILE",
         help="with --local, store the ratings of the page in the SQLite "
         "database FILE (made if need be), with the name and the groups of "
@@ -3524,6 +3607,14 @@ def parse_args(argv=None):
         "and waits for it",
     )
     parser.add_argument(
+        "--prebuild-reserve", type=float,
+        default=DEFAULTS["prebuild_reserve"], metavar="FRACTION",
+        help="with --users and --local, build an engine ahead only if the "
+        "share FRACTION of the memory (the machine's, or the service's "
+        "limit) stays for the queries of the sessions; the others are "
+        "built by their first session",
+    )
+    parser.add_argument(
         "--no-preload-embeddings", action="store_false",
         dest="preload_embeddings", default=DEFAULTS["preload_embeddings"],
         help="with --local, do not load the text embeddings of an engine "
@@ -3572,9 +3663,9 @@ def parse_args(argv=None):
     if args.max_sessions < 1 or not args.idle_minutes > 0:
         parser.error("--max-sessions is at least 1, --idle-minutes above 0")
     if (args.max_running is not None and args.max_running < 1) or \
-            not args.query_minutes >= 0:
-        parser.error("--max-running is at least 1, --query-minutes 0 or "
-                     "more")
+            not args.query_minutes >= 0 or not args.session_memory_mb >= 0:
+        parser.error("--max-running is at least 1, --query-minutes and "
+                     "--session-memory-mb 0 or more")
     if ((password or args.users) and not args.cert
             and args.host not in ("127.0.0.1", "localhost", "::1")):
         parser.error("a password goes in clear without --cert: give a "
@@ -3831,12 +3922,11 @@ def main(argv=None) -> None:
               + (f": the admin console's choice, kept in {engines.saved}, "
                  "holds over the configuration's (remove the file to go "
                  "back to it)" if engines.overrides else ""), flush=True)
-        if args.prepare:
+        to_prepare = list(args.engines or bundle_engines())
+        if args.prepare and not users:
             prepare_engines(
-                args.data_dir.resolve(),
-                list(args.engines or bundle_engines()),
-                args.resolution, args.light,
-                embeddings=args.preload_embeddings,
+                args.data_dir.resolve(), to_prepare, args.resolution,
+                args.light, embeddings=args.preload_embeddings,
             )
         options = dict(resolution=args.resolution, light=args.light,
                        feedback=feedback_target())
@@ -3861,11 +3951,29 @@ def main(argv=None) -> None:
                 most=args.max_sessions, idle=args.idle_minutes * 60,
                 running=args.max_running,
                 query_seconds=args.query_minutes * 60,
+                memory_mb=args.session_memory_mb,
                 preload_embeddings=args.preload_embeddings,
+                prebuild_reserve=args.prebuild_reserve,
                 **options,
             )
             backend.prebuilds = args.prebuild
-            if args.prebuild:
+            backend.exit_without_builder = True
+            if args.prepare:
+                # The server serves while the engines are prepared, those
+                # the page offers first, the default first of them; each
+                # is built ahead, if it is to be (see below), once it is
+                # prepared; a session of one not yet prepared waits.
+                offered = engines.to_build()
+                order = offered + [e for e in to_prepare if e not in offered]
+                backend.preparing = Preparation(
+                    args.data_dir.resolve(), order, args.resolution,
+                    args.light, embeddings=args.preload_embeddings,
+                    ready=lambda name: (
+                        args.prebuild and name in engines.on()
+                        and backend.prebuild([name])
+                    ),
+                ).start()
+            elif args.prebuild:
                 # Their sessions then start at once (a fork), the first
                 # ones too.
                 backend.prebuild(engines.to_build())

@@ -142,6 +142,37 @@ def test_the_local_engines_are_prepared_before_serving(serve, capsys):
     assert not serve.parse_args(["--local", "--no-prepare"]).prepare
 
 
+def test_the_engines_are_prepared_while_a_session_waits_for_its_own(serve):
+    """Preparation prepares in a thread, in order: wait returns once an
+    engine is, at once for one it does not prepare; ready is told each;
+    close stops the build."""
+    import threading
+
+    release = threading.Event()
+    told, stopped = [], []
+
+    def run(name):
+        if name == "neurostore":
+            release.wait(30)
+        return name != "broken"
+
+    run.stop = lambda: stopped.append(1)
+    preparation = serve.Preparation(
+        Path("data"), ["neurosynth", "neurostore", "broken"], run=run,
+        ready=told.append,
+    ).start()
+    assert preparation.wait("neurosynth", 30)
+    assert not preparation.wait("neurostore", 0.1)  # still building
+    assert preparation.wait("somewhere", 0)  # not one it prepares
+    release.set()
+    assert preparation.wait("neurostore", 30)
+    assert preparation.wait("broken", 30)  # failed: its sessions try
+    preparation.thread.join(30)
+    assert told == ["neurosynth", "neurostore", "broken"]
+    preparation.close()
+    assert stopped == [1]
+
+
 def test_the_bundle_is_built_with_the_engines_asked_for(
     serve, monkeypatch, tmp_path
 ):
@@ -687,7 +718,7 @@ def test_the_systemd_unit_runs_the_command(serve, tmp_path):
     assert f"WorkingDirectory={tmp_path}\n" in unit
     assert "WantedBy=default.target" in unit
     # Restarted after a failure, not as fast as systemd stops restarting.
-    assert "Restart=on-failure\nRestartSec=5\n" in unit
+    assert "Restart=on-failure\nRestartSec=5\nOOMPolicy=continue\n" in unit
 
 
 def test_the_systemd_unit_runs_any_path_as_it_is(serve, tmp_path, monkeypatch):
@@ -3221,6 +3252,7 @@ def test_the_defaults_of_the_options_are_those_of_their_file(serve):
     assert f"({defaults['idle_minutes']}, above 0)" in server
     assert f"({defaults['query_minutes']}; 0, never)" in server
     assert f"guests at once ({defaults['max_guest_sessions']})" in server
+    assert "``--session-memory-mb MB``" in server
     assert f"in DIR (``{defaults['uploads_dir']}``)" in server
     assert f"at most MB megabytes ({defaults['max_upload_mb']})" in server
     assert f"together at most MB ({defaults['max_uploads_mb']})" in server

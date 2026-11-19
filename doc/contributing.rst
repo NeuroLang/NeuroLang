@@ -297,7 +297,7 @@ that cookie over HTTPS only.  With ``--guests`` (and ``--local``), the
 login page lets visitors in as guests, who bring their own key; see
 :doc:`repl_server`.  With ``--local``, each tab of a
 user has a session of its own, in a process of its own: a builder process
-builds each engine once and forks a session's process from it, so that the
+per engine builds it once and forks a session's process from it, so that the
 sessions share the memory of the engine's data until they write it, and
 each has its own rules, AI assistant and queries, which run at the same
 time; a stop or a restart is that of the tab's session only (a reload

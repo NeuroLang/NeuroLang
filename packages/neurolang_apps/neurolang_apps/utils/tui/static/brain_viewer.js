@@ -1062,15 +1062,21 @@
     var onThreshold = function (e) { setThreshold(parseFloat(e.target.value)); };
     $('threshold').addEventListener('change', onThreshold);
     $('threshold').addEventListener('input', onThreshold);
-    $('threshold-slider').addEventListener('input', function (e) {
-      setThreshold(thresholdAt(e.target.value));
-    });
+    // A thumb dragged past the other moves that one instead: when the two
+    // overlap, the one on top, the high one, can then be dragged down too.
+    var onSlider = function (e) {
+      var p = parseInt(e.target.value, 10);
+      var low = positionOf(thresholdValue(viewer.state.active));
+      var high = positionOf(upperValue(viewer.state.active));
+      var isLow = e.target.id === 'threshold-slider';
+      if (isLow ? p <= high : p < low) setThreshold(thresholdAt(p));
+      else setUpper(thresholdAt(p));
+    };
+    $('threshold-slider').addEventListener('input', onSlider);
     var onUpper = function (e) { setUpper(parseFloat(e.target.value)); };
     $('threshold-high').addEventListener('change', onUpper);
     $('threshold-high').addEventListener('input', onUpper);
-    $('threshold-high-slider').addEventListener('input', function (e) {
-      setUpper(thresholdAt(e.target.value));
-    });
+    $('threshold-high-slider').addEventListener('input', onSlider);
     $('threshold-mode').addEventListener('change', function (e) {
       setThresholdMode(e.target.value);
     });
