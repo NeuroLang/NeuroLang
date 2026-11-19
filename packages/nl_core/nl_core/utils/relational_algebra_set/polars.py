@@ -831,8 +831,27 @@ class NamedRelationalAlgebraFrozenSet(
             self._container = self._container.rename(
                 dict(zip([str(i) for i in range(len(self._columns))], self._columns))
             )
+        elif isinstance(iterable, pd.DataFrame):
+            self._initialize_from_pandas(iterable)
         else:
             self._initialize_from_iterable(list(iterable))
+
+    def _initialize_from_pandas(self, frame):
+        """The rows of the pandas *frame*, its columns in the order of the
+        set's, as the pandas backend takes them; columns of values Polars
+        does not hold natively (regions) are read row by row."""
+        try:
+            container = pl.from_pandas(
+                frame.set_axis([str(c) for c in frame.columns], axis=1)
+            ).lazy()
+        except Exception:  # values Polars does not convert
+            self._initialize_from_iterable(
+                list(frame.itertuples(index=False, name=None))
+            )
+            return
+        self._container = container.rename(
+            dict(zip(_lf_names(container), self._columns))
+        )
 
     def _initialize_from_iterable(self, iterable):
         columns = [str(c) for c in self._columns]

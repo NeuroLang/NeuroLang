@@ -96,8 +96,9 @@ def cached(directory, peaks=PEAKS, studies=STUDIES, names=NAMES, radius=3.0,
     from neurolang_apps.utils.engine_registry import cached_atlas_activation
 
     img = atlas(GRID_2MM) if img is None else img
-    return cached_atlas_activation(directory, img, names, peaks, studies,
-                                   radius)
+    return list(map(tuple, cached_atlas_activation(
+        directory, img, names, peaks, studies, radius
+    ).itertuples(index=False)))
 
 
 def test_the_pairs_are_found_once_and_then_read(tmp_path, finds):

@@ -343,7 +343,7 @@ def _recursive_components(rules):
     depends_on = {head: set() for head in heads}
     for r in rules:
         depends_on[r.consequent.functor] |= _body_predicates(r) & heads
-    component = _strongly_connected_components(depends_on)
+    component = strongly_connected_components(depends_on)
     components = {}
     for r in rules:
         components.setdefault(component[r.consequent.functor], []).append(r)
@@ -359,7 +359,7 @@ def _body_predicates(implication):
     )
 
 
-def _strongly_connected_components(edges):
+def strongly_connected_components(edges):
     """``{node: index of its component}``, Tarjan's algorithm without
     recursion; the nodes with no rule of their own are in no cycle."""
     index, low, on_stack, stack = {}, {}, set(), []

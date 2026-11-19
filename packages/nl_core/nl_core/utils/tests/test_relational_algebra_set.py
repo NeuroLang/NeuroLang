@@ -37,6 +37,11 @@ def test_relational_algebra_set_semantics_empty(ra_module):
     assert ras.arity == 2
 
 
+def test_rows_of_an_empty_set(ra_module):
+    frame = ra_module.RelationalAlgebraFrozenSet().as_pandas_dataframe()
+    assert frame is None or len(frame) == 0
+
+
 def test_projection_of_an_empty_set_keeps_the_columns_projected(ra_module):
     empty = ra_module.NamedRelationalAlgebraFrozenSet(("a", "b"), [])
     unnamed = empty.to_unnamed()
@@ -1678,3 +1683,29 @@ def test_count_distinct_counts_values(backend, values):
     assert _rows(result) == {(0, 2)}
     result = relation.aggregate([], [("n", "x", count_distinct)])
     assert _rows(result) == {(2,)}
+
+
+def test_named_set_from_a_pandas_frame(ra_module):
+    """A named set takes the rows of a pandas frame, its columns in the
+    set's order whatever their names (the answer of the contractions of
+    the probabilistic solver), values Polars does not hold natively
+    included."""
+    import pandas as pd
+
+    class Region:
+        def __init__(self, n):
+            self.n = n
+
+        def __eq__(self, other):
+            return isinstance(other, Region) and other.n == self.n
+
+        def __hash__(self):
+            return hash(self.n)
+
+    frame = pd.DataFrame({"x": [1, 2], "fresh": ["a", "b"], 0: [.5, .25]})
+    rel = ra_module.NamedRelationalAlgebraFrozenSet(("x", "t", "p"), frame)
+    assert rel.columns == ("x", "t", "p")
+    assert set(rel) == {(1, "a", .5), (2, "b", .25)}
+    regions = pd.DataFrame({"r": [Region(1), Region(2)], "p": [.5, .25]})
+    rel = ra_module.NamedRelationalAlgebraFrozenSet(("r", "p"), regions)
+    assert set(rel) == {(Region(1), .5), (Region(2), .25)}
