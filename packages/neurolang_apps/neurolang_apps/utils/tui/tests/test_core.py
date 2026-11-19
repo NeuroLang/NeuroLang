@@ -390,6 +390,10 @@ def vocabulary_engine():
     nl.add_tuple_set(
         [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
     )
+    nl.add_tuple_set([(10, 2001), (11, 2010)], name="study_year")
+    nl.add_tuple_set(
+        [(10, "Pain in the brain"), (11, "Fear")], name="study_title"
+    )
     nl.add_tuple_set(
         [
             (10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4),
@@ -461,10 +465,14 @@ def test_banner_lists_relations_and_example(vocabulary_engine):
     ) in out
     assert "term_in_study_tfidf(study_id, term, tfidf)" in out
     assert "weighted_mention(study_id, term, tfidf)" in out
-    example = "ans(study) :- mentions(study, 'pain')"
-    assert f"Try: {example}" in out
-    app._execute_and_display(example)
-    assert app.results[0].frame.iloc[:, 0].tolist() == [10]
+    assert "Try: ans(study, year, title) :- mentions(study, 'pain')" in out
+    app._execute_and_display(
+        "ans(study, year, title) :- mentions(study, 'pain'), "
+        "study_year(study, year), study_title(study, title)"
+    )
+    assert app.results[0].frame.values.tolist() == [
+        [10, 2001, "Pain in the brain"]
+    ]
 
 
 @pytest.mark.squall
