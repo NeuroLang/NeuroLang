@@ -166,6 +166,11 @@ Unreleased
 
 **Bug fixes:**
 
+- A probabilistic plan computed as contractions whose answer could not be
+  built as a relation set failed the query: the building of the answer is
+  within the fallback, which logs the error and computes the plan by
+  relational algebra, as for any error of the contraction.
+
 - With the Polars backend, a probabilistic query computed as contractions
   failed (``IndexError``): the named relation sets of Polars take the rows
   of a pandas frame, as those of pandas do, columns in the set's order;
