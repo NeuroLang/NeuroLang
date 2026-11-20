@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+- Brain viewer: the views take the width of the page, the 3 slices in a
+  row as tall as a third of it allows (340 to 640 px), where they were
+  960 by 340 px whatever the page; the options of the display start
+  folded under *Display*, the image close to the threshold; the colour
+  and the width of the crosshair are named for screen readers.
+
 - ``neurolang-query --mcp`` and the REPL server's ``/mcp``: an answer's
   rows are shown by their value, highest first; its glass brain is a file
   too, linked; a page lists the answers of the session with their glass
