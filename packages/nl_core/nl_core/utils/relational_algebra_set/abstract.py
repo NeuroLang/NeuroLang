@@ -150,13 +150,14 @@ class RelationalAlgebraFrozenSet(Set):
     def as_numpy_array(self):
         pass
 
-    def sample_rows(self, n):
+    def sample_rows(self, n, contiguous=False):
         """
         Return an iterator of at most *n* rows of the set chosen at random,
-        always the same for one set, tuples in the order of its columns,
-        read without dropping duplicates (so without reading the whole
-        set), or None if the backend cannot. A sample to disprove a property
-        of the set with, cheaply.
+        always the same for one set, or its first *n* rows if *contiguous*,
+        tuples in the order of its columns, read without dropping
+        duplicates (so without reading the whole set), or None if the
+        backend cannot. A sample to disprove a property of the set with,
+        cheaply.
         """
         return None
 

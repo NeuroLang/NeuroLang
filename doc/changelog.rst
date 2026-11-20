@@ -220,8 +220,8 @@ Unreleased
 
 - Decoding an image by the terms (``p_image_given_term``) took 110 s on
   neurosynth, now 3.7 s, with the same answer. Lifting tests whether
-  columns of a relation determine another: two rows of a random sample of
-  it (``[PROBABILISTIC_SOLVER] function_sample_rows``, 10 000) with one key
+  columns of a relation determine another: two of its first rows
+  (``[PROBABILISTIC_SOLVER] function_sample_rows``, 10 000) with one key
   and two values now disprove it, rather than counting the distinct
   values of the whole relation (346 M rows of ``activated``, 30 to 45 s a
   test). And a sparse view weighted by probabilities on a few of its rows
