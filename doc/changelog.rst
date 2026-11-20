@@ -204,6 +204,11 @@ Unreleased
 
 **Performance:**
 
+- Query assistant: a query is run once per question for its preview.
+  ``final_answer`` and the confirmation of an empty answer reuse the
+  preview of the identical query text run before by
+  ``run_query`` or ``final_answer``, instead of running it again.
+
 - Engine builds read the cached atlas activations as arrays instead of
   rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
   arrays as fixed-width bytes instead of through ``repr``; the cache

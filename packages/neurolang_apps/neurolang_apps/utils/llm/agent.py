@@ -317,6 +317,8 @@ class Toolbox:
         self.answer_rows = ""
         self.answer_frames = None
         self.answer_preview = None
+        # The successful previews by exact query text.
+        self.previews = {}
         # The observations of the calls, by tool and arguments.
         self.observations = {}
         # The facts search_values found, and its calls finding none new.
@@ -401,15 +403,29 @@ class Toolbox:
             text += f"\n{result.notes}"
         return text, None
 
+    def _preview(self, query: str):
+        """
+        The preview of *query*, run once per exact text (whitespace can
+        matter, in string constants): the engine does not change during
+        an ask, so a successful preview is reused by later run_query and
+        final_answer calls.
+        """
+        preview = self.previews.get(query)
+        if preview is None:
+            preview = run_preview(
+                self.context.nl, query, self.language, self.preview_rows,
+                self.context.engine_name if self.context.declared else "",
+                self.query_timeout, self.query_memory_mb, self.max_cells,
+            )
+            if preview.ok:
+                self.previews[query] = preview
+        return preview
+
     def tool_run_query(self, query: str):
         check = check_query(self.context.nl, query, self.language)
         if not check.ok:
             return f"The query fails:\n{check.message}", None
-        preview = run_preview(
-            self.context.nl, query, self.language, self.preview_rows,
-            self.context.engine_name if self.context.declared else "",
-            self.query_timeout, self.query_memory_mb, self.max_cells,
-        )
+        preview = self._preview(query)
         if preview.ok and preview.rows:
             self.queries_with_rows.append(query.strip())
         return preview.text, None
@@ -425,11 +441,7 @@ class Toolbox:
                 "\nCorrect it and call final_answer again."
             ), None
         normalised = " ".join(query.split())
-        preview = run_preview(
-            self.context.nl, query, self.language, self.preview_rows,
-            self.context.engine_name if self.context.declared else "",
-            self.query_timeout, self.query_memory_mb, self.max_cells,
-        )
+        preview = self._preview(query)
         if not preview.ok:
             return (
                 f"The answer is rejected: running the query fails:\n"
