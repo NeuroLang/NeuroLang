@@ -368,6 +368,16 @@ def test_the_result_records_the_ids_of_the_examples_of_its_prompt(nl):
     assert result.valid
     # Those of the prompt's language, the most similar first.
     assert result.example_ids == ["bank.0001", "paper.fig1a"]
+    # An example given without an id has that of its question.
+    from ..examples import question_id
+    icl = IclAgent(
+        nl, provider(), assistant_config(), "squall",
+        client=ScriptedClient([]),
+        examples=[Example("Which studies mention pain?",
+                          {"squall": PAIN_SQUALL})],
+    )
+    icl.system_prompt("Which studies mention pain?")
+    assert icl.example_ids == [question_id("Which studies mention pain?")]
 
 
 def test_without_the_paper_examples_the_context_quotes_none(nl):

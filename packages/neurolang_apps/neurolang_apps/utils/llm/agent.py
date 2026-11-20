@@ -35,7 +35,7 @@ from . import prompts
 from .comments import comment_rules, commented_query
 from .config import AssistantConfig, ProviderConfig
 from .context import EngineContext
-from .examples import load_examples, select_examples
+from .examples import load_examples, question_id, select_examples
 from .providers import LLMError, make_client
 from .validation import (
     QueryTimeout, QueryTooLarge, _in_child, check_query, run_preview,
@@ -529,7 +529,10 @@ class Agent:
             bank, question, self.language, self.config.few_shot_k,
             exclude=self.exclude_question,
         )
-        self.example_ids = [example.id for example in examples]
+        self.example_ids = [
+            example.id or question_id(example.question)
+            for example in examples
+        ]
         return prompts.system_prompt(
             self.language,
             self.context.schema_summary() if schema is None else schema,

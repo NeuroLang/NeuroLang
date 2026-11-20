@@ -409,7 +409,7 @@ def _make_agent(app, provider, assistant, language, strategy, **options):
     )
 
 
-def _without_left_out(app, paper: bool = True) -> dict:
+def _without_left_out(app, paper: Optional[bool] = None) -> dict:
     """
     Return the guidance and the examples of the assistant on an engine
     leaving out predicates (``left_out_predicates``): the engine's, told

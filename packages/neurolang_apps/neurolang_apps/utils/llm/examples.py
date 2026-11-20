@@ -70,11 +70,15 @@ def _configuration_examples(engine_name: str) -> list:
     return examples
 
 
+def question_id(question: str) -> str:
+    """Return the id of an example of *question* without one of its own:
+    ``bank.`` and the first 8 hexadecimal digits of its SHA-1."""
+    return "bank." + hashlib.sha1(question.encode()).hexdigest()[:8]
+
+
 def example_id(entry: dict) -> str:
     """Return the id of the *entry* of a bank (see the module)."""
-    return entry.get("id") or "bank." + hashlib.sha1(
-        entry["question"].encode()
-    ).hexdigest()[:8]
+    return entry.get("id") or question_id(entry["question"])
 
 
 def load_examples(engine_name: str, paper: Optional[bool] = None) -> list:

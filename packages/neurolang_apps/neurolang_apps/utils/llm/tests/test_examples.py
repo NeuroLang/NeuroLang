@@ -117,7 +117,7 @@ def test_bank_answers_name_their_columns(engine):
     answers as the examples do. The voxel indices keep their names.
     """
     short = []
-    for example in load_examples(engine):
+    for example in load_examples(engine, paper=True):
         heads = ANSWER_HEAD.findall(example.query("datalog") or "")
         assert heads, example.question
         for head in heads:
@@ -153,7 +153,8 @@ def test_bank_queries_are_valid_on_the_engine(engine):
         nl.add_tuple_set(voxels.assign(value=4.0), name="image")
         nl.add_tuple_set(voxels.assign(p=0.9), name="image_probability")
     failures = []
-    for example in load_examples(engine):
+    # The paper's figure programs too.
+    for example in load_examples(engine, paper=True):
         for language, query in example.queries.items():
             result = check_query(nl, query, language)
             if not result.ok:

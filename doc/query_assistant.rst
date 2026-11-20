@@ -110,14 +110,15 @@ and text-to-SPARQL systems.
     default (``llm/defaults.yaml``). An evaluation of the assistant on the
     paper's questions turns it off, ``include_paper_examples: false`` in
     the configuration's ``assistant`` (or
-    ``AssistantConfig(include_paper_examples=False)``, or
-    ``load_examples(engine, paper=False)`` for a bank given as
-    ``examples=``), so that its prompt cannot hold their programs. Every
-    example has an ``id``: that of its entry (``paper.fig1a``,
-    ``paper.q1_reading_c``...), or else ``bank.`` and 8 hexadecimal
-    digits of the SHA-1 of its question. The ids of the examples of the
-    prompt are recorded in the agent's result (``example_ids``) and in
-    the ``done`` event of the REPL's assistant.
+    ``AssistantConfig(include_paper_examples=False)``): neither its prompt
+    nor the examples its tools quote then hold their programs. A bank
+    given as ``examples=`` replaces the examples of the prompt only, so
+    the setting is still needed. Every example has an ``id``: that of its
+    entry (``paper.fig1a``, ``paper.q1_reading_c``...), or else ``bank.``
+    and 8 hexadecimal digits of the SHA-1 of its question. The ids of the
+    examples of the prompt are recorded in the agent's result
+    (``example_ids``), the ``done`` event of the REPL's assistant and the
+    ``answer.json`` of an answer of the MCP server.
 
     The columns of an answer are named by the variables of its ``ans``:
     the prompt asks for names that say what they hold,
