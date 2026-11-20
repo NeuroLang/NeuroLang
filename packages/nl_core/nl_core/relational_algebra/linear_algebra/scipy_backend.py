@@ -295,6 +295,7 @@ class _Evaluation:
             return self.dense(left, right, rows + columns)
         left_matrix = self.matrix(left, rows, inner)
         right_matrix = self.matrix(right, inner, columns)
+        held = (left_matrix is not None, right_matrix is not None)
         inner_size = self.cells(inner)
         if len(inner) > 1:  # neither is held as a matrix
             inner_left, inner_right, inner_size = _compact(
@@ -308,9 +309,8 @@ class _Evaluation:
             )
             if len(inner) <= 1:
                 inner_left = self.keys(left, inner)
-            left_matrix = sparse.csr_array(
-                (left.values, (row_keys, inner_left)),
-                shape=(row_size, inner_size),
+            left_matrix = _csr(
+                left.values, row_keys, inner_left, (row_size, inner_size)
             )
         if right_matrix is None:
             column_keys, column_unique, column_size = _compact_one(
@@ -318,18 +318,11 @@ class _Evaluation:
             )
             if len(inner) <= 1:
                 inner_right = self.keys(right, inner)
-            right_matrix = sparse.csr_array(
-                (right.values, (inner_right, column_keys)),
-                shape=(inner_size, column_size),
+            right_matrix = _csr(
+                right.values, inner_right, column_keys,
+                (inner_size, column_size),
             )
-        if left_matrix.format != right_matrix.format:
-            # a view transposed is a CSC matrix: the other operand, not the
-            # view, is converted to its layout
-            if left_matrix.nnz <= right_matrix.nnz:
-                left_matrix = left_matrix.asformat(right_matrix.format)
-            else:
-                right_matrix = right_matrix.asformat(left_matrix.format)
-        product = sparse.coo_array(left_matrix @ right_matrix)
+        product = sparse.coo_array(_product(left_matrix, right_matrix, held))
         row_keys = product.row.astype(np.int64)
         column_keys = product.col.astype(np.int64)
         if row_unique is not None:
@@ -448,6 +441,49 @@ class ScipyTensorSolver(PatternWalker):
     @add_match(TensorExpression)
     def other(self, expression):
         raise NotApplicable(f"{expression} is not in normal form")
+
+
+#: The most cells of the dense matrices of a product of an engine's view
+#: by an operand of a few rows (or columns): that operand and the product.
+FEW_CELLS = 2 ** 25
+
+
+def _product(left, right, held):
+    """
+    Return the product of the sparse matrices *left* and *right*, of
+    which those *held* (a pair of booleans) are an engine's views, read
+    as they are.
+
+    A view by an operand of a few rows is the product of the view by
+    that operand as a dense matrix (contractions multiply the product
+    of the terms so far by the next term: a view is the right operand): one pass over the view, in
+    its own layout. A sparse product would cost the whole view all the
+    same, in the layout it is not held in (a selection of 2 895 studies
+    by the 1 billion entries of neurostore's voxel by study view: 2.8 s
+    rather than 12 s). Otherwise the operand of fewer entries takes the
+    layout of the other (a view transposed is a CSC matrix).
+    """
+    if held == (False, True) and left.shape[0] * max(
+        left.shape[1], right.shape[1]
+    ) <= FEW_CELLS:
+        return (right.T @ left.T.toarray()).T
+    small, big = (left, right) if left.nnz <= right.nnz else (right, left)
+    small = small.asformat(big.format)
+    return small @ big if left.nnz <= right.nnz else big @ small
+
+
+def _csr(values, rows, columns, shape):
+    """
+    Return the CSR matrix of *shape* of the *values* at (*rows*,
+    *columns*), with indices of 32 bits when they fit, as those of the
+    views: scipy keeps the type of the numbers it is given (64 bits for
+    keys), and a product of matrices of indices of two types converts
+    both to 64 bits (the 1 billion indices of neurostore's voxel by study
+    view: 12 s rather than 5 s).
+    """
+    if max(*shape, len(values)) <= np.iinfo(np.int32).max:
+        rows, columns = rows.astype(np.int32), columns.astype(np.int32)
+    return sparse.csr_array((values, (rows, columns)), shape=shape)
 
 
 def _compact(*keys, size):

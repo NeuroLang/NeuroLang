@@ -210,6 +210,13 @@ Unreleased
 
 **Performance:**
 
+- Contractions multiply an engine's view by an operand of a few rows (the
+  studies of a term) as a sparse by dense product, one pass over the view
+  in its own layout, and build their operands with indices of 32 bits, as
+  the views: ``uniformity('pain', ...)`` on neurostore went from 89-96 s
+  to 63-68 s, the product of the term's studies by ``activated`` from 12 s
+  to 2.8 s.
+  
 - Magic sets: in the query's own rule, a small stored relation (at most
   ``[MAGIC_SETS] seed_rows``, 100 tuples) binds its variables without a
   constant, and is put first. ``chosen(t), uniformity(t, i, j, k, u)``
