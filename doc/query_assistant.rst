@@ -102,6 +102,23 @@ and text-to-SPARQL systems.
     ``coordinate_meta_analysis``, and ``neurostore/examples.yaml`` adds
     questions on its concepts, domains and abstracts. The guidance of the
     prompt, ``assistant_guidance``, is in ``<engine>/guidance.yaml``.
+    The programs of the figures of the NeuroLang paper are a second
+    list of the same files, ``paper_examples``: those on Neurosynth in
+    ``coordinate_meta_analysis/examples.yaml``, those on the tracts in
+    ``iit_tractogram/examples.yaml``. The assistant adds them to the bank
+    when its setting ``include_paper_examples`` is on, as it is by
+    default (``llm/defaults.yaml``). An evaluation of the assistant on the
+    paper's questions turns it off, ``include_paper_examples: false`` in
+    the configuration's ``assistant`` (or
+    ``AssistantConfig(include_paper_examples=False)``): neither its prompt
+    nor the examples its tools quote then hold their programs. A bank
+    given as ``examples=`` replaces the examples of the prompt only, so
+    the setting is still needed. Every example has an ``id``: that of its
+    entry (``paper.fig1a``, ``paper.q1_reading_c``...), or else ``bank.``
+    and 8 hexadecimal digits of the SHA-1 of its question. The ids of the
+    examples of the prompt are recorded in the agent's result
+    (``example_ids``), the ``done`` event of the REPL's assistant and the
+    ``answer.json`` of an answer of the MCP server.
 
     The columns of an answer are named by the variables of its ``ans``:
     the prompt asks for names that say what they hold,
@@ -273,6 +290,7 @@ order:
       max_steps: 16
       max_repairs: 3
       few_shot_k: 6
+      include_paper_examples: true   # the paper's figure programs too
       samples: 1
       # fallback_provider: anthropic
       temperature: 0.0

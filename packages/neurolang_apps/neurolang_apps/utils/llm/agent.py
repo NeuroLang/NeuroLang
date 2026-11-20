@@ -35,7 +35,7 @@ from . import prompts
 from .comments import comment_rules, commented_query
 from .config import AssistantConfig, ProviderConfig
 from .context import EngineContext
-from .examples import load_examples, select_examples
+from .examples import load_examples, question_id, select_examples
 from .providers import LLMError, make_client
 from .validation import (
     QueryTimeout, QueryTooLarge, _in_child, check_query, run_preview,
@@ -113,7 +113,8 @@ class AgentResult:
     to keep, see :data:`~.validation.MAX_KEPT_CELLS`), so that it need not
     be run again to be shown. *out_of_steps* is set when the ReAct agent
     ran out of steps before a final answer, and its query is only the
-    last that gave rows.
+    last that gave rows. *example_ids* are the ids of the examples its
+    prompt had (:attr:`~.examples.Example.id`), most similar first.
     """
 
     query: str = ""
@@ -131,6 +132,7 @@ class AgentResult:
     verification: str = ""
     frames: Optional[list] = field(default=None, repr=False)
     out_of_steps: bool = False
+    example_ids: list = field(default_factory=list)
 
 
 @dataclass
@@ -477,7 +479,9 @@ class Agent:
     example bank).
 
     The examples of the prompt are chosen among *examples*, a list of
-    :class:`~.examples.Example`, by default the engine's bank, and the
+    :class:`~.examples.Example`, by default the engine's bank (with the
+    paper's figure programs if the setting ``include_paper_examples`` is
+    on), and the
     engine is described by *description*, by default the description
     of its configuration, and *guidance* tells how to answer on it, by
     default its configuration's ``assistant_guidance``.
@@ -499,13 +503,16 @@ class Agent:
         self.engine_name = engine_name
         self.client = client or make_client(provider, config.timeout)
         self.fallback_client = fallback_client
-        self.context = EngineContext(nl, engine_name, loaded)
+        self.context = EngineContext(
+            nl, engine_name, loaded, config.include_paper_examples
+        )
         self.on_step = on_step or (lambda step: None)
         self.exclude_question = exclude_question
         self.examples = examples
         self.description = description
         self.guidance = guidance
         self.previous = None
+        self.example_ids = []
 
     def system_prompt(
         self, question: str, text_tools: bool = False,
@@ -515,11 +522,17 @@ class Agent:
         the engine, or *schema* in their place if given."""
         bank = self.examples
         if bank is None:
-            bank = load_examples(self.engine_name)
+            bank = load_examples(
+                self.engine_name, self.config.include_paper_examples
+            )
         examples = select_examples(
             bank, question, self.language, self.config.few_shot_k,
             exclude=self.exclude_question,
         )
+        self.example_ids = [
+            example.id or question_id(example.question)
+            for example in examples
+        ]
         return prompts.system_prompt(
             self.language,
             self.context.schema_summary() if schema is None else schema,
@@ -599,6 +612,7 @@ class Agent:
         start = time.perf_counter()
         self.previous = previous
         result = self._run(question)
+        result.example_ids = list(self.example_ids)
         if result.valid and result.query and self.config.comment_rules:
             self._comment(result, question)
         result.seconds = time.perf_counter() - start

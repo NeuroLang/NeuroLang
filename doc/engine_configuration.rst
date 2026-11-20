@@ -219,6 +219,10 @@ may specify the following keys, all of them optional:
 - ``assistant_examples`` — the bank of questions with their ``datalog``
   or ``squall`` queries from which the LLM query assistant takes its
   few-shot examples (see :doc:`query_assistant`)
+- ``paper_examples`` — the programs of the figures of the NeuroLang
+  paper, entries as those of ``assistant_examples`` with an ``id``
+  (``paper.fig1a``...), added to the bank when the assistant's setting
+  ``include_paper_examples`` is on
 
 The long entries, ``examples``, ``assistant_examples`` and
 ``assistant_guidance``, are kept out of ``engines.yaml``, in files of the
@@ -587,8 +591,9 @@ and the engine's own entries override all of them.  Merging works per key:
 - ``datalog_init`` texts are concatenated, inherited rules first;
 - ``builtins``, ``downloads``, ``ontologies``,
   ``dimension_type_predicates``, ``assistant_examples``,
-  ``hidden_predicates``, ``solver_mixins``, ``acknowledgements`` and
-  ``python_init`` (a single module is a list of one) are concatenated
+  ``paper_examples``, ``hidden_predicates``, ``solver_mixins``,
+  ``acknowledgements`` and ``python_init`` (a single module is a list of
+  one) are concatenated
   without duplicates, and ``assistant_guidance`` texts as
   ``datalog_init``;
 - mappings (``atlases``, ``templates``, ``relations``, ``sorts``,
@@ -614,7 +619,8 @@ mappings and replaces lists: a key is best set in one file only).  The
 built-in engines keep there
 
 - ``<engine>/examples.yaml``: the queries the REPL shows (``examples``)
-  and the questions of the query assistant (``assistant_examples``);
+  and the questions of the query assistant (``assistant_examples``,
+  ``paper_examples``);
 - ``<engine>/guidance.yaml``: the ``assistant_guidance``.
 
 ``structural_connectivity/`` and ``functional_connectivity/`` hold those

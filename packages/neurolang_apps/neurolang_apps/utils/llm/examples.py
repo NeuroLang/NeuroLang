@@ -9,8 +9,17 @@ put in the prompt are those whose question is the most similar to the
 user's (:func:`select_examples`), ranked by BM25 over their words: no
 embedding model is needed. Engines without a bank fall back on the
 example queries of their configuration.
+
+The programs of the figures of the NeuroLang paper are a second list,
+``paper_examples``, added after the bank unless *paper* is false (the
+setting ``include_paper_examples`` of the assistant): the evaluations of
+the assistant on the paper's questions leave them out. Each example has
+an ``id``: that of its entry, ``paper.fig1a``..., or else ``bank.`` and
+the first 8 hexadecimal digits of the SHA-1 of its question, which stays
+the same as long as the question does.
 """
 
+import hashlib
 import math
 import re
 from collections import Counter
@@ -27,10 +36,12 @@ STOP_WORDS = frozenset(
 
 
 class Example(NamedTuple):
-    """A question with its queries, by language (``squall``, ``datalog``)."""
+    """A question with its queries, by language (``squall``, ``datalog``),
+    and the *id* of its entry in the bank."""
 
     question: str
     queries: dict
+    id: str = ""
 
     def query(self, language: str) -> Optional[str]:
         """Return the query of the example in *language*, if any."""
@@ -59,27 +70,44 @@ def _configuration_examples(engine_name: str) -> list:
     return examples
 
 
-def load_examples(engine_name: str) -> list:
+def question_id(question: str) -> str:
+    """Return the id of an example of *question* without one of its own:
+    ``bank.`` and the first 8 hexadecimal digits of its SHA-1."""
+    return "bank." + hashlib.sha1(question.encode()).hexdigest()[:8]
+
+
+def example_id(entry: dict) -> str:
+    """Return the id of the *entry* of a bank (see the module)."""
+    return entry.get("id") or question_id(entry["question"])
+
+
+def load_examples(engine_name: str, paper: Optional[bool] = None) -> list:
     """
     Return the examples of *engine_name*, from its banks or its config.
 
     The banks of the engines it ``extends`` come first, then its own:
     the ``neurosynth`` and ``neurostore`` engines share the bank of
-    ``coordinate_meta_analysis``.
+    ``coordinate_meta_analysis``. Then come the ``paper_examples``,
+    unless *paper* is false; None takes the default of the setting
+    ``include_paper_examples``.
     """
     engines = engine_registry._load_yaml_config()["engines"]
     if engine_name not in engines:
         return []
-    bank = engine_registry.resolve_engine_config(engines, engine_name).get(
-        "assistant_examples"
-    )
+    if paper is None:
+        from .config import AssistantConfig
+        paper = AssistantConfig.include_paper_examples
+    config = engine_registry.resolve_engine_config(engines, engine_name)
+    bank = config.get("assistant_examples") or []
+    if bank and paper:
+        bank = bank + (config.get("paper_examples") or [])
     if bank:
         return [
             Example(entry["question"], {
                 language: entry[language].strip()
                 for language in ("squall", "datalog")
                 if entry.get(language)
-            })
+            }, example_id(entry))
             for entry in bank
         ]
     if engine_name in engine_registry.list_engine_names():

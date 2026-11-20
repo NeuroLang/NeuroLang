@@ -52,7 +52,9 @@ from neurolang_apps.utils.llm import (
 from neurolang_apps.utils.llm.agent import Toolbox
 from neurolang_apps.utils.llm.comments import commented_query, split_rules
 from neurolang_apps.utils.llm.config import _assistant, config_path
-from neurolang_apps.utils.llm.examples import load_examples, select_examples
+from neurolang_apps.utils.llm.examples import (
+    load_examples, question_id, select_examples,
+)
 from neurolang_apps.utils.llm import validation
 from neurolang_apps.utils.llm.validation import run_preview
 from neurolang_apps.utils.tui import nifti, query_graph
@@ -162,6 +164,7 @@ class Answer:
     explanation: str
     outcome: str = ""
     links: dict = field(default_factory=dict)
+    example_ids: list = field(default_factory=list)
 
 
 # The name of the folder of a session's answers: its start, and a token.
@@ -236,6 +239,7 @@ class McpSession:
         self.store = ResultStore(results_dir, keep_days, token_bytes)
         self.answers: dict = {}
         self._question = ""
+        self._example_ids = []  # those of the prompt of the question
         self._prompted = False  # whether an ask gave the whole prompt
         self._toolbox: Optional[Toolbox] = None
         self._lock = threading.Lock()
@@ -298,7 +302,7 @@ class McpSession:
             app._nl, ProviderConfig("mcp", "command", "client"),
             self.config, LANGUAGE, "react", client=_NoModel(),
             engine_name=self.engine, loaded=app.loaded_relations,
-            **_without_left_out(app),
+            **_without_left_out(app, self.config.include_paper_examples),
         )
 
     def _tools(self, repl) -> Toolbox:
@@ -347,13 +351,15 @@ class McpSession:
                 return "\n\n".join(filter(None, [AGAIN_NOTE, examples, task]))
             self._prompted = True
             prompt = agent.system_prompt(question, schema=SCHEMA_POINTER)
+            self._example_ids = agent.example_ids
             return f"{prompt}\n\n{MCP_NOTE}\n\n{task}"
 
     def _save(self, answer: Answer) -> None:
         """Keep *answer* in its folder (answer.json), for a later session
         to list and refine it (list_answers)."""
         record = {key: getattr(answer, key) for key in (
-            "id", "question", "query", "explanation", "outcome", "links"
+            "id", "question", "query", "explanation", "outcome", "links",
+            "example_ids",
         )}
         (self.store.folder(answer.id) / "answer.json").write_text(
             json.dumps(record, indent=1), encoding="utf-8"
@@ -457,10 +463,16 @@ class McpSession:
         its prompt has them."""
         bank = agent.examples
         if bank is None:
-            bank = load_examples(self.engine)
+            bank = load_examples(
+                self.engine, self.config.include_paper_examples
+            )
         examples = select_examples(
             bank, question, LANGUAGE, self.config.few_shot_k
         )
+        self._example_ids = [
+            example.id or question_id(example.question)
+            for example in examples
+        ]
         if not examples:
             return ""
         return f"# Examples\n{prompts.format_examples(examples, LANGUAGE)}"
@@ -582,10 +594,12 @@ class McpSession:
         answer = Answer(
             f"a{len(self.answers) + 1}", self._question,
             commented, commented, explanation,
+            example_ids=list(self._example_ids),
         )
         result = AgentResult(
             query=commented, language=LANGUAGE, explanation=explanation,
             valid=True, commented=commented, frames=frames,
+            example_ids=list(self._example_ids),
         )
         app.assistant.last_run = (
             self._question, result, ProviderConfig("mcp", "command", "client"),

@@ -338,7 +338,8 @@ def _resolve_relation_file(
 # duplicates dropped) when inherited; every other list is replaced.
 _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
-    "dimension_type_predicates", "assistant_examples", "solver_mixins",
+    "dimension_type_predicates", "assistant_examples", "paper_examples",
+    "solver_mixins",
     "python_init", "hidden_predicates", "acknowledgements",
     "assistant_guidance",
 })

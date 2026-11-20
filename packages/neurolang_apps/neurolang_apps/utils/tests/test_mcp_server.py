@@ -774,6 +774,8 @@ class TestUsability:
         record = json.loads(next(tmp_path.glob("*/a1/answer.json"))
                             .read_text())
         assert record["question"] == "who is over 4?"
+        # The ids of the examples of its prompt (none: no bank here).
+        assert record["example_ids"] == []
 
     def test_an_earlier_sessions_answer_is_listed_and_refined(self, tmp_path):
         first = McpSession("", _engine, results_dir=tmp_path)

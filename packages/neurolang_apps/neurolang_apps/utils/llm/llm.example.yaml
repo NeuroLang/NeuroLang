@@ -104,6 +104,7 @@ assistant:
   max_steps: 16        # ReAct: maximum number of tool calls
   max_repairs: 3       # ICL: rounds of reprompting with the query error
   few_shot_k: 6        # number of example questions in the prompt
+  include_paper_examples: true  # the paper's figure programs among them
   samples: 1           # answers voted on (self-consistency)
   # fallback_provider: openrouter   # answers when no majority, more than
                                     # half of the samples, gives the same rows

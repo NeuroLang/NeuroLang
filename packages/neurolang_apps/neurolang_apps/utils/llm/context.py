@@ -94,9 +94,13 @@ class EngineContext:
     the columns of the relations loaded in the REPL with ``.load``.
     """
 
-    def __init__(self, nl, engine_name: str = "", loaded=None):
+    def __init__(self, nl, engine_name: str = "", loaded=None,
+                 paper_examples: Optional[bool] = None):
         self.nl = nl
         self.engine_name = engine_name
+        # Whether the examples it quotes include the paper's (None: the
+        # default of include_paper_examples).
+        self.paper_examples = paper_examples
         self.loaded = loaded or {}
         self.declared = declared_predicates(engine_name)
         self._frames = {}
@@ -322,7 +326,9 @@ class EngineContext:
             "another atom."
         )
         used = re.compile(rf"(?<![\w:]){re.escape(name)}\(")
-        for example in load_examples(self.engine_name):
+        for example in load_examples(
+            self.engine_name, self.paper_examples
+        ):
             query = example.query("datalog")
             if query and used.search(query):
                 return f"{text} For example:\n{query.strip()}"

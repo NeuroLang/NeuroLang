@@ -105,7 +105,11 @@ class AssistantConfig:
     of final answers of the ReAct agent that its verification may reject:
     each final answer is translated back into English, without the
     question, and the model judges whether that answers the question; 0
-    turns the verification off.
+    turns the verification off. With *include_paper_examples*, the
+    examples are taken from the bank of the engine and from the programs
+    of the figures of the NeuroLang paper (``paper_examples``, see
+    :func:`~.examples.load_examples`); an evaluation of the assistant on
+    the paper's questions turns it off.
     """
 
     # Their defaults are those of defaults.yaml.
@@ -114,6 +118,7 @@ class AssistantConfig:
     max_steps: int = _ASSISTANT["max_steps"]
     max_repairs: int = _ASSISTANT["max_repairs"]
     few_shot_k: int = _ASSISTANT["few_shot_k"]
+    include_paper_examples: bool = _ASSISTANT["include_paper_examples"]
     samples: int = _ASSISTANT["samples"]
     fallback_provider: Optional[ProviderConfig] = None
     temperature: float = _ASSISTANT["temperature"]

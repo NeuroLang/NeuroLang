@@ -15,6 +15,7 @@ assistant:
   max_steps: 16           # ReAct: most tool calls until its final answer
   max_repairs: 3          # ICL: rounds of reprompting with the query error
   few_shot_k: 6           # example questions in the prompt
+  include_paper_examples: true  # the paper's figure programs among them
   samples: 1              # answers voted on (self-consistency)
   temperature: 0.0
   timeout: 60.0           # seconds per LLM request
