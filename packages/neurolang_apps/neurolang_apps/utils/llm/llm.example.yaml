@@ -113,6 +113,8 @@ assistant:
   comment_rules: true  # one more request: a comment line on each rule
   verify_rounds: 1     # ReAct: final answers its back-translation check
                        # may reject (0: no check)
+  # verify_provider: openrouter-haiku   # the provider of that check, if
+                                        # not the agent's
 
 # Sharing the questions and the answers with a feedback server, where
 # they are rated and corrected to improve the assistant: off by default

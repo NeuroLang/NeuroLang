@@ -160,8 +160,9 @@ Work in steps:
 2. Write the query with these constants and the classes of the answers
    the question names, and run it with run_query: check that it gives
    the kind of rows the question asks for, and correct it otherwise.
-3. As soon as run_query shows the right rows, give the query with
-   final_answer. Return what the question asks for and, as answers of
+3. As soon as run_query shows the right rows, call final_answer with
+   its explanation only: the query you ran last is the answer (give
+   `query` only to answer with another one). Return what the question asks for and, as answers of
    their own, the entities it names that the answer is computed over
    (the regions at the ends of a tract, the parcels of a network): one
    named answer per kind of rows (`ans[name](...)` in Datalog,
@@ -182,7 +183,8 @@ Action: search_values
 Action Input: {{"pattern": "Ann"}}
 and to answer:
 Action: final_answer
-Action Input: {{"query": "...", "explanation": "..."}}"""
+Action Input: {{"explanation": "..."}}
+which answers with the query you ran last."""
 
 TOOLS = [
     {
@@ -239,15 +241,16 @@ TOOLS = [
     },
     {
         "name": "final_answer",
-        "description": "Give the final query and a one-sentence "
-        "explanation of what it computes.",
+        "description": "Give a one-sentence explanation of what the final "
+        "query computes; the query is the last one run with run_query, "
+        "unless another is given.",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
                 "explanation": {"type": "string"},
             },
-            "required": ["query", "explanation"],
+            "required": ["explanation"],
         },
     },
 ]

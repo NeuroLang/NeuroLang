@@ -105,7 +105,9 @@ class AssistantConfig:
     of final answers of the ReAct agent that its verification may reject:
     each final answer is translated back into English, without the
     question, and the model judges whether that answers the question; 0
-    turns the verification off.
+    turns the verification off. Those two requests go to the provider
+    *verify_provider* (a name in the file), if any, else to the agent's:
+    a smaller model checks faster than the one writing the query.
     """
 
     # Their defaults are those of defaults.yaml.
@@ -116,6 +118,7 @@ class AssistantConfig:
     few_shot_k: int = _ASSISTANT["few_shot_k"]
     samples: int = _ASSISTANT["samples"]
     fallback_provider: Optional[ProviderConfig] = None
+    verify_provider: Optional[ProviderConfig] = None
     temperature: float = _ASSISTANT["temperature"]
     timeout: float = _ASSISTANT["timeout"]
     preview_rows: int = _ASSISTANT["preview_rows"]
@@ -258,6 +261,10 @@ def parse_config(data: dict, path: Optional[Path] = None) -> LLMConfig:
         providers, default, _assistant(data.get("assistant")), path, feedback
     )
     config.provider()
+    if config.assistant.verify_provider is not None:
+        config.assistant.verify_provider = config.provider(
+            config.assistant.verify_provider
+        )
     if config.assistant.fallback_provider is not None:
         config.assistant.fallback_provider = config.provider(
             config.assistant.fallback_provider
