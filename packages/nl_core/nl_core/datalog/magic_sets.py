@@ -14,6 +14,7 @@ from nl_expr.expressions import (
     FunctionApplication,
     Symbol,
 )
+from nl_expr.config import config
 from nl_expr.expression_walker import ExpressionWalker
 from nl_expr.expression_pattern_matching import (
     NeuroLangPatternMatchingNoMatch,
@@ -55,6 +56,7 @@ AGGREGATES = (AggregationApplication, ProbabilisticQuery)
 
 def order_conjunction_constant_atoms_first(
     formulas: Tuple[Expression, ...], bound: Set[Symbol] = frozenset(),
+    binding=lambda functor: False,
 ) -> Tuple[Expression, ...]:
     """
     Order a rule body so constant-bearing atoms are adorned first.
@@ -64,7 +66,9 @@ def order_conjunction_constant_atoms_first(
     adorned first and restricts ``a`` to its studies.
 
     Builtins, such as ``x > 0``, are not constant-bearing atoms: they
-    bind nothing.
+    bind nothing. The atoms of the functors ``binding`` accepts (the
+    stored relations of the query's rule, see :class:`LeftToRightSIPS`)
+    count as constant-bearing atoms.
 
     Magic sets adorns rule bodies left to right; a constant-bearing atom
     only seeds the magic set (``magic_P(c) :- ()``) while its shared
@@ -86,7 +90,10 @@ def order_conjunction_constant_atoms_first(
     constant_atoms = [
         f for f in formulas
         if isinstance(f.functor, Symbol)
-        and any(isinstance(arg, Constant) or arg in bound for arg in f.args)
+        and (
+            binding(f.functor) or
+            any(isinstance(arg, Constant) or arg in bound for arg in f.args)
+        )
     ]
     if not constant_atoms:
         return formulas
@@ -175,6 +182,11 @@ class SIPS(ABC):
         self.prob_symbols = probabilistic_symbols(datalog)
         self.seed_from_edb = seed_from_edb
         self.seeding_edb_atoms = set()
+        # the query's predicate (adorn_code sets it), and whether the rule
+        # whose arcs are being created is the query's own
+        self.query_functor = None
+        self.query_is_recursive = False
+        self.in_query_rule = False
         self.aggregate_positions = aggregate_positions(datalog)
         # predicates left unbound, computed whole, see magic_rewrite
         self.unbound_predicates = set()
@@ -220,6 +232,10 @@ class SIPS(ABC):
             the adorned antecedent of the rule
         """
         self._check_for_bound_aggregates(rule, adorned_head.functor.adornment)
+        self.in_query_rule = (
+            unadorned_predicate_symbol(adorned_head.functor)
+            == self.query_functor and not self.query_is_recursive
+        )
 
         tail_predicates = [adorned_head]
         bound_variables = {
@@ -305,10 +321,13 @@ class LeftToRightSIPS(SIPS):
         - or it is a variable of a positive non probabilistic body literal
         left of P in the rule.
         - or, if ``seed_from_edb``, it is a variable of a positive literal
-        of a deterministic relation of the extensional database with a
-        constant argument, left of P in the rule, as ``d`` in
-        ``task(t, "stroop", d) & p(d, x)``. That literal joins the
-        bodies of the magic rules of the literals right of it.
+        of a deterministic relation of the extensional database left of P
+        in the rule, with a constant argument, as ``d`` in
+        ``task(t, "stroop", d) & p(d, x)``, or, in the query's own rule,
+        of a small relation (``[MAGIC_SETS] seed_rows`` tuples at most), as
+        ``t`` in ``ans(t, x) :- chosen(t) & p(t, x)`` (the terms the query
+        keeps). That literal joins the bodies of the magic rules of the
+        literals right of it; in the query's rule, it is put first.
 
     Probabilistic literals are those of probabilistic facts and choices,
     of within-language probabilistic queries, and of the predicates
@@ -366,8 +385,8 @@ class LeftToRightSIPS(SIPS):
 
     def _seed(self, predicate, bound_variables, tail_predicates):
         """Bind the variables of *predicate*, a literal of the extensional
-        database with a constant, and add it to the tails of the arcs of
-        the literals right of it."""
+        database with a constant or of the query's rule, and add it to the
+        tails of the arcs of the literals right of it."""
         self.seeding_edb_atoms.add(predicate)
         bound_variables.update(
             arg for arg in predicate.args if isinstance(arg, Symbol)
@@ -390,14 +409,36 @@ class LeftToRightSIPS(SIPS):
         """
         Whether *predicate*, a positive literal, binds its variables: it
         is of a deterministic relation of the extensional database, not a
-        function, with a constant argument.
+        function, with a constant argument or in the query's rule.
         """
         return (
             self.seed_from_edb and
-            isinstance(predicate.functor, Symbol) and
-            predicate.functor in self.datalog.extensional_database() and
-            predicate.functor not in self.prob_symbols and
-            any(isinstance(arg, Constant) for arg in predicate.args)
+            self._stored(predicate.functor) and
+            (
+                any(isinstance(arg, Constant) for arg in predicate.args) or
+                (self.in_query_rule and self.seeds(predicate.functor))
+            )
+        )
+
+    def _stored(self, functor) -> bool:
+        """Whether *functor* is a deterministic relation of the extensional
+        database."""
+        return (
+            isinstance(functor, Symbol) and
+            functor in self.datalog.extensional_database() and
+            functor not in self.prob_symbols
+        )
+
+    def seeds(self, functor) -> bool:
+        """Whether a literal of *functor* in the query's rule binds its
+        variables without a constant: a deterministic relation of the
+        extensional database of at most ``[MAGIC_SETS] seed_rows``
+        tuples."""
+        if not self._stored(functor):
+            return False
+        relation = self.datalog.extensional_database()[functor].value
+        return len(relation) <= config.getint(
+            "MAGIC_SETS", "seed_rows", fallback=100
         )
 
 
@@ -465,10 +506,17 @@ def check_stratified(rules, origins=None) -> None:
     The dependencies are those of a rule's head on the predicates of its
     body; the *strict* ones are those on a negated literal and, in a rule
     that aggregates, on any literal. A strict dependency between two
-    predicates of one strongly connected component is the cycle.
+    predicates of one strongly connected component is the cycle. Those of
+    aggregations are checked first, then those of negations, each in the
+    order of the rules: the predicate reported, which the rewrite leaves
+    unbound, does not depend on the order of a set (it did on the hashes
+    of the symbols: a functional connectivity query was planned with or
+    without its aggregation bound, run to run, in 5 or 17 s), and is
+    the aggregation's when there is one, computed once whole rather than
+    once for each binding.
     """
     edges = {}
-    strict = set()
+    by_aggregation, by_negation = {}, {}
     for rule in rules:
         if not isinstance(rule, Implication):
             continue
@@ -482,10 +530,12 @@ def check_stratified(rules, origins=None) -> None:
             if not isinstance(functor, Symbol):
                 continue  # a comparison, a built-in function
             edges[head].add(functor)
-            if negated or aggregates:
-                strict.add((head, functor))
+            if aggregates:
+                by_aggregation[head, functor] = None
+            elif negated:
+                by_negation[head, functor] = None
     component = strongly_connected_components(edges)
-    for head, functor in strict:
+    for head, functor in list(by_aggregation) + list(by_negation):
         if component.get(head) is not None and (
             component.get(head) == component.get(functor)
         ) and (head != functor or functor in edges.get(head, ())):
@@ -957,6 +1007,15 @@ def adorn_code(
     adornment = ''.join(
         'b' if isinstance(a, Constant) else 'f' for a in query.args
     )
+    sips.query_functor = query.functor
+    # a query defined recursively (a rule of a predicate unfolded into the
+    # query's) has no relation it keeps: its stored relations are steps
+    sips.query_is_recursive = any(
+        query.functor in _body_functors(rule)
+        for rule in getattr(
+            datalog.intensional_database().get(query.functor), "formulas", ()
+        )
+    )
 
     query = AdornedSymbol(query.functor, adornment, 0)(*query.args)
     adorn_stack = [query]
@@ -978,6 +1037,10 @@ def adorn_code(
         if rules is None:
             continue
 
+        in_query_rule = (
+            predicate_symbol == sips.query_functor
+            and not sips.query_is_recursive
+        )
         for rule in rules.formulas:
             if isinstance(rule, RightImplication):
                 continue
@@ -988,7 +1051,10 @@ def adorn_code(
                             rule.consequent.args,
                             getattr(consequent.functor, "adornment", ""),
                         ) if a == "b"
-                    }
+                    },
+                    sips.seeds if (
+                        in_query_rule and sips.seed_from_edb
+                    ) else (lambda functor: False),
                 )
                 if formulas != rule.antecedent.formulas:
                     rule = rule.apply(
