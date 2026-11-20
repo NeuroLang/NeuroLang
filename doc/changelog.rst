@@ -210,6 +210,15 @@ Unreleased
 
 **Performance:**
 
+- A choice over a few rows of an engine's view (the voxels of an image) by
+  the view reads those rows alone, and a vector over a few of its columns
+  reads them through the view's index by column entities, rather than the
+  whole view: decoding an image by the terms with ``selected_voxel`` on
+  neurostore, 10 voxels against ``activated``'s 1 billion entries, took 7
+  to 18 s, now 4 to 15 s; the product itself 1.7 s warm, 55 s cold, now
+  next to nothing. ``FEW_CELLS`` and ``INDEX_SHARE`` are in the
+  configuration: ``[PROBABILISTIC_SOLVER] few_cells`` and ``index_share``.
+
 - A natural join of a small relation (``[RAS] join_cut_rows``, 10 000 rows)
   with one ``join_cut_ratio`` (100) times larger first keeps the rows of
   the larger one whose values of the common columns are among the smaller

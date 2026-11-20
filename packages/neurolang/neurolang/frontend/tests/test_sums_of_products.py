@@ -347,7 +347,7 @@ def test_views_are_read_as_they_are(
     matrix, not a sparse product; a sparse product takes operands of
     the view's type of indices, so it converts neither. Indexed by its
     columns (the studies), the view is read through its index by the
-    studies of a term, restricted to them."""
+    studies of a term, restricted to them, and by a vector of studies."""
     from scipy import sparse
 
     from nl_core.relational_algebra.linear_algebra import (
@@ -383,7 +383,9 @@ def test_views_are_read_as_they_are(
     read_by_columns = []
     if indexed:
         # every study is few enough, in so small a view
-        monkeypatch.setattr(scipy_backend, "INDEX_SHARE", 1.)
+        monkeypatch.setitem(
+            config["PROBABILISTIC_SOLVER"], "index_share", "1"
+        )
         index = nl.sparse_views["activated"].by_columns
         matrix = index.matrix
         monkeypatch.setattr(
@@ -402,7 +404,9 @@ def test_views_are_read_as_they_are(
             ),
         )
     if not few_rows:
-        monkeypatch.setattr(scipy_backend, "FEW_CELLS", 0)
+        monkeypatch.setitem(
+            config["PROBABILISTIC_SOLVER"], "few_cells", "0"
+        )
     multiplied = []
     matmul = sparse._compressed._cs_matrix._matmul_sparse
     monkeypatch.setattr(
@@ -421,7 +425,9 @@ def test_views_are_read_as_they_are(
         contracted = _solve(nl, program)
         assert contractions and view_nnz not in converted
         assert all(a == b for _, _, a, b in multiplied)
-        assert bool(read_by_columns) == (indexed and "term" in body)
+        # with every study few enough, the index is read for the studies
+        # of a term and for the vector of the choice over the studies
+        assert bool(read_by_columns) == indexed
         assert not few_rows or read_by_columns or not any(
             view_nnz in (n, m) for n, m, _, _ in multiplied
         )
@@ -574,6 +580,67 @@ def test_a_view_weighted_by_a_few_facts(body, head, contractions, caplog):
         relational = _solve(nl, program, contract=False)
     finally:
         config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)
+    assert set(contracted) == set(relational) and relational
+    for key, value in relational.items():
+        assert contracted[key] == pytest.approx(value, rel=1e-12)
+
+
+@pytest.mark.parametrize(
+    "index_share, rows_alone", [("1", True), ("0", False)]
+)
+def test_a_choice_over_a_few_rows_of_a_view(
+    index_share, rows_alone, contractions, caplog, monkeypatch
+):
+    """A choice over a few voxels (those of an image) by the voxel by
+    study view, summed over the voxels: the product reads those rows of the
+    view alone when their entries are at most ``index_share`` of the
+    view's, the whole view otherwise; the answers of relational algebra."""
+    from nl_core.relational_algebra.linear_algebra import (
+        Axis,
+        ViewDeclaration,
+        build_sparse_views,
+        scipy_backend,
+    )
+
+    rng = np.random.default_rng(2)
+    voxels = list(itertools.product(range(3), range(2), range(2)))
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [v + (s,) for v in voxels for s in range(5) if rng.random() < .6],
+        name="activated",
+    )
+    nl.add_probabilistic_choice_from_tuples(
+        [(.5, 0, 0, 0), (.3, 1, 1, 1), (.2, 2, 0, 1)], name="cv"
+    )
+    nl.sparse_views = build_sparse_views(
+        nl.program_ir.symbol_table,
+        {"activated": ViewDeclaration(
+            Axis("voxel", (0, 1, 2)), Axis("study", (3,))
+        )},
+    )
+    monkeypatch.setitem(
+        config["PROBABILISTIC_SOLVER"], "index_share", index_share
+    )
+    few = []
+    record = scipy_backend._few
+    monkeypatch.setattr(
+        scipy_backend, "_few",
+        lambda entries, nnz: few.append(record(entries, nnz)) or few[-1],
+    )
+    previous = config.get("PROBABILISTIC_SOLVER", "dense_cells")
+    config.set("PROBABILISTIC_SOLVER", "dense_cells", "0")
+    try:
+        program = (
+            "q(s, p) :- PROB[cv(i, j, k) & activated(i, j, k, s)] = p\n"
+            "ans(s, p) :- q(s, p)"
+        )
+        contracted = _solve(nl, program)
+        assert contractions
+        assert "not computed as contractions" not in caplog.text
+        relational = _solve(nl, program, contract=False)
+    finally:
+        config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)
+    assert few and any(few) is rows_alone
     assert set(contracted) == set(relational) and relational
     for key, value in relational.items():
         assert contracted[key] == pytest.approx(value, rel=1e-12)
