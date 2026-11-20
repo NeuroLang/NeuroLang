@@ -91,13 +91,6 @@ class NotConjunctiveExpressionNestedPredicates(NotConjunctiveExpression):
     - A function or predicate of conjunctive arguments
     - A quantifier of conjunctive arguments
     - A negated predicate of conjunctive arguments, in an aggregation rule
-
-    Examples
-    --------
-    Q(count(x)) :- P(x) | R(x)
-
-    The above expression is not conjunctive since its body is a
-    disjunction.
     """
 
     suggestion = (
