@@ -1471,8 +1471,12 @@ def test_a_column_is_a_function_of_others(rows, expected, monkeypatch):
     """Whether a column is a function of others: two rows of the sample
     with one key and two values disprove it, without counting the
     distinct values of the relation; the counts decide otherwise."""
+    from nl_expr.config import config
+
     from .. import dalvi_suciu_lift
 
-    monkeypatch.setattr(dalvi_suciu_lift, "FUNCTION_SAMPLE_ROWS", 3)
+    monkeypatch.setitem(
+        config["PROBABILISTIC_SOLVER"], "function_sample_rows", "3"
+    )
     relation = NamedRelationalAlgebraFrozenSet(("x", "y"), rows)
     assert dalvi_suciu_lift._is_function(relation, ("x",), "y") is expected
