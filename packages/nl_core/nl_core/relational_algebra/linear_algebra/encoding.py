@@ -562,13 +562,16 @@ class ColumnIndex:
         starts, ends = self.indptr[columns], self.indptr[columns + 1]
         indptr = np.zeros(len(columns) + 1, dtype=np.int64)
         np.cumsum(ends - starts, out=indptr[1:])
-        indices = np.concatenate(
-            [self.indices[a:b] for a, b in zip(starts, ends)]
-            or [np.zeros(0, dtype=self.indices.dtype)]
-        )
+
+        def entries(array):
+            return np.concatenate(
+                [array[a:b] for a, b in zip(starts, ends)]
+                or [np.zeros(0, dtype=array.dtype)]
+            )
+
+        indices = entries(self.indices)
         values = np.ones(len(indices)) if self.values is None else (
-            np.concatenate([self.values[a:b] for a, b in zip(starts, ends)])
-            .astype(np.float64, copy=False)
+            entries(self.values).astype(np.float64, copy=False)
         )
         if indptr[-1] <= np.iinfo(np.int32).max:
             indptr = indptr.astype(np.int32)

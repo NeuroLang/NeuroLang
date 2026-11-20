@@ -501,9 +501,11 @@ def test_a_view_indexed_by_its_columns(tmp_path):
         by_columns = view.weighted().T.toarray()
         index = view.by_columns
         assert index.nnz == view.matrix.nnz
-        for columns in ([0], [1], [0, 2], list(range(by_columns.shape[0]))):
+        for columns in (
+            [], [0], [1], [0, 2], list(range(by_columns.shape[0]))
+        ):
             columns = np.array(
-                [c for c in columns if c < by_columns.shape[0]]
+                [c for c in columns if c < by_columns.shape[0]], dtype=int
             )
             matrix = index.matrix(columns)
             assert matrix.shape == (len(columns), by_columns.shape[1])

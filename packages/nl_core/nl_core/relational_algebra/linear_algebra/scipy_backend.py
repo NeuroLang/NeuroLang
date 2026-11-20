@@ -328,9 +328,9 @@ class _Evaluation:
                 right.values, inner_right, column_keys,
                 (inner_size, column_size),
             )
-        # a view by an operand that selects few of its column entities
-        # (contracted): both restricted to them, the view read through
-        # its index by column entities
+        # a view (the right operand, as products are taken) by an operand
+        # that selects few of its column entities (contracted): both
+        # restricted to them, the view read through its index
         if held == (False, True) and right.by_columns is not None and (
             inner + columns == list(right.groups[::-1])
         ):
@@ -338,14 +338,6 @@ class _Evaluation:
             if _selective(right.by_columns, selected):
                 left_matrix = left_matrix[:, selected]
                 right_matrix = right.by_columns.matrix(selected)
-                held = (False, False)
-        elif held == (True, False) and left.by_columns is not None and (
-            rows + inner == list(left.groups)
-        ):
-            selected = np.flatnonzero(np.diff(right_matrix.indptr))
-            if _selective(left.by_columns, selected):
-                left_matrix = left.by_columns.matrix(selected).T
-                right_matrix = right_matrix[selected]
                 held = (False, False)
         product = sparse.coo_array(_product(left_matrix, right_matrix, held))
         row_keys = product.row.astype(np.int64)
