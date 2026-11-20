@@ -219,6 +219,28 @@ Unreleased
   test). And a sparse view weighted by probabilities on a few of its rows
   (the voxels of the image) is multiplied by their diagonal, which reads
   those rows alone, rather than copied and scaled entry by entry (25 s).
+  
+- A selection or a projection by functions that apply to whole columns
+  (comparisons, arithmetic, and functions marked ``columnwise``, as
+  ``euclidean``) is computed once on the columns rather than once a row:
+  the studies with a peak within 3 mm of an MNI point,
+  ``peak_mni(x, y, z, s), (euclidean(x, y, z, -24, -4, -20) <= 3)``, took
+  15 s over the 508 000 peaks of Neurosynth, now 1.2 s. A backend other
+  than pandas computes it a row at a time, as before.
+
+- Contractions multiply an engine's view by an operand of a few rows (the
+  studies of a term) as a sparse by dense product, one pass over the view
+  in its own layout, and build their operands with indices of 32 bits, as
+  the views: ``uniformity('pain', ...)`` on neurostore went from 89-96 s
+  to 63-68 s, the product of the term's studies by ``activated`` from 12 s
+  to 2.8 s.
+
+- A view can be kept by its column entities as well
+  (``sparse_view_indexes`` of ``engines.yaml``; ``activated`` in the
+  coordinate-based engines): a product with a few of them (the studies of
+  a term) reads their entries alone, not the whole view.
+  ``uniformity('pain', ...)`` on neurostore: 63-68 s to 13 s; the index
+  of ``activated`` is 3.9 GB, built once.
 
 - Magic sets: in the query's own rule, a small stored relation (at most
   ``[MAGIC_SETS] seed_rows``, 100 tuples) binds its variables without a

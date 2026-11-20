@@ -173,6 +173,19 @@ may specify the following keys, all of them optional:
   reads them memory-mapped, shared by the processes.  The
   engines of ``coordinate_meta_analysis`` declare ``activated`` and the
   activations of the atlases
+- ``sparse_view_indexes`` — views of ``sparse_views`` also kept by their
+  column entities (a
+  :class:`~nl_core.relational_algebra.linear_algebra.ColumnIndex`, the
+  view's ``by_columns``): for each, the row entities it is stored with,
+  and the values of a view that has some (the entries of a view without
+  values are 1 and not stored).  A product of the view with an operand
+  of a few of its column entities, whose entries are at most
+  ``INDEX_SHARE`` (a tenth) of the view's, reads their entries alone
+  rather than the whole view: ``activated`` (``[activated]`` in the
+  engines of ``coordinate_meta_analysis``) by the studies of a term.
+  Kept with the build's tables apart from the views, memory-mapped and
+  shared as they are; on neurostore, 4 GB for the 1 billion entries of
+  ``activated``
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of

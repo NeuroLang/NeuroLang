@@ -31,6 +31,7 @@ from ...relational_algebra import (
     str2columnstr_constant
 )
 from ...utils.relational_algebra_set import (
+    ColumnwiseFunction,
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
 )
@@ -108,6 +109,87 @@ def test_selection_by_a_function_of_one_column():
         ('l', 's'), [('ab', 1), ('ac', 3)]
     )
     assert isinstance(selections[0], dict)
+
+
+def _distance(x, y, cx, cy):
+    return numpy.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+
+
+def test_selection_by_a_columnwise_function():
+    """A selection by a function marked ``columnwise``, compared with a
+    constant, is computed once on the columns (a ColumnwiseFunction), with
+    the rows of the function applied row by row."""
+    selections = []
+
+    class Relation(NamedRelationalAlgebraFrozenSet):
+        def selection(self, select_criteria):
+            selections.append(select_criteria)
+            return super().selection(select_criteria)
+
+    columnwise = _distance
+    columnwise.columnwise = True
+
+    def row_by_row(x, y, cx, cy):
+        return _distance(x, y, cx, cy)
+
+    rows = [(0., 0., 'a'), (3., 4., 'b'), (1., 1., 'c'), (6., 8., 'd')]
+    answers = []
+    for function in (columnwise, row_by_row):
+        selections.clear()
+        s = Selection(
+            C_[AbstractSet[Tuple[float, float, str]]](
+                Relation(('x', 'y', 'n'), rows)
+            ),
+            C_(operator.le)(
+                C_(function)(
+                    str2columnstr_constant('x'),
+                    str2columnstr_constant('y'), C_(0.), C_(0.)
+                ),
+                C_(5.),
+            ),
+        )
+        answers.append(RelationalAlgebraSolver().walk(s).value)
+        assert isinstance(selections[0], ColumnwiseFunction) is (
+            function is columnwise
+        )
+    assert answers[0] == answers[1] == NamedRelationalAlgebraFrozenSet(
+        ('x', 'y', 'n'), rows[:3]
+    )
+
+
+def test_extended_projection_by_a_columnwise_function():
+    """A projection by a ``columnwise`` function computes the column once
+    on the columns; called with a row, the same function gives the row's
+    value, as for a backend computing it row by row."""
+    columnwise = _distance
+    columnwise.columnwise = True
+    relation = NamedRelationalAlgebraFrozenSet(
+        ('x', 'y'), [(0., 0.), (3., 4.)]
+    )
+    projection = ExtendedProjection(
+        C_[AbstractSet[Tuple[float, float]]](relation),
+        (FunctionApplicationListMember(
+            C_(operator.mul)(
+                C_(columnwise)(
+                    str2columnstr_constant('x'),
+                    str2columnstr_constant('y'), C_(0.), C_(0.)
+                ),
+                C_(2.),
+            ),
+            str2columnstr_constant('d'),
+        ),),
+    )
+    sol = RelationalAlgebraSolver().walk(projection).value
+    assert sorted(sol.as_pandas_dataframe().d) == [0., 10.]
+
+    function = ColumnwiseFunction(lambda x, y: x + y, ('x', 'y'))
+
+    class Row:
+        x, y = 1, 2
+
+    assert function(Row()) == 3
+    assert list(function.of_columns({'x': numpy.array([1, 2]),
+                                     'y': numpy.array([3, 4])})) == [4, 6]
 
 
 def test_projections(R1):

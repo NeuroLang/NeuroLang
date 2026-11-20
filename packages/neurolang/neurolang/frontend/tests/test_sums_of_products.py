@@ -13,6 +13,7 @@ import pytest
 
 from neurolang.frontend import NeurolangPDL
 from nl_core.probabilistic import sums_of_products
+from nl_core.relational_algebra.linear_algebra.rewrites import NotApplicable
 from nl_expr.config import config
 
 
@@ -28,16 +29,27 @@ def no_failed_contractions(caplog):
 
 @pytest.fixture
 def contractions(monkeypatch):
-    """The plans computed as contractions, by solve."""
-    computed = []
+    """The plans computed as contractions, by solve: those whose
+    evaluation gave an answer. An error of an evaluation (which leaves
+    the plan to relational algebra, with its answers) fails the test;
+    a plan the backend does not compute (NotApplicable) does not."""
+    computed, errors = [], []
     evaluate = sums_of_products.evaluate
 
     def recording(plan, *args):
+        try:
+            answer = evaluate(plan, *args)
+        except NotApplicable:
+            raise
+        except Exception as error:
+            errors.append(error)
+            raise
         computed.append(plan)
-        return evaluate(plan, *args)
+        return answer
 
     monkeypatch.setattr(sums_of_products, "evaluate", recording)
-    return computed
+    yield computed
+    assert not errors, f"contractions failed: {errors!r}"
 
 
 def _solve(nl, program, contract=True):
@@ -318,22 +330,31 @@ def test_relations_the_translator_declines(
         assert result[key] == pytest.approx(value, rel=1e-12)
 
 
+@pytest.mark.parametrize("indexed", [False, True])
+@pytest.mark.parametrize("few_rows", [True, False])
 @pytest.mark.parametrize("body, head", [
     ("activated(i, j, k, s) & sel(s)", "i, j, k"),
     ("activated(i, j, k, s) & sel(s) // term(s, t) & sel(s)", "i, j, k, t"),
 ])
-def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
+def test_views_are_read_as_they_are(
+    body, head, few_rows, indexed, contractions, monkeypatch
+):
     """A relation of an engine's sparse view is read as its matrix,
     neither copied nor converted to another layout (a transposed view is
     a CSC matrix: the other operand of a product is converted to it; of
     a product of two views, one is), with the answers of relational
-    algebra."""
+    algebra. By a few rows (the terms), it is a product by a dense
+    matrix, not a sparse product; a sparse product takes operands of
+    the view's type of indices, so it converts neither. Indexed by its
+    columns (the studies), the view is read through its index by the
+    studies of a term, restricted to them."""
     from scipy import sparse
 
     from nl_core.relational_algebra.linear_algebra import (
         Axis,
         ViewDeclaration,
         build_sparse_views,
+        scipy_backend,
     )
 
     rng = np.random.default_rng(0)
@@ -356,8 +377,20 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
         {"activated": ViewDeclaration(
             Axis("voxel", (0, 1, 2)), Axis("study", (3,))
         )},
+        indexed=["activated"] if indexed else (),
     )
     view_nnz = nl.sparse_views["activated"].matrix.nnz
+    read_by_columns = []
+    if indexed:
+        # every study is few enough, in so small a view
+        monkeypatch.setattr(scipy_backend, "INDEX_SHARE", 1.)
+        index = nl.sparse_views["activated"].by_columns
+        matrix = index.matrix
+        monkeypatch.setattr(
+            index, "matrix",
+            lambda columns: read_by_columns.append(len(columns))
+            or matrix(columns),
+        )
     converted = []
     for kind, method in (
         (sparse.csc_array, "tocsr"), (sparse.csr_array, "tocsc")
@@ -368,6 +401,16 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
                 converted.append(self.nnz) or convert(self, *a, **k)
             ),
         )
+    if not few_rows:
+        monkeypatch.setattr(scipy_backend, "FEW_CELLS", 0)
+    multiplied = []
+    matmul = sparse._compressed._cs_matrix._matmul_sparse
+    monkeypatch.setattr(
+        sparse._compressed._cs_matrix, "_matmul_sparse",
+        lambda self, other: multiplied.append((
+            self.nnz, other.nnz, self.indices.dtype, other.indices.dtype
+        )) or matmul(self, other),
+    )
     previous = config.get("PROBABILISTIC_SOLVER", "dense_cells")
     config.set("PROBABILISTIC_SOLVER", "dense_cells", "0")
     try:
@@ -377,6 +420,11 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
         )
         contracted = _solve(nl, program)
         assert contractions and view_nnz not in converted
+        assert all(a == b for _, _, a, b in multiplied)
+        assert bool(read_by_columns) == (indexed and "term" in body)
+        assert not few_rows or read_by_columns or not any(
+            view_nnz in (n, m) for n, m, _, _ in multiplied
+        )
         relational = _solve(nl, program, contract=False)
     finally:
         config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)

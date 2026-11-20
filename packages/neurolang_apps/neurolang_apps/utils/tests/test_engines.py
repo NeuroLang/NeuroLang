@@ -1448,7 +1448,8 @@ class TestSparseViews:
         self, small_neurosynth_views
     ):
         """Check the view of ``activated`` holds its tuples, its voxels
-        and studies numbered by the view's entity indices."""
+        and studies numbered by the view's entity indices, and is indexed
+        by its studies (``sparse_view_indexes``)."""
         nl = small_neurosynth_views
         view = nl.sparse_views["activated"]
         with nl.scope as e:
@@ -1466,6 +1467,11 @@ class TestSparseViews:
                 view.columns
             )].itertuples(index=False)
         } == expected
+        studies = np.arange(len(view.column_index))
+        np.testing.assert_array_equal(
+            view.by_columns.matrix(studies).toarray(),
+            view.weighted().T.toarray(),
+        )
 
     def test_the_atlases_share_the_studies_of_activated(
         self, small_neurosynth_views
