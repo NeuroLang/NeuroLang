@@ -262,6 +262,11 @@ Unreleased
 
 **Bug fixes:**
 
+- AI assistant: an answer given when the ReAct agent ran out of steps,
+  the last query that gave rows, says so: its summary reads *Out of steps:
+  no final answer after N steps*, as a warning on the web page and in
+  yellow in the terminal, where it read as a final answer.
+
 - Tractography: ``.index_tracts(t, a, replace=1)`` also removes from the
   relations the atlases that indexed only the tractograms it removes. Their
   labels stayed in the box of a term (``term_box_*``), so that the

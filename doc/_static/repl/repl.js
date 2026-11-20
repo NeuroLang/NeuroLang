@@ -75,16 +75,17 @@ const live = $("live");
 const liveLog = $("live-log");
 // What the query the assistant wrote does, above the box it is in: the model's
 // explanation, and the query read back in English, with the check's doubts.
+// Out of steps, the query is no final answer: the explanation, which says so, is a warning.
 const summary = $("summary");
 function hideSummary() {
   summary.hidden = true;
 }
-function showSummary({ valid, explanation, back_translation: reads, verified, verification }, question = "") {
+function showSummary({ valid, explanation, back_translation: reads, verified, verification, out_of_steps: out }, question = "") {
   if (!valid || !(explanation || reads || question)) return hideSummary();
   $("summary-question").textContent = question ? `Asked: ${question}` : "";
-  $("summary-text").textContent = explanation ?? "";
+  $("summary-text").textContent = out ? "" : explanation ?? "";
   $("summary-reads").textContent = reads ? `Reads back as: ${reads}` : "";
-  $("summary-warning").textContent = verified === false ? `The check found that the query may not answer the question: ${verification}` : "";
+  $("summary-warning").textContent = out ? explanation : verified === false ? `The check found that the query may not answer the question: ${verification}` : "";
   summary.hidden = false;
 }
 
@@ -368,7 +369,7 @@ function useAsked(entry) {
     run(`.mode ${entry.language}`);
   }
   putQuery(entry.query);
-  showSummary({ valid: true, explanation: entry.explanation }, entry.question);
+  showSummary({ valid: true, explanation: entry.explanation, out_of_steps: entry.out_of_steps }, entry.question);
   input.focus();
 }
 
@@ -635,7 +636,7 @@ const workerMessages = {
       showNoAnswer(noAnswer(data), asking?.question);
       showSummary(data, asking?.question);
       showRating();
-      if (asking) asked.add({ ...asking, query: data.query ?? "", valid: data.valid, explanation: data.explanation });
+      if (asking) asked.add({ ...asking, query: data.query ?? "", valid: data.valid, explanation: data.explanation, out_of_steps: data.out_of_steps });
       asking = null;
       showAsked();
     }
