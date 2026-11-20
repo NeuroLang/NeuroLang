@@ -713,6 +713,10 @@ engines:
       schaefer400_activated: [schaefer400_label, study]
       destrieux_activated: [destrieux_label, study]
       tian_activated: [tian_label, study]
+    # Views also kept by their columns (the studies): a product with a few
+    # studies (those of a term) reads their voxels alone, not the whole
+    # view (2 895 studies of neurostore: 53 M of its 1 billion entries).
+    sparse_view_indexes: [activated]
     # The sorts of the entities the predicates relate, declared once: the
     # columns an entity spans and their type.  A sort of N > 1 columns
     # reads ``in ND`` in SQUALL (``every Voxel in 3D``).

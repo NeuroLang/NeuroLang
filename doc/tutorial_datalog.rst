@@ -623,7 +623,11 @@ completes in about 20 seconds.
     its rows bind its variables in the IDB predicates right of it: in
     ``ans(x) :- e("c", y) & p(y, x)``, with ``e`` an EDB predicate and
     ``p`` defined by rules, the values of ``y`` in the rows of ``e``
-    with ``"c"`` are passed to ``p``.
+    with ``"c"`` are passed to ``p``. In the query's own rule, a small
+    EDB predicate (``[MAGIC_SETS] seed_rows``, 100 tuples, at most) binds
+    its variables without a constant, and is put first: in
+    ``ans(t, i, j, k, u) :- chosen(t) & uniformity(t, i, j, k, u)``,
+    ``uniformity`` is computed for the terms of ``chosen`` alone.
 
 
 Part 9: The Complete Program

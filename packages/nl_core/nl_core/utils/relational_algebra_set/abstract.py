@@ -5,6 +5,28 @@ class RelationalAlgebraColumn:
     pass
 
 
+class ColumnwiseFunction:
+    """
+    A function of named columns whose operations numpy applies to whole
+    columns as to one row's values (comparisons, arithmetic, functions
+    marked ``columnwise``): called with a row, an object of its columns as
+    attributes, it gives the row's value, as any callable of a selection
+    or a projection; a backend that can calls :meth:`of_columns` once,
+    with the columns' arrays, rather than once a row.
+    """
+
+    def __init__(self, function, columns):
+        self.function, self.columns = function, tuple(columns)
+
+    def __call__(self, row):
+        return self.function(**{c: getattr(row, c) for c in self.columns})
+
+    def of_columns(self, columns):
+        """The values of the rows, from *columns*, a mapping of the names
+        of the columns to their arrays."""
+        return self.function(**{c: columns[c] for c in self.columns})
+
+
 def count_distinct(*columns: Iterable) -> int:
     """
     Return the number of distinct tuples of the values of *columns*, the
@@ -127,6 +149,16 @@ class RelationalAlgebraFrozenSet(Set):
     @abstractmethod
     def as_numpy_array(self):
         pass
+
+    def sample_rows(self, n):
+        """
+        Return an iterator of at most *n* rows of the set chosen at random,
+        always the same for one set, tuples in the order of its columns,
+        read without dropping duplicates (so without reading the whole
+        set), or None if the backend cannot. A sample to disprove a property
+        of the set with, cheaply.
+        """
+        return None
 
     def row_count_estimate(self):
         """

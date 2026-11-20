@@ -183,8 +183,6 @@
     });
     await nv.attachTo('gl');
     followZoom(nv);
-    // On a phone the options of the display start folded, the views close to the main controls.
-    if (NARROW) $('display-options').open = false;
     addColormaps(nv);
     var background = await loadVolume(data.background, 'background.nii.gz');
     background.colormap = 'gray';

@@ -310,7 +310,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if self.is_empty():
             return self._empty_set_same_structure()
 
-        if callable(select_criteria):
+        if isinstance(select_criteria, abc.ColumnwiseFunction):
+            ix = select_criteria.of_columns(self._container)
+        elif callable(select_criteria):
             ix = self._container.apply(select_criteria, axis=1)
         elif isinstance(
             select_criteria, RelationalAlgebraStringExpression
@@ -589,6 +591,17 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return iter([])
         else:
             return iter(self._container.itertuples(name=None, index=False))
+
+    def sample_rows(self, n):
+        if self.is_empty() or self.is_dee():
+            return iter([])
+        rows = self._container
+        if n < len(rows):
+            # a Generator chooses n of the rows without permuting them all
+            rows = rows.sample(n, random_state=np.random.default_rng(0))
+        return iter(rows[list(self.columns)].itertuples(
+            name=None, index=False
+        ))
 
     def __hash__(self):
         if self._container is None:
@@ -1283,6 +1296,10 @@ class NamedRelationalAlgebraFrozenSet(
             elif isinstance(operation, abc.RelationalAlgebraColumn):
                 seen_pure_columns.add(operation)
                 new_container[dst_column] = new_container.loc[:, operation]
+            elif isinstance(operation, abc.ColumnwiseFunction):
+                new_container[dst_column] = operation.of_columns(
+                    new_container
+                )
             elif callable(operation):
                 # A row as a tuple read by label: a pandas row of
                 # DataFrame.apply costs ten times the function, e.g.

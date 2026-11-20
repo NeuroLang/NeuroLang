@@ -493,6 +493,93 @@ class SparseView:
         return pd.concat(parts, axis=1)
 
 
+class ColumnIndex:
+    """
+    The entries of a :class:`SparseView` by its column entities: for each,
+    the numbers of the row entities it is stored with, and their values
+    for a view with a value (the CSR structure of the view's transpose).
+    The entries of a few columns are read alone (a few studies of the
+    voxel by study view of ``activated``), rather than the whole view.
+
+    The entries of a view without a value are 1, as in its
+    :meth:`~SparseView.weighted` matrix, and are not stored.
+
+    Parameters
+    ----------
+    indptr, indices : numpy.ndarray
+        The entries of column ``c`` are the row numbers
+        ``indices[indptr[c]:indptr[c + 1]]``.
+    rows : int
+        The number of row entities.
+    values : numpy.ndarray, optional
+        The values of the entries, as ``indices``.
+    """
+
+    def __init__(self, indptr, indices, rows: int, values=None):
+        self.indptr, self.indices = indptr, indices
+        self.rows, self.values = rows, values
+
+    @classmethod
+    def of(cls, view: "SparseView") -> "ColumnIndex":
+        """Return the index of *view* by its column entities."""
+        matrix = (view.matrix if view.value is None else view.weighted())
+        by_columns = matrix.T.tocsr()
+        return cls(
+            by_columns.indptr, by_columns.indices, matrix.shape[0],
+            None if view.value is None else by_columns.data,
+        )
+
+    def state(self) -> dict:
+        """Return the arrays of the index, by name, for :meth:`from_state`."""
+        arrays = {
+            "indptr": self.indptr, "indices": self.indices,
+            "rows": np.array([self.rows]),
+        }
+        if self.values is not None:
+            arrays["values"] = self.values
+        return arrays
+
+    @classmethod
+    def from_state(cls, arrays: Mapping[str, np.ndarray]) -> "ColumnIndex":
+        """Return the index whose :meth:`state` is *arrays* (not copies)."""
+        return cls(
+            arrays["indptr"], arrays["indices"], int(arrays["rows"][0]),
+            arrays.get("values"),
+        )
+
+    @property
+    def nnz(self) -> int:
+        return int(self.indptr[-1])
+
+    def entries(self, columns: np.ndarray) -> int:
+        """Return the number of entries of the column entities *columns*."""
+        return int((self.indptr[columns + 1] - self.indptr[columns]).sum())
+
+    def matrix(self, columns: np.ndarray):
+        """Return the CSR matrix of the column entities *columns* (sorted,
+        distinct numbers) by the row entities, of float64 entries: their
+        entries alone are read, a slice each."""
+        starts, ends = self.indptr[columns], self.indptr[columns + 1]
+        indptr = np.zeros(len(columns) + 1, dtype=np.int64)
+        np.cumsum(ends - starts, out=indptr[1:])
+
+        def entries(array):
+            return np.concatenate(
+                [array[a:b] for a, b in zip(starts, ends)]
+                or [np.zeros(0, dtype=array.dtype)]
+            )
+
+        indices = entries(self.indices)
+        values = np.ones(len(indices)) if self.values is None else (
+            entries(self.values).astype(np.float64, copy=False)
+        )
+        if indptr[-1] <= np.iinfo(np.int32).max:
+            indptr = indptr.astype(np.int32)
+        return sparse.csr_array(
+            (values, indices, indptr), shape=(len(columns), self.rows)
+        )
+
+
 # The views built on the frame holding the rows of a relation, by the
 # frame's id, and the frame, by the identities of its columns (see
 # :func:`views_of_columns`), for as long as the frame lives.
@@ -673,6 +760,7 @@ class ViewDeclaration(NamedTuple):
 
 def build_sparse_views(
     symbol_table, declarations: Mapping[str, ViewDeclaration], keep=None,
+    indexed: Sequence[str] = (),
 ) -> dict:
     """
     Build the declared views of the predicates of *symbol_table*.
@@ -695,6 +783,10 @@ def build_sparse_views(
         the text *parameters* only: kept (memory-mapped from a file, as
         an engine's build keeps them) or computed. The views are then
         those of the arrays it returns.
+    indexed : sequence of str
+        The predicates whose views are also kept by their column entities
+        (:class:`ColumnIndex`), as the view's ``by_columns``: kept, with
+        *keep*, apart from the views, whose arrays they leave as they are.
 
     Returns
     -------
@@ -759,6 +851,17 @@ def build_sparse_views(
             lambda view=view: view,
         )
         views[name].weighted()  # the matrix products take, made once
+    for name in indexed:
+        view = views[name]
+        frame = stored[name][0].as_pandas_dataframe()
+        if keep is None or frame is None:
+            view.by_columns = ColumnIndex.of(view)
+        else:
+            view.by_columns = ColumnIndex.from_state(keep(
+                [frame], repr(("by columns", name, tuple(declarations[name]),
+                               tuple(stored[name][1]))),
+                lambda view=view: ColumnIndex.of(view).state(),
+            ))
     # Hashing Arrow strings leaves their buffers in Arrow's memory pool,
     # which keeps them from the system (0.8 GiB for activated of
     # neurostore_iit) unless told otherwise.

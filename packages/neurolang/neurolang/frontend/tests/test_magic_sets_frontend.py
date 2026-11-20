@@ -414,3 +414,56 @@ def test_frontend_two_probabilities_one_bound_by_the_main_rule(query):
     solution = res.as_pandas_dataframe()
     assert len(solution) == 1
     assert solution[["p", "pa"]].values[0] == pytest.approx([2 / 3, 4 / 6])
+
+
+@pytest.mark.parametrize("query", [
+    "ans(t, l, p) :- chosen(t) & p_l_given_t(t, l, p)",
+    # a stored relation of the query's rule is put first
+    "ans(t, l, p) :- p_l_given_t(t, l, p) & chosen(t)",
+])
+def test_frontend_stored_relation_of_the_query_binds_a_probability(
+    query, capsys
+):
+    """
+    A relation of the extensional database in the query's own rule binds
+    its variables, without a constant: the conditional probability of
+    each region given a term is computed for the chosen terms alone (it
+    was for every term, filtered after), with the probabilities of the
+    query of each term.
+    """
+    nl = NeurolangPDL()
+    studies = [(s,) for s in range(6)]
+    nl.add_uniform_probabilistic_choice_over_set(studies, name="selected")
+    nl.add_tuple_set(
+        [(0, "a"), (1, "a"), (1, "b"), (3, "a"), (4, "b"), (5, "b")],
+        name="act",
+    )
+    nl.add_tuple_set(
+        [(0, "pain"), (1, "pain"), (3, "fear"), (4, "fear"), (5, "noise")],
+        name="term",
+    )
+    nl.add_tuple_set([("pain",), ("fear",)], name="chosen")
+    rules = (
+        "active(l, s) :- act(s, l) & selected(s)\n"
+        "about(t, s) :- term(s, t) & selected(s)\n"
+        "p_l_given_t(t, l, PROB) :- active(l, s) // about(t, s)\n"
+    )
+    with nl.scope:
+        nl.execute_datalog_program(
+            rules + query, show_rewritten=True, dry_run=True
+        )
+    assert "magic_p_l_given_t^bff" in capsys.readouterr().out
+    with nl.scope:
+        res = nl.execute_datalog_program(rules + query)
+    got = {tuple(r[:2]): r[2] for r in res.as_pandas_dataframe().values}
+    expected = {}
+    for t in ("pain", "fear"):
+        with nl.scope:
+            one = nl.execute_datalog_program(
+                rules + f"ans(l, p) :- p_l_given_t('{t}', l, p)"
+            )
+        expected.update(
+            {(t, l): p for l, p in one.as_pandas_dataframe().values}
+        )
+    assert got == pytest.approx(expected)
+    assert {t for t, _ in got} == {"pain", "fear"}

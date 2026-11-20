@@ -24,6 +24,7 @@ from ..aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..chase import Chase, ChaseAggregationSN
+from ..negation import DatalogProgramNegationMixin
 from ..expressions import Union
 
 S_ = Symbol
@@ -267,6 +268,54 @@ def test_aggregation_set_creation():
     assert set(solution[Q].value.unwrapped_iter()) == {
         (0, frozenset(i for i in range(3)))
     }
+
+
+class DatalogNegation(
+    TranslateToLogicWithAggregation,
+    DatalogWithAggregationMixin, DatalogProgramNegationMixin, DatalogProgram,
+    ExpressionBasicEvaluator
+):
+    pass
+
+
+@pytest.mark.parametrize(
+    "aggregation, expected", [("sum", 5), ("count", 2), ("max", 3)]
+)
+def test_aggregation_over_negated_body(aggregation, expected):
+    """``Q(agg(x)) :- P(x), ~R(x)`` aggregates the ``x`` of ``P`` not in
+    ``R``, as the two-rule ``S(x) :- P(x), ~R(x); Q(agg(x)) :- S(x)``."""
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+
+    dl = DatalogNegation()
+    dl.walk(Eb_(
+        [F_(P(C_(i))) for i in range(4)] + [F_(R(C_(0))), F_(R(C_(1)))] +
+        [Imp_(Q(Fa_(S_(aggregation), (x,))), P(x) & ~R(x))]
+    ))
+    dl.symbol_table[S_(aggregation)] = C_(
+        {"sum": sum, "count": len, "max": max}[aggregation]
+    )
+
+    solution = Chase(dl).build_chase_solution()
+
+    assert solution[Q] == C_[AbstractSet]({(expected,)})
+
+
+def test_aggregation_over_negated_body_non_stratified():
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    x = S_('x')
+
+    dl = DatalogNegation()
+    dl.walk(Eb_(
+        [F_(P(C_(i))) for i in range(3)] +
+        [Imp_(Q(Fa_(S_('sum'), (x,))), P(x) & ~Q(x))]
+    ))
+
+    with pytest.raises(ForbiddenUnstratifiedAggregation):
+        ChaseAggregationSN(dl).build_chase_solution()
 
 
 def test_aggregation_emptyset():

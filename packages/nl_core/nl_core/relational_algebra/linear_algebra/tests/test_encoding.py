@@ -463,3 +463,55 @@ def test_build_sparse_views_kept_are_mapped(tmp_path):
                 assert any(np.shares_memory(array, m) for m in mapped)
         assert views["activated"].column_index is views["tfidf"].row_index
     assert len(computed) == 1
+
+
+def test_a_view_indexed_by_its_columns(tmp_path):
+    """A view of ``indexed`` is also kept by its column entities: the
+    entries of a few of them, read alone, are those of its weighted
+    matrix (1, or the values), and kept apart from the views, whose
+    arrays (and so what a build keeps of them) are unchanged."""
+    def tfidf():
+        return NamedRelationalAlgebraFrozenSet(
+            ("study", "term", "w"),
+            [("s4", "pain", 0.5), ("s1", "pain", 0.25), ("s2", "fear", 1.)],
+        )
+
+    kept = {}
+
+    def keep(frames, parameters, compute):
+        if parameters not in kept:
+            kept[parameters] = {
+                name: np.array(array) for name, array in compute().items()
+            }
+        return kept[parameters]
+
+    plain = build_sparse_views(
+        *_declared_views(_activated(), tfidf()), keep=keep
+    )
+    views_kept = set(kept)
+    views = build_sparse_views(
+        *_declared_views(_activated(), tfidf()), keep=keep,
+        indexed=["activated", "tfidf"],
+    )
+    assert views_kept < set(kept) and len(kept) == len(views_kept) + 2
+    for name, view in views.items():
+        assert not hasattr(plain[name], "by_columns") or (
+            plain[name] is view  # the same view, registered once
+        )
+        by_columns = view.weighted().T.toarray()
+        index = view.by_columns
+        assert index.nnz == view.matrix.nnz
+        for columns in (
+            [], [0], [1], [0, 2], list(range(by_columns.shape[0]))
+        ):
+            columns = np.array(
+                [c for c in columns if c < by_columns.shape[0]], dtype=int
+            )
+            matrix = index.matrix(columns)
+            assert matrix.shape == (len(columns), by_columns.shape[1])
+            np.testing.assert_array_equal(
+                matrix.toarray(), by_columns[columns]
+            )
+            assert index.entries(columns) == matrix.nnz
+    assert views["tfidf"].by_columns.values is not None
+    assert views["activated"].by_columns.values is None
