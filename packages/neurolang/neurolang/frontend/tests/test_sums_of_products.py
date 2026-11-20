@@ -522,3 +522,58 @@ def test_a_contraction_failing_falls_back(caplog, monkeypatch):
         r.name == sums_of_products.LOG.name for r in caplog.records
     )
     caplog.clear()
+
+
+@pytest.mark.parametrize("body, head", [
+    # facts on a few voxels: the rows of the view (an image's voxels)
+    ("activated(i, j, k, s) & pv(i, j, k) & sel(s)", "s"),
+    # facts on a few studies: its columns
+    ("activated(i, j, k, s) & ps(s)", "i, j, k"),
+])
+def test_a_view_weighted_by_a_few_facts(body, head, contractions, caplog):
+    """A view weighted by probabilistic facts on a few of its rows (the
+    voxels of an image) or columns (studies) is scaled by the diagonal of
+    their probabilities, with the answers of relational algebra."""
+    from nl_core.relational_algebra.linear_algebra import (
+        Axis,
+        ViewDeclaration,
+        build_sparse_views,
+    )
+
+    rng = np.random.default_rng(1)
+    voxels = list(itertools.product(range(3), range(2), range(2)))
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [v + (s,) for v in voxels for s in range(5) if rng.random() < .6],
+        name="activated",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(.9, 0, 0, 0), (.4, 1, 1, 1), (.7, 2, 0, 1)], name="pv"
+    )
+    nl.add_probabilistic_facts_from_tuples([(.3, 1), (.8, 3)], name="ps")
+    nl.add_probabilistic_choice_from_tuples(
+        [(.1, 0), (.2, 1), (.3, 2), (.15, 3), (.25, 4)], name="sel"
+    )
+    nl.sparse_views = build_sparse_views(
+        nl.program_ir.symbol_table,
+        {"activated": ViewDeclaration(
+            Axis("voxel", (0, 1, 2)), Axis("study", (3,))
+        )},
+    )
+    previous = config.get("PROBABILISTIC_SOLVER", "dense_cells")
+    config.set("PROBABILISTIC_SOLVER", "dense_cells", "0")
+    try:
+        program = (
+            f"q({head}, p) :- PROB[{body}] = p\n"
+            f"ans({head}, p) :- q({head}, p)"
+        )
+        contracted = _solve(nl, program)
+        assert contractions
+        # an error of the contraction would leave it to relational algebra
+        assert "not computed as contractions" not in caplog.text
+        relational = _solve(nl, program, contract=False)
+    finally:
+        config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)
+    assert set(contracted) == set(relational) and relational
+    for key, value in relational.items():
+        assert contracted[key] == pytest.approx(value, rel=1e-12)
