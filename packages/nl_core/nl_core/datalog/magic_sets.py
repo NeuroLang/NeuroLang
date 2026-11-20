@@ -183,10 +183,6 @@ class SIPS(ABC):
         self.edb = edb_with_prob_symbols(datalog)
         self.prob_symbols = probabilistic_symbols(datalog)
         self.seed_from_edb = seed_from_edb
-        # the relations of the extensional database, read once: building
-        # them walks the whole symbol table (15 000 times, 70 s of the
-        # rewrite of a query of tracts)
-        self.stored_relations = datalog.extensional_database()
         self.seeding_edb_atoms = set()
         # the query's predicate (adorn_code sets it), and whether the rule
         # whose arcs are being created is the query's own
@@ -462,7 +458,7 @@ class LeftToRightSIPS(SIPS):
         database."""
         return (
             isinstance(functor, Symbol) and
-            functor in self.stored_relations and
+            functor in self.datalog.extensional_database() and
             functor not in self.prob_symbols
         )
 
@@ -473,7 +469,7 @@ class LeftToRightSIPS(SIPS):
         tuples."""
         if not self._stored(functor):
             return False
-        relation = self.stored_relations[functor].value
+        relation = self.datalog.extensional_database()[functor].value
         return len(relation) <= config.getint(
             "MAGIC_SETS", "seed_rows", fallback=100
         )

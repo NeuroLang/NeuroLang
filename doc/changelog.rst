@@ -214,7 +214,9 @@ Unreleased
   an engine) took most of its time: the relations of the extensional
   database were built again for each literal checked (15 000 times), and
   rules were ordered definitions first by reading every body on each pass.
-  Both are now read once. The Fig. 2b query of the bundles co-activated by
+  A symbol table now keeps the symbols of each type it was asked for until
+  it or a scope enclosing it changes (``symbols_by_type``, so
+  ``extensional_database`` and ``builtins``), and each body is read once. The Fig. 2b query of the bundles co-activated by
   language studies on neurosynth_iit took 240 to 267 s, now 118 to 120 s,
   with the same answer.
 
