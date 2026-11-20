@@ -210,6 +210,19 @@ Unreleased
 
 **Performance:**
 
+- Magic sets: in the query's own rule, a small stored relation (at most
+  ``[MAGIC_SETS] seed_rows``, 100 tuples) binds its variables without a
+  constant, and is put first. ``chosen(t), uniformity(t, i, j, k, u)``
+  computed ``uniformity`` for all 3 228 terms before keeping the chosen
+  ones (30 minutes without an answer on neurostore); it now computes it
+  for the chosen terms alone.
+
+- Magic sets: of a cycle with an aggregation and a negation that a binding
+  would create, the predicate left unbound is chosen in a fixed order, the
+  aggregation's first. It was the first of a set, so a query could be
+  planned differently from one run to the next: a functional connectivity
+  query took 5 or 17 s, its aggregation computed once or twice.
+
 - Engine builds read the cached atlas activations as arrays instead of
   rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
   arrays as fixed-width bytes instead of through ``repr``; the cache
