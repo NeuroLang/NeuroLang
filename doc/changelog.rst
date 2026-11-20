@@ -216,6 +216,17 @@ Unreleased
   it gives the aggregation over an intermediate rule holding the negation.
   An aggregate whose negated atom depends on its own head is refused, as
   with a positive one.
+  
+- REPL in the browser: the output of a query is legible on its dark panel.
+  Its colours were Rich's, made for a light terminal: an error was dark red
+  on navy (a contrast of 1.6). They are now the page's, each with a
+  contrast of at least 4.5 (WCAG AA), dim text included.
+  
+- REPL in the browser: *Map the studies* is offered for the columns of
+  studies only. A map of voxels, ``ans(i, j, k, lift)``, offered a map of
+  the studies in ``i``, ``j`` and ``k``, its voxel indices taken for
+  studies; integer columns of an unknown sort count only when no column is
+  of studies.
 
 - REPL in the browser: a map of voxels, such as ``ans(i, j, k, lift)``,
   no longer gets a *Network* tab: its ``i`` and ``j``, of the one sort of

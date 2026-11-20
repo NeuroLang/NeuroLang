@@ -46,10 +46,19 @@ function mapAction(result, variables, study, label, names) {
   };
 }
 
-// The actions that map the studies of the integer columns of the result (three at most), one for each.
-function mapActions({ columns, kinds }, result, variables) {
+// The columns of studies of *payload*: those of the sort study, or if none
+// is, those of integers whose sort is unknown. The voxel indices i, j, k of a
+// map are not.
+function studyColumns({ columns, kinds = [], sorts = [] }) {
+  const known = columns.filter((_, index) => sorts[index] === "study");
+  return known.length ? known : columns.filter((_, index) => !sorts[index] && kinds[index] === "int");
+}
+
+// The actions that map the studies of the columns of studies of the result (three at most), one for each.
+function mapActions(payload, result, variables) {
+  const { columns } = payload;
   const names = freshNames(columns);
-  const studies = columns.filter((_, index) => (kinds ?? [])[index] === "int").slice(0, 3);
+  const studies = studyColumns(payload).slice(0, 3);
   const label = (study) => (studies.length === 1 ? "Map the studies" : `Map the studies in ${study}`);
   return studies.map((study) => mapAction(result, variables, study, label(study), names));
 }

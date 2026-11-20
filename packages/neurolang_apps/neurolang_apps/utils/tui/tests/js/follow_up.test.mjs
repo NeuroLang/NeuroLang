@@ -47,3 +47,14 @@ test("no map without the peaks, or without a column of integers", () => {
   assert.equal(followUps({ columns: ["s"], kinds: ["int"] }, "ans(s) :- b(s)").length, 1);
   assert.equal(followUps({ columns: ["t"], kinds: ["str"] }, "ans(t) :- b(t)", { peaks: true }).length, 1);
 });
+
+test("the columns of another sort, as the voxel of a map, have no map of studies", () => {
+  const payload = {
+    columns: ["i", "j", "k", "lift"], kinds: ["int", "int", "int", "float"], sorts: ["voxel", "voxel", "voxel", null],
+  };
+  assert.deepEqual(followUps(payload, "ans(i, j, k, lift) :- lift('pain', i, j, k, lift)", { peaks: true })
+    .map((action) => action.label), ["Use in a query"]);
+  const studies = { columns: ["n", "s"], kinds: ["int", "int"], sorts: [null, "study"] };
+  assert.deepEqual(followUps(studies, "ans(n, s) :- a(n, s)", { peaks: true }).map((action) => action.label),
+    ["Use in a query", "Map the studies"]);
+});
