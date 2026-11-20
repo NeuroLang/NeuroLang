@@ -327,7 +327,8 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
     neither copied nor converted to another layout (a transposed view is
     a CSC matrix: the other operand of a product is converted to it; of
     a product of two views, one is), with the answers of relational
-    algebra."""
+    algebra. By a few rows (the terms), it is a product by a dense
+    matrix, not a sparse product."""
     from scipy import sparse
 
     from nl_core.relational_algebra.linear_algebra import (
@@ -368,6 +369,14 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
                 converted.append(self.nnz) or convert(self, *a, **k)
             ),
         )
+    multiplied = []
+    matmul = sparse._compressed._cs_matrix._matmul_sparse
+    monkeypatch.setattr(
+        sparse._compressed._cs_matrix, "_matmul_sparse",
+        lambda self, other: (
+            multiplied.extend((self.nnz, other.nnz)) or matmul(self, other)
+        ),
+    )
     previous = config.get("PROBABILISTIC_SOLVER", "dense_cells")
     config.set("PROBABILISTIC_SOLVER", "dense_cells", "0")
     try:
@@ -377,6 +386,7 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
         )
         contracted = _solve(nl, program)
         assert contractions and view_nnz not in converted
+        assert view_nnz not in multiplied
         relational = _solve(nl, program, contract=False)
     finally:
         config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)

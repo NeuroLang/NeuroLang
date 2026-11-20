@@ -295,6 +295,7 @@ class _Evaluation:
             return self.dense(left, right, rows + columns)
         left_matrix = self.matrix(left, rows, inner)
         right_matrix = self.matrix(right, inner, columns)
+        held = (left_matrix is not None, right_matrix is not None)
         inner_size = self.cells(inner)
         if len(inner) > 1:  # neither is held as a matrix
             inner_left, inner_right, inner_size = _compact(
@@ -322,14 +323,7 @@ class _Evaluation:
                 (right.values, (inner_right, column_keys)),
                 shape=(inner_size, column_size),
             )
-        if left_matrix.format != right_matrix.format:
-            # a view transposed is a CSC matrix: the other operand, not the
-            # view, is converted to its layout
-            if left_matrix.nnz <= right_matrix.nnz:
-                left_matrix = left_matrix.asformat(right_matrix.format)
-            else:
-                right_matrix = right_matrix.asformat(left_matrix.format)
-        product = sparse.coo_array(left_matrix @ right_matrix)
+        product = sparse.coo_array(_product(left_matrix, right_matrix, held))
         row_keys = product.row.astype(np.int64)
         column_keys = product.col.astype(np.int64)
         if row_unique is not None:
@@ -448,6 +442,45 @@ class ScipyTensorSolver(PatternWalker):
     @add_match(TensorExpression)
     def other(self, expression):
         raise NotApplicable(f"{expression} is not in normal form")
+
+
+#: The most cells of the dense matrices of a product of an engine's view
+#: by an operand of a few rows (or columns): that operand and the product.
+FEW_CELLS = 2 ** 25
+
+
+def _product(left, right, held):
+    """
+    Return the product of the sparse matrices *left* and *right*, of
+    which those *held* (a pair of booleans) are an engine's views, read
+    as they are.
+
+    A view by an operand of a few rows (columns) is the product of the
+    view by that operand as a dense matrix: one pass over the view, in
+    its own layout. A sparse product would cost the whole view all the
+    same, in the layout it is not held in (a selection of 2 895 studies
+    by the 1 billion entries of neurostore's voxel by study view: 2.8 s
+    rather than 12 s). Otherwise the operand of fewer entries takes the
+    layout of the other (a view transposed is a CSC matrix) and the type
+    of its indices, which the product would otherwise convert the view's
+    to: 5 s rather than 12 s.
+    """
+    if held == (False, True) and left.shape[0] * max(
+        left.shape[1], right.shape[1]
+    ) <= FEW_CELLS:
+        return (right.T @ left.T.toarray()).T
+    if held == (True, False) and right.shape[1] * max(
+        left.shape[0], right.shape[0]
+    ) <= FEW_CELLS:
+        return left @ right.toarray()
+    small, big = (left, right) if left.nnz <= right.nnz else (right, left)
+    small = small.asformat(big.format)
+    if small.indices.dtype != big.indices.dtype:
+        # rebuilt from its arrays, of the smallest type that holds them
+        small = type(small)(
+            (small.data, small.indices, small.indptr), shape=small.shape
+        )
+    return small @ big if left.nnz <= right.nnz else big @ small
 
 
 def _compact(*keys, size):
