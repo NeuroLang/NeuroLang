@@ -63,7 +63,8 @@ class _State:
     def __init__(self):
         self.data_dir = None  # where the atlases of Yeh are downloaded
         self.store = RelationStore()
-        self.atlases: Dict[str, Atlas] = {}  # those in the store
+        # those indexed by (in the store, but those replace=1 removed)
+        self.atlases: Dict[str, Atlas] = {}
         self.term_mappings: Dict[str, Any] = {}  # theirs, as given
         self.extents: Dict[str, str] = {}  # theirs, of label_extent
         self.tractograms: Dict[str, Tractogram] = {}
@@ -136,8 +137,8 @@ class TractsCommandsMixin(PatternWalker):
         as tract_querier's boxes, for the directional terms to reproduce
         its own). With ``replace=1``, the tractogram is the only one: those
         indexed before are removed from the relations, with a warning that
-        names them; they stay loaded, to be indexed again by
-        ``.index_tracts`` alone.
+        names them, and so are the atlases that indexed only them; they
+        stay loaded, to be indexed again by ``.index_tracts`` alone.
 
     The matches are exact: a command that is not one of these is left to the
     ones after it in the solver, which refuse it.
@@ -301,7 +302,10 @@ class TractsCommandsMixin(PatternWalker):
             raise InvalidCommandExpression(f"{e} (space)") from e
         except ValueError as e:
             raise InvalidCommandExpression(str(e)) from e
-        if atlas_name not in state.atlases:
+        if atlas_name not in state.store.atlases:
+            # its options, if indexed before (and removed by replace=1)
+            mapping = state.term_mappings.get(atlas_name, mapping)
+            extent = state.extents.get(atlas_name, extent)
             try:
                 state.store.add_atlas(
                     atlas, atlas_term_mapping(atlas, mapping),
@@ -315,7 +319,7 @@ class TractsCommandsMixin(PatternWalker):
             state.term_mappings[atlas_name] = mapping
             state.extents[atlas_name] = extent or "edge"
         if options["replace"]:
-            self._remove_tractograms_but(ident)
+            self._remove_tractograms_but(ident, atlas_name)
         if ident not in state.in_store:
             state.store.add_tractogram(tractogram, params)
             state.in_store.add(ident)
@@ -328,15 +332,22 @@ class TractsCommandsMixin(PatternWalker):
             )
         self._publish_tracts()
 
-    def _remove_tractograms_but(self, ident):
+    def _remove_tractograms_but(self, ident, atlas_name):
         """Remove the tractograms indexed but *ident* from the relations,
-        with a warning that names them; they stay loaded."""
+        with a warning that names them; they stay loaded. The atlases but
+        *atlas_name* that index none of those left are removed from the
+        relations too, the boxes of a term (``term_box_*``) being over
+        every atlas of the relations; they stay in the state, with their
+        options, to be indexed by again."""
         state = self._tracts
         removed = sorted(state.in_store - {ident})
         for other in removed:
             state.store.remove_tractogram(other)
             state.in_store.discard(other)
             state.length_threshold.pop(other, None)
+        indexing = {a for a, _ in state.store._indexed} | {atlas_name}
+        for atlas in state.store.atlases - indexing:
+            state.store.remove_atlas(atlas)
         if removed:
             warnings.warn(
                 f"tractogram {ident!r} replaces "
