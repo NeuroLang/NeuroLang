@@ -210,6 +210,14 @@ Unreleased
 
 **Performance:**
 
+- A natural join of a small relation (``[RAS] join_cut_rows``, 10 000 rows)
+  with one ``join_cut_ratio`` (100) times larger first keeps the rows of
+  the larger one whose values of the common columns are among the smaller
+  one's, before dropping its duplicates and merging (pandas). The magic
+  set of a term, one row, was merged with the 10 M rows of NeuroStore's
+  TF-IDF: ``mentions(s, 'pain'), mentions(s, 'emotion')`` took 9.2 s, now
+  2.9 s.
+
 - Decoding an image by the terms (``p_image_given_term``) took 110 s on
   neurosynth, now 3.7 s, with the same answer. Lifting tests whether
   columns of a relation determine another: two rows of a random sample of
@@ -267,6 +275,17 @@ Unreleased
   no final answer after N steps*, as a warning on the web page and in
   yellow in the terminal, where it read as a final answer.
 
+- A predicate whose rule binds a variable only through its head, as
+  ``q`` in ``similar_study(q, s)`` of the engine neurosynth, gets the
+  values of a stored relation of the rules using it:
+  ``uses(s) :- cogat_term(t, 'stroop task'), skos:definition(t, d),
+  similar_study(d, s)`` raised ``UnboundVariablesError``, as did
+  ``study_similarity``, ``p_similar``, ``p_a_given_similar``,
+  ``lift_llm``, ``uniformity_llm`` and the other ``*_llm`` predicates.
+  When magic sets cannot bind every predicate without leaving the
+  program unstratified (two WMQL bundles of the engine neurosynth_iit),
+  only those predicates are bound, where the rewrite was dropped.
+  
 - Tractography: ``.index_tracts(t, a, replace=1)`` also removes from the
   relations the atlases that indexed only the tractograms it removes. Their
   labels stayed in the box of a term (``term_box_*``), so that the

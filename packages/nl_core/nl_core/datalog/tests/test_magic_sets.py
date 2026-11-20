@@ -30,6 +30,7 @@ from ..magic_sets import (
     ReplaceAdornedSymbolWalker,
     check_stratified,
     magic_rewrite,
+    needed_positions,
 )
 from ..negation import DatalogProgramNegationMixin
 
@@ -1142,3 +1143,40 @@ def test_an_aggregation_in_a_cycle_is_reported_before_a_negation(
     with raises(UnstratifiedMagicSetsRewriteError) as error:
         check_stratified(rules, {n: S_("origin_n"), g: S_("origin_g")})
     assert error.value.predicate == S_("origin_g")
+
+
+class DatalogWithClose(Datalog):
+    def function_close(self, text: str, study: str) -> bool:
+        return text[0] == study[0]
+
+
+def test_a_predicate_bound_through_its_head_is_bound_by_a_stored_relation():
+    """
+    ``q`` of ``Sim(q, s)`` is bound only through the head: ``Sim`` is a
+    relation over the texts its users bind, here ``Def``, a stored
+    relation without a constant. It binds ``d`` because ``Sim`` needs it
+    (``Sim`` was left unbound, and its rule could not be solved).
+    """
+    t, s, text = S_("t"), S_("s"), S_("text")
+    Sim, Use = S_("Sim"), S_("Use")  # noqa: N806
+    Def, Study = S_("Def"), S_("Study")  # noqa: N806
+    close = S_("close")
+    dl = DatalogWithClose()
+    dl.walk(Eb_([
+        Imp_(Sim(text, s), Study(s) & close(text, s)),
+        Imp_(Use(s), Def(t, text) & Sim(text, s)),
+        Imp_(q(s), Use(s)),
+    ]))
+    dl.walk(Eb_([
+        F_(Def(C_("t1"), C_("apple"))), F_(Def(C_("t2"), C_("banana"))),
+        F_(Study(C_("a1"))), F_(Study(C_("c1"))), F_(Study(C_("b1"))),
+    ]))
+    assert needed_positions(dl) == {Sim: {0}}
+    goal, mr = magic_rewrite(q(x), dl)
+    assert any(
+        rule.consequent.functor.name.startswith("Sim^bf")
+        for rule in mr.formulas
+    )
+    dl.walk(mr)
+    solution = Chase(dl, rules=mr).build_chase_solution()
+    assert solution[goal].value == {(C_("a1"),), (C_("b1"),)}

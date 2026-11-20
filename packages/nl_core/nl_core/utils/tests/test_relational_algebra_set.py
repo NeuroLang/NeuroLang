@@ -1709,3 +1709,59 @@ def test_named_set_from_a_pandas_frame(ra_module):
     regions = pd.DataFrame({"r": [Region(1), Region(2)], "p": [.5, .25]})
     rel = ra_module.NamedRelationalAlgebraFrozenSet(("r", "p"), regions)
     assert set(rel) == {(Region(1), .5), (Region(2), .25)}
+
+
+@pytest.mark.parametrize("small, large", [
+    # a magic set of a term with a relation of terms in studies, duplicated
+    ((("t",), [("pain",)]),
+     (("s", "t", "v"), [(1, "pain", .5), (1, "pain", .5), (2, "fear", .1),
+                        (3, "pain", .2), (4, "emotion", .3)])),
+    # two common columns, each value present but not their pairs
+    ((("s", "t"), [(1, "emotion"), (3, "pain")]),
+     (("s", "t", "v"), [(1, "pain", .5), (1, "emotion", .4), (3, "pain", .2),
+                        (3, "fear", .1)])),
+    # an int column with a float one, and missing values, as merge has them
+    ((("k",), [(2.,), (float("nan"),)]),
+     (("k", "x"), [(1, "a"), (2, "b"), (2, "c"), (None, "d")])),
+])
+def test_naturaljoin_cut_by_the_smaller_relation(small, large, monkeypatch):
+    """A natural join with a much smaller relation first keeps the rows of
+    the larger one whose values of the common columns are among the
+    smaller one's: the rows of the join are those without the cut."""
+    from nl_expr.config import config
+
+    cuts = []
+    cut_by_smaller = pandas.NamedRelationalAlgebraFrozenSet._cut_by_smaller
+    monkeypatch.setattr(
+        pandas.NamedRelationalAlgebraFrozenSet, "_cut_by_smaller",
+        lambda self, other, on: cuts.append(1) or cut_by_smaller(
+            self, other, on
+        ),
+    )
+
+    def join(rows, ratio):
+        monkeypatch.setitem(config["RAS"], "join_cut_rows", str(rows))
+        monkeypatch.setitem(config["RAS"], "join_cut_ratio", str(ratio))
+        joined = pandas.NamedRelationalAlgebraFrozenSet(*large).naturaljoin(
+            pandas.NamedRelationalAlgebraFrozenSet(*small)
+        )
+        frame = joined.as_pandas_dataframe()
+        return sorted(
+            map(repr, frame.itertuples(index=False, name=None))
+        ), list(frame.columns)
+
+    plain = join(0, 1)  # no cut: no relation has at most 0 rows
+    cut_rows = []
+    named = pandas.NamedRelationalAlgebraFrozenSet
+    original = named._light_init_same_structure
+
+    def light_init(self, container, *args, **kwargs):
+        cut_rows.append(len(container))
+        return original(self, container, *args, **kwargs)
+
+    monkeypatch.setattr(
+        pandas.NamedRelationalAlgebraFrozenSet, "_light_init_same_structure",
+        light_init,
+    )
+    assert join(10, 1) == plain
+    assert cuts and cut_rows[0] < len(large[1])

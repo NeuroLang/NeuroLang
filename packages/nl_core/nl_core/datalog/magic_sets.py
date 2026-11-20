@@ -42,6 +42,7 @@ from .constraints_representation import (
     get_list_of_intensional_rules,
     reachable_code,
 )
+from .range_restriction import unbound_variables_error
 from .expression_processing import (
     FlattenQueryInNonRecursiveUCQ,
     any_body_preds_in_set,
@@ -56,7 +57,7 @@ AGGREGATES = (AggregationApplication, ProbabilisticQuery)
 
 def order_conjunction_constant_atoms_first(
     formulas: Tuple[Expression, ...], bound: Set[Symbol] = frozenset(),
-    binding=lambda functor: False,
+    binding=lambda atom: False,
 ) -> Tuple[Expression, ...]:
     """
     Order a rule body so constant-bearing atoms are adorned first.
@@ -66,9 +67,9 @@ def order_conjunction_constant_atoms_first(
     adorned first and restricts ``a`` to its studies.
 
     Builtins, such as ``x > 0``, are not constant-bearing atoms: they
-    bind nothing. The atoms of the functors ``binding`` accepts (the
-    stored relations of the query's rule, see :class:`LeftToRightSIPS`)
-    count as constant-bearing atoms.
+    bind nothing. The atoms ``binding`` accepts (the stored relations of
+    the query's rule, or those binding a predicate that needs it, see
+    :class:`LeftToRightSIPS`) count as constant-bearing atoms.
 
     Magic sets adorns rule bodies left to right; a constant-bearing atom
     only seeds the magic set (``magic_P(c) :- ()``) while its shared
@@ -91,7 +92,7 @@ def order_conjunction_constant_atoms_first(
         f for f in formulas
         if isinstance(f.functor, Symbol)
         and (
-            binding(f.functor) or
+            binding(f) or
             any(isinstance(arg, Constant) or arg in bound for arg in f.args)
         )
     ]
@@ -190,6 +191,21 @@ class SIPS(ABC):
         self.aggregate_positions = aggregate_positions(datalog)
         # predicates left unbound, computed whole, see magic_rewrite
         self.unbound_predicates = set()
+        # the arguments of the predicates that need bindings, and the
+        # variables at them in the rule whose arcs are being created
+        self.needed_positions = needed_positions(datalog)
+        self.needed_variables = frozenset()
+
+    def variables_needed(self, rule):
+        """The variables of the body of *rule* at the arguments of a
+        predicate that need bindings, see :func:`needed_positions`."""
+        return frozenset(
+            atom.args[i] for atom, _ in _literals(rule.antecedent)
+            if isinstance(atom, FunctionApplication)
+            for i in self.needed_positions.get(
+                unadorned_predicate_symbol(atom.functor), ()
+            )
+        )
 
     def _check_for_bound_aggregates(self, rule, adornment):
         """
@@ -236,6 +252,7 @@ class SIPS(ABC):
             unadorned_predicate_symbol(adorned_head.functor)
             == self.query_functor and not self.query_is_recursive
         )
+        self.needed_variables = self.variables_needed(rule)
 
         tail_predicates = [adorned_head]
         bound_variables = {
@@ -328,6 +345,12 @@ class LeftToRightSIPS(SIPS):
         ``t`` in ``ans(t, x) :- chosen(t) & p(t, x)`` (the terms the query
         keeps). That literal joins the bodies of the magic rules of the
         literals right of it; in the query's rule, it is put first.
+        - or it is a variable of a positive literal of a deterministic
+        relation of the extensional database, put first, sharing a
+        variable with an argument a predicate of the rule needs bound, as
+        ``q`` of ``sim(q, s) :- study(s), v == f(q, s), v > .5`` (see
+        :func:`needed_positions`): ``d`` in ``task(t, d), sim(d, s)``,
+        whatever ``seed_from_edb``.
 
     Probabilistic literals are those of probabilistic facts and choices,
     of within-language probabilistic queries, and of the predicates
@@ -409,15 +432,24 @@ class LeftToRightSIPS(SIPS):
         """
         Whether *predicate*, a positive literal, binds its variables: it
         is of a deterministic relation of the extensional database, not a
-        function, with a constant argument or in the query's rule.
+        function, with a constant argument or in the query's rule, or
+        with a variable a predicate of the rule needs bound
+        (:func:`needed_positions`), whatever ``seed_from_edb``.
         """
-        return (
+        return self.binds(predicate) or (
             self.seed_from_edb and
             self._stored(predicate.functor) and
             (
                 any(isinstance(arg, Constant) for arg in predicate.args) or
                 (self.in_query_rule and self.seeds(predicate.functor))
             )
+        )
+
+    def binds(self, predicate) -> bool:
+        """Whether *predicate*, a literal of a stored relation, has a
+        variable that a predicate of its rule needs bound."""
+        return self._stored(predicate.functor) and not (
+            self.needed_variables.isdisjoint(predicate.args)
         )
 
     def _stored(self, functor) -> bool:
@@ -440,6 +472,56 @@ class LeftToRightSIPS(SIPS):
         return len(relation) <= config.getint(
             "MAGIC_SETS", "seed_rows", fallback=100
         )
+
+
+def needed_positions(datalog):
+    """
+    Return the positions of the arguments of each predicate of *datalog*
+    bound only through its head, which magic sets bind: ``q`` in
+    ``sim(q, s) :- study(s), v == f(q, s), v > .5``, or in a rule
+    passing it on, ``p(q, PROB) :- sim(q, s) & selected(s)``. Such a
+    predicate cannot be computed whole: its relation is over the values
+    the rules using it bind.
+    """
+    rules = get_list_of_intensional_rules(datalog)
+    functions = datalog.builtins()
+    positions = {}
+    for rule in rules:
+        head = rule.consequent.args
+        if unbound_variables_error(rule.antecedent, functions) is None:
+            continue
+        positions.setdefault(rule.consequent.functor, set()).update(
+            i for i, arg in enumerate(head)
+            if isinstance(arg, Symbol) and unbound_variables_error(
+                rule.antecedent, functions,
+                exempt=set(head) - {arg},
+            ) is not None
+        )
+    changed = True
+    while changed:
+        changed = False
+        for rule in rules:
+            needed, bound = set(), set()
+            for atom, negated in _literals(rule.antecedent):
+                if negated or not isinstance(atom, FunctionApplication) or (
+                    isinstance(atom.functor, Constant) or
+                    atom.functor in functions
+                ):
+                    continue  # a negation, a comparison, a function
+                at = positions.get(atom.functor, ())
+                for i, arg in enumerate(atom.args):
+                    (needed if i in at else bound).add(arg)
+            new = {
+                i for i, arg in enumerate(rule.consequent.args)
+                if arg in needed - bound
+            }
+            known = positions.setdefault(rule.consequent.functor, set())
+            if not new <= known:
+                known |= new
+                changed = True
+    return {
+        functor: frozenset(at) for functor, at in positions.items() if at
+    }
 
 
 def aggregate_positions(datalog):
@@ -576,14 +658,22 @@ def magic_rewrite(
     # A predicate whose binding would put an aggregation or a negation in a
     # cycle of the rewritten program is left unbound, and the rewrite done
     # again: it is then computed whole, the others still bound.
+    # When that does not help, only the predicates that cannot be computed
+    # whole are bound, the others left unbound.
     unbound = set()
     while True:
         try:
             return _magic_rewrite(query, datalog, seed_from_edb, unbound)
         except UnstratifiedMagicSetsRewriteError as error:
-            if error.predicate is None or error.predicate in unbound:
+            if error.predicate is not None and error.predicate not in unbound:
+                unbound.add(error.predicate)
+                continue
+            others = set(datalog.intensional_database()) - set(
+                needed_positions(datalog)
+            )
+            if others <= unbound:
                 raise
-            unbound.add(error.predicate)
+            unbound |= others
 
 
 def _magic_rewrite(query, datalog, seed_from_edb, unbound_predicates):
@@ -1045,6 +1135,14 @@ def adorn_code(
             if isinstance(rule, RightImplication):
                 continue
             if isinstance(rule.antecedent, Conjunction):
+                needed = sips.variables_needed(rule)
+                seeds = in_query_rule and sips.seed_from_edb
+
+                def binding(atom, needed=needed, seeds=seeds):
+                    return (
+                        sips._stored(atom.functor) and
+                        not needed.isdisjoint(atom.args)
+                    ) or (seeds and sips.seeds(atom.functor))
                 formulas = order_conjunction_constant_atoms_first(
                     rule.antecedent.formulas, {
                         arg for arg, a in zip(
@@ -1052,9 +1150,7 @@ def adorn_code(
                             getattr(consequent.functor, "adornment", ""),
                         ) if a == "b"
                     },
-                    sips.seeds if (
-                        in_query_rule and sips.seed_from_edb
-                    ) else (lambda functor: False),
+                    binding,
                 )
                 if formulas != rule.antecedent.formulas:
                     rule = rule.apply(
