@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+- Brain viewer: the views take the width of the page, the 3 slices in a
+  row as tall as a third of it allows (340 to 640 px), where they were
+  960 by 340 px whatever the page; the options of the display start
+  folded under *Display*, the image close to the threshold; the colour
+  and the width of the crosshair are named for screen readers.
+
 - ``neurolang-query --mcp`` and the REPL server's ``/mcp``: an answer's
   rows are shown by their value, highest first; its glass brain is a file
   too, linked; a page lists the answers of the session with their glass
@@ -210,6 +216,19 @@ Unreleased
   the views: ``uniformity('pain', ...)`` on neurostore went from 89-96 s
   to 63-68 s, the product of the term's studies by ``activated`` from 12 s
   to 2.8 s.
+  
+- Magic sets: in the query's own rule, a small stored relation (at most
+  ``[MAGIC_SETS] seed_rows``, 100 tuples) binds its variables without a
+  constant, and is put first. ``chosen(t), uniformity(t, i, j, k, u)``
+  computed ``uniformity`` for all 3 228 terms before keeping the chosen
+  ones (30 minutes without an answer on neurostore); it now computes it
+  for the chosen terms alone.
+
+- Magic sets: of a cycle with an aggregation and a negation that a binding
+  would create, the predicate left unbound is chosen in a fixed order, the
+  aggregation's first. It was the first of a set, so a query could be
+  planned differently from one run to the next: a functional connectivity
+  query took 5 or 17 s, its aggregation computed once or twice.
 
 - Engine builds read the cached atlas activations as arrays instead of
   rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
@@ -217,6 +236,23 @@ Unreleased
   ``VERSION`` is 2, so caches kept by earlier versions are found again once.
 
 **Bug fixes:**
+
+- An aggregation over a body with a negated atom, as
+  ``r(sum(x)) :- p(x), ~q(x)``, is no longer refused as not conjunctive:
+  it gives the aggregation over an intermediate rule holding the negation.
+  An aggregate whose negated atom depends on its own head is refused, as
+  with a positive one.
+  
+- REPL in the browser: the output of a query is legible on its dark panel.
+  Its colours were Rich's, made for a light terminal: an error was dark red
+  on navy (a contrast of 1.6). They are now the page's, each with a
+  contrast of at least 4.5 (WCAG AA), dim text included.
+  
+- REPL in the browser: *Map the studies* is offered for the columns of
+  studies only. A map of voxels, ``ans(i, j, k, lift)``, offered a map of
+  the studies in ``i``, ``j`` and ``k``, its voxel indices taken for
+  studies; integer columns of an unknown sort count only when no column is
+  of studies.
 
 - REPL in the browser: a map of voxels, such as ``ans(i, j, k, lift)``,
   no longer gets a *Network* tab: its ``i`` and ``j``, of the one sort of

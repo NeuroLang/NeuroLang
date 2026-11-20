@@ -44,7 +44,7 @@ from . import (
 )
 from .basic_representation import UnionOfConjunctiveQueries
 from .expression_processing import (
-    extract_logic_predicates,
+    extract_logic_atoms,
     is_aggregation_predicate,
     is_aggregation_rule,
 )
@@ -193,7 +193,9 @@ class DatalogWithAggregationMixin(PatternWalker):
                 "All variables on the consequent need to be on the antecedent"
             )
 
-        if not is_conjunctive_expression_with_nested_predicates(antecedent):
+        if not is_conjunctive_expression_with_nested_predicates(
+            antecedent, allow_negation=True
+        ):
             raise NotConjunctiveExpressionNestedPredicates(
                 f'Expression {antecedent} is not conjunctive'
             )
@@ -220,9 +222,8 @@ class ChaseAggregationMixin:
     def _stratum_is_aggregation_viable(self, seen_in_stratum, aggregate_rules):
         for rule in aggregate_rules:
             if any(
-                predicate.functor in seen_in_stratum
-                for predicate
-                in extract_logic_predicates(rule.antecedent)
+                atom.functor in seen_in_stratum
+                for atom in extract_logic_atoms(rule.antecedent)
             ):
                 raise ForbiddenUnstratifiedAggregation(
                     f"Unstratifiable aggregation {rule.consequent.functor}"
