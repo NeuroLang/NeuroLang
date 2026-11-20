@@ -211,6 +211,11 @@ Unreleased
 
 **Bug fixes:**
 
+- REPL in the browser: the output of a query is legible on its dark panel.
+  Its colours were Rich's, made for a light terminal: an error was dark red
+  on navy (a contrast of 1.6). They are now the page's, each with a
+  contrast of at least 4.5 (WCAG AA), dim text included.
+
 - REPL in the browser: a map of voxels, such as ``ans(i, j, k, lift)``,
   no longer gets a *Network* tab: its ``i`` and ``j``, of the one sort of
   a voxel, were taken for the two ends of an edge. A sort of several
