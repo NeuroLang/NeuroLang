@@ -628,6 +628,13 @@ completes in about 20 seconds.
     its variables without a constant, and is put first: in
     ``ans(t, i, j, k, u) :- chosen(t) & uniformity(t, i, j, k, u)``,
     ``uniformity`` is computed for the terms of ``chosen`` alone.
+    A predicate whose rule binds a variable only through its head, as
+    ``q`` in ``similar_study(q, s) :- study(s) & (v ==
+    query_similarity(q, s)) & ...``, is a relation over the values the
+    rules using it bind: there, an EDB predicate with a variable at
+    such an argument binds it, and is put first, as ``skos:definition``
+    does ``d`` in ``uses(s) :- cogat_term(t, 'stroop task') &
+    skos:definition(t, d) & similar_study(d, s)``.
 
 
 Part 9: The Complete Program

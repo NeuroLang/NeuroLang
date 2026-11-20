@@ -262,6 +262,17 @@ Unreleased
 
 **Bug fixes:**
 
+- A predicate whose rule binds a variable only through its head, as
+  ``q`` in ``similar_study(q, s)`` of the engine neurosynth, gets the
+  values of a stored relation of the rules using it:
+  ``uses(s) :- cogat_term(t, 'stroop task'), skos:definition(t, d),
+  similar_study(d, s)`` raised ``UnboundVariablesError``, as did
+  ``study_similarity``, ``p_similar``, ``p_a_given_similar``,
+  ``lift_llm``, ``uniformity_llm`` and the other ``*_llm`` predicates.
+  When magic sets cannot bind every predicate without leaving the
+  program unstratified (two WMQL bundles of the engine neurosynth_iit),
+  only those predicates are bound, where the rewrite was dropped.
+  
 - Tractography: ``.index_tracts(t, a, replace=1)`` also removes from the
   relations the atlases that indexed only the tractograms it removes. Their
   labels stayed in the box of a term (``term_box_*``), so that the

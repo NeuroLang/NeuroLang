@@ -467,3 +467,121 @@ def test_frontend_stored_relation_of_the_query_binds_a_probability(
         )
     assert got == pytest.approx(expected)
     assert {t for t, _ in got} == {"pain", "fear"}
+
+
+def _lower(text: str) -> str:
+    return text.lower()
+
+
+def _similar_study_engine(frontend=NeurolangPDL):
+    """
+    The ``similar_study`` of the engine neurosynth, its similarity a stub:
+    its text ``q`` is bound only through its head, by the rules using it.
+    Studies 2 to 5 are similar to any text.
+    """
+    nl = frontend()
+    studies = [(s,) for s in range(6)]
+    nl.add_tuple_set(studies, name="study")
+    nl.add_tuple_set([("t1", "Stroop Task"), ("t2", "Other")], name="name")
+    nl.add_tuple_set(
+        [("t1", "a text"), ("t2", "another text")], name="definition"
+    )
+    nl.add_tuple_set(
+        [(0, "a"), (1, "a"), (3, "a"), (4, "b")], name="act"
+    )
+    nl.add_symbol(_rank_similarity, name="query_similarity")
+    nl.add_symbol(lambda q: .5, name="query_similarity_cutoff")
+    nl.add_symbol(_lower, name="lcase")
+    nl.execute_datalog_program(
+        "term(x, t) :- name(x, n), (t == lcase(n))\n"
+        "similar_study(q, s) :- study(s) & "
+        "(v == query_similarity(q, s)) & "
+        "(c == query_similarity_cutoff(q)) & (v >= c)"
+    )
+    return nl
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+@pytest.mark.parametrize("program", [
+    # the text joined from a stored relation without a constant, in the
+    # same body as the literal binding it (UnboundVariablesError in
+    # similar_study_0: the rewrite left similar_study unbound)
+    "uses(s) :- term(t, 'stroop task'), definition(t, d), "
+    "similar_study(d, s)",
+    # the same, the literals in another order
+    "uses(s) :- similar_study(d, s), definition(t, d), "
+    "term(t, 'stroop task')",
+    # bound in a rule of its own
+    "task_def(d) :- term(t, 'stroop task'), definition(t, d)\n"
+    "uses(s) :- task_def(d), similar_study(d, s)",
+    # every text of a stored relation, no constant: magic sets were refused
+    "uses(s) :- definition(t, d), similar_study(d, s)",
+])
+def test_frontend_similar_study_bound_from_its_rule_body(frontend, program):
+    """
+    ``similar_study(q, s)`` is a relation over the texts ``q`` the rules
+    using it bind, by a stored relation of their body as well as by a
+    rule: a stored relation without a constant passes its values to a
+    predicate whose rules need them.
+    """
+    nl = _similar_study_engine(frontend)
+    res = nl.execute_datalog_program(
+        program + "\nans(count(s)) :- uses(s)"
+    )
+    assert res.as_pandas_dataframe().values.tolist() == [[4]]
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_similar_study_when_magic_sets_are_unstratified(frontend):
+    """
+    Bound, ``u`` would be in a cycle with a negation of the rewritten
+    program, and unbound too, through ``t``, shared with ``v``: the
+    rewrite was refused, and ``similar_study`` solved unbound
+    (UnboundVariablesError). The predicates that need bindings are
+    bound, the others left unbound.
+    """
+    nl = _similar_study_engine(frontend)
+    nl.add_tuple_set([(1, "a"), (1, "c"), (2, "c")], name="lab")
+    nl.add_tuple_set([(1, 0), (1, 1), (2, 0), (2, 1)], name="ep")
+    nl.add_tuple_set([(1, 4), (2, 5), (1, 1)], name="in_study")
+    res = nl.execute_datalog_program(
+        "t(x, r) :- lab(x, r)\n"
+        "u(x) :- ep(x, 0), t(x, 'a'), ~t(x, 'b')\n"
+        "v(x) :- ep(x, 0), t(x, 'c')\n"
+        "b(x, 'U') :- u(x)\n"
+        "b(x, 'V') :- v(x)\n"
+        "end(k, x, e) :- b(x, k), ep(x, e)\n"
+        "pair(k, x) :- end(k, x, 0), end(k, x, 1)\n"
+        "about(s) :- term(c, 'stroop task'), definition(c, d), "
+        "similar_study(d, s)\n"
+        "co(k, s) :- pair(k, x), in_study(x, s), about(s)\n"
+        "ans(k, count(s)) :- co(k, s)"
+    )
+    assert sorted(res.as_pandas_dataframe().values.tolist()) == [
+        ["U", 1], ["V", 2]
+    ]
+
+
+@pytest.mark.parametrize("program", [
+    "p_similar(q, PROB) :- similar_study(q, s) & selected_study(s)\n"
+    "texts(d, p) :- definition(t, d), p_similar(d, p)\n"
+    "ans(d, p) :- texts(d, p)",
+    "p_a(l, q, PROB) :- (act(s, l) & selected_study(s)) // "
+    "(similar_study(q, s) & selected_study(s))\n"
+    "lift(q, l, r) :- p_a(l, q, r)\n"
+    "texts(d, p) :- definition(t, d), lift(d, 'a', p)\n"
+    "ans(d, p) :- texts(d, p)",
+])
+def test_frontend_similar_study_bound_through_probabilities(program):
+    """The text joined from a stored relation without a constant reaches
+    ``similar_study`` through the probabilistic queries using it."""
+    nl = _similar_study_engine()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="selected_study"
+    )
+    res = nl.execute_datalog_program(program)
+    # studies 2 to 5 are similar; one of them, 3, is about a
+    assert dict(res.as_pandas_dataframe().values) == pytest.approx(
+        {"a text": 4 / 6 if "p_similar" in program else 1 / 4,
+         "another text": 4 / 6 if "p_similar" in program else 1 / 4}
+    )
