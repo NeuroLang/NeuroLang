@@ -454,8 +454,9 @@ def _product(left, right, held):
     which those *held* (a pair of booleans) are an engine's views, read
     as they are.
 
-    A view by an operand of a few rows (columns) is the product of the
-    view by that operand as a dense matrix: one pass over the view, in
+    A view by an operand of a few rows is the product of the view by
+    that operand as a dense matrix (contractions multiply the product
+    of the terms so far by the next term: a view is the right operand): one pass over the view, in
     its own layout. A sparse product would cost the whole view all the
     same, in the layout it is not held in (a selection of 2 895 studies
     by the 1 billion entries of neurostore's voxel by study view: 2.8 s
@@ -466,10 +467,6 @@ def _product(left, right, held):
         left.shape[1], right.shape[1]
     ) <= FEW_CELLS:
         return (right.T @ left.T.toarray()).T
-    if held == (True, False) and right.shape[1] * max(
-        left.shape[0], right.shape[0]
-    ) <= FEW_CELLS:
-        return left @ right.toarray()
     small, big = (left, right) if left.nnz <= right.nnz else (right, left)
     small = small.asformat(big.format)
     return small @ big if left.nnz <= right.nnz else big @ small

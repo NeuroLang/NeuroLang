@@ -13,6 +13,7 @@ import pytest
 
 from neurolang.frontend import NeurolangPDL
 from nl_core.probabilistic import sums_of_products
+from nl_core.relational_algebra.linear_algebra.rewrites import NotApplicable
 from nl_expr.config import config
 
 
@@ -28,16 +29,27 @@ def no_failed_contractions(caplog):
 
 @pytest.fixture
 def contractions(monkeypatch):
-    """The plans computed as contractions, by solve."""
-    computed = []
+    """The plans computed as contractions, by solve: those whose
+    evaluation gave an answer. An error of an evaluation (which leaves
+    the plan to relational algebra, with its answers) fails the test;
+    a plan the backend does not compute (NotApplicable) does not."""
+    computed, errors = [], []
     evaluate = sums_of_products.evaluate
 
     def recording(plan, *args):
+        try:
+            answer = evaluate(plan, *args)
+        except NotApplicable:
+            raise
+        except Exception as error:
+            errors.append(error)
+            raise
         computed.append(plan)
-        return evaluate(plan, *args)
+        return answer
 
     monkeypatch.setattr(sums_of_products, "evaluate", recording)
-    return computed
+    yield computed
+    assert not errors, f"contractions failed: {errors!r}"
 
 
 def _solve(nl, program, contract=True):
