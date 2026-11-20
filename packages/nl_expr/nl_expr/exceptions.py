@@ -90,24 +90,19 @@ class NotConjunctiveExpressionNestedPredicates(NotConjunctiveExpression):
     - Constant
     - A function or predicate of conjunctive arguments
     - A quantifier of conjunctive arguments
-
-    Note that in this case, negated predicates are not valid (negation and
-    aggregation cannot be used in the same rule).
+    - A negated predicate of conjunctive arguments, in an aggregation rule
 
     Examples
     --------
-    StudyMatchingRegionSegregationQuery(count(s), r) :-
-        RegionReported(r, s) & ~RegionReported(r2, s)
-        & RegionLabel(r2) & (r2 != r)
+    Q(count(x)) :- P(x) | R(x)
 
-    The above expression is not conjunctive since it uses an aggregate
-    function `count` in combination with a negated predicate
-    `~RegionReported`.
+    The above expression is not conjunctive since its body is a
+    disjunction.
     """
 
     suggestion = (
-        "Negation and aggregation cannot be used in the same rule: "
-        "compute the negated part in a separate rule first."
+        "Write the body as a conjunction of atoms: compute each "
+        "disjunct or nested formula in a separate rule first."
     )
 
 

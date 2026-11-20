@@ -1,5 +1,7 @@
 import numpy as np
+import pytest
 
+from ..deterministic_frontend import NeurolangDL
 from ..probabilistic_frontend import NeurolangPDL
 
 
@@ -65,3 +67,50 @@ def test_two_negations_over_columns_of_mixed_types():
         'ans(x, h) :- t(x, "a", h), ~t(x, "b", h), opp(h, o), ~ih(x, o)'
     )
     assert set(result) == {(1, "left")}
+
+
+def _solve(frontend, program):
+    nl = frontend()
+    nl.add_tuple_set([(1,), (2,), (3,)], name="p")
+    nl.add_tuple_set([(1,)], name="q")
+    nl.execute_datalog_program(program)
+    return set(nl.solve_all()["r"].as_pandas_dataframe().itertuples(
+        index=False, name=None
+    ))
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+@pytest.mark.parametrize("aggregation", ["sum", "count", "max"])
+@pytest.mark.parametrize("program", [
+    "r({agg}(x)) :- p(x), ~q(x)",
+    "r(m) :- AGGREGATE[()]((p(x) & ~q(x)) @ {agg}(x)) = m",
+])
+def test_aggregation_over_negated_body(frontend, aggregation, program):
+    """An aggregation over a body with a negated atom equals the aggregation
+    over an intermediate rule that holds the negation."""
+    expected = _solve(
+        frontend, f"s(x) :- p(x), ~q(x)\nr({aggregation}(x)) :- s(x)"
+    )
+    assert expected == {
+        "sum": {(5,)}, "count": {(2,)}, "max": {(3,)}
+    }[aggregation]
+    assert _solve(frontend, program.format(agg=aggregation)) == expected
+
+
+def test_probabilistic_query_on_aggregation_over_negated_body():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1,), (2,), (3,)], name="p")
+    nl.add_tuple_set([(1,)], name="q")
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, 2), (0.3, 3)], name="pp"
+    )
+    nl.execute_datalog_program(
+        "r(x, count(y)) :- p(x), p(y), ~q(y)\n"
+        "z(x, c, PROB) :- pp(x), r(x, c)"
+    )
+    result = nl.solve_all()["z"].as_pandas_dataframe()
+    assert_almost_equal(
+        set(result.itertuples(index=False, name=None)),
+        {(2, 2, 0.5), (3, 2, 0.3)},
+    )
+    assert len(result) == 2
