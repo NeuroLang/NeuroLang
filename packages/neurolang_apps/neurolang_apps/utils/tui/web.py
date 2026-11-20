@@ -625,6 +625,8 @@ class WebRepl:
                 "output": result.usage.get("output", 0),
                 "calls": result.calls, "provider": provider.name,
                 "model": provider.model or provider.api,
+                "llm_seconds": round(result.model_seconds, 2),
+                "tool_seconds": round(result.tool_seconds, 2),
             }
         return Reply(
             self._output(), viewers, self.app.failed, self._tables, prompt,

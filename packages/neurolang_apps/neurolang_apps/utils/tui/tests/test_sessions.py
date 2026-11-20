@@ -1038,8 +1038,9 @@ def test_the_tokens_of_an_answer_are_logged(tmp_path):
         ann = sessions.session("ann", "1")
         ann.start("neurostore")
         reply = {"html": "", "failed": False, "tokens": {
-            "input": 10, "output": 3, "calls": 1, "provider": "albert",
-            "model": "m", "key": "server"}}
+            "input": 10, "output": 3, "calls": 4, "provider": "albert",
+            "model": "m", "key": "server", "llm_seconds": 0.75,
+            "tool_seconds": 0.2}}
         ann._log_submit(".ask who?", reply, 1.0, None)
     finally:
         sessions.close()
@@ -1048,6 +1049,8 @@ def test_the_tokens_of_an_answer_are_logged(tmp_path):
                 if e["kind"] == "submit"]
     assert (answer["tokens_in"], answer["tokens_out"], answer["llm"],
             answer["llm_key"]) == (10, 3, "albert/m", "server")
+    assert (answer["llm_calls"], answer["llm_seconds"],
+            answer["tool_seconds"]) == (4, 0.75, 0.2)
 
 
 def test_the_text_embeddings_are_loaded_once_before_the_sessions_fork(

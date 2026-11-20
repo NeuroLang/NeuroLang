@@ -231,6 +231,8 @@ def _step_printer(app, language: str):
             query = step.arguments.get("query")
             if isinstance(query, str) and query.strip():
                 console.print(query_text(query, language, "      "))
+            if step.seconds >= 0.1:
+                summary += f" · {step.seconds:.1f} s"
             console.print(f"    [dim]{escape(summary)}[/dim]")
     return print_step
 
@@ -240,9 +242,9 @@ def _step_printer(app, language: str):
 # strategy), then for each request to the model ``request`` (call) and
 # ``reply`` (call, text, tool_calls, usage, seconds or error; the model has
 # answered and its tool is about to run), and for each step of the agent
-# ``step`` (thought, action, arguments, observation); ``done`` (valid,
-# query, explanation, error, calls, tokens, seconds, verified, back_translation,
-# verification) ends them.
+# ``step`` (thought, action, arguments, observation, seconds); ``done``
+# (valid, query, explanation, error, calls, tokens, seconds, model_seconds,
+# tool_seconds, verified, back_translation, verification) ends them.
 AGENT_EVENTS = ("ask", "request", "reply", "step", "done")
 
 
@@ -251,6 +253,7 @@ def _step_event(step) -> dict:
     return {
         "event": "step", "thought": step.thought, "action": step.action,
         "arguments": step.arguments, "observation": step.observation,
+        "seconds": step.seconds,
     }
 
 
@@ -269,7 +272,8 @@ def _done_event(result) -> dict:
         "explanation": result.explanation, "error": result.error,
         "calls": result.calls, "tokens": result.usage.get("input", 0)
         + result.usage.get("output", 0),
-        "seconds": result.seconds, "verified": result.verified,
+        "seconds": result.seconds, "model_seconds": result.model_seconds,
+        "tool_seconds": result.tool_seconds, "verified": result.verified,
         "back_translation": result.back_translation,
         "verification": result.verification,
     }
@@ -354,6 +358,9 @@ def _show_result(app, result) -> None:
         usage += f", {tokens} tokens"
     if result.usage.get("cached"):
         usage += f", {result.usage['cached']} read from the cache"
+    if result.model_seconds or result.tool_seconds:
+        usage += (f"; {result.model_seconds:.1f} s waiting for the model, "
+                  f"{result.tool_seconds:.1f} s in its tools")
     app.err_console.print(f"[dim]{usage}[/dim]")
     if result.query:
         _switch_language(app, result.language)
