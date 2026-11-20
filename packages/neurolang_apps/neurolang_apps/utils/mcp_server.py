@@ -22,6 +22,8 @@ waits for it. The calls run one at a time, on the one session.
 
 import asyncio
 import base64
+import html
+import json
 import logging
 import os
 import re
@@ -113,8 +115,11 @@ viewer and the files of the result, in Markdown; show it to the user as it
 is: the query with its comments, and always the links, the viewer's first,
 and the references to cite NeuroLang. To change an
 answer for a new question, call `ask` with `refine` set to the answer's id
-(`a1`, ...) or to `last`, the last query run, such as one the user changed
-and ran with `repl`. `repl` runs statements and dot-commands (`.help`) in
+(`a1`, ..., or one of an earlier session that `list_answers` gives) or to
+`last`, the last query run, such as one the user changed and ran with
+`repl`. `examples` gives example questions by topic, for a user who does
+not know what to ask; `status` tells the engine, its grid and whether it is
+built yet. `repl` runs statements and dot-commands (`.help`) in
 the session: the rules sent alone stay in it."""
 
 # In place of the predicates in the prompt of ``ask``: they would make it
@@ -235,6 +240,9 @@ class McpSession:
         self._toolbox: Optional[Toolbox] = None
         self._lock = threading.Lock()
         self._repl = Future()
+        self._building = time.monotonic()
+        #: What status tells of the server besides (its grid, its data).
+        self.about: dict = {}
         self._pending = None  # the build not started yet
         if repl is not None:
             self._repl.set_result(repl)
@@ -249,6 +257,7 @@ class McpSession:
         ).start()
 
     def _start(self, build, initial_program: str) -> None:
+        self._building = time.monotonic()
         log.info("engine %s: building", self.engine)
         start = time.monotonic()
         try:
@@ -319,14 +328,13 @@ class McpSession:
                 if previous is None:
                     raise ToolError("Nothing to refine: no query ran yet.")
             elif refine:
-                answer = self.answers.get(refine)
-                if answer is None:
+                record = dict(self.earlier_answers(most=1000)).get(refine)
+                if record is None:
                     raise ToolError(
-                        f"No answer {refine!r}: the answers are "
-                        f"{', '.join(self.answers) or 'none yet'}."
+                        f"No answer {refine!r}: list_answers gives them."
                     )
                 previous = Previous(
-                    answer.question, answer.query, answer.outcome
+                    record["question"], record["query"], record["outcome"]
                 )
             agent = self._agent(repl)
             self._toolbox = None
@@ -340,6 +348,104 @@ class McpSession:
             self._prompted = True
             prompt = agent.system_prompt(question, schema=SCHEMA_POINTER)
             return f"{prompt}\n\n{MCP_NOTE}\n\n{task}"
+
+    def _save(self, answer: Answer) -> None:
+        """Keep *answer* in its folder (answer.json), for a later session
+        to list and refine it (list_answers)."""
+        record = {key: getattr(answer, key) for key in (
+            "id", "question", "query", "explanation", "outcome", "links"
+        )}
+        (self.store.folder(answer.id) / "answer.json").write_text(
+            json.dumps(record, indent=1), encoding="utf-8"
+        )
+
+    def _index(self, answer: Answer) -> str:
+        """Write the page of the answers of the session, with *answer*, and
+        return its link."""
+        answers = [*self.answers.values()]
+        if answer.id not in self.answers:
+            answers.append(answer)
+        page = self.store.root / "index.html"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text(_index_page(answers, self.store), encoding="utf-8")
+        return self.store.link(page)
+
+    def earlier_answers(self, most: int = 20) -> list:
+        """The answers kept by the sessions of the folder of this one
+        (answer.json), the latest first: (id, record), an earlier
+        session's id being ``SESSION/aN``."""
+        found = []
+        root = self.store.root.parent
+        for path in root.glob("*/a*/answer.json"):
+            session = path.parent.parent.name
+            if not SESSION_FOLDER.fullmatch(session):
+                continue
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            ident = record["id"] if session == self.store.root.name else \
+                f"{session}/{record['id']}"
+            found.append((path.stat().st_mtime, ident, record))
+        found.sort(key=lambda item: item[0], reverse=True)
+        return [(ident, record) for _, ident, record in found[:most]]
+
+    def list_answers(self) -> str:
+        """The answers of this session and of the earlier ones, latest
+        first, for refine."""
+        answers = self.earlier_answers()
+        if not answers:
+            return "No answer yet."
+        return "\n".join(
+            f"- `{ident}`: {record.get('question') or '(no question)'}"
+            + (f" ({record['links']['viewer']})"
+               if record.get("links", {}).get("viewer") else "")
+            for ident, record in answers
+        )
+
+    def status(self) -> str:
+        """What the server is: its engine, grid and folders, whether its
+        statements are confined, and whether the engine is built."""
+        from neurolang.confine import confined_roots
+
+        if self._repl.done():
+            built = "failed" if self._repl.exception() else "built"
+        elif self._pending is not None:
+            built = "built at the first tool call"
+        else:
+            built = f"building ({time.monotonic() - self._building:.0f} s)"
+        roots = confined_roots()
+        lines = [
+            f"Engine: {self.engine or '(none)'}, {built}.",
+            *(f"{key}: {value}" for key, value in self.about.items()),
+            f"Answers' files: {self.store.root}",
+            "Statements: " + (
+                "confined to " + ", ".join(map(str, roots))
+                if roots is not None else "not confined"
+            ),
+            f"Answers of this session: {len(self.answers)}.",
+        ]
+        return "\n".join(lines)
+
+    def examples(self, topic: str = "") -> str:
+        """The questions of the assistant's bank on the engine: its topics
+        with their numbers of questions, or the questions of *topic*."""
+        with self._lock:
+            topics = self._session().question_topics()
+        if not topic:
+            counts = {}
+            for name in topics.values():
+                counts[name] = counts.get(name, 0) + 1
+            return "Topics of the example questions (call examples with " \
+                "one):\n" + "\n".join(
+                    f"- {name} ({count})" for name, count in counts.items()
+                )
+        questions = [q for q, name in topics.items() if name == topic]
+        if not questions:
+            return f"No topic {topic!r}: the topics are " + ", ".join(
+                sorted(set(topics.values()))
+            )
+        return "\n".join(f"- {question}" for question in questions)
 
     def new_conversation(self) -> None:
         """A client starts a conversation: its first ask gives the whole
@@ -468,8 +574,9 @@ class McpSession:
         """Show the accepted answer in the session, keep it, and return
         what it gives."""
         app = repl.app
-        if tools.answer_frames is not None:  # shown, not run again
-            app.agent_run = AgentRun(commented, False, tools.answer_frames)
+        frames, orders = _by_value(tools.answer_frames)
+        if frames is not None:  # shown, not run again
+            app.agent_run = AgentRun(commented, False, frames)
         repl.max_rows = ANSWER_ROWS
         reply = repl.submit(commented)
         answer = Answer(
@@ -478,7 +585,7 @@ class McpSession:
         )
         result = AgentResult(
             query=commented, language=LANGUAGE, explanation=explanation,
-            valid=True, commented=commented, frames=tools.answer_frames,
+            valid=True, commented=commented, frames=frames,
         )
         app.assistant.last_run = (
             self._question, result, ProviderConfig("mcp", "command", "client"),
@@ -491,9 +598,13 @@ class McpSession:
         self._question = ""  # that of the next ask
         with lifted():  # the server writes the answer's files
             images = self._files(repl, answer)
+        with lifted():
+            answer.links["index"] = self._index(answer)
         answer.links = links = dict(sorted(
             answer.links.items(), key=lambda item: _link_rank(item[0])
         ))
+        with lifted():
+            self._save(answer)
         citations = list(NEUROLANG_REFERENCES)
         text = [
             f"## Answer {answer.id}" + (
@@ -503,7 +614,8 @@ class McpSession:
             if "viewer" in links else "",
             explanation,
             f"### Query\n```datalog\n{commented}\n```",
-            *map(_markdown_table, reply.tables),
+            *(_markdown_table(table, orders[n] if n < len(orders) else "")
+              for n, table in enumerate(reply.tables)),
         ]
         if reply.failed:
             text.append(
@@ -586,15 +698,22 @@ class McpSession:
                     shutil.move(path, image)
                     links[stem] = self.store.link(image)
                     if n < ANSWER_IMAGES:
+                        png = nifti.render_png(
+                            nifti.read_nifti(image),
+                            _image_title(heading, answer.id, name,
+                                         len(layers) > 1),
+                            request.threshold,
+                        )
                         images.append(types.ImageContent(
                             type="image", mime_type="image/png",
-                            data=_base64(nifti.render_png(
-                                nifti.read_nifti(image),
-                                _image_title(heading, answer.id, name,
-                                             len(layers) > 1),
-                                request.threshold,
-                            )),
+                            data=_base64(png),
                         ))
+                        # a file too: a client may show its model the
+                        # image, not its user
+                        brain = folder / ("glass-brain.png" if not n else
+                                          f"glass-brain-{n + 1}.png")
+                        brain.write_bytes(png)
+                        links[brain.stem] = self.store.link(brain)
                 except Exception:  # the answer stands without its image
                     pass
         try:
@@ -614,10 +733,12 @@ class McpSession:
 # and type.
 LINKS = {
     "viewer": ("interactive viewer", "text/html"),
+    "glass": ("glass brain (PNG)", "image/png"),
     "result": ("NIfTI image", "application/gzip"),
     "rows": ("rows (CSV)", "text/csv"),
     "graph": ("graph of the query", "text/html"),
     "query": ("query (Datalog)", "text/plain"),
+    "index": ("the answers of the session", "text/html"),
 }
 
 
@@ -634,18 +755,83 @@ def _link_title(name: str) -> str:
     """The title of the file *name* of an answer in its list of files:
     ``rows-ans`` is "Rows (CSV): ans"."""
     kind, _, part = name.partition("-")
+    if kind == "glass":  # glass-brain, glass-brain-2
+        part = name[len("glass-brain"):].lstrip("-")
     title = LINKS[kind][0]
     return title[0].upper() + title[1:] + (f": {part}" if part else "")
 
 
-def _markdown_table(table: dict) -> str:
+def _index_page(answers, store) -> str:
+    """The page of the answers of a session: each with its question, its
+    glass brain and the links to its files, relative to the page."""
+    items = []
+    for answer in reversed(answers):
+        folder = store.root / answer.id
+        brain = folder / "glass-brain.png"
+        files = [
+            (name, path.name) for name, path in (
+                (name, folder / path) for name, path in (
+                    ("Interactive viewer", "view.html"),
+                    ("NIfTI image", "result.nii.gz"),
+                    ("Rows (CSV)", "rows.csv"),
+                    ("Graph of the query", "graph.html"),
+                    ("Query (Datalog)", "query.dl"),
+                )
+            ) if path.exists()
+        ]
+        items.append(
+            f"<section><h2>{html.escape(answer.id)}: "
+            f"{html.escape(answer.question or '(no question)')}</h2>"
+            f"<p>{html.escape(answer.explanation)}</p>"
+            + (f'<img src="{answer.id}/glass-brain.png" alt="">'
+               if brain.exists() else "")
+            + "<p>" + " · ".join(
+                f'<a href="{answer.id}/{file}">{html.escape(name)}</a>'
+                for name, file in files
+            ) + "</p></section>"
+        )
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<title>NeuroLang answers</title><style>"
+        "body{font:15px system-ui,sans-serif;max-width:52rem;margin:2rem auto;"
+        "padding:0 1rem;color:#0f1b33}section{border-top:1px solid #d9e1ee;"
+        "padding:1rem 0}h2{font-size:1.05rem;margin:0 0 .4rem}"
+        "img{max-width:100%}a{color:#1a63c2}</style></head><body>"
+        "<h1>The answers of this NeuroLang session</h1>"
+        + "".join(items) + "</body></html>"
+    )
+
+
+def _by_value(frames):
+    """Return the result *frames*, ``(title, frame)``, each by its value,
+    highest first (its last column of numbers with decimals, a
+    probability, a lift...), and the column each is ordered by ("" for
+    none); None, () when there are no frames."""
+    if frames is None:
+        return None, ()
+    ordered, orders = [], []
+    for title, frame in frames:
+        values = [
+            column for column in frame.columns
+            if getattr(frame[column].dtype, "kind", "") == "f"
+        ]
+        if values:
+            frame = frame.sort_values(
+                values[-1], ascending=False, kind="stable"
+            ).reset_index(drop=True)
+        ordered.append((title, frame))
+        orders.append(str(values[-1]) if values else "")
+    return ordered, orders
+
+
+def _markdown_table(table: dict, order: str = "") -> str:
     """Return the rows of a result of the REPL as a Markdown table, after
-    a heading with its name and number of rows; numbers to 4 significant
-    digits."""
+    a heading with its name and number of rows, and the column they are
+    ordered by, highest first; numbers to 4 significant digits."""
     shown, total = len(table["rows"]), table["total"]
     count = f"{total} row{'s' * (total != 1)}" + (
         f", the first {shown}" if table["truncated"] else ""
-    )
+    ) + (f", by {order}, highest first" if order else "")
     title = f"### Result{': ' + table['title'] if table['title'] else ''}"
     lines = [
         f"{title} ({count})",
@@ -978,6 +1164,34 @@ def server(session: McpSession):
         )
 
     @mcp.tool()
+    async def list_answers() -> str:
+        """
+        The answers of this session and of the earlier ones (kept 7 days),
+        latest first, with their questions and viewers: their ids are what
+        ask's refine takes.
+        """
+        return await _logged("list_answers", {}, session.list_answers)
+
+    @mcp.tool()
+    async def status() -> str:
+        """
+        What this server is: its engine and grid, where the files of the
+        answers go, whether the statements are confined, and whether the
+        engine is built yet (it takes a minute at the start).
+        """
+        return await _logged("status", {}, session.status)
+
+    @mcp.tool()
+    async def examples(topic: str = "") -> str:
+        """
+        The example questions of the assistant's bank on this engine: the
+        topics, or the questions of one; for the user to pick what to ask.
+        """
+        return await _logged(
+            "examples", {"topic": topic}, lambda: session.examples(topic)
+        )
+
+    @mcp.tool()
     async def repl(text: str, max_rows: int = MAX_ROWS) -> str:
         """
         Run text in the NeuroLang REPL session, as typed at its prompt:
@@ -1023,6 +1237,8 @@ def confine(args) -> Optional[list]:
     roots = [
         Path(args.data_dir).expanduser().resolve(),
         Path(args.results_dir or RESULTS_DIR).expanduser().resolve(),
+        *(Path(d).expanduser().resolve()
+          for d in getattr(args, "allow_dir", None) or ()),
     ]
     os.environ[CONFINE_ENV] = os.pathsep.join(map(str, roots))
     return roots
@@ -1048,4 +1264,9 @@ def main(args, initial_program: str = "") -> None:
         config=assistant_settings(), lazy=args.build_on_first_call,
         keep_days=args.keep_results,
     )
+    session.about = {
+        "Grid": f"{getattr(args, 'resolution', '?')} mm",
+        "Data": str(args.data_dir),
+        **({"Log": str(args.log)} if args.log else {}),
+    }
     server(session).run("stdio")

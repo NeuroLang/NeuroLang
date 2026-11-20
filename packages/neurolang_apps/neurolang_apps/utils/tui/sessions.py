@@ -545,6 +545,21 @@ class Session:
             for listener in self._listeners:
                 listener.put(text)
 
+    def _wait_for_preparation(self, engine: str) -> None:
+        """Wait until the server has prepared *engine* (see
+        :attr:`Sessions.preparing`), telling the page; the session may
+        end meanwhile."""
+        preparing = self.sessions.preparing
+        if preparing is None or preparing.wait(engine, 0):
+            return
+        self.emit_text(json.dumps({
+            "type": "status",
+            "message": f"The server is preparing the engine {engine}…",
+        }))
+        while not preparing.wait(engine, 5):
+            if self.sessions.dead or not self.sessions._owns(self):
+                self.end("ended while it waited for its engine")
+
     # The requests of the page.
 
     def start(self, engine: str, text: bool = False) -> dict:
@@ -557,6 +572,7 @@ class Session:
             self._failure = None
             self.busy += 1
             try:
+                self._wait_for_preparation(engine)
                 self.sessions._fork(self, engine)
                 # The build may take minutes; the session may end meanwhile.
                 while not self._forked.wait(5):
@@ -807,7 +823,9 @@ class Sessions:
     :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`. At most
     *running* queries (and downloads) run at once (by default, as many as
     the machine has CPUs), the others waiting; one running longer than
-    *query_seconds*, if given, ends its session's process. With
+    *query_seconds*, if given, ends its session's process. A query taking
+    its session's process more than *memory_mb* MB of memory of its own is
+    stopped, with a message, the session staying (0: no limit; Linux). With
     *preload_embeddings*, the builders load the text embeddings of an
     engine (its documents' and its query model) before forking its
     sessions, which share them. The engines built ahead (:meth:`prebuild`)
@@ -826,7 +844,7 @@ class Sessions:
         withhold=(), activity_db=None, running: Optional[int] = None,
         query_seconds: Optional[float] = None,
         preload_embeddings: bool = True, uploads: Optional[dict] = None,
-        prebuild_reserve: float = 0.35,
+        prebuild_reserve: float = 0.35, memory_mb: float = 0,
     ):
         env = env or {}
         #: Where the sessions' uploads go, a folder each in its directory,
@@ -867,7 +885,7 @@ class Sessions:
         self._builder_conn, theirs = context.Pipe()
         options = {"data_dir": str(data_dir), "resolution": resolution,
                    "light": light, "feedback": feedback,
-                   "uploads": self.uploads}
+                   "uploads": self.uploads, "memory_mb": memory_mb}
         self._builder = context.Process(
             target=_builder, daemon=True, name="neurolang-repl-builder",
             args=(theirs, self._listener.address, authkey, options, build,
@@ -908,6 +926,8 @@ class Sessions:
             session.end("the server stopped")
         if self.activity is not None:
             self.activity.beat(self._run, stopped=True)
+        if self.preparing is not None:
+            self.preparing.close()
         self._builder_conn.close()
         self._builder.join(5)
         if self._builder.is_alive():  # nor so its builders
@@ -1133,6 +1153,11 @@ class Sessions:
     #: Whether the server has the engines the admin console turns on
     #: built at once (:meth:`prebuild`), as those offered at its start.
     prebuilds = False
+
+    #: The engines the server prepares while it serves, if it does (a
+    #: :class:`serve_repl.Preparation`, whose ``wait(engine, timeout)`` and
+    #: ``close()`` are used): a session of an engine not yet prepared waits.
+    preparing = None
 
     #: Why no session starts any more, if the builder ended.
     dead: Optional[str] = None

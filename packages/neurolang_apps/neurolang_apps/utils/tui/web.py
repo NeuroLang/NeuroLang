@@ -302,8 +302,10 @@ def table_payload(
     The ``columns`` and their ``kinds`` (bool, int, float, str or other,
     for the sort), the first *max_rows* ``rows`` of cells, the ``total``
     number of rows, whether the rows are ``truncated`` and the ``title``.
-    With the *sorts* of the columns (the name of each, None if unknown),
-    ``sorts``; and if some columns are of studies, and the *studies* are
+    With the *sorts* of the columns (the :class:`~.provenance.ColumnSort`
+    of each, None if unknown), ``sorts``, the name of each, and
+    ``positions``, the column of each among those of its sort (0 to 2 for
+    the ``i, j, k`` of a voxel); and if some columns are of studies, and the *studies* are
     known (see :func:`study_records`), ``study_links``: those ``columns``,
     and the ``records`` of the studies the rows hold, by id.
     """
@@ -318,7 +320,8 @@ def table_payload(
         "truncated": len(frame) > len(kept),
     }
     if sorts is not None:
-        payload["sorts"] = list(sorts)
+        payload["sorts"] = [s.sort if s else None for s in sorts]
+        payload["positions"] = [s.position if s else None for s in sorts]
         links = _study_links(kept, payload["sorts"], studies)
         if links:
             payload["study_links"] = links
@@ -682,7 +685,7 @@ class WebRepl:
             self.console.print(
                 f"── {block.title} ──", style="bold magenta", markup=False
             )
-        sorts = [s.sort if s else None for s in block.sorts or ()]
+        sorts = list(block.sorts or ())
         self._frames.append(block.frame)
         table = table_payload(
             block.frame, block.title, self.max_rows,

@@ -554,7 +554,10 @@ def test_the_examples_leave_out_the_missing_predicates(repl):
     assert examples["datalog"] and examples["squall"]
     for query in examples["datalog"] + examples["squall"]:
         assert "uniformity" not in query and "activated(" not in query
-    assert "ans(study) :- mentions(study, 'pain')" in examples["datalog"]
+    assert (
+        "ans(study, year, title) :- mentions(study, 'pain'), "
+        "study_year(study, year), study_title(study, title)"
+    ) in examples["datalog"]
 
 
 def test_the_banner_says_what_the_engine_leaves_out(repl):
@@ -605,6 +608,18 @@ class TestStudyLinks:
     def test_a_column_of_studies_tells_its_sort(self, studies_repl):
         [table] = studies_repl.submit("ans(s, t) :- mentions(s, t)").tables
         assert table["sorts"] == ["study", "term"]
+        assert table["positions"] == [0, 0]
+
+    def test_the_columns_of_a_voxel_tell_their_position(self, studies_repl):
+        studies_repl.submit(
+            "peak_reported(i, j, k, s) :- (i == 1), (j == 2), (k == 3), "
+            "study(s)"
+        )
+        [table] = studies_repl.submit(
+            "ans(i, j, k, s) :- peak_reported(i, j, k, s)"
+        ).tables
+        assert table["sorts"][:3] == ["voxel"] * 3
+        assert table["positions"] == [0, 1, 2, 0]
 
     def test_the_records_of_the_studies_shown_come_with_the_table(
         self, studies_repl

@@ -19,6 +19,36 @@ Unreleased
 
 **New features:**
 
+- ``neurolang-query --mcp`` and the REPL server's ``/mcp``: an answer's
+  rows are shown by their value, highest first; its glass brain is a file
+  too, linked; a page lists the answers of the session with their glass
+  brains (``index.html``); the answers are kept (``answer.json``), and
+  ``list_answers`` lists those of the earlier sessions, which ``ask``
+  refines by their ids. New tools: ``examples`` (the assistant's example
+  questions by topic) and ``status`` (the engine, its grid, its folders,
+  whether it is built). ``--allow-dir DIR`` lets the confined statements
+  read a folder of one's own (``.load`` reads the files of the folders
+  they may read); the options may be kept in
+  ``~/.config/neurolang/mcp.yaml``; ``--print-mcp-command`` prints the
+  command adding the server to Claude Code; the data directory is
+  ``~/neurolang_data`` by default. On the REPL server, each user's answers
+  are in a folder of their own. The meta-analysis engines answer "where in
+  the brain is X reported" with the lift of each voxel of the cortex.
+  
+- REPL server (``--users --local``): ``--session-memory-mb`` stops, on Linux,
+  a query taking its session's process more than that much memory of its own,
+  with a message, the session staying, instead of the OOM killer taking the
+  builder or the server; ``doc/repl_server.rst`` gives the matching systemd
+  ``MemoryHigh``/``MemoryMax``.
+
+- REPL server (``--users --local``): it answers at once and prepares the
+  engines in the background (those the page offers first), instead of
+  after their preparation, which took minutes after an update that
+  changed the tables kept (the page did not answer meanwhile). A session
+  of an engine not yet prepared waits for it, its page telling so; the
+  others start at once. Without ``--users`` the engines are still
+  prepared before serving.
+  
 - REPL page: the question and query boxes have a copy button at their top
   right, and keep their own history of edits: Ctrl or Cmd Z undoes a run of
   typing at a time (the browser's undid a character at a time in Chrome) and
@@ -186,6 +216,12 @@ Unreleased
   ``VERSION`` is 2, so caches kept by earlier versions are found again once.
 
 **Bug fixes:**
+
+- REPL in the browser: a map of voxels, such as ``ans(i, j, k, lift)``,
+  no longer gets a *Network* tab: its ``i`` and ``j``, of the one sort of
+  a voxel, were taken for the two ends of an edge. A sort of several
+  columns now ends no edge; the page is sent the position of each column
+  in its sort.
 
 - A probabilistic plan computed as contractions whose answer could not be
   built as a relation set failed the query: the building of the answer is
@@ -621,6 +657,12 @@ v0.1a23 (2026-11-15)
   ``coordinate_meta_analysis`` engines say so.
 
 **Performance:**
+
+* Assistant: the two requests that check an answer (its translation back
+  into English and the judgement of it) start with the same message, the
+  engine and its predicates, which the Anthropic provider now caches as a
+  block of its own, so that the second reads it from the cache instead of
+  sending it again, as does each check of a retried answer.
 
 * The greedy join ordering starts from the join of two relations with the
   fewest rows at most, and adds at each step the relation whose join with
