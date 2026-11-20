@@ -330,13 +330,14 @@ def test_relations_the_translator_declines(
         assert result[key] == pytest.approx(value, rel=1e-12)
 
 
+@pytest.mark.parametrize("indexed", [False, True])
 @pytest.mark.parametrize("few_rows", [True, False])
 @pytest.mark.parametrize("body, head", [
     ("activated(i, j, k, s) & sel(s)", "i, j, k"),
     ("activated(i, j, k, s) & sel(s) // term(s, t) & sel(s)", "i, j, k, t"),
 ])
 def test_views_are_read_as_they_are(
-    body, head, few_rows, contractions, monkeypatch
+    body, head, few_rows, indexed, contractions, monkeypatch
 ):
     """A relation of an engine's sparse view is read as its matrix,
     neither copied nor converted to another layout (a transposed view is
@@ -344,7 +345,9 @@ def test_views_are_read_as_they_are(
     a product of two views, one is), with the answers of relational
     algebra. By a few rows (the terms), it is a product by a dense
     matrix, not a sparse product; a sparse product takes operands of
-    the view's type of indices, so it converts neither."""
+    the view's type of indices, so it converts neither. Indexed by its
+    columns (the studies), the view is read through its index by the
+    studies of a term, restricted to them."""
     from scipy import sparse
 
     from nl_core.relational_algebra.linear_algebra import (
@@ -374,8 +377,20 @@ def test_views_are_read_as_they_are(
         {"activated": ViewDeclaration(
             Axis("voxel", (0, 1, 2)), Axis("study", (3,))
         )},
+        indexed=["activated"] if indexed else (),
     )
     view_nnz = nl.sparse_views["activated"].matrix.nnz
+    read_by_columns = []
+    if indexed:
+        # every study is few enough, in so small a view
+        monkeypatch.setattr(scipy_backend, "INDEX_SHARE", 1.)
+        index = nl.sparse_views["activated"].by_columns
+        matrix = index.matrix
+        monkeypatch.setattr(
+            index, "matrix",
+            lambda columns: read_by_columns.append(len(columns))
+            or matrix(columns),
+        )
     converted = []
     for kind, method in (
         (sparse.csc_array, "tocsr"), (sparse.csr_array, "tocsc")
@@ -406,7 +421,8 @@ def test_views_are_read_as_they_are(
         contracted = _solve(nl, program)
         assert contractions and view_nnz not in converted
         assert all(a == b for _, _, a, b in multiplied)
-        assert not few_rows or not any(
+        assert bool(read_by_columns) == (indexed and "term" in body)
+        assert not few_rows or read_by_columns or not any(
             view_nnz in (n, m) for n, m, _, _ in multiplied
         )
         relational = _solve(nl, program, contract=False)

@@ -216,7 +216,14 @@ Unreleased
   the views: ``uniformity('pain', ...)`` on neurostore went from 89-96 s
   to 63-68 s, the product of the term's studies by ``activated`` from 12 s
   to 2.8 s.
-  
+
+- A view can be kept by its column entities as well
+  (``sparse_view_indexes`` of ``engines.yaml``; ``activated`` in the
+  coordinate-based engines): a product with a few of them (the studies of
+  a term) reads their entries alone, not the whole view.
+  ``uniformity('pain', ...)`` on neurostore: 63-68 s to 13 s; the index
+  of ``activated`` is 3.9 GB, built once.
+
 - Magic sets: in the query's own rule, a small stored relation (at most
   ``[MAGIC_SETS] seed_rows``, 100 tuples) binds its variables without a
   constant, and is put first. ``chosen(t), uniformity(t, i, j, k, u)``

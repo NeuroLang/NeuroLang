@@ -70,9 +70,14 @@ class _Tensor:
     the first by the second.
     """
 
-    def __init__(self, groups, codes=None, values=None, matrix=None):
+    def __init__(
+        self, groups, codes=None, values=None, matrix=None, by_columns=None
+    ):
         self.groups = tuple(groups)
         self.matrix = matrix
+        # the matrix (an engine's view, as it is) by its column entities,
+        # a ColumnIndex; a tensor computed from it has none
+        self.by_columns = by_columns
         self._codes, self._values = codes, values
 
     def _entries(self):
@@ -140,6 +145,7 @@ class _Evaluation:
             return _Tensor(
                 (self.group_of[rows[0]], self.group_of[columns[0]]),
                 matrix=view.weighted(),
+                by_columns=getattr(view, "by_columns", None),
             )
         frame = self.frames[id(factor)]
         groups = self.groups(factor.axes)
@@ -322,6 +328,17 @@ class _Evaluation:
                 right.values, inner_right, column_keys,
                 (inner_size, column_size),
             )
+        # a view (the right operand, as products are taken) by an operand
+        # that selects few of its column entities (contracted): both
+        # restricted to them, the view read through its index
+        if held == (False, True) and right.by_columns is not None and (
+            inner + columns == list(right.groups[::-1])
+        ):
+            selected = np.unique(left_matrix.indices)
+            if _selective(right.by_columns, selected):
+                left_matrix = left_matrix[:, selected]
+                right_matrix = right.by_columns.matrix(selected)
+                held = (False, False)
         product = sparse.coo_array(_product(left_matrix, right_matrix, held))
         row_keys = product.row.astype(np.int64)
         column_keys = product.col.astype(np.int64)
@@ -470,6 +487,18 @@ def _product(left, right, held):
     small, big = (left, right) if left.nnz <= right.nnz else (right, left)
     small = small.asformat(big.format)
     return small @ big if left.nnz <= right.nnz else big @ small
+
+
+#: The largest share of the entries of a view that a product reads
+#: through its index by column entities (:class:`~.encoding.ColumnIndex`)
+#: rather than as the view.
+INDEX_SHARE = .1
+
+
+def _selective(index, columns):
+    """Whether the entries of the column entities *columns* of a view are
+    few enough to be read through its *index*."""
+    return index.entries(columns) <= INDEX_SHARE * index.nnz
 
 
 def _csr(values, rows, columns, shape):
