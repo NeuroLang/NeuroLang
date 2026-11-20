@@ -95,6 +95,51 @@ def test_a_stop_interrupts_the_request_at_work(backend, monkeypatch):
     assert not backend.stop()
 
 
+def _run_busy(backend, monkeypatch, allocate):
+    started = threading.Event()
+
+    def busy(text):
+        ballast = allocate()
+        started.set()
+        while True:
+            ballast = ballast  # held, until the interrupt
+            time.sleep(0.01)
+
+    monkeypatch.setattr(backend.repl, "submit", busy)
+    replies = []
+    worker = threading.Thread(target=lambda: replies.append(
+        backend.submit("anything")))
+    worker.start()
+    started.wait(10)
+    worker.join(10)
+    return replies
+
+
+@pytest.mark.skipif(not os.path.exists("/proc/self/smaps_rollup"),
+                    reason="the memory of a process is read on Linux")
+def test_a_query_over_the_memory_cap_is_stopped_with_a_message(
+        tmp_path, monkeypatch):
+    from neurolang_apps.utils.tui.sessions import process_usage
+
+    backend = LocalBackend(tmp_path, build=_engine, memory_seconds=0.05)
+    backend.start("neurostore")
+    # 150 MB more than this process takes, which a query then exceeds.
+    backend.memory_mb = process_usage(os.getpid())["private"] + 150
+    replies = _run_busy(backend, monkeypatch,
+                        lambda: bytearray(b"x" * (400 << 20)))
+    assert replies and replies[0]["failed"]
+    assert "MB a session may take" in replies[0]["html"]
+    assert not backend.stop()  # nothing at work any more
+
+
+def test_a_query_under_the_memory_cap_is_not_stopped(backend, monkeypatch):
+    backend.memory_mb = 100000
+    backend.memory_seconds = 0.05
+    backend.start("neurostore")
+    reply = backend.submit("ans(n) :- person(n, a)")
+    assert not reply["failed"]
+
+
 def test_without_a_key_the_assistant_is_that_of_the_machine(backend):
     pytest.importorskip("httpx")
     backend.start("neurostore")

@@ -4,7 +4,7 @@
 # bank of the query assistant below, the queries it shows (examples) and
 # the questions of the query assistant (assistant_examples).
 questions:
-  - Which studies mention pain?
+  - Which studies mention pain? Give their year and title.
   - Which gyri and sulci are activated by studies about language?
   - Which subcortical regions are activated by studies about fear?
   - What is the Bayes factor of fear for the activation of the left amygdala?
@@ -12,7 +12,7 @@ questions:
   - Where in the brain is working memory, by its definition in the Cognitive Atlas?
 examples:
   datalog:
-    - "ans(study) :- mentions(study, 'pain')"
+    - "ans(study, year, title) :- mentions(study, 'pain'), study_year(study, year), study_title(study, title)"
     - "ans(study, title, tfidf) :- weighted_mention(study, 'pain', tfidf), (tfidf > 0.1), study_title(study, title)"
     - "ans(i, j, k, uniformity) :- uniformity('pain', i, j, k, uniformity)"
     - "ans(i, j, k, uniformity) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, uniformity)"
@@ -45,6 +45,12 @@ examples:
 # (schaefer400_activated, the Schaefer atlas of 400 parcels, and
 # tian_activated).
 #
+# The voxels of a map are those of the cortex, cortical_mask(i, j, k),
+# unless the question names the subcortex, the brainstem, the
+# cerebellum or the whole brain: few studies report peaks below the
+# cortex, and a single study activating such a voxel gives it a large
+# lift (that of the brainstem crowds the maps of lift_llm otherwise).
+#
 # A topic given as a description, or a cognitive process, task or
 # concept, is matched to the studies by the similarity of their title
 # and abstract (similar_study: the 5% closest), with whichever text
@@ -60,9 +66,9 @@ examples:
 # boot_studies, and the interval is the percentiles 2.5 and 97.5 of the
 # replicates; two measures are compared on the same replicate b.
 assistant_examples:
-  - question: Which studies mention pain?
+  - question: Which studies mention pain? Give their year and title.
     datalog: |-
-      ans(study) :- mentions(study, 'pain')
+      ans(study, year, title) :- mentions(study, 'pain'), study_year(study, year), study_title(study, title)
 
   - question: Which terms are mentioned by the studies, and how often?
     datalog: |-
@@ -88,9 +94,13 @@ assistant_examples:
       term_association(s, t) :- mentions(s, t), selected_study(s)
       ans(term, probability) :- PROB[term_association(s, term) // term_association(s, 'fear')] = probability
 
+  - question: Where in the brain is pain reported?
+    datalog: |-
+      ans(i, j, k, lift) :- lift('pain', i, j, k, lift), cortical_mask(i, j, k)
+
   - question: Which voxels are activated by studies that mention pain?
     datalog: |-
-      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      activation(i, j, k, s) :- activated(i, j, k, s), cortical_mask(i, j, k), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
       ans(i, j, k, probability) :- PROB[activation(i, j, k, s) // term_association(s, 'pain')] = probability
 
@@ -306,7 +316,7 @@ assistant_examples:
     datalog: |-
       near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= {kernel_radius_mm})
       seed(s) :- near(s), selected_study(s)
-      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      activation(i, j, k, s) :- activated(i, j, k, s), cortical_mask(i, j, k), selected_study(s)
       ans(i, j, k, probability) :- PROB[activation(i, j, k, s) // seed(s)] = probability
 
   - question: What is the probability that a study activating the MNI point (-24, -4, -20) also activates the MNI point (24, -4, -20)?
@@ -368,13 +378,17 @@ assistant_examples:
     datalog: |-
       ans(study, title) :- cogat_definition('response inhibition', d), similar_study(d, study), study_title(study, title)
 
-  - question: Which voxels do the studies about holding information in mind over a delay activate?
+  - question: Which voxels do the studies about maintenance of visual information during a delay period activate?
     datalog: |-
-      ans(i, j, k, probability) :- p_a_given_similar('holding information in mind over a delay', i, j, k, probability)
+      ans(i, j, k, probability) :- p_a_given_similar('maintenance of visual information during a delay period', i, j, k, probability), cortical_mask(i, j, k)
+
+  - question: Which voxels are associated with cortical responses to noxious heat applied to the skin, with a lift above 2?
+    datalog: |-
+      ans(i, j, k, lift) :- lift_llm('cortical response to noxious heat applied to the skin', i, j, k, lift), cortical_mask(i, j, k), (lift > 2)
 
   - question: Where in the brain is working memory, by its definition in the Cognitive Atlas?
     datalog: |-
-      ans(i, j, k, uniformity) :- cogat_definition('working memory', d), uniformity_llm(d, i, j, k, uniformity)
+      ans(i, j, k, uniformity) :- cogat_definition('working memory', d), uniformity_llm(d, i, j, k, uniformity), cortical_mask(i, j, k)
 
   - question: How likely is a study about fear, by its Cognitive Atlas definition, to report an amygdala activation?
     datalog: |-

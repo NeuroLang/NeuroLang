@@ -616,9 +616,9 @@ def test_explain_reads_the_last_query_in_english(app):
     app._run_line(".explain")
     assert not app.failed
     assert "Reads as: The studies that mention the term pain." in output(app)
-    request = client.requests[0]["messages"][1]["content"]
+    request = client.requests[0]["messages"][2]["content"]
     assert "ans(s) :- mentions(s, 'pain')" in request
-    assert "Datalog" in client.requests[0]["messages"][0]["content"]
+    assert "Datalog" in client.requests[0]["messages"][1]["content"]
 
 
 def test_explain_follows_the_language_of_the_query(app):
@@ -626,7 +626,7 @@ def test_explain_follows_the_language_of_the_query(app):
     app._run_line(PAIN)
     client = script(app, "Every study that mentions pain.")
     app._run_line(".explain")
-    assert "SQUALL" in client.requests[0]["messages"][0]["content"]
+    assert "SQUALL" in client.requests[0]["messages"][1]["content"]
     assert "Reads as: Every study that mentions pain." in output(app)
 
 

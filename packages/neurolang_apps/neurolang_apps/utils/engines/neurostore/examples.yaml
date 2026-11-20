@@ -28,14 +28,14 @@ assistant_examples:
 
   - question: Which voxels do the studies of the domain executive cognitive control activate?
     datalog: |-
-      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      activation(i, j, k, s) :- activated(i, j, k, s), cortical_mask(i, j, k), selected_study(s)
       control(s) :- study_domain(s, 'Executive cognitive control'), selected_study(s)
       ans(i, j, k, probability) :- PROB[activation(i, j, k, s) // control(s)] = probability
 
-  - question: Which cognitive concepts were extracted from the studies about holding information in mind over a delay?
+  - question: Which cognitive concepts were extracted from the studies about maintenance of visual information during a delay period?
     datalog: |-
       close(q, s) :- similar_study(q, s), selected_study(s)
       concept(s, c) :- study_concept(s, c), selected_study(s)
       p_concept_given_close(q, c, PROB) :- concept(s, c) // close(q, s)
-      ans(concept, probability) :- p_concept_given_close('holding information in mind over a delay', concept, probability)
+      ans(concept, probability) :- p_concept_given_close('maintenance of visual information during a delay period', concept, probability)
 

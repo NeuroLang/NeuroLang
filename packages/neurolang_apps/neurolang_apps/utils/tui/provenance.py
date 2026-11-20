@@ -32,6 +32,9 @@ from neurolang_apps.utils.cli import (
     _body_atoms, _subformulas, _whole_relation,
 )
 
+# The comparisons of a query thresholding its result, ``(lift > 2)``.
+_COMPARISONS = (operator.gt, operator.ge, operator.lt, operator.le)
+
 # The sort of a column that a rule computes, ``b == p / p0``: a measure,
 # whatever its name, which may be that of a column of a sort.
 COMPUTED = "computed"
@@ -231,3 +234,51 @@ def _column_sorts(nl, engine_name, program, squall, rules) -> dict:
         key: _query_sorts(head, body, known)
         for key, (head, body) in queries.items()
     }
+
+
+def _compared_terms(formula) -> set:
+    """
+    Return the variables *formula* compares with a constant, as
+    ``(lift > 2)`` or ``(2 <= lift)``, in its conjunctions, existentials
+    and conditions (not under a negation).
+    """
+    compared = set()
+    functor = getattr(formula, "functor", None)
+    if (
+        isinstance(formula, FunctionApplication)
+        and isinstance(functor, Constant) and functor.value in _COMPARISONS
+        and len(formula.args) == 2
+    ):
+        left, right = formula.args
+        if isinstance(left, Symbol) and isinstance(right, Constant):
+            compared.add(left)
+        elif isinstance(right, Symbol) and isinstance(left, Constant):
+            compared.add(right)
+    for sub in _subformulas(formula):
+        compared |= _compared_terms(sub)
+    return compared
+
+
+def thresholded_columns(nl, program: str, squall: bool) -> dict:
+    """
+    Return the columns of the results of *program*'s queries that the
+    query itself compares with a constant, ``ans(i, j, k, lift) :- ...,
+    (lift > 2)``, by the key of each result (see :func:`column_sorts`):
+    their positions among the columns. A program that does not parse has
+    none.
+    """
+    try:
+        _, queries = (
+            _squall_queries(program) if squall
+            else _datalog_queries(nl, program)
+        )
+    except Exception:
+        return {}
+    found = {}
+    for key, (head, body) in queries.items():
+        named = isinstance(getattr(head, "functor", None), Symbol)
+        terms = head.args if named else head
+        terms = terms if isinstance(terms, tuple) else (terms,)
+        compared = _compared_terms(body)
+        found[key] = {n for n, term in enumerate(terms) if term in compared}
+    return found

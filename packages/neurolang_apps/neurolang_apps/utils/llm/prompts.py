@@ -341,11 +341,20 @@ both. Check each condition of the question in a short sentence, then
 end with a line `VERDICT: yes` or `VERDICT: no`."""
 
 
-def _engine_part(engine_description: str) -> str:
-    """Return the description of the engine as a part of a message."""
-    if not engine_description:
-        return ""
-    return f"# The engine\n{' '.join(engine_description.split())}\n\n"
+def engine_context(engine_description: str, schema: str) -> dict:
+    """
+    Return the system message with the engine and its predicates.
+
+    The requests that check a query start with this message, the same
+    one for all of them, so that they share it in the cache of the
+    provider instead of sending it each time.
+    """
+    engine = (
+        f"# The engine\n{' '.join(engine_description.split())}\n\n"
+        if engine_description else ""
+    )
+    predicates = f"# Predicates\n{schema}" if schema else ""
+    return {"role": "system", "content": (engine + predicates).rstrip()}
 
 
 def back_translation_request(
@@ -355,11 +364,10 @@ def back_translation_request(
     """Return the messages asking to translate *query* into English."""
     name = LANGUAGE_NAMES[language]
     return [
+        engine_context(engine_description, schema),
         {"role": "system", "content": BACK_TRANSLATION.format(language=name)},
         {"role": "user", "content": (
-            _engine_part(engine_description)
-            + f"# Predicates\n{schema}\n\n# {name} query\n{query}\n\n"
-            f"# First rows of its answer\n{rows}"
+            f"# {name} query\n{query}\n\n# First rows of its answer\n{rows}"
         )},
     ]
 
@@ -372,17 +380,15 @@ def verification_request(
     Return the messages asking whether *english* answers *question*,
     on an engine answered following its *guidance*.
     """
-    predicates = f"# Predicates\n{schema}\n\n" if schema else ""
-    if guidance:
-        predicates += (
-            f"# How to answer on this engine\n{' '.join(guidance.split())}"
-            "\n\n"
-        )
+    how = (
+        f"# How to answer on this engine\n{' '.join(guidance.split())}"
+        "\n\n" if guidance else ""
+    )
     return [
+        engine_context(engine_description, schema),
         {"role": "system", "content": VERIFICATION},
         {"role": "user", "content": (
-            _engine_part(engine_description) + predicates
-            + f"# Question\n{question}\n\n# What the query returns\n"
+            how + f"# Question\n{question}\n\n# What the query returns\n"
             f"{english}\n\n# First rows of its answer\n{rows}"
         )},
     ]

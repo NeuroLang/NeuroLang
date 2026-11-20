@@ -403,7 +403,8 @@ given as argument or with ``--file`` runs first, in the session.
     question and the task, as the client has the rest and reads it again
     at each turn (``full=true`` returns it all again). With ``refine`` set
     to the id of an answer (``a1``, ``a2``, ...) the task is to change that
-    answer for the new question, from its query and the rows it gave; with
+    answer for the new question, from its query and the rows it gave (an
+    answer of an earlier session too, by the id ``list_answers`` gives); with
     ``refine`` set to ``last``, it is the last query run, such as one the
     user corrected and ran with ``repl``, as ``.ask --refine`` does.
 ``list_predicates``, ``describe_predicate``, ``search_values``, ``check_query``, ``run_query``
@@ -423,9 +424,13 @@ given as argument or with ``--file`` runs first, in the session.
     million) is sent back to be restricted. The client receives:
 
     - the explanation and the query with a ``%`` comment above each rule;
-    - the first 20 rows of each result;
+    - the first 20 rows of each result, by its value (its last column of
+      decimal numbers, a probability or a lift), highest first, as the
+      table's heading says;
     - a glass brain (PNG) of each of its first two images, for a result of
-      voxels or of regions with a value;
+      voxels or of regions with a value, as an image and as a file
+      (``glass-brain.png``), as a client may show its model the image but
+      not its user;
     - as structured content (``structuredContent``), its id, the same
       Markdown, which some clients, such as Claude Code, give their model in
       place of the text, its links and its numbers of rows;
@@ -436,13 +441,27 @@ given as argument or with ``--file`` runs first, in the session.
       ``--results-dir`` (``~/.cache/neurolang/mcp`` by default): the
       interactive viewer of
       ``.view`` (``view.html``), the images (``result.nii.gz``), all the
-      rows (``rows.csv``), the query (``query.dl``) and its graph
-      (``graph.html``, as ``.graph``). They are the user's only (as the
+      rows (``rows.csv``), the query (``query.dl``), its graph
+      (``graph.html``, as ``.graph``), and the page of all the answers of
+      the session, with their glass brains (``index.html``); each answer is
+      kept there too (``answer.json``), for a later session to list and
+      refine it. They are the user's only (as the
       ``--log`` file), and the folders of the sessions older than
       ``--keep-results`` days (7 by default; 0 keeps them) are removed when
       the server starts.
     - the references to cite NeuroLang (the sources of the engine's data
       are those of ``.credits``).
+``list_answers``
+    lists the answers of the session and of the earlier ones still kept,
+    latest first, with their questions and viewers: after a reconnection,
+    ``ask`` refines one by the id it gives (``SESSION/a1``).
+``examples``
+    gives the topics of the assistant's example questions on the engine,
+    or the questions of one, for a user who does not know what to ask.
+``status``
+    tells the engine, its grid, its data, where the answers' files go,
+    whether the statements are confined, and whether the engine is built
+    yet (it takes a minute when the server starts).
 ``repl``
     runs what is typed at the prompt, statements and dot-commands, and
     returns the output and the first rows of each result (50 by default,
@@ -456,8 +475,9 @@ The statements of the session are confined, as those of the users of the
 REPL server: they read the engine's data and the answers' files only
 (``--data-dir``, ``--results-dir``) and write no file, so that what the
 client's model is led to run, by a text of the data for instance, reaches
-no other file of the machine. ``--unconfined`` lifts it, to ``.load`` or
-``.image`` a file of one's own. ``repl`` refuses ``.ask``, ``.llm``,
+no other file of the machine. ``--allow-dir DIR`` adds a folder they may
+read, to ``.load`` or ``.image`` files of one's own, such as a map to
+decode; ``--unconfined`` lifts it all. ``repl`` refuses ``.ask``, ``.llm``,
 ``.explain``, ``.rate`` and ``.refine``: they would run the assistant of
 the machine's ``llm.yaml``, the client's model being the assistant.
 
@@ -468,6 +488,25 @@ of every voxel of the brain may need more than their default 4 GB.
 The engine's MNI grid is of 2 mm unless ``--resolution`` gives another,
 as the REPL server's: at its native 1 mm, ``neurosynth`` takes 12 GB instead
 of 3, and a whole-brain map 76 s to answer instead of 9.
+
+The data directory is ``~/neurolang_data`` unless ``--data-dir`` gives
+another: not relative to the folder the client starts the server in,
+where it would build the engine anew. The options of the server may be
+kept in ``~/.config/neurolang/mcp.yaml`` (or the file of
+``NEUROLANG_MCP_CONFIG``), named as the options with underscores, which
+those of the command line win over; a change takes effect when the client
+reconnects (``/mcp``, *Reconnect* in Claude Code), with no new
+registration::
+
+    engine: neurostore
+    resolution: 2
+    log: ~/neurolang-mcp.log
+    allow_dir: [~/maps]
+
+``--print-mcp-command`` prints the command that adds the server to Claude
+Code, with absolute paths and the options given, and exits::
+
+    neurolang-query --mcp --engine neurosynth --print-mcp-command
 
 The engine is built when the server starts, so that it is ready at the
 first call; ``--build-on-first-call`` builds it at the first tool call

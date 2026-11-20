@@ -58,14 +58,19 @@ On a Linux server, from a checkout of NeuroLang, with `uv
    loginctl enable-linger $USER   # keep it running after you log out
 
 Then open ``https://SERVER:8443/``, log in as ``ann``, and open the admin
-console at ``https://SERVER:8443/admin`` to add the other users.  Before
-serving, the server prepares each engine: it downloads its data into
-``--data-dir`` and finds the tables it takes long to find, kept there, which
-takes a few minutes the first time and is quicker after; an engine it
-cannot prepare (a source down) is told in the log, and its first session
-tries again.  A session then starts from the data kept, without the
-network: the first one of an engine takes the time of a build (about a
-minute for Neurosynth with ``--light``), the next ones under a second.
+console at ``https://SERVER:8443/admin`` to add the other users.  The
+server answers at once and prepares each engine meanwhile, those the page
+offers first: it downloads its data into ``--data-dir`` and finds the
+tables it takes long to find, kept there, which takes a few minutes the
+first time (up to half an hour for the six engines of the Inria server
+after an update that changes the tables) and is quicker after.  A session
+of an engine not yet prepared waits for it, its page telling that the
+server is preparing the engine; the log tells *The engine NAME is ready*.
+An engine it cannot prepare (a source down) is told in the log, and its
+first session tries again.  A session then starts from the data kept,
+without the network: the first one of an engine takes the time of a build
+(about a minute for Neurosynth with ``--light``), the next ones under a
+second.
 
 
 Requirements
@@ -105,8 +110,9 @@ Serving
    The engines' data directory (default ``neurolang_data``, relative to
    where the command runs; give an absolute path for a service).
 ``--no-prepare``
-   Do not prepare the engines before serving; the first session of each
-   downloads what it lacks.
+   Do not prepare the engines; the first session of each downloads what it
+   lacks.  Without it, the server with ``--users`` serves while it prepares
+   them; one without ``--users`` prepares them before serving.
 ``--no-preload-embeddings``
    Do not load an engine's text embeddings when it is built (with
    ``--users``, before forking its sessions): its first query of them
@@ -205,6 +211,10 @@ Who may use it
    With ``--users`` and ``--local``: the queries running at once, of all
    the sessions (the machine's CPUs, at least 1), and the minutes after
    which a query is stopped (60; 0, never); see `Sessions`_.
+``--session-memory-mb MB``
+   With ``--users`` and ``--local``, on Linux: a query taking its
+   session's process more than MB megabytes of memory of its own (0, never)
+   is stopped; see `Sessions`_.
 ``--uploads-dir DIR``, ``--max-upload-mb MB``, ``--max-uploads-mb MB``
    The files the pages upload (**Upload data**: tables, images): with
    ``--users`` and ``--local``, a session keeps them in a folder of its own
@@ -295,6 +305,7 @@ log and the dashboard go there too::
    idle_minutes: 120
    max_running: 4              # queries at once (the machine's CPUs)
    query_minutes: 60           # 0: no limit
+   session_memory_mb: 4096     # 0: no limit (Linux)
    uploads_dir: /srv/neurolang/uploads  # a folder per session, removed when it ends
    max_upload_mb: 50
    max_uploads_mb: 200
@@ -598,8 +609,9 @@ Claude Code::
   REPL answers in plain text. A session that ended starts again at the
   next request, and its first ``ask`` gives the whole prompt again.
 - **The files** of the answers (the viewer, the images, the rows, the query
-  and its graph) are kept in ``--mcp-results-dir``, a folder per session
-  with a random name, removed after 7 days, and linked as
+  and its graph) are kept in ``--mcp-results-dir``, in a folder per user
+  (the ``list_answers`` of an MCP client lists theirs only), a folder per
+  session with a random name, removed after 7 days, and linked as
   ``https://HOST/mcp/files/...``: they open for the users logged in. The
   pages (the viewer, the graph) are sandboxed, away from the site's cookies;
   the other files are downloaded.
@@ -742,6 +754,26 @@ own, in a process of its own (``neurolang_apps.utils.tui.sessions``):
   process ends (which frees its CPU and memory at once, as no thread of
   Python can be stopped otherwise), and its page says so; its rules come
   back at the next input.
+- A query taking its session's process more than ``--session-memory-mb`` of
+  memory of its own (the *private* memory of ``/proc/PID/smaps_rollup``,
+  which leaves out the pages the session shares with the builder; read
+  every half second, on Linux, nothing elsewhere) is interrupted as the
+  **Stop** button does: the page says how much it took and the cap, and the
+  session stays, its rules too, its memory given back.  A query that
+  allocates faster than the reading, in one native call, may still go over
+  before it stops.  Set it so that ``--max-sessions`` times the cap, plus
+  the builder's memory (the engines' data), fits in the machine's memory:
+  otherwise the kernel's OOM killer picks, perhaps the builder or the
+  server.  As a second line, in the service run by systemd, limit the
+  whole unit (``systemctl --user edit neurolang-repl``)::
+
+     [Service]
+     MemoryHigh=48G   # above it, the unit is slowed down and its memory reclaimed
+     MemoryMax=56G    # above it, the kernel kills in the unit, not the machine's other services
+
+  The user manager must have the ``memory`` controller delegated
+  (``systemctl --user show -p Delegate``; on many distributions only
+  system units may set these).
 
 Without ``--users``, one session serves everyone, in the server's process.
 
