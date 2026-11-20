@@ -211,6 +211,12 @@ Unreleased
 
 **Bug fixes:**
 
+- An aggregation over a body with a negated atom, as
+  ``r(sum(x)) :- p(x), ~q(x)``, is no longer refused as not conjunctive:
+  it gives the aggregation over an intermediate rule holding the negation.
+  An aggregate whose negated atom depends on its own head is refused, as
+  with a positive one.
+  
 - REPL in the browser: the output of a query is legible on its dark panel.
   Its colours were Rich's, made for a light terminal: an error was dark red
   on navy (a contrast of 1.6). They are now the page's, each with a
