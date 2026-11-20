@@ -94,7 +94,9 @@ def is_conjunctive_expression(expression):
     )
 
 
-def is_conjunctive_expression_with_nested_predicates(expression):
+def is_conjunctive_expression_with_nested_predicates(
+    expression, allow_negation=False
+):
     tr = TranslateToDatalogSemantics()
     expression = tr.walk(expression)
     stack = [expression]
@@ -110,6 +112,8 @@ def is_conjunctive_expression_with_nested_predicates(expression):
             stack += exp.formulas
         elif isinstance(exp, Quantifier):
             stack.append(exp.body)
+        elif allow_negation and isinstance(exp, Negation):
+            stack.append(exp.formula)
         else:
             return False
 

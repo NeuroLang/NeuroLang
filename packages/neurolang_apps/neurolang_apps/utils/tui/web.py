@@ -35,6 +35,7 @@ from unittest import mock
 
 import pandas as pd
 from rich.console import Console
+from rich.terminal_theme import TerminalTheme
 from rich.text import Text
 
 from neurolang_apps.utils import engine_registry
@@ -54,6 +55,22 @@ MAX_ROWS = 200_000
 HTML_FORMAT = (
     '<pre class="repl-output" style="font-family: inherit">'
     "<code>{code}</code></pre>"
+)
+
+# The colours of the output on the page: on its dark panel (--term in
+# tokens.css, in either theme), those of the page's palette, each with a
+# contrast of at least 4.5 to the panel (WCAG AA), where Rich's default
+# theme, made for a light terminal, wrote the red of an error at 1.6. Text
+# of no colour takes the page's; dim text is blended halfway from the
+# foreground, white, to the background, the lighter of the two panels.
+LOG_THEME = TerminalTheme(
+    (0x0F, 0x1B, 0x33), (0xFF, 0xFF, 0xFF),
+    [(0x83, 0x92, 0xAF), (0xFF, 0x8F, 0x87), (0x4C, 0xCF, 0x8A),
+     (0xF2, 0xC1, 0x4E), (0x7D, 0xB7, 0xF8), (0xD7, 0xA6, 0xF5),
+     (0x4C, 0xC3, 0xDE), (0xE8, 0xEE, 0xF9)],
+    [(0xA9, 0xB8, 0xD0), (0xFF, 0xB3, 0xAD), (0x7F, 0xE0, 0xAD),
+     (0xF7, 0xD6, 0x83), (0xA9, 0xCF, 0xFB), (0xE6, 0xC6, 0xF9),
+     (0x8A, 0xDC, 0xEC), (0xFF, 0xFF, 0xFF)],
 )
 
 # The precomputed analyses of the meta-analysis engines: ``activated``
@@ -919,7 +936,8 @@ class WebRepl:
     def _output(self) -> str:
         """Return the HTML, or text, of what was printed since last asked."""
         html = self.console.export_html(
-            clear=True, inline_styles=True, code_format=HTML_FORMAT
+            clear=True, inline_styles=True, code_format=HTML_FORMAT,
+            theme=LOG_THEME,
         ) if self.html else self.console.export_text(clear=True)
         self.console.file.seek(0)
         self.console.file.truncate()
