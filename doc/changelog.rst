@@ -210,6 +210,14 @@ Unreleased
 
 **Performance:**
 
+- A natural join of a small relation (``[RAS] join_cut_rows``, 10 000 rows)
+  with one ``join_cut_ratio`` (100) times larger first keeps the rows of
+  the larger one whose values of the common columns are among the smaller
+  one's, before dropping its duplicates and merging (pandas). The magic
+  set of a term, one row, was merged with the 10 M rows of NeuroStore's
+  TF-IDF: ``mentions(s, 'pain'), mentions(s, 'emotion')`` took 9.2 s, now
+  2.9 s.
+
 - Decoding an image by the terms (``p_image_given_term``) took 110 s on
   neurosynth, now 3.7 s, with the same answer. Lifting tests whether
   columns of a relation determine another: two rows of a random sample of
