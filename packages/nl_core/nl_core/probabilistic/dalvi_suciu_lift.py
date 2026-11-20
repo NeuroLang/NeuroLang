@@ -2681,14 +2681,16 @@ def _functions_of(atom, variables, symbol_table):
 
 def _is_function(relation, key, column):
     """Whether the *column* of *relation* is a function of its *key*
-    columns. Two rows of a random sample of it with one key and two values
-    disprove it without reading the rest (for a voxel and the study of
-    ``activated``, in 5 ms; counting the distinct values of its 346 M rows
-    took 30 to 45 s); otherwise the distinct keys and the distinct pairs of
-    key and value are counted. The size of the sample is
+    columns. Two of its first rows with one key and two values disprove it
+    without reading the rest: contiguous rows do at once when the relation
+    is ordered by its key, as ``activated`` is by voxel (in about 1 ms;
+    counting the distinct values of its 346 M rows took 30 to 45 s);
+    otherwise the distinct keys and the distinct pairs of key and value
+    are counted. The number of rows read is
     ``[PROBABILISTIC_SOLVER] function_sample_rows`` of the configuration."""
     rows = relation.sample_rows(
-        config.getint("PROBABILISTIC_SOLVER", "function_sample_rows")
+        config.getint("PROBABILISTIC_SOLVER", "function_sample_rows"),
+        contiguous=True,
     )
     if rows is not None:
         columns = list(relation.columns)
