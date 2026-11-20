@@ -48,3 +48,87 @@ assistant_examples:
       bayes_factor(t, bf) :- joint_probability(t, p_rt), connecting_probability(p_r), task_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
       ans[uf_end_regions](region_1, region_2, streamlines) :- connected(region_1, region_2, streamlines)
       ans[task_specificity](task, bayes_factor) :- bayes_factor(task, bayes_factor)
+
+# The programs of the figures of the NeuroLang paper, each with a stable
+# id (paper.fig1a...): examples of the assistant, after those of
+# assistant_examples, when the setting include_paper_examples of the
+# assistant is on (llm/defaults.yaml: on). The paper's evaluations, whose
+# agent writes these programs, turn it off, so that they are not in its
+# prompt (see doc/query_assistant.rst). The tests check them as the
+# others.
+paper_examples:
+  # Fig. 1e and Fig. 2b, on the tracts, adapted to the bank: the outputs
+  # that only feed a drawing (the streamlines, the pairs of parcels) are
+  # left out. Estimates over selected_study are kept
+  # where at least 10 studies support them, with 95% percentile intervals
+  # over the replicates of boot_studies. The parcels of a bundle are the
+  # Schaefer (100) parcels within 3 mm of its ends; a study activates a
+  # parcel when a peak is within 6 mm of it.
+  # Fig. 1e: the parcels near at least 5% of the ends of the left
+  # uncinate; the tasks are the Cognitive Atlas classes below COGPO_00049
+  # (behavioural experimental paradigm) named in its task list
+  # (cognitive_task), and a study uses one when its abstract is among the
+  # 5% closest to the task's definition (similar_study).
+  - question: Which Cognitive Atlas tasks are used by the studies that activate the parcels at the ends of the left uncinate fasciculus, by the similarity of their abstracts to the task definitions? Give each task's probability and base rate with 95% bootstrap intervals, for tasks supported by at least 10 studies.
+    id: paper.fig1e
+    datalog: |-
+      uf_end_near(x, e, n) :- uf(x, "left"), endpoint_point(x, e, ex, ey, ez), schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+      uf_parcel_ends(n, count(x, e)) :- uf_end_near(x, e, n)
+      uf_ends(count(x, e)) :- uf(x, "left"), endpoint_point(x, e, ex, ey, ez)
+      uf_parcel(n) :- uf_parcel_ends(n, c), uf_ends(t), (c >= 0.05 * t)
+      uf_study(s) :- uf_parcel(n), schaefer_activated(n, s), selected_study(s)
+      uf_activating(s) :- uf_parcel(n), schaefer_activated(n, s)
+      task_definition(t, d) :- rdfs:subClassOf(c, <http://www.cogpo.org/ontologies/working/CogPOver2011.owl#COGPO_00049>), cogat_term(c, t), skos:definition(c, d), cognitive_task(x, name, desc), (t == lcase(name))
+      uses(t, s) :- task_definition(t, d), similar_study(d, s), selected_study(s)
+      support(t, count(s)) :- task_definition(t, d), similar_study(d, s), uf_activating(s)
+      supported(t) :- support(t, n), (n >= 10)
+      p_task_given_uf(t, PROB) :- uses(t, s) // uf_study(s)
+      p_task(t, PROB) :- uses(t, s)
+      both(t, p, p0) :- p_task_given_uf(t, p), p_task(t, p0), supported(t)
+      replicate(b, t, p, p0) :- RESAMPLE[boot_studies](both(t, p, p0)) = b
+      interval(t, percentile(p, 2.5), percentile(p, 97.5), percentile(p0, 2.5), percentile(p0, 97.5)) :- replicate(b, t, p, p0)
+      ans[uf_parcels](parcel, ends) :- uf_parcel(parcel), uf_parcel_ends(parcel, ends)
+      ans[tasks](task, probability, ci_low, ci_high, base_rate, base_low, base_high, studies) :- both(task, probability, base_rate), interval(task, ci_low, ci_high, base_low, base_high), support(task, studies)
+
+  # Fig. 2b: six WMQL bundles of each hemisphere, the right ones the
+  # control (the arcuate and SLF II have no or 2 left streamlines on this
+  # tractogram). Streamline ends have no consistent orientation, so a
+  # bundle joins two parcels when at least 5% of its streamlines have one
+  # end near each, in either order; a study co-activates the bundle when
+  # it activates both parcels of a pair it joins. A language study names
+  # the Cognitive Atlas concept or a descendant, or its abstract is among
+  # the 5% closest to the concept's definition. Left and right are
+  # compared on the same replicates.
+  - question: Which left-hemisphere white-matter bundles join cortical regions that language studies co-activate more than chance, against their right homologues? Give the log lifts and the left minus right difference with 95% bootstrap intervals, for bundles supported by at least 10 studies.
+    id: paper.fig2b
+    datalog: |-
+      bundle(x, 'UF', h) :- uf(x, h)
+      bundle(x, 'ILF', h) :- ilf(x, h)
+      bundle(x, 'IFOF', h) :- ioff(x, h)
+      bundle(x, 'EmC', h) :- extreme_capsule(x, h)
+      bundle(x, 'SLF III', h) :- slf_iii(x, h)
+      bundle(x, 'MdLF', h) :- mdlf(x, h)
+      end_near(t, h, x, e, n) :- bundle(x, t, h), endpoint_point(x, e, ex, ey, ez), schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+      pair(t, h, x, m, n) :- end_near(t, h, x, 0, m), end_near(t, h, x, 1, n), (m != n)
+      pair(t, h, x, m, n) :- end_near(t, h, x, 1, m), end_near(t, h, x, 0, n), (m != n)
+      pair_count(t, h, m, n, count(x)) :- pair(t, h, x, m, n)
+      size(t, h, count(x)) :- bundle(x, t, h)
+      joined(t, h, m, n) :- pair_count(t, h, m, n, k), size(t, h, z), (k >= 0.05 * z)
+      coactive(t, h, s) :- joined(t, h, m, n), schaefer_activated(m, s), schaefer_activated(n, s)
+      language_class(c) :- cogat_term(c, 'language')
+      language_class(d) :- cogat_term(c, 'language'), cogat_subclass_of(d, c)
+      language(s) :- language_class(c), cogat_term(c, w), mentions(s, w)
+      language(s) :- cogat_definition('language', d), similar_study(d, s)
+      support(t, h, count(s)) :- coactive(t, h, s), language(s)
+      supported(t, h) :- support(t, h, k), (k >= 10)
+      active(t, h, s) :- coactive(t, h, s), supported(t, h), selected_study(s)
+      language_study(s) :- language(s), selected_study(s)
+      p_language(t, h, PROB) :- active(t, h, s) // language_study(s)
+      p_all(t, h, PROB) :- active(t, h, s)
+      log_lift(t, h, p, q, r) :- p_language(t, h, p), p_all(t, h, q), (r == log(p / q))
+      replicate(b, t, h, p, q, r) :- RESAMPLE[boot_studies](log_lift(t, h, p, q, r)) = b
+      asymmetry(b, t, d) :- replicate(b, t, 'left', p1, q1, r1), replicate(b, t, 'right', p2, q2, r2), (d == r1 - r2)
+      interval(t, h, percentile(p, 2.5), percentile(p, 97.5), percentile(q, 2.5), percentile(q, 97.5), percentile(r, 2.5), percentile(r, 97.5)) :- replicate(b, t, h, p, q, r)
+      asymmetry_interval(t, percentile(d, 2.5), percentile(d, 97.5)) :- asymmetry(b, t, d)
+      ans[lift](bundle, hemisphere, p_language, p_language_low, p_language_high, p_all, p_all_low, p_all_high, log_lift, log_lift_low, log_lift_high, studies) :- log_lift(bundle, hemisphere, p_language, p_all, log_lift), interval(bundle, hemisphere, p_language_low, p_language_high, p_all_low, p_all_high, log_lift_low, log_lift_high), support(bundle, hemisphere, studies)
+      ans[asymmetry](bundle, asymmetry, ci_low, ci_high) :- log_lift(bundle, 'left', p1, q1, r1), log_lift(bundle, 'right', p2, q2, r2), (asymmetry == r1 - r2), asymmetry_interval(bundle, ci_low, ci_high)

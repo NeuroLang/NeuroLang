@@ -14,6 +14,7 @@ from ..examples import (
     select_examples,
     words,
 )
+from ..config import AssistantConfig
 from ..validation import check_query
 
 # Before the session fixture of ../../conftest.py replaces it by a small file.
@@ -67,20 +68,41 @@ def test_banks_load(engine):
 def test_banks_are_inherited():
     # Both engines extend coordinate_meta_analysis and share its bank;
     # neurostore adds examples of its own after it.
-    shared = load_examples("coordinate_meta_analysis")
-    assert load_examples("neurosynth") == shared
+    shared = load_examples("coordinate_meta_analysis", paper=False)
+    assert load_examples("neurosynth", paper=False) == shared
     # ...which begins with those of the connectivities it extends
     # (those of the atlases they both extend, connectivity_atlases, once)
     connectivity = []
-    for example in (load_examples("structural_connectivity")
-                    + load_examples("functional_connectivity")):
+    for example in (load_examples("structural_connectivity", paper=False)
+                    + load_examples("functional_connectivity", paper=False)):
         if example not in connectivity:
             connectivity.append(example)
     assert shared[:len(connectivity)] == connectivity
     assert len(shared) > len(connectivity)
-    neurostore = load_examples("neurostore")
+    neurostore = load_examples("neurostore", paper=False)
     assert neurostore[:len(shared)] == shared
     assert len(neurostore) > len(shared)
+
+
+@pytest.mark.parametrize("engine", ("neurosynth", "neurosynth_iit"))
+def test_the_paper_examples_follow_the_bank_when_on(engine):
+    bank = load_examples(engine, paper=False)
+    with_paper = load_examples(engine, paper=True)
+    paper = with_paper[len(bank):]
+    assert with_paper[:len(bank)] == bank
+    assert paper and all(e.id.startswith("paper.") for e in paper)
+    assert not any(e.id.startswith("paper.") for e in bank)
+    # The default is the setting's, on.
+    assert AssistantConfig().include_paper_examples
+    assert load_examples(engine) == with_paper
+    # Every example has an id, its entry's or its question's.
+    ids = [e.id for e in with_paper]
+    assert len(set(ids)) == len(ids)
+    assert all(i.startswith("bank.") for i in [e.id for e in bank])
+    assert load_examples(engine, paper=False) == bank
+    if engine == "neurosynth_iit":
+        assert {"paper.fig1e", "paper.fig2b"} <= set(ids)
+    assert {"paper.fig1a", "paper.q1_reading_c"} <= set(ids)
 
 
 ANSWER_HEAD = re.compile(r"^\s*ans\s*(?:\[\s*\w+\s*\])?\s*\(([^)]*)\)", re.M)

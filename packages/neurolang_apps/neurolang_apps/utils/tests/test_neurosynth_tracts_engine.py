@@ -258,8 +258,8 @@ def test_the_example_is_a_question_of_the_assistant():
     from neurolang.frontend.datalog.standard_syntax import parser
     from neurolang_apps.utils.llm.examples import load_examples
 
-    bank = load_examples("neurosynth_tracts")
-    assert bank[:-1] == load_examples("neurosynth")
+    bank = load_examples("neurosynth_tracts", paper=False)
+    assert bank[:-1] == load_examples("neurosynth", paper=False)
     question = bank[-1]
     assert "uncinate" in question.question
     parser(question.queries["datalog"])
@@ -317,8 +317,8 @@ def test_the_engine_of_the_page_has_the_bundles_over_the_wmparc(
 def test_the_engine_of_the_page_has_its_own_questions():
     from neurolang_apps.utils.llm.examples import load_examples
 
-    bank = load_examples("neurosynth_iit")
-    assert bank[:-3] == load_examples("neurosynth_tracts")
+    bank = load_examples("neurosynth_iit", paper=False)
+    assert bank[:-3] == load_examples("neurosynth_tracts", paper=False)
     assert "uncinate" in bank[-3].question
     assert bank[-3].queries["datalog"] == \
         'ans(streamline) :- uf(streamline, "left")'

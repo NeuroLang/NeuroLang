@@ -350,6 +350,37 @@ def test_examples_and_description_can_be_given(nl):
     assert "The engine: A tiny engine." in system
 
 
+def test_the_result_records_the_ids_of_the_examples_of_its_prompt(nl):
+    from ..examples import Example
+
+    examples = [
+        Example("Which studies mention pain?", {"squall": PAIN_SQUALL},
+                "bank.0001"),
+        Example("Which voxels?", {"squall": "obtain every Voxel."},
+                "paper.fig1a"),
+        Example("Which terms?", {"datalog": PAIN_DATALOG}, "bank.0002"),
+    ]
+    icl = IclAgent(
+        nl, provider(), assistant_config(), "squall",
+        client=ScriptedClient([fenced(PAIN_SQUALL)]), examples=examples,
+    )
+    result = icl.run("Which studies mention pain?")
+    assert result.valid
+    # Those of the prompt's language, the most similar first.
+    assert result.example_ids == ["bank.0001", "paper.fig1a"]
+
+
+def test_without_the_paper_examples_the_context_quotes_none(nl):
+    icl = IclAgent(
+        nl, provider(), assistant_config(include_paper_examples=False),
+        "datalog", engine_name="neurosynth_iit", client=ScriptedClient([]),
+    )
+    assert icl.context.paper_examples is False
+    icl.system_prompt("Which tasks do studies of the left uncinate use?")
+    assert icl.example_ids
+    assert not any(i.startswith("paper.") for i in icl.example_ids)
+
+
 @pytest.mark.parametrize("text, name, arguments", [
     ('**Thought:** look\n**Action:** search_values\n**Action Input:** '
      '{"pattern": "pain"}', "search_values", {"pattern": "pain"}),

@@ -26,10 +26,10 @@ def test_neurostore_tracts_is_neurostore_and_tracts():
 
 
 def test_neurostore_tracts_has_the_uncinate_question():
-    bank = load_examples("neurostore_tracts")
-    assert bank[:-1] == load_examples("neurostore")
+    bank = load_examples("neurostore_tracts", paper=False)
+    assert bank[:-1] == load_examples("neurostore", paper=False)
     assert "uncinate" in bank[-1].question
-    assert bank[-1] == load_examples("neurosynth_tracts")[-1]
+    assert bank[-1] == load_examples("neurosynth_tracts", paper=False)[-1]
 
 
 def test_neurostore_iit_loads_the_tractogram_of_neurosynth_iit():
@@ -46,8 +46,8 @@ def test_neurostore_iit_loads_the_tractogram_of_neurosynth_iit():
 
 
 def test_neurostore_iit_has_the_questions_of_the_bundles():
-    bank = load_examples("neurostore_iit")
-    assert bank[:-3] == load_examples("neurostore_tracts")
-    assert bank[-3:] == load_examples("neurosynth_iit")[-3:]
+    bank = load_examples("neurostore_iit", paper=False)
+    assert bank[:-3] == load_examples("neurostore_tracts", paper=False)
+    assert bank[-3:] == load_examples("neurosynth_iit", paper=False)[-3:]
     assert bank[-3].queries["datalog"] == \
         'ans(streamline) :- uf(streamline, "left")'

@@ -242,7 +242,8 @@ def _step_printer(app, language: str):
 # answered and its tool is about to run), and for each step of the agent
 # ``step`` (thought, action, arguments, observation); ``done`` (valid,
 # query, explanation, error, calls, tokens, seconds, verified, back_translation,
-# verification, out_of_steps) ends them.
+# verification, out_of_steps, example_ids: those of the examples of its
+# prompt) ends them.
 AGENT_EVENTS = ("ask", "request", "reply", "step", "done")
 
 
@@ -273,6 +274,7 @@ def _done_event(result) -> dict:
         "back_translation": result.back_translation,
         "verification": result.verification,
         "out_of_steps": result.out_of_steps,
+        "example_ids": result.example_ids,
     }
 
 
@@ -402,11 +404,12 @@ def _make_agent(app, provider, assistant, language, strategy, **options):
     return make_agent(
         app._nl, provider, assistant, language, strategy,
         engine_name=app.settings.engine_name, loaded=app.loaded_relations,
-        **_without_left_out(app), **options,
+        **_without_left_out(app, assistant.include_paper_examples),
+        **options,
     )
 
 
-def _without_left_out(app) -> dict:
+def _without_left_out(app, paper: bool = True) -> dict:
     """
     Return the guidance and the examples of the assistant on an engine
     leaving out predicates (``left_out_predicates``): the engine's, told
@@ -428,7 +431,7 @@ def _without_left_out(app) -> dict:
             "  Never use them: answer with the other predicates."
         ),
         "examples": [
-            example for example in load_examples(engine)
+            example for example in load_examples(engine, paper)
             if not any(
                 uses_predicates(query, left_out)
                 for query in example.queries.values()

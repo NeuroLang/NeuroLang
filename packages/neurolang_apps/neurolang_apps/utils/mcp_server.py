@@ -298,7 +298,7 @@ class McpSession:
             app._nl, ProviderConfig("mcp", "command", "client"),
             self.config, LANGUAGE, "react", client=_NoModel(),
             engine_name=self.engine, loaded=app.loaded_relations,
-            **_without_left_out(app),
+            **_without_left_out(app, self.config.include_paper_examples),
         )
 
     def _tools(self, repl) -> Toolbox:
@@ -457,7 +457,9 @@ class McpSession:
         its prompt has them."""
         bank = agent.examples
         if bank is None:
-            bank = load_examples(self.engine)
+            bank = load_examples(
+                self.engine, self.config.include_paper_examples
+            )
         examples = select_examples(
             bank, question, LANGUAGE, self.config.few_shot_k
         )

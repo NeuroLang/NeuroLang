@@ -19,6 +19,15 @@ Unreleased
 
 **New features:**
 
+- Query assistant: the programs of the figures of the NeuroLang paper are
+  examples of the assistant, ``paper_examples`` next to the banks (Fig.
+  1a-d and f, Fig. 2a, c and d and the three readings of Fig. 4 in
+  ``coordinate_meta_analysis``; Fig. 1e and 2b in ``iit_tractogram``),
+  each with an id (``paper.fig1a``...), used when the setting
+  ``include_paper_examples`` is on (by default); an evaluation on the
+  paper's questions turns it off. Every example has an id, and the
+  agent's result records those of its prompt (``example_ids``).
+
 - Brain viewer: the views take the width of the page, the 3 slices in a
   row as tall as a third of it allows (340 to 640 px), where they were
   960 by 340 px whatever the page; the options of the display start

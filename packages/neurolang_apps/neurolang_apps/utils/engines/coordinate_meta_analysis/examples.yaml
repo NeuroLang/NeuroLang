@@ -1010,3 +1010,338 @@ assistant_examples:
       p_image(PROB) :- image_hit(s) & selected_study(s)
       term_studies(t, count(s)) :- term_in_study(s, t)
       ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
+
+# The programs of the figures of the NeuroLang paper, each with a stable
+# id (paper.fig1a...): examples of the assistant, after those of
+# assistant_examples, when the setting include_paper_examples of the
+# assistant is on (llm/defaults.yaml: on). The paper's evaluations, whose
+# agent writes these programs, turn it off, so that they are not in its
+# prompt (see doc/query_assistant.rst). The tests check them as the
+# others.
+paper_examples:
+  # Fig. 1a-d and f, Fig. 2a, c and d, Fig. 4a-c, on Neurosynth, adapted
+  # to the bank: the outputs that only feed a drawing are left out. Each
+  # program estimates over
+  # selected_study only where at least 10 studies support the estimate,
+  # and gives 95% percentile intervals over the replicates of
+  # boot_studies; "about a term" is mentions (TF-IDF above 0.03), the left
+  # amygdala Tian's lAMY lh and mAMY lh, and a peak within 3 mm of it is
+  # a peak of peak_mni within 3 mm of one of their points (tian_points).
+  # Fig. 1a: a peak within 3 mm of a voxel of brain_mask, as the voxels of
+  # peak_reported, at the 2 mm grid of the REPL and MCP servers: 1.5
+  # voxels (3 at the 1 mm grid). A map of a 6 mm kernel, activated, has
+  # many more voxels and, resampled, takes tens of GB at 1 mm.
+  - question: Where in the whole brain do studies that mention fear report a peak within 3 mm? Give each voxel's probability with a 95% bootstrap interval, for the voxels supported by at least 10 fear studies.
+    id: paper.fig1a
+    datalog: |-
+      about(s, t) :- mentions(s, t), selected_study(s)
+      near_voxel(i, j, k, s) :- brain_mask(i, j, k), peak_reported(i1, j1, k1, s), (EUCLIDEAN(i, j, k, i1, j1, k1) <= 1.5)
+      support(i, j, k, count(s)) :- near_voxel(i, j, k, s), mentions(s, 'fear')
+      active(i, j, k, s) :- near_voxel(i, j, k, s), support(i, j, k, n), (n >= 10), selected_study(s)
+      p_fear(i, j, k, PROB) :- active(i, j, k, s) // about(s, 'fear')
+      p_replicate(b, i, j, k, p) :- RESAMPLE[boot_studies](p_fear(i, j, k, p)) = b
+      interval(i, j, k, percentile(p, 2.5), percentile(p, 97.5)) :- p_replicate(b, i, j, k, p)
+      ans(i, j, k, probability, ci_low, ci_high, studies) :- p_fear(i, j, k, probability), interval(i, j, k, ci_low, ci_high), support(i, j, k, studies)
+
+  # Fig. 1b: the concepts are the terms of the vocabulary that name a
+  # Cognitive Atlas concept; those with fewer than 10 supporting studies
+  # are an answer of their own (withheld).
+  - question: Decode the left amygdala, which Cognitive Atlas concepts do the studies with a peak within 3 mm of it mention more often than their base rate? Give the log lift with a 95% bootstrap interval, for concepts supported by at least 10 studies.
+    id: paper.fig1b
+    datalog: |-
+      amygdala_label('lAMY lh')
+      amygdala_label('mAMY lh')
+      near_amygdala(s) :- amygdala_label(l), tian_points(x, y, z, l), peak_mni(px, py, pz, s), (EUCLIDEAN(px, py, pz, x, y, z) <= 3)
+      active(s) :- near_amygdala(s), selected_study(s)
+      concept_term(t) :- cogat_term(c, t), term(t)
+      support(t, count(s)) :- near_amygdala(s), mentions(s, t), concept_term(t)
+      supported(t) :- support(t, n), (n >= 10)
+      about(s, t) :- mentions(s, t), supported(t), selected_study(s)
+      p_concept_given_active(t, PROB) :- about(s, t) // active(s)
+      p_concept(t, PROB) :- about(s, t)
+      both(t, p, p0) :- p_concept_given_active(t, p), p_concept(t, p0)
+      replicate(b, t, p, p0) :- RESAMPLE[boot_studies](both(t, p, p0)) = b
+      log_lift(b, t, r) :- replicate(b, t, p, p0), (r == log(p / p0))
+      interval(t, percentile(p, 2.5), percentile(p, 97.5), percentile(p0, 2.5), percentile(p0, 97.5)) :- replicate(b, t, p, p0)
+      lift_interval(t, percentile(r, 2.5), percentile(r, 97.5)) :- log_lift(b, t, r)
+      ans[decoding](term, probability, ci_low, ci_high, base_rate, base_low, base_high, log_lift, lift_low, lift_high, studies) :- both(term, probability, base_rate), interval(term, ci_low, ci_high, base_low, base_high), lift_interval(term, lift_low, lift_high), support(term, studies), (log_lift == log(probability / base_rate))
+      ans[withheld](term, studies) :- support(term, studies), (studies < 10)
+
+  # Fig. 1c: a region (Schaefer 400 cortex, Tian subcortex) is active when
+  # a peak is within 6 mm of it; the amygdala itself is left out.
+  - question: Which Schaefer and Tian regions are co-activated with the left amygdala, a peak within 3 mm of it, more than chance? Give the log ratio with a 95% bootstrap interval, for the regions supported by at least 10 studies.
+    id: paper.fig1c
+    datalog: |-
+      amygdala_label('lAMY lh')
+      amygdala_label('mAMY lh')
+      near_amygdala(s) :- amygdala_label(l), tian_points(x, y, z, l), peak_mni(px, py, pz, s), (EUCLIDEAN(px, py, pz, x, y, z) <= 3)
+      active(s) :- near_amygdala(s), selected_study(s)
+      region_active(l, s) :- schaefer400_activated(l, s)
+      region_active(l, s) :- tian_activated(l, s)
+      support(l, count(s)) :- region_active(l, s), near_amygdala(s)
+      supported(l) :- support(l, n), (n >= 10), ~amygdala_label(l)
+      in_region(l, s) :- region_active(l, s), supported(l), selected_study(s)
+      p_region_given_active(l, PROB) :- in_region(l, s) // active(s)
+      p_region(l, PROB) :- in_region(l, s)
+      log_ratio(l, x) :- p_region_given_active(l, p), p_region(l, p0), (x == log(p / p0))
+      replicate(b, l, x) :- RESAMPLE[boot_studies](log_ratio(l, x)) = b
+      interval(l, percentile(x, 2.5), percentile(x, 97.5)) :- replicate(b, l, x)
+      ans(region, log_ratio, ci_low, ci_high, studies) :- log_ratio(region, log_ratio), interval(region, ci_low, ci_high), support(region, studies)
+
+  # Fig. 1d: the regions wired to the left amygdala are those that receive
+  # at least 1% of its streamlines in the region-to-region connectome
+  # schaefer400_tian_structural_connectivity; they are an answer of their
+  # own.
+  - question: Which regions structurally connected to the left amygdala do studies that mention fear activate more than studies in general? Give the log ratio with a 95% bootstrap interval, for the regions supported by at least 10 fear studies.
+    id: paper.fig1d
+    datalog: |-
+      amygdala_label('lAMY lh')
+      amygdala_label('mAMY lh')
+      region_active(l, s) :- schaefer400_activated(l, s)
+      region_active(l, s) :- tian_activated(l, s)
+      about(s, t) :- mentions(s, t), selected_study(s)
+      streamlines(l, sum(n)) :- amygdala_label(a), schaefer400_tian_structural_connectivity(a, l, n), ~amygdala_label(l)
+      total(sum(n)) :- streamlines(l, n)
+      connected(l, n) :- streamlines(l, n), total(t), (n >= 0.01 * t)
+      support(l, count(s)) :- connected(l, c), region_active(l, s), mentions(s, 'fear')
+      supported(l) :- support(l, n), (n >= 10)
+      in_region(l, s) :- region_active(l, s), supported(l), selected_study(s)
+      p_region_given_fear(l, PROB) :- in_region(l, s) // about(s, 'fear')
+      p_region(l, PROB) :- in_region(l, s)
+      log_ratio(l, x) :- p_region_given_fear(l, p), p_region(l, p0), (x == log(p / p0))
+      replicate(b, l, x) :- RESAMPLE[boot_studies](log_ratio(l, x)) = b
+      interval(l, percentile(x, 2.5), percentile(x, 97.5)) :- replicate(b, l, x)
+      ans[connected](region, streamlines) :- connected(region, streamlines)
+      ans[fear](region, log_ratio, ci_low, ci_high, studies) :- log_ratio(region, log_ratio), interval(region, ci_low, ci_high), support(region, studies)
+
+  # Fig. 1f, the open world: not mentioning a term is not being about
+  # something else. A study is about working memory when its abstract is
+  # among the 5% closest to the concept's definition (similar_study); the
+  # map of each group is whole-brain, a peak within 3 mm, 1.5 voxels of
+  # the 2 mm grid as in Fig. 1a.
+  - question: Which studies are about working memory, by its Cognitive Atlas definition, without mentioning the term, what share of those studies are they, and where in the whole brain do they and those that mention it report peaks?
+    id: paper.fig1f
+    datalog: |-
+      close(s) :- cogat_definition('working memory', d), similar_study(d, s)
+      annotated(s) :- mentions(s, 'working memory')
+      group(s, 'annotated') :- close(s), annotated(s)
+      group(s, 'not annotated') :- close(s), ~annotated(s)
+      in_group(s, g) :- group(s, g), selected_study(s)
+      close_study(s) :- close(s), selected_study(s)
+      size(g, count(s)) :- group(s, g)
+      p_group(g, PROB) :- in_group(s, g) // close_study(s)
+      group_replicate(b, g, p) :- RESAMPLE[boot_studies](p_group(g, p)) = b
+      group_interval(g, percentile(p, 2.5), percentile(p, 97.5)) :- group_replicate(b, g, p)
+      near_voxel(i, j, k, s) :- brain_mask(i, j, k), peak_reported(i1, j1, k1, s), (EUCLIDEAN(i, j, k, i1, j1, k1) <= 1.5)
+      support(g, i, j, k, count(s)) :- near_voxel(i, j, k, s), group(s, g)
+      active(g, i, j, k, s) :- near_voxel(i, j, k, s), support(g, i, j, k, n), (n >= 10), selected_study(s)
+      p_map(g, i, j, k, PROB) :- active(g, i, j, k, s) // in_group(s, g)
+      ans[groups](group, studies, probability, ci_low, ci_high) :- size(group, studies), p_group(group, probability), group_interval(group, ci_low, ci_high)
+      ans[maps](group, i, j, k, probability, studies) :- p_map(group, i, j, k, probability), support(group, i, j, k, studies)
+      ans[studies](study, group) :- group(study, group)
+
+  # Fig. 2a, segregation: a working-memory study names working memory or
+  # one of its Cognitive Atlas descendants; the excluded concepts are
+  # attention and cognitive control with their descendants, except
+  # working memory's family, which the Cognitive Atlas places under
+  # cognitive control. The left lateral prefrontal cortex is the left
+  # Schaefer-400 parcels labelled PFCl or PFClv; a parcel is active when
+  # a peak is within 6 mm of it. Both groups are resampled together, so
+  # the change made by segregation has an interval of its own.
+  - question: Which parcels of the left lateral prefrontal cortex are activated by working-memory studies that are about neither attention nor cognitive control, and how does leaving those out change their lift? Give log lifts and changes with 95% bootstrap intervals, for parcels supported by at least 10 studies.
+    id: paper.fig2a
+    datalog: |-
+      lateral_pfc(l) :- schaefer400(l, r), str_contains(l, ' LH '), str_contains(l, 'PFCl')
+      wm_class(c) :- cogat_term(c, 'working memory')
+      wm_class(d) :- cogat_term(c, 'working memory'), cogat_subclass_of(d, c)
+      excluded_root('attention')
+      excluded_root('cognitive control')
+      excluded_class(c) :- excluded_root(w), cogat_term(c, w)
+      excluded_class(d) :- excluded_root(w), cogat_term(c, w), cogat_subclass_of(d, c), ~wm_class(d)
+      wm_study(s) :- wm_class(c), cogat_term(c, w), mentions(s, w)
+      excluded_study(s) :- excluded_class(c), cogat_term(c, w), mentions(s, w)
+      group(s, 'working memory') :- wm_study(s)
+      group(s, 'segregated') :- wm_study(s), ~excluded_study(s)
+      support(g, l, count(s)) :- group(s, g), schaefer400_activated(l, s), lateral_pfc(l)
+      supported(l) :- support('segregated', l, n), (n >= 10)
+      in_region(l, s) :- schaefer400_activated(l, s), supported(l), selected_study(s)
+      in_group(s, g) :- group(s, g), selected_study(s)
+      p_group(g, l, PROB) :- in_region(l, s) // in_group(s, g)
+      p_all(l, PROB) :- in_region(l, s)
+      log_lift(g, l, p, q, r) :- p_group(g, l, p), p_all(l, q), (r == log(p / q))
+      replicate(b, g, l, p, q, r) :- RESAMPLE[boot_studies](log_lift(g, l, p, q, r)) = b
+      change(b, l, d) :- replicate(b, 'segregated', l, p1, q1, r1), replicate(b, 'working memory', l, p2, q2, r2), (d == r1 - r2)
+      interval(g, l, percentile(p, 2.5), percentile(p, 97.5), percentile(r, 2.5), percentile(r, 97.5)) :- replicate(b, g, l, p, q, r)
+      change_interval(l, percentile(d, 2.5), percentile(d, 97.5)) :- change(b, l, d)
+      size(g, count(s)) :- group(s, g)
+      ans[lift](group, parcel, probability, ci_low, ci_high, base_rate, log_lift, lift_low, lift_high, studies, group_size) :- log_lift(group, parcel, probability, base_rate, log_lift), interval(group, parcel, ci_low, ci_high, lift_low, lift_high), support(group, parcel, studies), size(group, group_size)
+      ans[change](parcel, change, ci_low, ci_high) :- log_lift('segregated', parcel, p1, q1, r1), log_lift('working memory', parcel, p2, q2, r2), (change == r1 - r2), change_interval(parcel, ci_low, ci_high)
+      ans[withheld](parcel, studies) :- support('segregated', parcel, studies), (studies < 10)
+
+  # Fig. 2c, the open world through tasks: the tasks measuring response
+  # inhibition are the Cognitive Atlas's two existential restrictions, a
+  # contrast that measures the concept (or a descendant) and the task it
+  # is related to. A study uses such a task when it mentions the task's
+  # name or its abstract is among the 5% closest to the task's
+  # definition; it names the concept when the word appears at all
+  # (term_in_study, TF-IDF above 0.001). The two maps are over the
+  # Schaefer-400 and Tian regions with at least 10 studies in each group,
+  # and their Pearson correlation is computed from sums over the regions,
+  # on each replicate too; its interval is r +- 1.96 standard deviations
+  # of the replicates' r, which are attenuated by the resampling noise.
+  # The definitions are a rule of their own: with skos:definition in the
+  # rule of similar_study, the uses take minutes, not seconds.
+  - question: Where do studies that use a task measuring response inhibition, but never name the concept, report peaks, and do their peaks agree with those of studies that name it? Give both maps and their correlation with 95% bootstrap intervals, for regions supported by at least 10 studies in each group.
+    id: paper.fig2c
+    datalog: |-
+      ri_class(c) :- cogat_term(c, 'response inhibition')
+      ri_class(d) :- cogat_term(c, 'response inhibition'), cogat_subclass_of(d, c)
+      measuring(x) :- cogat_measures(x, c), ri_class(c)
+      ri_task(t) :- measuring(x), rdfs:subClassOf(x, r), owl:onProperty(r, <http://www.cogpo.org/ontologies/working/CogPOver2011.owl#is_related_to>), owl:someValuesFrom(r, t)
+      uses(s) :- ri_task(t), cogat_term(t, w), mentions(s, w)
+      task_definition(d) :- ri_task(t), skos:definition(t, d)
+      uses(s) :- task_definition(d), similar_study(d, s)
+      names(s) :- ri_class(c), cogat_term(c, w), term_in_study(s, w)
+      group(s, 'unnamed') :- uses(s), ~names(s)
+      group(s, 'named') :- names(s)
+      region_active(l, s) :- schaefer400_activated(l, s)
+      region_active(l, s) :- tian_activated(l, s)
+      support(g, l, count(s)) :- group(s, g), region_active(l, s)
+      supported(l) :- support('unnamed', l, n1), support('named', l, n2), (n1 >= 10), (n2 >= 10)
+      in_region(l, s) :- region_active(l, s), supported(l), selected_study(s)
+      in_group(s, g) :- group(s, g), selected_study(s)
+      p_map(g, l, PROB) :- in_region(l, s) // in_group(s, g)
+      replicate(b, g, l, p) :- RESAMPLE[boot_studies](p_map(g, l, p)) = b
+      paired(l, x, y, xx, yy, xy) :- p_map('unnamed', l, x), p_map('named', l, y), (xx == x * x), (yy == y * y), (xy == x * y)
+      paired_b(b, l, x, y, xx, yy, xy) :- replicate(b, 'unnamed', l, x), replicate(b, 'named', l, y), (xx == x * x), (yy == y * y), (xy == x * y)
+      sums(count(l), sum(x), sum(y), sum(xx), sum(yy), sum(xy)) :- paired(l, x, y, xx, yy, xy)
+      sums_b(b, count(l), sum(x), sum(y), sum(xx), sum(yy), sum(xy)) :- paired_b(b, l, x, y, xx, yy, xy)
+      correlation(v) :- sums(n, sx, sy, sxx, syy, sxy), (v == (n * sxy - sx * sy) / exp(0.5 * log((n * sxx - sx * sx) * (n * syy - sy * sy))))
+      correlation_b(b, v) :- sums_b(b, n, sx, sy, sxx, syy, sxy), (v == (n * sxy - sx * sy) / exp(0.5 * log((n * sxx - sx * sx) * (n * syy - sy * sy))))
+      correlation_sq_b(b, v, vv) :- correlation_b(b, v), (vv == v * v)
+      moments(count(b), sum(v), sum(vv)) :- correlation_sq_b(b, v, vv)
+      correlation_interval(lo, hi) :- correlation(v), moments(k, sv, svv), (lo == v - 1.96 * exp(0.5 * log(svv / k - (sv / k) * (sv / k)))), (hi == v + 1.96 * exp(0.5 * log(svv / k - (sv / k) * (sv / k))))
+      map_interval(g, l, percentile(p, 2.5), percentile(p, 97.5)) :- replicate(b, g, l, p)
+      size(g, count(s)) :- group(s, g)
+      ans[maps](group, region, probability, ci_low, ci_high, studies) :- p_map(group, region, probability), map_interval(group, region, ci_low, ci_high), support(group, region, studies)
+      ans[correlation](correlation, ci_low, ci_high, regions) :- correlation(correlation), correlation_interval(ci_low, ci_high), sums(regions, sx, sy, sxx, syy, sxy)
+      ans[groups](group, studies) :- size(group, studies)
+      ans[tasks](task) :- ri_task(t), cogat_term(t, task)
+
+  # Fig. 2d, lateralisation compared: LI = (L - R) / (L + R), L and R the
+  # probabilities of a peak within 6 mm of the region given the concept,
+  # summed over nine homologous perisylvian Destrieux pairs; a pair is kept
+  # when both its regions have at least 10 studies of each concept. A
+  # study is about a concept when it mentions it or one of its Cognitive
+  # Atlas descendants.
+  - question: Is the activation of reading studies more left-lateralised than that of speech-production studies? Give the lateralisation index of each and their difference with 95% bootstrap intervals, over the homologous language regions supported by at least 10 studies of each.
+    id: paper.fig2d
+    datalog: |-
+      homolog('L G front inf Opercular', 'R G front inf Opercular')
+      homolog('L G front inf Triangul', 'R G front inf Triangul')
+      homolog('L G front inf Orbital', 'R G front inf Orbital')
+      homolog('L G temp sup Lateral', 'R G temp sup Lateral')
+      homolog('L G temp sup Plan tempo', 'R G temp sup Plan tempo')
+      homolog('L S temporal sup', 'R S temporal sup')
+      homolog('L G temporal middle', 'R G temporal middle')
+      homolog('L G pariet inf Supramar', 'R G pariet inf Supramar')
+      homolog('L G pariet inf Angular', 'R G pariet inf Angular')
+      compared('reading')
+      compared('speech production')
+      concept_term(c, w) :- compared(c), cogat_term(k, c), cogat_subclass_of(d, k), cogat_term(d, w)
+      concept_term(c, c) :- compared(c)
+      about(s, c) :- concept_term(c, w), mentions(s, w)
+      side(l, 'left') :- homolog(l, r)
+      side(r, 'right') :- homolog(l, r)
+      support(c, l, count(s)) :- about(s, c), destrieux_activated(l, s), side(l, h)
+      strong(c, l) :- support(c, l, n), (n >= 10)
+      weak(l, r) :- homolog(l, r), compared(c), ~strong(c, l)
+      weak(l, r) :- homolog(l, r), compared(c), ~strong(c, r)
+      kept(l, r) :- homolog(l, r), ~weak(l, r)
+      kept_region(l) :- kept(l, r)
+      kept_region(r) :- kept(l, r)
+      in_region(l, s) :- destrieux_activated(l, s), kept_region(l), selected_study(s)
+      in_concept(s, c) :- about(s, c), selected_study(s)
+      p_region(c, l, PROB) :- in_region(l, s) // in_concept(s, c)
+      replicate(b, c, l, p) :- RESAMPLE[boot_studies](p_region(c, l, p)) = b
+      hemi(c, h, sum(p)) :- p_region(c, l, p), side(l, h)
+      hemi_b(b, c, h, sum(p)) :- replicate(b, c, l, p), side(l, h)
+      li(c, x) :- hemi(c, 'left', a), hemi(c, 'right', z), (x == (a - z) / (a + z))
+      li_b(b, c, x) :- hemi_b(b, c, 'left', a), hemi_b(b, c, 'right', z), (x == (a - z) / (a + z))
+      difference_b(b, d) :- li_b(b, 'reading', x), li_b(b, 'speech production', y), (d == x - y)
+      li_interval(c, percentile(x, 2.5), percentile(x, 97.5)) :- li_b(b, c, x)
+      difference_interval(percentile(d, 2.5), percentile(d, 97.5)) :- difference_b(b, d)
+      size(c, count(s)) :- about(s, c)
+      ans[li](concept, li, ci_low, ci_high, studies) :- li(concept, li), li_interval(concept, ci_low, ci_high), size(concept, studies)
+      ans[difference](difference, ci_low, ci_high) :- li('reading', x), li('speech production', y), (difference == x - y), difference_interval(ci_low, ci_high)
+      ans[weak](left_region, right_region) :- weak(left_region, right_region)
+
+  # Fig. 4a-c, one question under three readings of "a study about a
+  # term", the rule about_term the only one that differs: the term appears
+  # in the abstract (term_in_study, TF-IDF above 0.001), the term is
+  # frequent (TF-IDF above 0.1), or the study is about the term with
+  # probability its TF-IDF weight (a probabilistic rule). The log ratio
+  # of the two probabilities is compared on the same replicates.
+  - question: Is the left amygdala, a peak within 3 mm of it, activated more often by studies in whose abstract the word fear appears than by those in which pain appears? Give the log ratio with a 95% bootstrap interval.
+    id: paper.q1_reading_a
+    datalog: |-
+      amygdala_label('lAMY lh')
+      amygdala_label('mAMY lh')
+      topic('fear')
+      topic('pain')
+      near_amygdala(s) :- amygdala_label(l), tian_points(x, y, z, l), peak_mni(px, py, pz, s), (EUCLIDEAN(px, py, pz, x, y, z) <= 3)
+      active(s) :- near_amygdala(s), selected_study(s)
+      about_term(s, t) :- term_in_study(s, t)
+      about(s, t) :- about_term(s, t), topic(t), selected_study(s)
+      p_given(t, PROB) :- active(s) // about(s, t)
+      replicate(b, t, p) :- RESAMPLE[boot_studies](p_given(t, p)) = b
+      log_ratio_b(b, r) :- replicate(b, 'fear', f), replicate(b, 'pain', q), (r == log(f / q))
+      interval(percentile(r, 2.5), percentile(r, 97.5)) :- log_ratio_b(b, r)
+      term_studies(t, count(s)) :- about_term(s, t)
+      term_active(t, count(s)) :- about_term(s, t), near_amygdala(s)
+      supported(t) :- term_active(t, n), (n >= 10)
+      ans[answer](fear, pain, log_ratio, ci_low, ci_high) :- p_given('fear', fear), p_given('pain', pain), supported('fear'), supported('pain'), (log_ratio == log(fear / pain)), interval(ci_low, ci_high)
+      ans[evidence](term, studies, active) :- topic(term), term_studies(term, studies), term_active(term, active)
+
+  - question: Is the left amygdala, a peak within 3 mm of it, activated more often by studies whose abstracts use the term fear frequently, a TF-IDF above 0.1, than by those using pain so? Give the log ratio with a 95% bootstrap interval.
+    id: paper.q1_reading_b
+    datalog: |-
+      amygdala_label('lAMY lh')
+      amygdala_label('mAMY lh')
+      topic('fear')
+      topic('pain')
+      near_amygdala(s) :- amygdala_label(l), tian_points(x, y, z, l), peak_mni(px, py, pz, s), (EUCLIDEAN(px, py, pz, x, y, z) <= 3)
+      active(s) :- near_amygdala(s), selected_study(s)
+      about_term(s, t) :- weighted_mention(s, t, w), (w > 0.1)
+      about(s, t) :- about_term(s, t), topic(t), selected_study(s)
+      p_given(t, PROB) :- active(s) // about(s, t)
+      replicate(b, t, p) :- RESAMPLE[boot_studies](p_given(t, p)) = b
+      log_ratio_b(b, r) :- replicate(b, 'fear', f), replicate(b, 'pain', q), (r == log(f / q))
+      interval(percentile(r, 2.5), percentile(r, 97.5)) :- log_ratio_b(b, r)
+      term_studies(t, count(s)) :- about_term(s, t)
+      term_active(t, count(s)) :- about_term(s, t), near_amygdala(s)
+      supported(t) :- term_active(t, n), (n >= 10)
+      ans[answer](fear, pain, log_ratio, ci_low, ci_high) :- p_given('fear', fear), p_given('pain', pain), supported('fear'), supported('pain'), (log_ratio == log(fear / pain)), interval(ci_low, ci_high)
+      ans[evidence](term, studies, active) :- topic(term), term_studies(term, studies), term_active(term, active)
+
+  - question: Is the left amygdala, a peak within 3 mm of it, activated more often by studies probably about fear, each with probability its TF-IDF weight, than by those probably about pain? Give the log ratio with a 95% bootstrap interval.
+    id: paper.q1_reading_c
+    datalog: |-
+      amygdala_label('lAMY lh')
+      amygdala_label('mAMY lh')
+      topic('fear')
+      topic('pain')
+      near_amygdala(s) :- amygdala_label(l), tian_points(x, y, z, l), peak_mni(px, py, pz, s), (EUCLIDEAN(px, py, pz, x, y, z) <= 3)
+      active(s) :- near_amygdala(s), selected_study(s)
+      about_term(s, t) :: w :- weighted_mention(s, t, w)
+      about(s, t) :- about_term(s, t), topic(t), selected_study(s)
+      p_given(t, PROB) :- active(s) // about(s, t)
+      replicate(b, t, p) :- RESAMPLE[boot_studies](p_given(t, p)) = b
+      log_ratio_b(b, r) :- replicate(b, 'fear', f), replicate(b, 'pain', q), (r == log(f / q))
+      interval(percentile(r, 2.5), percentile(r, 97.5)) :- log_ratio_b(b, r)
+      term_support(s, t) :- weighted_mention(s, t, w)
+      term_studies(t, count(s)) :- term_support(s, t)
+      term_active(t, count(s)) :- term_support(s, t), near_amygdala(s)
+      supported(t) :- term_active(t, n), (n >= 10)
+      ans[answer](fear, pain, log_ratio, ci_low, ci_high) :- p_given('fear', fear), p_given('pain', pain), supported('fear'), supported('pain'), (log_ratio == log(fear / pain)), interval(ci_low, ci_high)
+      ans[evidence](term, studies, active) :- topic(term), term_studies(term, studies), term_active(term, active)

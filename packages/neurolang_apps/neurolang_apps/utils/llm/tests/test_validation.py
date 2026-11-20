@@ -202,7 +202,9 @@ def test_describe_a_rule_computed_for_a_given_text(nl, monkeypatch):
     example = "ans(s) :- similar_study('fear', s)"
     monkeypatch.setattr(
         "neurolang_apps.utils.llm.context.load_examples",
-        lambda name: [Example("Studies close to fear?", {"datalog": example})],
+        lambda name, paper=None: [
+            Example("Studies close to fear?", {"datalog": example})
+        ],
     )
     context = EngineContext(nl)
     lines = context.describe("study_similarity").splitlines()
