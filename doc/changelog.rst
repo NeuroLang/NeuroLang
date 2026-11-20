@@ -211,6 +211,11 @@ Unreleased
 
 **Bug fixes:**
 
+- REPL in the browser: the output of a query is legible on its dark panel.
+  Its colours were Rich's, made for a light terminal: an error was dark red
+  on navy (a contrast of 1.6). They are now the page's, each with a
+  contrast of at least 4.5 (WCAG AA), dim text included.
+  
 - REPL in the browser: *Map the studies* is offered for the columns of
   studies only. A map of voxels, ``ans(i, j, k, lift)``, offered a map of
   the studies in ``i``, ``j`` and ``k``, its voxel indices taken for
