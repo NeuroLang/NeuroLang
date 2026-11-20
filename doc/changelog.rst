@@ -210,6 +210,14 @@ Unreleased
 
 **Performance:**
 
+- A selection or a projection by functions that apply to whole columns
+  (comparisons, arithmetic, and functions marked ``columnwise``, as
+  ``euclidean``) is computed once on the columns rather than once a row:
+  the studies with a peak within 3 mm of an MNI point,
+  ``peak_mni(x, y, z, s), (euclidean(x, y, z, -24, -4, -20) <= 3)``, took
+  15 s over the 508 000 peaks of Neurosynth, now 1.2 s. A backend other
+  than pandas computes it a row at a time, as before.
+
 - Contractions multiply an engine's view by an operand of a few rows (the
   studies of a term) as a sparse by dense product, one pass over the view
   in its own layout, and build their operands with indices of 32 bits, as
