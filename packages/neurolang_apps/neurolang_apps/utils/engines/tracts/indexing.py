@@ -488,6 +488,24 @@ class RelationStore:
             pair for pair in self._indexed if pair[1] != ident
         }
 
+    @property
+    def atlases(self) -> set:
+        """The names of the atlases added (``add_atlas``)."""
+        known = self.relations.get("atlas")
+        return set() if known is None else set(known["a"])
+
+    def remove_atlas(self, name: str) -> None:
+        """Remove the atlas ``name`` and its rows from every relation (its
+        catalogue, ``label``, ``label_term``, ``label_extent``, and the
+        rows it indexed)."""
+        for relation, frame in self.relations.items():
+            if "a" in frame.columns:
+                keep = (frame["a"] != name).to_numpy()
+                self.relations[relation] = frame[keep].reset_index(drop=True)
+        self._indexed = {
+            pair for pair in self._indexed if pair[0] != name
+        }
+
     def add_index(
         self,
         tractogram: Tractogram,

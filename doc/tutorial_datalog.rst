@@ -623,7 +623,18 @@ completes in about 20 seconds.
     its rows bind its variables in the IDB predicates right of it: in
     ``ans(x) :- e("c", y) & p(y, x)``, with ``e`` an EDB predicate and
     ``p`` defined by rules, the values of ``y`` in the rows of ``e``
-    with ``"c"`` are passed to ``p``.
+    with ``"c"`` are passed to ``p``. In the query's own rule, a small
+    EDB predicate (``[MAGIC_SETS] seed_rows``, 100 tuples, at most) binds
+    its variables without a constant, and is put first: in
+    ``ans(t, i, j, k, u) :- chosen(t) & uniformity(t, i, j, k, u)``,
+    ``uniformity`` is computed for the terms of ``chosen`` alone.
+    A predicate whose rule binds a variable only through its head, as
+    ``q`` in ``similar_study(q, s) :- study(s) & (v ==
+    query_similarity(q, s)) & ...``, is a relation over the values the
+    rules using it bind: there, an EDB predicate with a variable at
+    such an argument binds it, and is put first, as ``skos:definition``
+    does ``d`` in ``uses(s) :- cogat_term(t, 'stroop task') &
+    skos:definition(t, d) & similar_study(d, s)``.
 
 
 Part 9: The Complete Program

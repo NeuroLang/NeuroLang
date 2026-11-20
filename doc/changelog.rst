@@ -19,6 +19,12 @@ Unreleased
 
 **New features:**
 
+- Brain viewer: the views take the width of the page, the 3 slices in a
+  row as tall as a third of it allows (340 to 640 px), where they were
+  960 by 340 px whatever the page; the options of the display start
+  folded under *Display*, the image close to the threshold; the colour
+  and the width of the crosshair are named for screen readers.
+
 - ``neurolang-query --mcp`` and the REPL server's ``/mcp``: an answer's
   rows are shown by their value, highest first; its glass brain is a file
   too, linked; a page lists the answers of the session with their glass
@@ -212,6 +218,68 @@ Unreleased
 
 **Performance:**
 
+- A choice over a few rows of an engine's view (the voxels of an image) by
+  the view reads those rows alone, and a vector over a few of its columns
+  reads them through the view's index by column entities, rather than the
+  whole view: decoding an image by the terms with ``selected_voxel`` on
+  neurostore, 10 voxels against ``activated``'s 1 billion entries, took 7
+  to 18 s, now 4 to 15 s; the product itself 1.7 s warm, 55 s cold, now
+  next to nothing. ``FEW_CELLS`` and ``INDEX_SHARE`` are in the
+  configuration: ``[PROBABILISTIC_SOLVER] few_cells`` and ``index_share``.
+
+- A natural join of a small relation (``[RAS] join_cut_rows``, 10 000 rows)
+  with one ``join_cut_ratio`` (100) times larger first keeps the rows of
+  the larger one whose values of the common columns are among the smaller
+  one's, before dropping its duplicates and merging (pandas). The magic
+  set of a term, one row, was merged with the 10 M rows of NeuroStore's
+  TF-IDF: ``mentions(s, 'pain'), mentions(s, 'emotion')`` took 9.2 s, now
+  2.9 s.
+
+- Decoding an image by the terms (``p_image_given_term``) took 110 s on
+  neurosynth, now 3.7 s, with the same answer. Lifting tests whether
+  columns of a relation determine another: two of its first rows
+  (``[PROBABILISTIC_SOLVER] function_sample_rows``, 10 000) with one key
+  and two values now disprove it, rather than counting the distinct
+  values of the whole relation (346 M rows of ``activated``, 30 to 45 s a
+  test). And a sparse view weighted by probabilities on a few of its rows
+  (the voxels of the image) is multiplied by their diagonal, which reads
+  those rows alone, rather than copied and scaled entry by entry (25 s).
+  
+- A selection or a projection by functions that apply to whole columns
+  (comparisons, arithmetic, and functions marked ``columnwise``, as
+  ``euclidean``) is computed once on the columns rather than once a row:
+  the studies with a peak within 3 mm of an MNI point,
+  ``peak_mni(x, y, z, s), (euclidean(x, y, z, -24, -4, -20) <= 3)``, took
+  15 s over the 508 000 peaks of Neurosynth, now 1.2 s. A backend other
+  than pandas computes it a row at a time, as before.
+
+- Contractions multiply an engine's view by an operand of a few rows (the
+  studies of a term) as a sparse by dense product, one pass over the view
+  in its own layout, and build their operands with indices of 32 bits, as
+  the views: ``uniformity('pain', ...)`` on neurostore went from 89-96 s
+  to 63-68 s, the product of the term's studies by ``activated`` from 12 s
+  to 2.8 s.
+
+- A view can be kept by its column entities as well
+  (``sparse_view_indexes`` of ``engines.yaml``; ``activated`` in the
+  coordinate-based engines): a product with a few of them (the studies of
+  a term) reads their entries alone, not the whole view.
+  ``uniformity('pain', ...)`` on neurostore: 63-68 s to 13 s; the index
+  of ``activated`` is 3.9 GB, built once.
+
+- Magic sets: in the query's own rule, a small stored relation (at most
+  ``[MAGIC_SETS] seed_rows``, 100 tuples) binds its variables without a
+  constant, and is put first. ``chosen(t), uniformity(t, i, j, k, u)``
+  computed ``uniformity`` for all 3 228 terms before keeping the chosen
+  ones (30 minutes without an answer on neurostore); it now computes it
+  for the chosen terms alone.
+
+- Magic sets: of a cycle with an aggregation and a negation that a binding
+  would create, the predicate left unbound is chosen in a fixed order, the
+  aggregation's first. It was the first of a set, so a query could be
+  planned differently from one run to the next: a functional connectivity
+  query took 5 or 17 s, its aggregation computed once or twice.
+
 - Engine builds read the cached atlas activations as arrays instead of
   rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
   arrays as fixed-width bytes instead of through ``repr``; the cache
@@ -230,6 +298,49 @@ Unreleased
   than 1 000 streamlines to (166 regions before); the studies of the
   subclasses of attention and of the tf-idf example show their titles, and
   the former the subclass that matched.
+- AI assistant: an answer given when the ReAct agent ran out of steps,
+  the last query that gave rows, says so: its summary reads *Out of steps:
+  no final answer after N steps*, as a warning on the web page and in
+  yellow in the terminal, where it read as a final answer.
+
+- A predicate whose rule binds a variable only through its head, as
+  ``q`` in ``similar_study(q, s)`` of the engine neurosynth, gets the
+  values of a stored relation of the rules using it:
+  ``uses(s) :- cogat_term(t, 'stroop task'), skos:definition(t, d),
+  similar_study(d, s)`` raised ``UnboundVariablesError``, as did
+  ``study_similarity``, ``p_similar``, ``p_a_given_similar``,
+  ``lift_llm``, ``uniformity_llm`` and the other ``*_llm`` predicates.
+  When magic sets cannot bind every predicate without leaving the
+  program unstratified (two WMQL bundles of the engine neurosynth_iit),
+  only those predicates are bound, where the rewrite was dropped.
+  
+- Tractography: ``.index_tracts(t, a, replace=1)`` also removes from the
+  relations the atlases that indexed only the tractograms it removes. Their
+  labels stayed in the box of a term (``term_box_*``), so that the
+  directional rules of the bundles (``endpoint_anterior_of``...) of the
+  tractogram indexed depended on them: HCP842 indexed by ``cvs_avg35``'s
+  wmparc in place of the IIT tractogram indexed by its wmparc (the commands
+  of ``neurosynth_iit``) selected 715 left uncinate streamlines instead of
+  tract_querier's 724, the left amygdala's box reaching 1.5 mm forward in
+  IIT's wmparc and 0.5 mm in ``cvs_avg35``'s. The atlas removed keeps its
+  options (``extent``, ``term_mapping``) for when it indexes again.
+
+- An aggregation over a body with a negated atom, as
+  ``r(sum(x)) :- p(x), ~q(x)``, is no longer refused as not conjunctive:
+  it gives the aggregation over an intermediate rule holding the negation.
+  An aggregate whose negated atom depends on its own head is refused, as
+  with a positive one.
+  
+- REPL in the browser: the output of a query is legible on its dark panel.
+  Its colours were Rich's, made for a light terminal: an error was dark red
+  on navy (a contrast of 1.6). They are now the page's, each with a
+  contrast of at least 4.5 (WCAG AA), dim text included.
+  
+- REPL in the browser: *Map the studies* is offered for the columns of
+  studies only. A map of voxels, ``ans(i, j, k, lift)``, offered a map of
+  the studies in ``i``, ``j`` and ``k``, its voxel indices taken for
+  studies; integer columns of an unknown sort count only when no column is
+  of studies.
 
 - REPL in the browser: a map of voxels, such as ``ans(i, j, k, lift)``,
   no longer gets a *Network* tab: its ``i`` and ``j``, of the one sort of

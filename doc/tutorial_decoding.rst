@@ -389,7 +389,8 @@ runs
     .index_tracts("uf_l", "fs", replace=1)
 
 ``replace=1`` removes the tractogram indexed before (the engine's own, or
-another upload) from the relations, and the REPL notes which one; the row
+another upload) from the relations, with the atlases that indexed only it,
+and the REPL notes which one; the row
 of the file indexed says *Indexed*, and *Index* on another file's row puts
 it in its place.  The engine's own tractogram is listed first, as the
 engine's, without *Download* or *Remove*: its *Index* puts it back.  A

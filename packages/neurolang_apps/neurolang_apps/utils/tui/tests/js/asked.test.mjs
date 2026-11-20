@@ -17,8 +17,14 @@ test("a question is kept with the query it gave, between visits", () => {
   const again = new AskedHistory(storage);
   assert.deepEqual(again.entries, [{
     question: "which studies mention pain?", query: "ans(s) :- mentions(s, 'pain')",
-    language: "datalog", valid: true, explanation: "The studies.", at: 1000,
+    language: "datalog", valid: true, explanation: "The studies.", out_of_steps: false, at: 1000,
   }]);
+});
+
+test("an answer given out of steps is kept as one", () => {
+  const asked = new AskedHistory(new Storage());
+  asked.add(answer("a?", "ans(x) :- a(x)", { out_of_steps: true }));
+  assert.equal(asked.newest()[0].out_of_steps, true);
 });
 
 test("the newest come first; the same answer twice in a row is kept once", () => {

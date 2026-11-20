@@ -2015,7 +2015,9 @@ def _phase_sparse_views(nl, cfg):
     engine leaves out, the activations of atlases it does not load) are
     not built, nor any when the probabilistic solver, which reads them,
     does not compute contractions (``[PROBABILISTIC_SOLVER] contractions``
-    of the configuration).
+    of the configuration). The views of ``sparse_view_indexes`` are also
+    kept by their column entities, so that a product with few of them
+    reads their entries alone.
     """
     from nl_expr.config import config
 
@@ -2047,6 +2049,10 @@ def _phase_sparse_views(nl, cfg):
         None if tables is None else functools.partial(
             tables.arrays, "sparse_views"
         ),
+        indexed=[
+            name for name in cfg.get("sparse_view_indexes") or ()
+            if name in declared
+        ],
     )
 
 

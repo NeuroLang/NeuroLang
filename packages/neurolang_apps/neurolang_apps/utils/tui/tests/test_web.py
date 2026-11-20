@@ -1,6 +1,7 @@
 """Tests for the REPL driven from a web page."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -1084,3 +1085,30 @@ def test_the_topics_of_the_questions_are_known_and_grouped(repl):
     assert set(topics.values()) <= set(QUESTION_TOPICS)
     ranks = [QUESTION_TOPICS.index(topics[q]) for q in more]
     assert ranks == sorted(ranks)
+
+
+def _luminance(hex_colour: str) -> float:
+    """Return the relative luminance (WCAG) of a colour ``#rrggbb``."""
+    def channel(value: int) -> float:
+        value /= 255
+        return value / 12.92 if value <= 0.03928 else (
+            (value + 0.055) / 1.055
+        ) ** 2.4
+    r, g, b = (int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+@pytest.mark.parametrize("panel", ["#070d19", "#0f1b33"])
+def test_the_colours_of_the_output_are_legible_on_its_panel(repl, panel):
+    # the dark panel of the output, --term in tokens.css, in either theme
+    repl.app.console.print(
+        "[red]failed[/red] [dim]a note[/dim] [green]saved[/green] "
+        "[magenta]a path[/magenta] [cyan]1[/cyan] [yellow]warned[/yellow]"
+    )
+    colours = re.findall(r"color: (#[0-9a-f]{6})", repl._output())
+    assert len(colours) >= 6
+    for colour in colours:
+        bright, dark = sorted(
+            (_luminance(colour), _luminance(panel)), reverse=True
+        )
+        assert (bright + 0.05) / (dark + 0.05) >= 4.5, colour

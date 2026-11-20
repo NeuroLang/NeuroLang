@@ -242,7 +242,7 @@ def _step_printer(app, language: str):
 # answered and its tool is about to run), and for each step of the agent
 # ``step`` (thought, action, arguments, observation); ``done`` (valid,
 # query, explanation, error, calls, tokens, seconds, verified, back_translation,
-# verification) ends them.
+# verification, out_of_steps) ends them.
 AGENT_EVENTS = ("ask", "request", "reply", "step", "done")
 
 
@@ -272,6 +272,7 @@ def _done_event(result) -> dict:
         "seconds": result.seconds, "verified": result.verified,
         "back_translation": result.back_translation,
         "verification": result.verification,
+        "out_of_steps": result.out_of_steps,
     }
 
 
@@ -299,11 +300,15 @@ def runnable_query(result) -> str:
 def _show_summary(app, result) -> None:
     """
     Print what the query does, above it and apart from it: the
-    explanation the model gave and the query read back in English.
+    explanation the model gave and the query read back in English. Out
+    of steps, the query is no final answer: the summary says so, in yellow.
     """
     summary = Text()
     if result.explanation:
-        summary.append(result.explanation)
+        summary.append(
+            result.explanation,
+            style="yellow" if result.out_of_steps else "",
+        )
     if result.back_translation:
         if summary:
             summary.append("\n")
@@ -312,7 +317,7 @@ def _show_summary(app, result) -> None:
     if summary:
         app.console.print(Panel(
             summary, title="Summary", title_align="left",
-            border_style="cyan",
+            border_style="yellow" if result.out_of_steps else "cyan",
         ))
 
 
@@ -335,7 +340,8 @@ def _show_result(app, result) -> None:
         _show_summary(app, result)
         app.console.print(Panel(
             query_text(result.commented or result.query, result.language),
-            title=f"{result.language.upper()} query", border_style="green",
+            title=f"{result.language.upper()} query",
+            border_style="yellow" if result.out_of_steps else "green",
         ))
         _show_verification(app, result)
     else:

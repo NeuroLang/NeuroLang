@@ -16,17 +16,21 @@ from ..aggregation import (
 )
 from ..chase import Chase
 from ..expression_processing import extract_logic_free_variables
+from ..expressions import AggregationApplication
 from ..exceptions import (
     BoundAggregationApplicationError,
     InvalidMagicSetError,
     NegationInMagicSetsRewriteError,
     NoConstantPredicateFoundError,
+    UnstratifiedMagicSetsRewriteError,
 )
 from ..magic_sets import (
     AdornedSymbol,
     LeftToRightSIPS,
     ReplaceAdornedSymbolWalker,
+    check_stratified,
     magic_rewrite,
+    needed_positions,
 )
 from ..negation import DatalogProgramNegationMixin
 
@@ -424,11 +428,99 @@ def test_resolution_works_constant_in_edb_atom():
     assert solution[goal].value == {C_((c,)), C_((d,))}
 
 
-def test_edb_atom_without_constant_does_not_seed_magic_sets():
+@pytest.mark.parametrize("body", [
+    lambda: par(z, x) & anc(x, y),
+    lambda: anc(x, y) & par(z, x),  # put first
+])
+def test_edb_atom_of_the_query_rule_binds_without_constant(body):
+    """
+    In the query's own rule, an atom of the extensional database binds
+    its variables, constant or not (the relation the query restricts
+    itself to, as ``chosen(t)``), and is put first: ``x`` of
+    ``anc(x, y)`` is bound by ``par(z, x)``; the answers are those of the
+    program not rewritten.
+    """
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(y), body()),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    expected = Chase(dl).build_chase_solution()[q].value
+    goal, mr = magic_rewrite(q(y), dl)
+    assert any(
+        rule.consequent.functor.name.startswith("magic_anc^bf")
+        and par(z, x) in rule.antecedent.formulas
+        for rule in mr.formulas
+    )
+
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == expected
+
+
+def test_large_edb_atom_of_the_query_rule_does_not_seed_magic_sets():
+    """In the query's rule, a stored relation of more than
+    ``[MAGIC_SETS] seed_rows`` tuples binds nothing: its magic set would
+    restrict little (all the voxels of a mask)."""
+    from nl_expr.config import config
+
     edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
     code = Eb_(
         [
             Imp_(q(y), par(z, x) & anc(x, y)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    previous = config.get("MAGIC_SETS", "seed_rows")
+    config.set("MAGIC_SETS", "seed_rows", "2")  # par has 3
+    try:
+        with raises(NoConstantPredicateFoundError):
+            magic_rewrite(q(y), dl)
+    finally:
+        config.set("MAGIC_SETS", "seed_rows", previous)
+
+
+def test_edb_atom_of_a_recursive_query_rule_does_not_seed_magic_sets():
+    """A query defined recursively (a transitive closure, as a frontend
+    unfolds ``ans(x, y) :- reach(x, y)``) keeps no relation of its own:
+    its stored relations, steps of the recursion, bind nothing."""
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(x, y), par(x, y)),
+            Imp_(q(x, y), q(x, z) & par(z, y)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    with raises(NoConstantPredicateFoundError):
+        magic_rewrite(q(x, y), dl)
+
+
+def test_edb_atom_without_constant_does_not_seed_magic_sets():
+    """Out of the query's rule, an atom of the extensional database
+    without a constant binds nothing: no magic set covers a whole
+    relation."""
+    r = S_("r")
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(y), r(y)),
+            Imp_(r(y), par(z, x) & anc(x, y)),
             Imp_(anc(x, y), par(x, y)),
             Imp_(anc(x, y), anc(x, z) & par(z, y)),
         ]
@@ -1029,3 +1121,62 @@ def test_magic_rewrite_keeps_an_aggregation_that_is_not_in_a_cycle():
     dl.walk(code)
     dl.walk(edb)
     magic_rewrite(q(x), dl)  # does not raise
+
+
+@pytest.mark.parametrize("negation_first", [True, False])
+def test_an_aggregation_in_a_cycle_is_reported_before_a_negation(
+    negation_first,
+):
+    """
+    Of a cycle with an aggregation and a negation in it, the predicate
+    reported (which magic sets leave unbound) is the aggregation's, in
+    whichever order the rules come: it was the first of a set, which
+    changed with the hashes of the symbols, and so did the plan.
+    """
+    n, g, e, s_ = S_("n"), S_("g"), S_("e"), S_("s")
+    negation = Imp_(n(x), Cnj_((s_(x), Negation(g(x, y)))))
+    count = AggregationApplication(S_("count"), (y,))
+    aggregation = Imp_(g(x, count), Cnj_((n(y), e(x, y))))
+    rules = (negation, aggregation) if negation_first else (
+        aggregation, negation
+    )
+    with raises(UnstratifiedMagicSetsRewriteError) as error:
+        check_stratified(rules, {n: S_("origin_n"), g: S_("origin_g")})
+    assert error.value.predicate == S_("origin_g")
+
+
+class DatalogWithClose(Datalog):
+    def function_close(self, text: str, study: str) -> bool:
+        return text[0] == study[0]
+
+
+def test_a_predicate_bound_through_its_head_is_bound_by_a_stored_relation():
+    """
+    ``q`` of ``Sim(q, s)`` is bound only through the head: ``Sim`` is a
+    relation over the texts its users bind, here ``Def``, a stored
+    relation without a constant. It binds ``d`` because ``Sim`` needs it
+    (``Sim`` was left unbound, and its rule could not be solved).
+    """
+    t, s, text = S_("t"), S_("s"), S_("text")
+    Sim, Use = S_("Sim"), S_("Use")  # noqa: N806
+    Def, Study = S_("Def"), S_("Study")  # noqa: N806
+    close = S_("close")
+    dl = DatalogWithClose()
+    dl.walk(Eb_([
+        Imp_(Sim(text, s), Study(s) & close(text, s)),
+        Imp_(Use(s), Def(t, text) & Sim(text, s)),
+        Imp_(q(s), Use(s)),
+    ]))
+    dl.walk(Eb_([
+        F_(Def(C_("t1"), C_("apple"))), F_(Def(C_("t2"), C_("banana"))),
+        F_(Study(C_("a1"))), F_(Study(C_("c1"))), F_(Study(C_("b1"))),
+    ]))
+    assert needed_positions(dl) == {Sim: {0}}
+    goal, mr = magic_rewrite(q(x), dl)
+    assert any(
+        rule.consequent.functor.name.startswith("Sim^bf")
+        for rule in mr.formulas
+    )
+    dl.walk(mr)
+    solution = Chase(dl, rules=mr).build_chase_solution()
+    assert solution[goal].value == {(C_("a1"),), (C_("b1"),)}

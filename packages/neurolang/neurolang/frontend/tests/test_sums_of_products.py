@@ -13,6 +13,7 @@ import pytest
 
 from neurolang.frontend import NeurolangPDL
 from nl_core.probabilistic import sums_of_products
+from nl_core.relational_algebra.linear_algebra.rewrites import NotApplicable
 from nl_expr.config import config
 
 
@@ -28,16 +29,27 @@ def no_failed_contractions(caplog):
 
 @pytest.fixture
 def contractions(monkeypatch):
-    """The plans computed as contractions, by solve."""
-    computed = []
+    """The plans computed as contractions, by solve: those whose
+    evaluation gave an answer. An error of an evaluation (which leaves
+    the plan to relational algebra, with its answers) fails the test;
+    a plan the backend does not compute (NotApplicable) does not."""
+    computed, errors = [], []
     evaluate = sums_of_products.evaluate
 
     def recording(plan, *args):
+        try:
+            answer = evaluate(plan, *args)
+        except NotApplicable:
+            raise
+        except Exception as error:
+            errors.append(error)
+            raise
         computed.append(plan)
-        return evaluate(plan, *args)
+        return answer
 
     monkeypatch.setattr(sums_of_products, "evaluate", recording)
-    return computed
+    yield computed
+    assert not errors, f"contractions failed: {errors!r}"
 
 
 def _solve(nl, program, contract=True):
@@ -318,22 +330,31 @@ def test_relations_the_translator_declines(
         assert result[key] == pytest.approx(value, rel=1e-12)
 
 
+@pytest.mark.parametrize("indexed", [False, True])
+@pytest.mark.parametrize("few_rows", [True, False])
 @pytest.mark.parametrize("body, head", [
     ("activated(i, j, k, s) & sel(s)", "i, j, k"),
     ("activated(i, j, k, s) & sel(s) // term(s, t) & sel(s)", "i, j, k, t"),
 ])
-def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
+def test_views_are_read_as_they_are(
+    body, head, few_rows, indexed, contractions, monkeypatch
+):
     """A relation of an engine's sparse view is read as its matrix,
     neither copied nor converted to another layout (a transposed view is
     a CSC matrix: the other operand of a product is converted to it; of
     a product of two views, one is), with the answers of relational
-    algebra."""
+    algebra. By a few rows (the terms), it is a product by a dense
+    matrix, not a sparse product; a sparse product takes operands of
+    the view's type of indices, so it converts neither. Indexed by its
+    columns (the studies), the view is read through its index by the
+    studies of a term, restricted to them, and by a vector of studies."""
     from scipy import sparse
 
     from nl_core.relational_algebra.linear_algebra import (
         Axis,
         ViewDeclaration,
         build_sparse_views,
+        scipy_backend,
     )
 
     rng = np.random.default_rng(0)
@@ -356,8 +377,22 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
         {"activated": ViewDeclaration(
             Axis("voxel", (0, 1, 2)), Axis("study", (3,))
         )},
+        indexed=["activated"] if indexed else (),
     )
     view_nnz = nl.sparse_views["activated"].matrix.nnz
+    read_by_columns = []
+    if indexed:
+        # every study is few enough, in so small a view
+        monkeypatch.setitem(
+            config["PROBABILISTIC_SOLVER"], "index_share", "1"
+        )
+        index = nl.sparse_views["activated"].by_columns
+        matrix = index.matrix
+        monkeypatch.setattr(
+            index, "matrix",
+            lambda columns: read_by_columns.append(len(columns))
+            or matrix(columns),
+        )
     converted = []
     for kind, method in (
         (sparse.csc_array, "tocsr"), (sparse.csr_array, "tocsc")
@@ -368,6 +403,18 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
                 converted.append(self.nnz) or convert(self, *a, **k)
             ),
         )
+    if not few_rows:
+        monkeypatch.setitem(
+            config["PROBABILISTIC_SOLVER"], "few_cells", "0"
+        )
+    multiplied = []
+    matmul = sparse._compressed._cs_matrix._matmul_sparse
+    monkeypatch.setattr(
+        sparse._compressed._cs_matrix, "_matmul_sparse",
+        lambda self, other: multiplied.append((
+            self.nnz, other.nnz, self.indices.dtype, other.indices.dtype
+        )) or matmul(self, other),
+    )
     previous = config.get("PROBABILISTIC_SOLVER", "dense_cells")
     config.set("PROBABILISTIC_SOLVER", "dense_cells", "0")
     try:
@@ -377,6 +424,13 @@ def test_views_are_read_as_they_are(body, head, contractions, monkeypatch):
         )
         contracted = _solve(nl, program)
         assert contractions and view_nnz not in converted
+        assert all(a == b for _, _, a, b in multiplied)
+        # with every study few enough, the index is read for the studies
+        # of a term and for the vector of the choice over the studies
+        assert bool(read_by_columns) == indexed
+        assert not few_rows or read_by_columns or not any(
+            view_nnz in (n, m) for n, m, _, _ in multiplied
+        )
         relational = _solve(nl, program, contract=False)
     finally:
         config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)
@@ -474,3 +528,119 @@ def test_a_contraction_failing_falls_back(caplog, monkeypatch):
         r.name == sums_of_products.LOG.name for r in caplog.records
     )
     caplog.clear()
+
+
+@pytest.mark.parametrize("body, head", [
+    # facts on a few voxels: the rows of the view (an image's voxels)
+    ("activated(i, j, k, s) & pv(i, j, k) & sel(s)", "s"),
+    # facts on a few studies: its columns
+    ("activated(i, j, k, s) & ps(s)", "i, j, k"),
+])
+def test_a_view_weighted_by_a_few_facts(body, head, contractions, caplog):
+    """A view weighted by probabilistic facts on a few of its rows (the
+    voxels of an image) or columns (studies) is scaled by the diagonal of
+    their probabilities, with the answers of relational algebra."""
+    from nl_core.relational_algebra.linear_algebra import (
+        Axis,
+        ViewDeclaration,
+        build_sparse_views,
+    )
+
+    rng = np.random.default_rng(1)
+    voxels = list(itertools.product(range(3), range(2), range(2)))
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [v + (s,) for v in voxels for s in range(5) if rng.random() < .6],
+        name="activated",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(.9, 0, 0, 0), (.4, 1, 1, 1), (.7, 2, 0, 1)], name="pv"
+    )
+    nl.add_probabilistic_facts_from_tuples([(.3, 1), (.8, 3)], name="ps")
+    nl.add_probabilistic_choice_from_tuples(
+        [(.1, 0), (.2, 1), (.3, 2), (.15, 3), (.25, 4)], name="sel"
+    )
+    nl.sparse_views = build_sparse_views(
+        nl.program_ir.symbol_table,
+        {"activated": ViewDeclaration(
+            Axis("voxel", (0, 1, 2)), Axis("study", (3,))
+        )},
+    )
+    previous = config.get("PROBABILISTIC_SOLVER", "dense_cells")
+    config.set("PROBABILISTIC_SOLVER", "dense_cells", "0")
+    try:
+        program = (
+            f"q({head}, p) :- PROB[{body}] = p\n"
+            f"ans({head}, p) :- q({head}, p)"
+        )
+        contracted = _solve(nl, program)
+        assert contractions
+        # an error of the contraction would leave it to relational algebra
+        assert "not computed as contractions" not in caplog.text
+        relational = _solve(nl, program, contract=False)
+    finally:
+        config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)
+    assert set(contracted) == set(relational) and relational
+    for key, value in relational.items():
+        assert contracted[key] == pytest.approx(value, rel=1e-12)
+
+
+@pytest.mark.parametrize(
+    "index_share, rows_alone", [("1", True), ("0", False)]
+)
+def test_a_choice_over_a_few_rows_of_a_view(
+    index_share, rows_alone, contractions, caplog, monkeypatch
+):
+    """A choice over a few voxels (those of an image) by the voxel by
+    study view, summed over the voxels: the product reads those rows of the
+    view alone when their entries are at most ``index_share`` of the
+    view's, the whole view otherwise; the answers of relational algebra."""
+    from nl_core.relational_algebra.linear_algebra import (
+        Axis,
+        ViewDeclaration,
+        build_sparse_views,
+        scipy_backend,
+    )
+
+    rng = np.random.default_rng(2)
+    voxels = list(itertools.product(range(3), range(2), range(2)))
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [v + (s,) for v in voxels for s in range(5) if rng.random() < .6],
+        name="activated",
+    )
+    nl.add_probabilistic_choice_from_tuples(
+        [(.5, 0, 0, 0), (.3, 1, 1, 1), (.2, 2, 0, 1)], name="cv"
+    )
+    nl.sparse_views = build_sparse_views(
+        nl.program_ir.symbol_table,
+        {"activated": ViewDeclaration(
+            Axis("voxel", (0, 1, 2)), Axis("study", (3,))
+        )},
+    )
+    monkeypatch.setitem(
+        config["PROBABILISTIC_SOLVER"], "index_share", index_share
+    )
+    few = []
+    record = scipy_backend._few
+    monkeypatch.setattr(
+        scipy_backend, "_few",
+        lambda entries, nnz: few.append(record(entries, nnz)) or few[-1],
+    )
+    previous = config.get("PROBABILISTIC_SOLVER", "dense_cells")
+    config.set("PROBABILISTIC_SOLVER", "dense_cells", "0")
+    try:
+        program = (
+            "q(s, p) :- PROB[cv(i, j, k) & activated(i, j, k, s)] = p\n"
+            "ans(s, p) :- q(s, p)"
+        )
+        contracted = _solve(nl, program)
+        assert contractions
+        assert "not computed as contractions" not in caplog.text
+        relational = _solve(nl, program, contract=False)
+    finally:
+        config.set("PROBABILISTIC_SOLVER", "dense_cells", previous)
+    assert few and any(few) is rows_alone
+    assert set(contracted) == set(relational) and relational
+    for key, value in relational.items():
+        assert contracted[key] == pytest.approx(value, rel=1e-12)

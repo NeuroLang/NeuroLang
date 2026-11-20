@@ -1457,3 +1457,28 @@ def test_order_across_subqueries():
     assert testing.eq_prov_relations(
         result, testing.make_prov_set([(expected,)], ("_p_",))
     )
+
+
+@pytest.mark.parametrize("rows, sample, expected", [
+    ([("a", 1), ("b", 2), ("a", 1)], 3, True),
+    ([("a", 1), ("a", 2), ("b", 2)], 2, False),  # disproved by the sample
+    # the first 3 rows disprove nothing: the distinct values count
+    ([("a", 1), ("b", 2), ("c", 3), ("a", 4)], 3, False),
+    # missing values are one value, as distinct values count them
+    ([("a", float("nan")), ("a", float("nan")), ("b", 1.)], 3, True),
+])
+def test_a_column_is_a_function_of_others(
+    rows, sample, expected, monkeypatch
+):
+    """Whether a column is a function of others: two of the first rows
+    with one key and two values disprove it, without counting the
+    distinct values of the relation; the counts decide otherwise."""
+    from nl_expr.config import config
+
+    from .. import dalvi_suciu_lift
+
+    monkeypatch.setitem(
+        config["PROBABILISTIC_SOLVER"], "function_sample_rows", str(sample)
+    )
+    relation = NamedRelationalAlgebraFrozenSet(("x", "y"), rows)
+    assert dalvi_suciu_lift._is_function(relation, ("x",), "y") is expected

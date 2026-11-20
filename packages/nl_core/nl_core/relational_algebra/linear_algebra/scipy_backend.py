@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+from nl_expr.config import config
 from nl_expr.expression_walker import PatternWalker, add_match
 
 from .encoding import EntityIndex, views_of_columns
@@ -70,9 +71,14 @@ class _Tensor:
     the first by the second.
     """
 
-    def __init__(self, groups, codes=None, values=None, matrix=None):
+    def __init__(
+        self, groups, codes=None, values=None, matrix=None, by_columns=None
+    ):
         self.groups = tuple(groups)
         self.matrix = matrix
+        # the matrix (an engine's view, as it is) by its column entities,
+        # a ColumnIndex; a tensor computed from it has none
+        self.by_columns = by_columns
         self._codes, self._values = codes, values
 
     def _entries(self):
@@ -140,6 +146,7 @@ class _Evaluation:
             return _Tensor(
                 (self.group_of[rows[0]], self.group_of[columns[0]]),
                 matrix=view.weighted(),
+                by_columns=getattr(view, "by_columns", None),
             )
         frame = self.frames[id(factor)]
         groups = self.groups(factor.axes)
@@ -215,13 +222,20 @@ class _Evaluation:
         vector[by_keys] = factors
         matrix = tensor.matrix
         if len(by.groups) == 1 and matrix is not None:
-            matrix = matrix.copy()
-            matrix.data *= vector[
-                matrix.indices if tensor.groups.index(by.groups[0])
-                else np.repeat(
-                    np.arange(matrix.shape[0]), np.diff(matrix.indptr)
-                )
-            ]
+            # A product by the diagonal of the factors present: by rows,
+            # it reads the rows of those alone (the voxels of an image
+            # out of the 346 M entries of activated, where copying the
+            # matrix and scaling each entry took 25 s); by columns, every
+            # entry once, never copied. The diagonal's indices have the
+            # matrix's type, which the product would convert otherwise.
+            present = np.flatnonzero(vector).astype(matrix.indices.dtype)
+            diagonal = sparse.csr_array(
+                (vector[present], (present, present)), shape=(size, size)
+            )
+            matrix = (
+                matrix @ diagonal if tensor.groups.index(by.groups[0])
+                else diagonal @ matrix
+            )
             matrix.eliminate_zeros()
             return _Tensor(tensor.groups, matrix=matrix)
         if len(by.groups) == 1:
@@ -260,12 +274,33 @@ class _Evaluation:
         other = held.groups[1 - held.groups.index(group)]
         if other not in keep:
             return None
-        dense = np.zeros(self.size(group))
-        dense[vector.codes[0]] = vector.values
-        matrix = held.matrix if held.groups[1] == group else held.matrix.T
-        out = matrix @ dense
+        codes, values = vector.codes[0], vector.values
+        rows = held.matrix
+        if held.groups[0] == group and rows.format == "csr" and _few(
+            np.diff(rows.indptr)[codes].sum(), rows.nnz
+        ):
+            # a few rows (the voxels of an image) read alone, not the
+            # whole view by its transpose: 10 voxels of activated, 1.7 s
+            # warm and 55 s cold for its 1 billion entries
+            out = values @ rows[codes]
+        elif held.groups[1] == group and held.by_columns is not None:
+            order = np.argsort(codes)
+            if _selective(held.by_columns, codes[order]):
+                out = values[order] @ held.by_columns.matrix(codes[order])
+            else:
+                out = rows @ self._dense(group, codes, values)
+        else:
+            dense = self._dense(group, codes, values)
+            out = (rows if held.groups[1] == group else rows.T) @ dense
         codes = np.flatnonzero(out)
         return _Tensor((other,), [codes], out[codes])
+
+    def _dense(self, group, codes, values):
+        """The dense vector of the entities of *group*, *values* at
+        *codes*."""
+        dense = np.zeros(self.size(group))
+        dense[codes] = values
+        return dense
 
     def contract(self, left, right, keep):
         """Return the product of *left* and *right* summed over their
@@ -295,6 +330,7 @@ class _Evaluation:
             return self.dense(left, right, rows + columns)
         left_matrix = self.matrix(left, rows, inner)
         right_matrix = self.matrix(right, inner, columns)
+        held = (left_matrix is not None, right_matrix is not None)
         inner_size = self.cells(inner)
         if len(inner) > 1:  # neither is held as a matrix
             inner_left, inner_right, inner_size = _compact(
@@ -308,9 +344,8 @@ class _Evaluation:
             )
             if len(inner) <= 1:
                 inner_left = self.keys(left, inner)
-            left_matrix = sparse.csr_array(
-                (left.values, (row_keys, inner_left)),
-                shape=(row_size, inner_size),
+            left_matrix = _csr(
+                left.values, row_keys, inner_left, (row_size, inner_size)
             )
         if right_matrix is None:
             column_keys, column_unique, column_size = _compact_one(
@@ -318,18 +353,22 @@ class _Evaluation:
             )
             if len(inner) <= 1:
                 inner_right = self.keys(right, inner)
-            right_matrix = sparse.csr_array(
-                (right.values, (inner_right, column_keys)),
-                shape=(inner_size, column_size),
+            right_matrix = _csr(
+                right.values, inner_right, column_keys,
+                (inner_size, column_size),
             )
-        if left_matrix.format != right_matrix.format:
-            # a view transposed is a CSC matrix: the other operand, not the
-            # view, is converted to its layout
-            if left_matrix.nnz <= right_matrix.nnz:
-                left_matrix = left_matrix.asformat(right_matrix.format)
-            else:
-                right_matrix = right_matrix.asformat(left_matrix.format)
-        product = sparse.coo_array(left_matrix @ right_matrix)
+        # a view (the right operand, as products are taken) by an operand
+        # that selects few of its column entities (contracted): both
+        # restricted to them, the view read through its index
+        if held == (False, True) and right.by_columns is not None and (
+            inner + columns == list(right.groups[::-1])
+        ):
+            selected = np.unique(left_matrix.indices)
+            if _selective(right.by_columns, selected):
+                left_matrix = left_matrix[:, selected]
+                right_matrix = right.by_columns.matrix(selected)
+                held = (False, False)
+        product = sparse.coo_array(_product(left_matrix, right_matrix, held))
         row_keys = product.row.astype(np.int64)
         column_keys = product.col.astype(np.int64)
         if row_unique is not None:
@@ -448,6 +487,59 @@ class ScipyTensorSolver(PatternWalker):
     @add_match(TensorExpression)
     def other(self, expression):
         raise NotApplicable(f"{expression} is not in normal form")
+
+
+def _product(left, right, held):
+    """
+    Return the product of the sparse matrices *left* and *right*, of
+    which those *held* (a pair of booleans) are an engine's views, read
+    as they are.
+
+    A view by an operand of a few rows is the product of the view by
+    that operand as a dense matrix (contractions multiply the product
+    of the terms so far by the next term: a view is the right operand): one pass over the view, in
+    its own layout. A sparse product would cost the whole view all the
+    same, in the layout it is not held in (a selection of 2 895 studies
+    by the 1 billion entries of neurostore's voxel by study view: 2.8 s
+    rather than 12 s). Otherwise the operand of fewer entries takes the
+    layout of the other (a view transposed is a CSC matrix).
+    """
+    if held == (False, True) and left.shape[0] * max(
+        left.shape[1], right.shape[1]
+    ) <= config.getint("PROBABILISTIC_SOLVER", "few_cells"):
+        return (right.T @ left.T.toarray()).T
+    small, big = (left, right) if left.nnz <= right.nnz else (right, left)
+    small = small.asformat(big.format)
+    return small @ big if left.nnz <= right.nnz else big @ small
+
+
+def _few(entries, nnz):
+    """Whether *entries* of a view of *nnz* are few enough to be read alone
+    (``[PROBABILISTIC_SOLVER] index_share`` of them at most)."""
+    return entries <= config.getfloat(
+        "PROBABILISTIC_SOLVER", "index_share"
+    ) * nnz
+
+
+def _selective(index, columns):
+    """Whether the entries of the column entities *columns* of a view are
+    few enough to be read through its *index*
+    (:class:`~.encoding.ColumnIndex`)."""
+    return _few(index.entries(columns), index.nnz)
+
+
+def _csr(values, rows, columns, shape):
+    """
+    Return the CSR matrix of *shape* of the *values* at (*rows*,
+    *columns*), with indices of 32 bits when they fit, as those of the
+    views: scipy keeps the type of the numbers it is given (64 bits for
+    keys), and a product of matrices of indices of two types converts
+    both to 64 bits (the 1 billion indices of neurostore's voxel by study
+    view: 12 s rather than 5 s).
+    """
+    if max(*shape, len(values)) <= np.iinfo(np.int32).max:
+        rows, columns = rows.astype(np.int32), columns.astype(np.int32)
+    return sparse.csr_array((values, (rows, columns)), shape=shape)
 
 
 def _compact(*keys, size):
