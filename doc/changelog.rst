@@ -262,6 +262,17 @@ Unreleased
 
 **Bug fixes:**
 
+- Tractography: ``.index_tracts(t, a, replace=1)`` also removes from the
+  relations the atlases that indexed only the tractograms it removes. Their
+  labels stayed in the box of a term (``term_box_*``), so that the
+  directional rules of the bundles (``endpoint_anterior_of``...) of the
+  tractogram indexed depended on them: HCP842 indexed by ``cvs_avg35``'s
+  wmparc in place of the IIT tractogram indexed by its wmparc (the commands
+  of ``neurosynth_iit``) selected 715 left uncinate streamlines instead of
+  tract_querier's 724, the left amygdala's box reaching 1.5 mm forward in
+  IIT's wmparc and 0.5 mm in ``cvs_avg35``'s. The atlas removed keeps its
+  options (``extent``, ``term_mapping``) for when it indexes again.
+
 - An aggregation over a body with a negated atom, as
   ``r(sum(x)) :- p(x), ~q(x)``, is no longer refused as not conjunctive:
   it gives the aggregation over an intermediate rule holding the negation.

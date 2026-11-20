@@ -154,6 +154,50 @@ def test_replace_indexes_one_tractogram_at_a_time(files):
         "ans(t) :- tractogram(t)")) == {("t1",)}
 
 
+def test_replace_removes_the_atlases_that_indexed_only_those_removed(files):
+    """replace=1 also removes the atlases that indexed only the tractograms
+    removed, whose boxes would otherwise be in the box of a term
+    (term_box_*): the bundles of the one indexed are those it has alone.
+    Such an atlas indexes again with the options it was first given."""
+    nibabel_image = nib.Nifti1Image(synthetic_volume(), AFFINES["flipped"])
+    nib.save(nibabel_image, files / "labels2.nii.gz")
+
+    def boxes(nl):
+        return rows(nl.execute_datalog_program(
+            'ans(axis, lo) :- term_box_lo("putamen", "left", axis, lo)'))
+
+    alone = tracts_engine()
+    alone.execute_datalog_program(
+        f'.load_atlas("fs2", "{files}/labels2.nii.gz", "{files}/lut.txt", '
+        'kind="freesurfer", space="s")\n'
+        + tractogram_command(files, "b", "t2")
+        + '.index_tracts("t2", "fs2")\n')
+    nl = tracts_engine()
+    nl.execute_datalog_program(
+        atlas_command(files) + tractogram_command(files)
+        + '.index_tracts("t1", "fs", extent="centre")\n')
+    first = boxes(nl)
+    nl.execute_datalog_program(
+        f'.load_atlas("fs2", "{files}/labels2.nii.gz", "{files}/lut.txt", '
+        'kind="freesurfer", space="s")\n')
+    assert boxes(nl) != boxes(alone)
+    with pytest.warns(UserWarning, match="'t2' replaces 't1'"):
+        nl.execute_datalog_program(
+            tractogram_command(files, "b", "t2")
+            + '.index_tracts("t2", "fs2", replace=1)\n')
+    assert rows(nl.execute_datalog_program("ans(a) :- atlas(a)")) == \
+        {("fs2",)}
+    assert boxes(nl) == boxes(alone)
+    # fs, still loaded, indexes t1 again in place of t2
+    with pytest.warns(UserWarning, match="'t1' replaces 't2'"):
+        nl.execute_datalog_program('.index_tracts("t1", "fs", replace=1)\n')
+    assert rows(nl.execute_datalog_program("ans(a) :- atlas(a)")) == \
+        {("fs",)}
+    assert rows(nl.execute_datalog_program(
+        'ans(a) :- label(a, 1, "Left-Putamen", "left")')) == {("fs",)}
+    assert boxes(nl) == first
+
+
 def test_every_relation_of_the_schema_is_there(files):
     nl = tracts_engine()
     nl.execute_datalog_program(
