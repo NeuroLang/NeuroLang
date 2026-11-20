@@ -208,6 +208,14 @@ Unreleased
   engine's own tractogram is listed first, never removed, its *Index*
   putting it back (:doc:`tutorial_decoding`).
 
+**Deprecated:**
+
+- SQUALL (controlled English): ``execute_squall_program`` (so
+  ``neurolang-query --squall`` and the REPL's SQUALL mode) warns that it will
+  be removed, :doc:`tutorial_squall` says so, and the engines shipped no
+  longer declare SQUALL examples (the REPL listed one for the studies that
+  mention pain, among others).  Write Datalog instead.
+
 **Performance:**
 
 - A choice over a few rows of an engine's view (the voxels of an image) by
@@ -279,6 +287,17 @@ Unreleased
 
 **Bug fixes:**
 
+- The REPL's example questions answer what they ask, with readable regions:
+  the lifts of the regions activated by studies about language or fear, and
+  of those co-activated with the left amygdala, are kept above 1.5, 1.5 and
+  2.0 (all of them were above 1, so the lists named every region) and show the
+  names of the regions; the left thalamus and hippocampus of the
+  functional-connectivity questions are all their parts (the thalamus was 2
+  rows, at a threshold of 0.2 that its correlations barely reach, now 42 rows
+  above 0.15); the left superior frontal gyrus lists the regions it sends more
+  than 1 000 streamlines to (166 regions before); the studies of the
+  subclasses of attention and of the tf-idf example show their titles, and
+  the former the subclass that matched.
 - AI assistant: an answer given when the ReAct agent ran out of steps,
   the last query that gave rows, says so: its summary reads *Out of steps:
   no final answer after N steps*, as a warning on the web page and in

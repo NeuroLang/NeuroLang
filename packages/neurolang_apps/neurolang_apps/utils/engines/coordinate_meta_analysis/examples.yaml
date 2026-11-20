@@ -13,15 +13,11 @@ questions:
 examples:
   datalog:
     - "ans(study, year, title) :- mentions(study, 'pain'), study_year(study, year), study_title(study, title)"
-    - "ans(study, tfidf) :- weighted_mention(study, 'pain', tfidf), (tfidf > 0.1)"
+    - "ans(study, title, tfidf) :- weighted_mention(study, 'pain', tfidf), (tfidf > 0.1), study_title(study, title)"
     - "ans(i, j, k, uniformity) :- uniformity('pain', i, j, k, uniformity)"
     - "ans(i, j, k, uniformity) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, uniformity)"
     - "ans(concept) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, concept)"
-    - "ans(study) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(study, t)"
-  squall:
-    - "obtain every Study that mentions 'pain'."
-    - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
-    - "obtain every Voxel (?i; ?j; ?k) that a Study that mentions 'pain' reports."
+    - "ans(concept, study, title) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, concept), mentions(study, concept), study_title(study, title)"
 
 # Questions on the coordinate-based meta-analysis engines (neurosynth,
 # neurostore) with their Datalog queries: the few-shot examples of the
@@ -129,7 +125,7 @@ assistant_examples:
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
       p_active(l, p0) :- PROB[active(l, s)] = p0
-      ans(region, lift) :- cogat_definition('language', d), p_active_given_close(d, region, p), p_active(region, p0), (lift == p / p0)
+      ans(region, name, lift) :- cogat_definition('language', d), p_active_given_close(d, region, p), p_active(region, p0), (lift == p / p0), (lift > 1.5), destrieux_name(region, name)
 
   - question: Is the left superior temporal gyrus activated by studies on speech?
     datalog: |-
@@ -143,7 +139,7 @@ assistant_examples:
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
       p_active(l, p0) :- PROB[active(l, s)] = p0
-      ans(region, lift) :- cogat_definition('fear', d), p_active_given_close(d, region, p), p_active(region, p0), (lift == p / p0)
+      ans(region, name, lift) :- cogat_definition('fear', d), p_active_given_close(d, region, p), p_active(region, p0), (lift == p / p0), (lift > 1.5), tian_name(region, name)
 
   - question: Which parcels of the functional networks are activated by studies about the default mode?
     datalog: |-
@@ -297,7 +293,7 @@ assistant_examples:
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       p_active_given(l, p) :- PROB[active(l, s) // seed(s)] = p
       p_active(l, p0) :- PROB[active(l, s)] = p0
-      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
+      ans(region, name, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0), (lift > 2.0), destrieux_name(region, name)
 
   - question: Which gyri and sulci are co-activated with the left superior temporal gyrus?
     datalog: |-

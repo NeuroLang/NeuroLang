@@ -846,6 +846,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> sorted(result.as_pandas_dataframe().iloc[:, 0].tolist())
         ['alice']
         """
+        warnings.warn(
+            "SQUALL (controlled English) is deprecated and will be removed; "
+            "write Datalog instead.",
+            FutureWarning, stacklevel=2,
+        )
         parsed = squall_parser(code)
 
         self._process_squall_commands(parsed)

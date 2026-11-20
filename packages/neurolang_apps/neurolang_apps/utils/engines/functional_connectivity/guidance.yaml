@@ -35,4 +35,7 @@ assistant_guidance: >
   model, which the answer states), or a choice over a seed's partners
   weighted by r / sum(r). The correlations of the subcortex are weaker
   (0.3 at most between two subcortical regions, about 0.2 to the
-  cortex), so their thresholds are lower, (r > 0.2).
+  cortex), so their thresholds are lower: (r > 0.2) between subcortical
+  regions, (r > 0.15) from a subcortical structure to the cortex, whose
+  correlations barely reach 0.2 (at (r > 0.2) the left thalamus keeps 2
+  parcels, at (r > 0.15) 42).
