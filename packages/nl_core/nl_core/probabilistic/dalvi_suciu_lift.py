@@ -2675,9 +2675,41 @@ def _functions_of(atom, variables, symbol_table):
     return {
         arg for i, arg in enumerate(atom.args)
         if key and isinstance(arg, Symbol) and arg not in variables and
-        len(relation.projection(*key)) ==
-        len(relation.projection(*key, relation.columns[i]))
+        _is_function(relation, key, relation.columns[i])
     }
+
+
+#: The rows of a relation read first to disprove that columns determine
+#: another, before counting the distinct values of the whole relation.
+FUNCTION_SAMPLE_ROWS = 10000
+
+
+def _is_function(relation, key, column):
+    """Whether the *column* of *relation* is a function of its *key*
+    columns. Two of its first rows with one key and two values disprove it
+    without reading the rest (for a voxel and the study of ``activated``,
+    its second row; counting the distinct values of its 346 M rows took
+    30 to 45 s); otherwise the distinct keys and the distinct pairs of key
+    and value are counted."""
+    rows = relation.first_rows(FUNCTION_SAMPLE_ROWS)
+    if rows is not None:
+        columns = list(relation.columns)
+        at = [columns.index(c) for c in key]
+        value_at = columns.index(column)
+        values = {}
+        for row in rows:
+            first = values.setdefault(
+                tuple(row[i] for i in at), row[value_at]
+            )
+            # two missing values are one, as distinct values count them
+            if first != row[value_at] and (
+                first == first or row[value_at] == row[value_at]
+            ):
+                return False
+    return (
+        len(relation.projection(*key)) ==
+        len(relation.projection(*key, column))
+    )
 
 
 class IsPureLiftedPlan(PatternWalker):

@@ -128,6 +128,15 @@ class RelationalAlgebraFrozenSet(Set):
     def as_numpy_array(self):
         pass
 
+    def first_rows(self, n):
+        """
+        Return an iterator of at most *n* rows of the set, tuples in the
+        order of its columns, read without dropping duplicates (so without
+        reading the whole set), or None if the backend cannot. A sample to
+        disprove a property of the set with, cheaply.
+        """
+        return None
+
     def row_count_estimate(self):
         """
         Return a cheap upper bound of the number of rows of the set.

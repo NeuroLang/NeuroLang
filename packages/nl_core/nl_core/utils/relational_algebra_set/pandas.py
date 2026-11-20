@@ -590,6 +590,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         else:
             return iter(self._container.itertuples(name=None, index=False))
 
+    def first_rows(self, n):
+        if self.is_empty() or self.is_dee():
+            return iter([])
+        return iter(self._container.head(n)[list(self.columns)].itertuples(
+            name=None, index=False
+        ))
+
     def __hash__(self):
         if self._container is None:
             return hash((tuple(), None))

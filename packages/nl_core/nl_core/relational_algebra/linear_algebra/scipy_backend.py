@@ -215,13 +215,20 @@ class _Evaluation:
         vector[by_keys] = factors
         matrix = tensor.matrix
         if len(by.groups) == 1 and matrix is not None:
-            matrix = matrix.copy()
-            matrix.data *= vector[
-                matrix.indices if tensor.groups.index(by.groups[0])
-                else np.repeat(
-                    np.arange(matrix.shape[0]), np.diff(matrix.indptr)
-                )
-            ]
+            # A product by the diagonal of the factors present: by rows,
+            # it reads the rows of those alone (the voxels of an image
+            # out of the 346 M entries of activated, where copying the
+            # matrix and scaling each entry took 25 s); by columns, every
+            # entry once, never copied. The diagonal's indices have the
+            # matrix's type, which the product would convert otherwise.
+            present = np.flatnonzero(vector).astype(matrix.indices.dtype)
+            diagonal = sparse.csr_array(
+                (vector[present], (present, present)), shape=(size, size)
+            )
+            matrix = (
+                matrix @ diagonal if tensor.groups.index(by.groups[0])
+                else diagonal @ matrix
+            )
             matrix.eliminate_zeros()
             return _Tensor(tensor.groups, matrix=matrix)
         if len(by.groups) == 1:

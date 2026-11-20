@@ -210,6 +210,15 @@ Unreleased
 
 **Performance:**
 
+- Decoding an image by the terms (``p_image_given_term``) took 110 s on
+  neurosynth, now 3.7 s, with the same answer. Lifting tests whether
+  columns of a relation determine another: two of its first rows with one
+  key and two values now disprove it, rather than counting the distinct
+  values of the whole relation (346 M rows of ``activated``, 30 to 45 s a
+  test). And a sparse view weighted by probabilities on a few of its rows
+  (the voxels of the image) is multiplied by their diagonal, which reads
+  those rows alone, rather than copied and scaled entry by entry (25 s).
+
 - Magic sets: in the query's own rule, a small stored relation (at most
   ``[MAGIC_SETS] seed_rows``, 100 tuples) binds its variables without a
   constant, and is put first. ``chosen(t), uniformity(t, i, j, k, u)``
