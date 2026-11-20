@@ -1180,3 +1180,27 @@ def test_a_predicate_bound_through_its_head_is_bound_by_a_stored_relation():
     dl.walk(mr)
     solution = Chase(dl, rules=mr).build_chase_solution()
     assert solution[goal].value == {(C_("a1"),), (C_("b1"),)}
+
+
+def test_a_rewrite_reads_the_extensional_database_a_few_times():
+    """The relations of the extensional database are read a few times by
+    a rewrite, not once a literal: building them walks the whole symbol
+    table (15 000 times, half the rewrite of a query of tracts)."""
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(c, d))])
+    code = Eb_(
+        [
+            Imp_(q(y), par(a, x) & anc(x, y) & par(y, z) & anc(z, x1)),
+            Imp_(anc(x, y), par(x, y)),
+            Imp_(anc(x, y), anc(x, z) & par(z, y)),
+        ]
+    )
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    reads = []
+    extensional_database = dl.extensional_database
+    dl.extensional_database = lambda: (
+        reads.append(1) or extensional_database()
+    )
+    magic_rewrite(q(y), dl)
+    assert len(reads) <= 4

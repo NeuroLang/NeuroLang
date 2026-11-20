@@ -45,6 +45,7 @@ from .constraints_representation import (
 from .range_restriction import unbound_variables_error
 from .expression_processing import (
     FlattenQueryInNonRecursiveUCQ,
+    _body_predicates,
     any_body_preds_in_set,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
@@ -182,6 +183,10 @@ class SIPS(ABC):
         self.edb = edb_with_prob_symbols(datalog)
         self.prob_symbols = probabilistic_symbols(datalog)
         self.seed_from_edb = seed_from_edb
+        # the relations of the extensional database, read once: building
+        # them walks the whole symbol table (15 000 times, 70 s of the
+        # rewrite of a query of tracts)
+        self.stored_relations = datalog.extensional_database()
         self.seeding_edb_atoms = set()
         # the query's predicate (adorn_code sets it), and whether the rule
         # whose arcs are being created is the query's own
@@ -457,7 +462,7 @@ class LeftToRightSIPS(SIPS):
         database."""
         return (
             isinstance(functor, Symbol) and
-            functor in self.datalog.extensional_database() and
+            functor in self.stored_relations and
             functor not in self.prob_symbols
         )
 
@@ -468,7 +473,7 @@ class LeftToRightSIPS(SIPS):
         tuples."""
         if not self._stored(functor):
             return False
-        relation = self.datalog.extensional_database()[functor].value
+        relation = self.stored_relations[functor].value
         return len(relation) <= config.getint(
             "MAGIC_SETS", "seed_rows", fallback=100
         )
@@ -846,18 +851,19 @@ def order_rules_definitions_first(rules):
     taken as known, and the rules after a recursive one are still
     ordered.
     """
-    pending = list(rules)
+    # the predicates of each body, read once, not once a pass; the rules
+    # by position, as comparing rules is comparing their expressions
+    pending = [(rule, _body_predicates(rule)) for rule in rules]
     ordered = []
     while pending:
-        heads = {rule.consequent.functor for rule in pending}
+        heads = {rule.consequent.functor for rule, _ in pending}
         ready = [
-            rule for rule in pending
-            if not any_body_preds_in_set(
-                rule, heads - {rule.consequent.functor}
-            )
-        ] or pending[:1]
-        ordered += ready
-        pending = [rule for rule in pending if rule not in ready]
+            i for i, (rule, body) in enumerate(pending)
+            if not body & (heads - {rule.consequent.functor})
+        ] or [0]
+        ordered += [pending[i][0] for i in ready]
+        ready = set(ready)
+        pending = [p for i, p in enumerate(pending) if i not in ready]
     return tuple(ordered)
 
 

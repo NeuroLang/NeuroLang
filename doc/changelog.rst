@@ -210,6 +210,14 @@ Unreleased
 
 **Performance:**
 
+- The magic-sets rewrite of a query over a large program (the tracts of
+  an engine) took most of its time: the relations of the extensional
+  database were built again for each literal checked (15 000 times), and
+  rules were ordered definitions first by reading every body on each pass.
+  Both are now read once. The Fig. 2b query of the bundles co-activated by
+  language studies on neurosynth_iit took 240 to 267 s, now 118 to 120 s,
+  with the same answer.
+
 - A natural join of a small relation (``[RAS] join_cut_rows``, 10 000 rows)
   with one ``join_cut_ratio`` (100) times larger first keeps the rows of
   the larger one whose values of the common columns are among the smaller
