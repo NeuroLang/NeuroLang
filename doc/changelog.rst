@@ -210,6 +210,16 @@ Unreleased
 
 **Performance:**
 
+- Decoding an image by the terms (``p_image_given_term``) took 110 s on
+  neurosynth, now 3.7 s, with the same answer. Lifting tests whether
+  columns of a relation determine another: two rows of a random sample of
+  it (``[PROBABILISTIC_SOLVER] function_sample_rows``, 10 000) with one key
+  and two values now disprove it, rather than counting the distinct
+  values of the whole relation (346 M rows of ``activated``, 30 to 45 s a
+  test). And a sparse view weighted by probabilities on a few of its rows
+  (the voxels of the image) is multiplied by their diagonal, which reads
+  those rows alone, rather than copied and scaled entry by entry (25 s).
+  
 - A selection or a projection by functions that apply to whole columns
   (comparisons, arithmetic, and functions marked ``columnwise``, as
   ``euclidean``) is computed once on the columns rather than once a row:
@@ -262,6 +272,17 @@ Unreleased
   When magic sets cannot bind every predicate without leaving the
   program unstratified (two WMQL bundles of the engine neurosynth_iit),
   only those predicates are bound, where the rewrite was dropped.
+  
+- Tractography: ``.index_tracts(t, a, replace=1)`` also removes from the
+  relations the atlases that indexed only the tractograms it removes. Their
+  labels stayed in the box of a term (``term_box_*``), so that the
+  directional rules of the bundles (``endpoint_anterior_of``...) of the
+  tractogram indexed depended on them: HCP842 indexed by ``cvs_avg35``'s
+  wmparc in place of the IIT tractogram indexed by its wmparc (the commands
+  of ``neurosynth_iit``) selected 715 left uncinate streamlines instead of
+  tract_querier's 724, the left amygdala's box reaching 1.5 mm forward in
+  IIT's wmparc and 0.5 mm in ``cvs_avg35``'s. The atlas removed keeps its
+  options (``extent``, ``term_mapping``) for when it indexes again.
 
 - An aggregation over a body with a negated atom, as
   ``r(sum(x)) :- p(x), ~q(x)``, is no longer refused as not conjunctive:

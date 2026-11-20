@@ -592,6 +592,17 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         else:
             return iter(self._container.itertuples(name=None, index=False))
 
+    def sample_rows(self, n):
+        if self.is_empty() or self.is_dee():
+            return iter([])
+        rows = self._container
+        if n < len(rows):
+            # a Generator chooses n of the rows without permuting them all
+            rows = rows.sample(n, random_state=np.random.default_rng(0))
+        return iter(rows[list(self.columns)].itertuples(
+            name=None, index=False
+        ))
+
     def __hash__(self):
         if self._container is None:
             return hash((tuple(), None))
