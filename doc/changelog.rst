@@ -270,6 +270,11 @@ Unreleased
 
 **Bug fixes:**
 
+- AI assistant: an answer given when the ReAct agent ran out of steps,
+  the last query that gave rows, says so: its summary reads *Out of steps:
+  no final answer after N steps*, as a warning on the web page and in
+  yellow in the terminal, where it read as a final answer.
+
 - A predicate whose rule binds a variable only through its head, as
   ``q`` in ``similar_study(q, s)`` of the engine neurosynth, gets the
   values of a stored relation of the rules using it:

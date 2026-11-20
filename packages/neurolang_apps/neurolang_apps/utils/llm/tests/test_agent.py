@@ -392,6 +392,8 @@ def test_react_answers_the_last_query_with_rows_when_out_of_steps(nl):
     react, _ = agent(nl, ReactAgent, replies, language="datalog", max_steps=3)
     result = react.run("Which studies?")
     assert result.valid and result.query == "ans(s) :- study(s)"
+    assert result.out_of_steps
+    assert result.explanation.startswith("Out of steps")
     assert "after 3 steps" in result.explanation
 
 
@@ -406,6 +408,7 @@ def test_final_answer_runs_the_query(nl):
     result = react.run("Which studies mention zzz?")
     assert "gives no rows" in steps[0].observation
     assert result.valid and steps[1].observation == "Accepted."
+    assert not result.out_of_steps
 
 
 def test_fallback_prefers_the_most_detailed_query(nl):

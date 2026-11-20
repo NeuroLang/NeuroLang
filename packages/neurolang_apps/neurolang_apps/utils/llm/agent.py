@@ -111,7 +111,9 @@ class AgentResult:
     query to accept it, and keeps the whole result, as ``(title, frame)``
     for each relation, in *frames* (None when it is boolean, or too large
     to keep, see :data:`~.validation.MAX_KEPT_CELLS`), so that it need not
-    be run again to be shown.
+    be run again to be shown. *out_of_steps* is set when the ReAct agent
+    ran out of steps before a final answer, and its query is only the
+    last that gave rows.
     """
 
     query: str = ""
@@ -128,6 +130,7 @@ class AgentResult:
     verified: Optional[bool] = None
     verification: str = ""
     frames: Optional[list] = field(default=None, repr=False)
+    out_of_steps: bool = False
 
 
 @dataclass
@@ -844,10 +847,11 @@ class ReactAgent(Agent):
         if ran is not None:
             # Out of steps, the last query that gave rows is the answer.
             result.query = ran.arguments["query"]
-            result.valid = True
+            result.valid = result.out_of_steps = True
             result.explanation = (
-                f"The last query that gave rows, after "
-                f"{self.config.max_steps} steps."
+                f"Out of steps: no final answer after "
+                f"{self.config.max_steps} steps. This is the last query "
+                "that gave rows, which may not answer the question."
             )
             return result
         last = next(
