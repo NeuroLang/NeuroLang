@@ -646,6 +646,9 @@ class Session:
             tokens_out=tokens.get("output"),
             llm=tokens and f"{tokens.get('provider')}/{tokens.get('model')}"
             or None, llm_key=tokens.get("key"),
+            llm_calls=tokens.get("calls"),
+            llm_seconds=tokens.get("llm_seconds"),
+            tool_seconds=tokens.get("tool_seconds"),
         )
 
     def set_llm(self, **options) -> None:

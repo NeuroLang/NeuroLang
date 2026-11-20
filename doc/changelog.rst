@@ -204,6 +204,13 @@ Unreleased
 
 **Performance:**
 
+- The query assistant asks for its comment on each rule with its final
+  answer, not in one more request to the model after it; one is sent only
+  when the answer lacks a comment per rule. The time spent waiting for the
+  model and running its tools is shown after each answer and each tool call,
+  and the REPL server logs it, with the requests, in its activity log
+  (``llm_calls``, ``llm_seconds``, ``tool_seconds``).
+
 - Engine builds read the cached atlas activations as arrays instead of
   rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
   arrays as fixed-width bytes instead of through ``repr``; the cache

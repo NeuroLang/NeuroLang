@@ -88,6 +88,7 @@ def test_ask_puts_the_query_in_the_prompt(app):
     text = output(app)
     assert "DATALOG query" in text and "Studies mentioning pain." in text
     assert "1 LLM calls, 15 tokens" in text
+    assert "s waiting for the model" in text and "s in its tools" in text
     system = client.requests[0]["messages"][0]["content"]
     assert "Datalog syntax" in system
 

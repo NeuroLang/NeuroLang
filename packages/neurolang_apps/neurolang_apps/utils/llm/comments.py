@@ -1,14 +1,15 @@
 """
 A comment line explaining each rule of the assistant's query.
 
-Once the agent has an accepted query, :func:`comment_rules` asks the
-model, in one more request, for a line explaining each of its rules
-(:func:`split_rules`), and :func:`commented_query` writes the query with
-each line as a comment above its rule: ``% ...`` in Datalog, whose
-parser ignores them, so that the commented query runs as it is. SQUALL
-has no comments: its rules are shown with their comments, and the query
-is kept without them. The model only writes the comments; the query is
-the one that was checked.
+The ReAct agent gives a line explaining each rule of its query
+(:func:`split_rules`) with its final answer (:func:`given_comments`); else,
+once the agent has an accepted query, :func:`comment_rules` asks the model for
+them in one more request. Then :func:`commented_query` writes the query with
+each line as a comment above its rule: ``% ...`` in Datalog, whose parser
+ignores them, so that the commented query runs as it is. SQUALL has no
+comments: its rules are shown with their comments, and the query is kept
+without them. The model only writes the comments; the query is the one that was
+checked.
 """
 
 import json
@@ -118,10 +119,27 @@ def parse_comments(text: str, count: int) -> list:
         and all(isinstance(c, str) for c in comments)
     ):
         raise ValueError(f"The reply is not a list of {count} strings.")
-    return [
-        " ".join(c.replace("%", " ").split())[:MAX_COMMENT]
-        for c in comments
-    ]
+    return [_clean(c) for c in comments]
+
+
+def _clean(comment: str) -> str:
+    """Return *comment* on one line of at most :data:`MAX_COMMENT`
+    characters, without ``%``."""
+    return " ".join(comment.replace("%", " ").split())[:MAX_COMMENT]
+
+
+def given_comments(query: str, language: str, comments) -> str:
+    """
+    Return *query* commented with *comments*, the model's line for each
+    of its rules, or "" when they are not one string per rule.
+    """
+    rules = split_rules(query, language)
+    if not (
+        rules and isinstance(comments, list) and len(comments) == len(rules)
+        and all(isinstance(c, str) and c.strip() for c in comments)
+    ):
+        return ""
+    return commented_query(rules, [_clean(c) for c in comments])
 
 
 def commented_query(rules: list, comments: list) -> str:

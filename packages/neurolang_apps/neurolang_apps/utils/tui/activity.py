@@ -38,7 +38,10 @@ CREATE TABLE IF NOT EXISTS activity (
     tokens_in INTEGER,       -- the tokens the assistant sent and received
     tokens_out INTEGER,      -- answering the input, if it did,
     llm TEXT,                -- with the provider/model,
-    llm_key TEXT             -- and whose key: page (theirs), server
+    llm_key TEXT,            -- and whose key: page (theirs), server,
+    llm_calls INTEGER,       -- in so many requests, waiting
+    llm_seconds REAL,        -- so long for the model, and
+    tool_seconds REAL        -- so long running its tools
 );
 CREATE INDEX IF NOT EXISTS activity_user ON activity (user, id);
 CREATE INDEX IF NOT EXISTS activity_created ON activity (created);
@@ -133,10 +136,12 @@ class ActivityLog:
 
     COLUMNS = ("created", "user", "groups", "tab", "engine", "kind", "text",
                "response", "failed", "seconds", "cpu", "memory",
-               "tokens_in", "tokens_out", "llm", "llm_key")
+               "tokens_in", "tokens_out", "llm", "llm_key", "llm_calls",
+               "llm_seconds", "tool_seconds")
     #: The columns a log made before them lacks.
     ADDED = {"tokens_in": "INTEGER", "tokens_out": "INTEGER", "llm": "TEXT",
-             "llm_key": "TEXT"}
+             "llm_key": "TEXT", "llm_calls": "INTEGER", "llm_seconds": "REAL",
+             "tool_seconds": "REAL"}
 
     def __init__(self, path):
         self.path = str(path)
@@ -238,6 +243,7 @@ class ActivityLog:
             rows = db.execute(
                 "SELECT id, created, user, engine, text, failed, seconds, "
                 "cpu, memory, tokens_in, tokens_out, llm, llm_key, "
+                "llm_calls, llm_seconds, tool_seconds, "
                 f"substr(response, 1, {SNIPPET_CHARS}) AS snippet, "
                 f"length(response) > {SNIPPET_CHARS} AS cut "
                 f"FROM activity WHERE {where} "

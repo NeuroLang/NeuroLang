@@ -7,6 +7,7 @@ import pytest
 from ..agent import ReactAgent
 from ..comments import (
     commented_query,
+    given_comments,
     parse_comments,
     split_rules,
 )
@@ -110,3 +111,44 @@ def test_no_comments_without_a_valid_query(nl):
     react, _ = _react(nl, ["I do not know."], max_steps=1)
     result = react.run("Which studies mention pain?")
     assert not result.valid and len(react.client.requests) == 1
+
+
+def test_comments_given_with_the_answer_need_no_request(nl):
+    final = "Action: final_answer\nAction Input: " + json.dumps({
+        "query": PAIN, "explanation": "x",
+        "comments": ["The studies % mentioning\n pain"],
+    })
+    react, steps = _react(nl, [final])
+    result = react.run("Which studies mention pain?")
+    assert result.valid
+    assert result.commented == f"% The studies mentioning pain\n{PAIN}"
+    assert result.calls == 1
+    assert all(step.action != "comment_rules" for step in steps)
+
+
+def test_comments_not_one_per_rule_are_asked_for(nl):
+    final = "Action: final_answer\nAction Input: " + json.dumps({
+        "query": PAIN, "explanation": "x", "comments": ["one", "two"],
+    })
+    react, steps = _react(nl, [final, '["The studies mentioning pain"]'])
+    result = react.run("Which studies mention pain?")
+    assert result.commented == f"% The studies mentioning pain\n{PAIN}"
+    assert result.calls == 2 and steps[-1].action == "comment_rules"
+
+
+def test_given_comments_are_one_line_per_rule():
+    assert given_comments(QUERY, "datalog", ["a", "b", "c"]) == (
+        commented_query(split_rules(QUERY, "datalog"), ["a", "b", "c"])
+    )
+    assert given_comments(QUERY, "datalog", ["a", "b"]) == ""
+    assert given_comments(QUERY, "datalog", ["a", " ", "c"]) == ""
+    assert given_comments(QUERY, "datalog", None) == ""
+
+
+def test_the_time_of_the_model_and_of_the_tools_is_kept(nl):
+    react, steps = _react(nl, [FINAL, '["The studies mentioning pain"]'])
+    result = react.run("Which studies mention pain?")
+    assert result.model_seconds > 0 and result.tool_seconds > 0
+    assert result.model_seconds + result.tool_seconds <= result.seconds
+    final = next(s for s in steps if s.action == "final_answer")
+    assert 0 < final.seconds <= result.tool_seconds

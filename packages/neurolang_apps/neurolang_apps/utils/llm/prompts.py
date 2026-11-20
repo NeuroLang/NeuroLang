@@ -182,7 +182,8 @@ Action: search_values
 Action Input: {{"pattern": "Ann"}}
 and to answer:
 Action: final_answer
-Action Input: {{"query": "...", "explanation": "..."}}"""
+Action Input: {{"query": "...", "explanation": "...", \
+"comments": ["...", "..."]}}"""
 
 TOOLS = [
     {
@@ -239,13 +240,16 @@ TOOLS = [
     },
     {
         "name": "final_answer",
-        "description": "Give the final query and a one-sentence "
-        "explanation of what it computes.",
+        "description": "Give the final query, a one-sentence "
+        "explanation of what it computes and, for each of its rules in "
+        "order, one short line (at most 15 words) saying what it computes "
+        "in terms of the question, not of the syntax.",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
                 "explanation": {"type": "string"},
+                "comments": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["query", "explanation"],
         },

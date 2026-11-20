@@ -32,7 +32,7 @@ from typing import Callable, Optional
 from neurolang_apps.utils import engine_registry
 
 from . import prompts
-from .comments import comment_rules, commented_query
+from .comments import comment_rules, commented_query, given_comments
 from .config import AssistantConfig, ProviderConfig
 from .context import EngineContext
 from .examples import load_examples, select_examples
@@ -87,13 +87,16 @@ class AgentStep:
     A step of an agent: a tool call or a query attempt.
 
     *action* is the tool called (``query`` for an ICL attempt) with its
-    *arguments*, and *observation* what it returned.
+    *arguments*, *observation* what it returned and *seconds* the time it
+    took (the tool's, or the model's for ``verify`` and
+    ``comment_rules``).
     """
 
     thought: str = ""
     action: str = ""
     arguments: dict = field(default_factory=dict)
     observation: str = ""
+    seconds: float = 0.0
 
 
 @dataclass
@@ -101,17 +104,17 @@ class AgentResult:
     """
     The outcome of an agent: its query, if *valid*, or its *error*.
 
-    *usage* counts the tokens sent (``input``, of which ``cached`` read
-    from the cache of the provider) and received
-    (``output``), *calls* the requests to the model and *seconds* the
-    time it took. The ReAct agent translates its query back into English
-    (*back_translation*) and sets *verified* to whether the model judged
-    that to answer the question (None when unchecked), with the reason
-    of its judgement (*verification*). The ReAct agent runs its final
-    query to accept it, and keeps the whole result, as ``(title, frame)``
-    for each relation, in *frames* (None when it is boolean, or too large
-    to keep, see :data:`~.validation.MAX_KEPT_CELLS`), so that it need not
-    be run again to be shown.
+    *usage* counts the tokens sent (``input``, of which ``cached`` read from
+    the cache of the provider) and received (``output``), *calls* the requests
+    to the model and *seconds* the time it took, of which *model_seconds*
+    waiting for the model and *tool_seconds* running its tools. The ReAct agent
+    translates its query back into English (*back_translation*) and sets
+    *verified* to whether the model judged that to answer the question (None
+    when unchecked), with the reason of its judgement (*verification*). The
+    ReAct agent runs its final query to accept it, and keeps the whole result,
+    as ``(title, frame)`` for each relation, in *frames* (None when it is
+    boolean, or too large to keep, see :data:`~.validation.MAX_KEPT_CELLS`), so
+    that it need not be run again to be shown.
     """
 
     query: str = ""
@@ -124,6 +127,8 @@ class AgentResult:
     usage: Counter = field(default_factory=Counter)
     calls: int = 0
     seconds: float = 0.0
+    model_seconds: float = 0.0
+    tool_seconds: float = 0.0
     back_translation: str = ""
     verified: Optional[bool] = None
     verification: str = ""
@@ -317,6 +322,8 @@ class Toolbox:
         self.answer_rows = ""
         self.answer_frames = None
         self.answer_preview = None
+        # The comment on each rule given with that answer, if any.
+        self.answer_comments = None
         # The observations of the calls, by tool and arguments.
         self.observations = {}
         # The facts search_values found, and its calls finding none new.
@@ -414,7 +421,8 @@ class Toolbox:
             self.queries_with_rows.append(query.strip())
         return preview.text, None
 
-    def tool_final_answer(self, query: str, explanation: str = ""):
+    def tool_final_answer(self, query: str, explanation: str = "",
+                          comments=None):
         result = check_query(
             self.context.nl, query, self.language,
             self.context.engine_name if self.context.declared else "",
@@ -459,6 +467,7 @@ class Toolbox:
         self.answer_rows = preview.text
         self.answer_frames = preview.frames
         self.answer_preview = preview
+        self.answer_comments = comments
         return "Accepted.", (query.strip(), explanation.strip())
 
 
@@ -546,10 +555,12 @@ class Agent:
         the provider) is asked for again once.
         """
         for _ in range(2):
+            began = time.perf_counter()
             reply = self.client.complete(
                 messages, tools, self.config.temperature
                 if temperature is None else temperature,
             )
+            result.model_seconds += time.perf_counter() - began
             result.calls += 1
             result.usage.update(reply.usage)
             if reply.text.strip() or reply.tool_calls:
@@ -591,12 +602,14 @@ class Agent:
 
         With the setting ``comment_rules``, the accepted query is also
         written with a comment line explaining each rule, in
-        ``commented`` (see :meth:`_comment`).
+        ``commented``: those the ReAct agent gave with its final answer,
+        or else those of one more request (see :meth:`_comment`).
         """
         start = time.perf_counter()
         self.previous = previous
         result = self._run(question)
-        if result.valid and result.query and self.config.comment_rules:
+        if (result.valid and result.query and self.config.comment_rules
+                and not result.commented):
             self._comment(result, question)
         result.seconds = time.perf_counter() - start
         return result
@@ -699,6 +712,7 @@ class Agent:
         without a comment per rule, leaves ``commented`` empty and is
         reported as a step.
         """
+        began = time.perf_counter()
         try:
             rules, notes = comment_rules(
                 lambda messages: self._complete(result, messages, None, 0.0),
@@ -706,12 +720,14 @@ class Agent:
             )
         except (LLMError, ValueError) as exc:
             self._step(result, AgentStep(
-                "", "comment_rules", {}, f"No comments: {exc}"
+                "", "comment_rules", {}, f"No comments: {exc}",
+                time.perf_counter() - began,
             ))
             return
         result.commented = commented_query(rules, notes)
         self._step(result, AgentStep(
-            "", "comment_rules", {}, result.commented
+            "", "comment_rules", {}, result.commented,
+            time.perf_counter() - began,
         ))
 
 
@@ -824,6 +840,10 @@ class ReactAgent(Agent):
                 result.query, result.explanation = final
                 result.frames = toolbox.answer_frames
                 result.valid = True
+                if self.config.comment_rules:
+                    result.commented = given_comments(
+                        result.query, self.language, toolbox.answer_comments
+                    )
                 return result
             rejections += 1
             messages.append(
@@ -869,6 +889,7 @@ class ReactAgent(Agent):
         """
         from .providers import LLMError
 
+        began = time.perf_counter()
         try:
             description = self._engine_text(self.description, "description")
             guidance = self._engine_text(self.guidance, "assistant_guidance")
@@ -887,6 +908,7 @@ class ReactAgent(Agent):
             self._step(result, AgentStep(
                 "", "verify", {"query": query},
                 f"The verification failed: {exc}",
+                time.perf_counter() - began,
             ))
             return None
         result.back_translation = english
@@ -897,6 +919,7 @@ class ReactAgent(Agent):
             "", "verify", {"query": query},
             f"Reads back as: {english}\nAnswers the question: {answers}"
             + (f" — {reason}" if reason else ""),
+            time.perf_counter() - began,
         ))
         if verdict is False:
             return prompts.verification_rejection(english, reason)
@@ -904,9 +927,14 @@ class ReactAgent(Agent):
 
     def _call(self, result, toolbox, thought, name, arguments):
         """Call a tool, record the step and return (observation, final)."""
+        began = time.perf_counter()
         observation, final = toolbox.call(name, arguments)
+        seconds = time.perf_counter() - began
+        result.tool_seconds += seconds
         observation = truncate(observation)
-        self._step(result, AgentStep(thought, name, arguments, observation))
+        self._step(result, AgentStep(
+            thought, name, arguments, observation, seconds
+        ))
         return observation, final
 
     def _native_turn(self, result, messages, toolbox, temperature):
