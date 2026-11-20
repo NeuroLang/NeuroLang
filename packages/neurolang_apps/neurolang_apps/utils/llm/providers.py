@@ -214,9 +214,18 @@ class OpenAIChatClient(ChatClient):
             ]
         # OpenRouter caches the prompts of Claude only when asked to (it
         # caches those of OpenAI, DeepSeek and others by itself); other
-        # look-alikes of the API may reject the field.
+        # look-alikes of the API may reject the field. The field marks
+        # the end of the conversation; each system message is marked as
+        # well, as with the Anthropic API, so that requests starting with
+        # the same message share it.
         if self.provider.model.startswith("anthropic/"):
             payload["cache_control"] = CACHED
+            for message in payload["messages"]:
+                if message["role"] == "system":
+                    message["content"] = [{
+                        "type": "text", "text": message["content"],
+                        "cache_control": CACHED,
+                    }]
         return payload
 
     def _reply(self, data: dict) -> Reply:
@@ -335,9 +344,9 @@ class AnthropicChatClient(ChatClient):
         return converted
 
     def _payload(self, messages, tools, temperature) -> dict:
-        system = "\n\n".join(
-            m["content"] for m in messages if m["role"] == "system"
-        )
+        # One block per system message, each marked: requests that start
+        # with the same message (the engine's predicates) share its cache.
+        system = [m["content"] for m in messages if m["role"] == "system"]
         # No temperature: current Claude models reject sampling parameters.
         payload = {
             "model": self.provider.model,
@@ -346,7 +355,8 @@ class AnthropicChatClient(ChatClient):
         }
         if system:
             payload["system"] = [
-                {"type": "text", "text": system, "cache_control": CACHED}
+                {"type": "text", "text": text, "cache_control": CACHED}
+                for text in system
             ]
         if tools:
             payload["tools"] = [

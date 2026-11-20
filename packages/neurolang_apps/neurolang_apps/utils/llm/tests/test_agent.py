@@ -542,21 +542,24 @@ def test_react_verifies_the_final_answer(nl):
     translation, judgement = react.client.requests[1:]
     # The query is translated back without the question.
     assert "Which studies mention pain?" not in str(translation["messages"])
-    assert PAIN_DATALOG in translation["messages"][1]["content"]
-    assert "1 rows" in translation["messages"][1]["content"]
-    judged = judgement["messages"][1]["content"]
+    assert PAIN_DATALOG in translation["messages"][2]["content"]
+    assert "1 rows" in translation["messages"][2]["content"]
+    judged = judgement["messages"][2]["content"]
     assert "Which studies mention pain?" in judged
     assert "The engine's definitions are the" in (
-        judgement["messages"][0]["content"]
+        judgement["messages"][1]["content"]
     )
+    # Both start with the engine and its predicates, the same message,
+    # so that the provider can cache it for both.
+    assert translation["messages"][0] == judgement["messages"][0]
+    assert "# Predicates\n- mentions(" in judgement["messages"][0]["content"]
     # Both read PROB[A // B] as P(A | B), and the rows' text is no
     # evidence against the engine's definitions.
     assert "// conditions: p is P(A | B)" in (
-        translation["messages"][0]["content"]
+        translation["messages"][1]["content"]
     )
     for text in ("never from the text of its rows", "conditional probability"):
-        assert text in judgement["messages"][0]["content"]
-    assert "# Predicates\n- mentions(" in judged
+        assert text in judgement["messages"][1]["content"]
     assert "The studies that mention the term pain." in judged
 
 
@@ -641,11 +644,11 @@ def test_verification_reads_the_engine_description_and_guidance(nl):
     translation, judgement = react.client.requests[1:]
     for request in (translation, judgement):
         assert "# The engine\nTerms are lower case." in (
-            request["messages"][1]["content"]
+            request["messages"][0]["content"]
         )
     guidance = "# How to answer on this engine\nAnswer with probabilities."
-    assert guidance in judgement["messages"][1]["content"]
-    assert guidance not in translation["messages"][1]["content"]
+    assert guidance in judgement["messages"][2]["content"]
+    assert guidance not in str(translation["messages"])
 
 
 def test_explain_translates_a_query_into_english(nl):
@@ -654,8 +657,8 @@ def test_explain_translates_a_query_into_english(nl):
     english = react.explain(PAIN_DATALOG)
     assert english == "The studies that mention pain."
     messages = react.client.requests[0]["messages"]
-    assert PAIN_DATALOG in messages[1]["content"]
-    assert "# Predicates\n- mentions(" in messages[1]["content"]
+    assert PAIN_DATALOG in messages[2]["content"]
+    assert "# Predicates\n- mentions(" in messages[0]["content"]
 
 
 def test_describe_predicate_stops_a_rule_too_slow_to_sample(nl, monkeypatch):

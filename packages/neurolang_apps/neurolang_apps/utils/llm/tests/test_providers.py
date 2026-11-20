@@ -112,6 +112,60 @@ def test_openrouter_caches_the_prompts_of_claude(monkeypatch):
     assert reply.usage == {"input": 1200, "output": 3, "cached": 1000}
 
 
+def test_openrouter_marks_each_system_message_of_claude_for_the_cache(
+    monkeypatch,
+):
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "ok"}}], "usage": {},
+        })
+
+    monkeypatch.setenv("TEST_LLM_KEY", "secret")
+    for model in ("anthropic/claude-sonnet-5.5", "google/gemma"):
+        provider = ProviderConfig(
+            "openrouter", "openai", model, "https://openrouter.test/api/v1",
+            api_key_env="TEST_LLM_KEY",
+        )
+        chat = make_client(provider, transport=httpx.MockTransport(handler))
+        chat.complete([
+            {"role": "system", "content": "The predicates."},
+            {"role": "system", "content": "The task."},
+            {"role": "user", "content": "Go."},
+        ])
+    cached = {"type": "ephemeral"}
+    assert [m["content"] for m in bodies[0]["messages"][:2]] == [
+        [{"type": "text", "text": "The predicates.", "cache_control": cached}],
+        [{"type": "text", "text": "The task.", "cache_control": cached}],
+    ]
+    assert bodies[0]["messages"][2]["content"] == "Go."
+    assert bodies[1]["messages"][0]["content"] == "The predicates."
+
+
+def test_anthropic_caches_each_system_message_apart(monkeypatch):
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={
+            "content": [{"type": "text", "text": "ok"}],
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        })
+
+    client("anthropic", handler, monkeypatch).complete([
+        {"role": "system", "content": "The predicates."},
+        {"role": "system", "content": "The task."},
+        {"role": "user", "content": "Go."},
+    ])
+    cached = {"type": "ephemeral"}
+    assert seen["body"]["system"] == [
+        {"type": "text", "text": "The predicates.", "cache_control": cached},
+        {"type": "text", "text": "The task.", "cache_control": cached},
+    ]
+
+
 def test_anthropic_request_and_tool_calls(monkeypatch):
     seen = {}
 
