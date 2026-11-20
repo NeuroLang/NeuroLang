@@ -84,6 +84,11 @@ def euclidean(*coordinates):
     return result
 
 
+#: Its arguments may be arrays: a selection by it is computed on whole
+#: columns (see
+#: :class:`~nl_core.utils.relational_algebra_set.ColumnwiseFunction`).
+euclidean.columnwise = True
+
 #: Alias of :func:`euclidean`, the name under which programs know it.
 euclidean_distance = euclidean
 
