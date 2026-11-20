@@ -252,6 +252,17 @@ Unreleased
 
 **Bug fixes:**
 
+- A predicate whose rule binds a variable only through its head, as
+  ``q`` in ``similar_study(q, s)`` of the engine neurosynth, gets the
+  values of a stored relation of the rules using it:
+  ``uses(s) :- cogat_term(t, 'stroop task'), skos:definition(t, d),
+  similar_study(d, s)`` raised ``UnboundVariablesError``, as did
+  ``study_similarity``, ``p_similar``, ``p_a_given_similar``,
+  ``lift_llm``, ``uniformity_llm`` and the other ``*_llm`` predicates.
+  When magic sets cannot bind every predicate without leaving the
+  program unstratified (two WMQL bundles of the engine neurosynth_iit),
+  only those predicates are bound, where the rewrite was dropped.
+
 - An aggregation over a body with a negated atom, as
   ``r(sum(x)) :- p(x), ~q(x)``, is no longer refused as not conjunctive:
   it gives the aggregation over an intermediate rule holding the negation.
