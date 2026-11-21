@@ -90,8 +90,13 @@
   #edge-threshold { width: 7em; }
   #edge-slider { width: 180px; vertical-align: middle; }
   #edges { margin: 4px 0; padding-left: 28px; font-size: 13px; }
-  #streamlines { margin: 8px 0; color: #ccc; display: flex; gap: 18px; }
+  #streamlines { margin: 8px 0; color: var(--soft); display: flex; flex-wrap: wrap; gap: 8px 18px; }
   #streamlines label { display: inline-flex; gap: 6px; align-items: center; }
+  #streamlines [hidden] { display: none; }
+  #bundle-legend { list-style: none; margin: 0; padding: 0; display: flex;
+    flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+  #bundle-legend li { display: inline-flex; gap: 6px; align-items: center; }
+  .swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; }
   #region-tip { position: fixed; pointer-events: none; z-index: 10;
     padding: 2px 6px; border-radius: 3px; font-size: 12px;
     background: rgba(0, 0, 0, 0.8); color: #fff; white-space: nowrap; }
@@ -206,6 +211,13 @@
     max="1000" step="10" value="1000"
     aria-label="Number of streamlines shown"
     title="How many streamlines are drawn, on a logarithmic scale"></label>
+  <label id="streamline-colour-control" hidden>Colour by
+    <select id="streamline-colour"
+      title="Each streamline in the colour of its bundle, as the result names it, or of the direction of each of its segments">
+      <option value="bundle">bundle</option>
+      <option value="direction">direction</option>
+    </select></label>
+  <ul id="bundle-legend" aria-label="The colours of the bundles" hidden></ul>
 </div>
 <p id="message"></p>
 <script id="viewer-data" type="application/json">__DATA__</script>

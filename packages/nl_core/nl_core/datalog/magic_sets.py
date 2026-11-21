@@ -45,6 +45,7 @@ from .constraints_representation import (
 from .range_restriction import unbound_variables_error
 from .expression_processing import (
     FlattenQueryInNonRecursiveUCQ,
+    _body_predicates,
     any_body_preds_in_set,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
@@ -171,6 +172,18 @@ class ReplaceAdornedSymbolWalker(ExpressionWalker):
         )
 
 
+def program_invariants(datalog) -> dict:
+    """What a SIPS reads of the program *datalog*, which a rewrite does not
+    change: computed once for the attempts of one rewrite, not once each
+    (44 attempts, 25 s of a query of tracts)."""
+    return {
+        "edb": edb_with_prob_symbols(datalog),
+        "prob_symbols": probabilistic_symbols(datalog),
+        "aggregate_positions": aggregate_positions(datalog),
+        "needed_positions": needed_positions(datalog),
+    }
+
+
 class SIPS(ABC):
     """
     Sideways Information Passing Strategy (SIPS). A SIPS defines how
@@ -180,10 +193,12 @@ class SIPS(ABC):
     literals, to another literal.
     """
 
-    def __init__(self, datalog, seed_from_edb=True) -> None:
+    def __init__(self, datalog, seed_from_edb=True, invariants=None) -> None:
         self.datalog = datalog
-        self.edb = edb_with_prob_symbols(datalog)
-        self.prob_symbols = probabilistic_symbols(datalog)
+        if invariants is None:
+            invariants = program_invariants(datalog)
+        self.edb = invariants["edb"]
+        self.prob_symbols = invariants["prob_symbols"]
         self.seed_from_edb = seed_from_edb
         self.seeding_edb_atoms = set()
         # the query's predicate (adorn_code sets it), and whether the rule
@@ -191,12 +206,12 @@ class SIPS(ABC):
         self.query_functor = None
         self.query_is_recursive = False
         self.in_query_rule = False
-        self.aggregate_positions = aggregate_positions(datalog)
+        self.aggregate_positions = invariants["aggregate_positions"]
         # predicates left unbound, computed whole, see magic_rewrite
         self.unbound_predicates = set()
         # the arguments of the predicates that need bindings, and the
         # variables at them in the rule whose arcs are being created
-        self.needed_positions = needed_positions(datalog)
+        self.needed_positions = invariants["needed_positions"]
         self.needed_variables = frozenset()
 
     def variables_needed(self, rule):
@@ -368,8 +383,8 @@ class LeftToRightSIPS(SIPS):
        Queries on Stratified Databases. J. Log. Program. 11(3&4). p. 305.
     """
 
-    def __init__(self, datalog, seed_from_edb=True) -> None:
-        super().__init__(datalog, seed_from_edb)
+    def __init__(self, datalog, seed_from_edb=True, invariants=None) -> None:
+        super().__init__(datalog, seed_from_edb, invariants)
 
     def _create_arc(
         self,
@@ -666,9 +681,12 @@ def magic_rewrite(
     # When that does not help, only the predicates that cannot be computed
     # whole are bound, the others left unbound.
     unbound = set()
+    invariants = program_invariants(datalog)
     while True:
         try:
-            return _magic_rewrite(query, datalog, seed_from_edb, unbound)
+            return _magic_rewrite(
+                query, datalog, seed_from_edb, unbound, invariants
+            )
         except UnstratifiedMagicSetsRewriteError as error:
             if error.predicate is not None and error.predicate not in unbound:
                 unbound.add(error.predicate)
@@ -681,10 +699,12 @@ def magic_rewrite(
             unbound |= others
 
 
-def _magic_rewrite(query, datalog, seed_from_edb, unbound_predicates):
+def _magic_rewrite(
+    query, datalog, seed_from_edb, unbound_predicates, invariants=None
+):
     """:func:`magic_rewrite`, the *unbound_predicates* left unbound."""
     # 1. Create a SIPS and use it to adorn the code
-    sips = LeftToRightSIPS(datalog, seed_from_edb)
+    sips = LeftToRightSIPS(datalog, seed_from_edb, invariants)
     sips.unbound_predicates = unbound_predicates
     adorned_code, constant_predicates = reachable_adorned_code(
         query, datalog, sips
@@ -851,18 +871,19 @@ def order_rules_definitions_first(rules):
     taken as known, and the rules after a recursive one are still
     ordered.
     """
-    pending = list(rules)
+    # the predicates of each body, read once, not once a pass; the rules
+    # by position, as comparing rules is comparing their expressions
+    pending = [(rule, _body_predicates(rule)) for rule in rules]
     ordered = []
     while pending:
-        heads = {rule.consequent.functor for rule in pending}
+        heads = {rule.consequent.functor for rule, _ in pending}
         ready = [
-            rule for rule in pending
-            if not any_body_preds_in_set(
-                rule, heads - {rule.consequent.functor}
-            )
-        ] or pending[:1]
-        ordered += ready
-        pending = [rule for rule in pending if rule not in ready]
+            i for i, (rule, body) in enumerate(pending)
+            if not body & (heads - {rule.consequent.functor})
+        ] or [0]
+        ordered += [pending[i][0] for i in ready]
+        ready = set(ready)
+        pending = [p for i, p in enumerate(pending) if i not in ready]
     return tuple(ordered)
 
 
@@ -1058,13 +1079,12 @@ def reachable_adorned_code(query, datalog, sips: SIPS):
     not follow the adornments.
     """
     adorned_code, constant_predicates = adorn_code(query, datalog, sips)
-    adorned_datalog = type(datalog)()
-    adorned_datalog.walk(adorned_code)
     # assume that the query rule is the first
     adorned_query = adorned_code.formulas[0]
     reachable = dict.fromkeys(
-        rule.consequent.functor
-        for rule in reachable_code(adorned_query, adorned_datalog).formulas
+        rule.consequent.functor for rule in reachable_code(
+            adorned_query, _RulesOf(adorned_code.formulas)
+        ).formulas
     )
     # a predicate adorned twice before its rules were has them twice
     rules = dict.fromkeys(adorned_code.formulas)
@@ -1075,6 +1095,25 @@ def reachable_adorned_code(query, datalog, sips: SIPS):
         )),
         constant_predicates,
     )
+
+
+class _RulesOf:
+    """The rules of a rewrite as a program for
+    :func:`.constraints_representation.reachable_code`, which reads its
+    intensional database alone: walking them into a program of their own,
+    to that end, ran its type resolution and checks on each rule of each
+    attempt of a rewrite (1 s each)."""
+
+    def __init__(self, rules):
+        rules_of = {}
+        for rule in rules:
+            rules_of.setdefault(rule.consequent.functor, []).append(rule)
+        self.rules_of = {
+            functor: Union(tuple(rules)) for functor, rules in rules_of.items()
+        }
+
+    def intensional_database(self):
+        return self.rules_of
 
 
 def adorn_code(

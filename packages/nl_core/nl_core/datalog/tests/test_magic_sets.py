@@ -1180,3 +1180,4 @@ def test_a_predicate_bound_through_its_head_is_bound_by_a_stored_relation():
     dl.walk(mr)
     solution = Chase(dl, rules=mr).build_chase_solution()
     assert solution[goal].value == {(C_("a1"),), (C_("b1"),)}
+

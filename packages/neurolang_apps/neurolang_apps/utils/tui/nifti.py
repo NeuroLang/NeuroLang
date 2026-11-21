@@ -1250,7 +1250,12 @@ A result of streamline ids, of an engine of tractograms, shows the
 streamlines, coloured by their direction, in the 3D render and on the
 slices near them, over the engine's background, and an overlay of the
 number of streamlines through each voxel; 20000 at most are drawn,
-evenly subsampled. A column holds streamline ids when, without voxel
+evenly subsampled. With one other column, of 20 values at most, each
+value is a bundle: the streamlines are in its colour, named in a legend,
+or by direction, as "Colour by" chooses; one of several bundles is of
+the first:
+  ans(x, side) :- uncinate(x, side)
+A column holds streamline ids when, without voxel
 columns, it is of the sort streamline (engines.yaml), or, the engine
 having streamlines, it is the one column of integers of unknown sort:
   ans(x) :- uncinate(x, "left")
@@ -1816,6 +1821,37 @@ def streamline_background(nl):
     return background, "MNI"
 
 
+def streamline_bundles(df: pd.DataFrame, column, shown):
+    """
+    Return the bundles of the streamlines *shown* of the result *df*,
+    whose ids are in *column*: those its one other column names, as
+    :func:`~.brain_viewer.streamlines_state` takes them (names, colours,
+    the number of the name of each one shown), else None, if it has no
+    other column, several or one of more than
+    :data:`~.brain_viewer.MAX_BUNDLES` values. A streamline of several
+    bundles is of the first, in their order.
+    """
+    others = [c for c in df.columns if c != column]
+    if len(others) != 1:
+        return None
+    labels = df[others[0]].astype(str)
+    if labels.nunique() > brain_viewer.MAX_BUNDLES:
+        return None
+    first = (
+        pd.DataFrame({"id": df[column].astype(int), "label": labels})
+        .sort_values("label", kind="stable")
+        .drop_duplicates("id").set_index("id")["label"]
+    )
+    of = first.loc[list(shown)].tolist()
+    names = sorted(set(of))
+    number = {name: n for n, name in enumerate(names)}
+    # the dark colours of tab20 first, then the light: few bundles are of
+    # hues apart, rather than of pairs of one hue
+    palette = REGION_PALETTE[::2] + REGION_PALETTE[1::2]
+    colours = [palette[n % len(palette)] for n in range(len(names))]
+    return names, colours, [number[name] for name in of]
+
+
 def last_result_streamlines(app, block):
     """
     Return the result *block*, of streamline ids, as streamlines.
@@ -1826,7 +1862,8 @@ def last_result_streamlines(app, block):
     layer of the number of the streamlines drawn through each voxel of
     the background, (name, path) of a temporary NIfTI file, and the
     keyword arguments of the viewer: the streamlines
-    (:func:`~.brain_viewer.streamlines_state`) and the background
+    (:func:`~.brain_viewer.streamlines_state`), with their bundles
+    (:func:`streamline_bundles`), and the background
     (:func:`streamline_background`); an exception tells why they cannot
     be built.
     """
@@ -1847,14 +1884,21 @@ def last_result_streamlines(app, block):
     ]
     background, space = streamline_background(app._nl)
     counts = _visits(lines, background.shape, background.affine)
-    state = brain_viewer.streamlines_state(lines, len(ids))
-    subsampled = (
+    bundles = streamline_bundles(block.frame, column, shown)
+    state = brain_viewer.streamlines_state(lines, len(ids), bundles)
+    notes = (
         f", evenly subsampled to {brain_viewer.MAX_STREAMLINES} at most"
         if len(lines) < len(ids) else ""
     )
+    if bundles is not None:
+        other = next(c for c in block.frame.columns if c != column)
+        notes += (
+            f", coloured by the {len(bundles[0])} bundles of the column "
+            f"{str(other)!r}"
+        )
     app.console.print(
         f"Streamlines of the column {str(column)!r}: {len(lines)} of "
-        f"{len(ids)} shown{subsampled}", style="green", markup=False,
+        f"{len(ids)} shown{notes}", style="green", markup=False,
     )
     if not callable(getattr(app._nl, "streamline_background", None)):
         app.console.print(

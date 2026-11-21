@@ -426,6 +426,8 @@ def shown_edges(connectome: dict) -> list:
 
 # The number of streamlines drawn at most, evenly subsampled.
 MAX_STREAMLINES = DEFAULTS["streamlines"]["max_shown"]
+#: The most bundles the streamlines are coloured by, one colour each.
+MAX_BUNDLES = DEFAULTS["streamlines"]["max_bundles"]
 
 
 def shown_streamlines(ids, cap=None) -> list:
@@ -476,18 +478,29 @@ def trk_bytes(lines) -> bytes:
     return file.getvalue()
 
 
-def streamlines_state(lines, total: int) -> dict:
+def streamlines_state(lines, total: int, bundles=None) -> dict:
     """
     Return the streamlines *lines* for the page to draw, a JSON-able dict.
 
     *lines* are (n, 3) arrays of points in millimetres, those drawn of
     the *total* of the result; they go in the page as a ``.trk`` file
-    (:func:`trk_bytes`), encoded as :func:`encode_array` does.
+    (:func:`trk_bytes`), encoded as :func:`encode_array` does. With
+    *bundles*, a tuple (names, colours, the number of the name of each
+    line), the page can colour each line by its bundle, a colour
+    ``#rrggbb`` per name, rather than by its direction.
     """
-    return {
+    state = {
         "trk": encode_array(np.frombuffer(trk_bytes(lines), np.uint8)),
         "shown": len(lines), "total": int(total),
     }
+    if bundles is not None:
+        names, colours, numbers = bundles
+        state["bundles"] = {
+            "names": [str(name) for name in names],
+            "colours": list(colours),
+            "of": encode_array(np.asarray(numbers, dtype=np.uint16)),
+        }
+    return state
 
 
 def regions_state(regions) -> dict:
@@ -537,7 +550,8 @@ def viewer_html(
     is drawn in the 3D render, which the page then starts with, beside
     the slices, and its strongest edges are listed. *streamlines*, of
     :func:`streamlines_state`, are drawn so too, coloured by their
-    direction, with a control of their visibility and opacity, on
+    direction or, if they have bundles, by their bundle, as a control
+    chooses, with controls of their visibility and number, on
     slices cut in millimetres, as they are drawn. *space* names the
     millimetres of the cursor: ``MNI``, or ``RAS`` over the background of
     a subject. *regions*, a :class:`~.nifti.RegionLayer`, are the regions

@@ -19,6 +19,13 @@ Unreleased
 
 **New features:**
 
+- Brain viewer: the streamlines of a result with one other column, such
+  as ``ans(x, side) :- uncinate(x, side)``, can be coloured by bundle, a
+  colour per value of the column, which a legend names, or by direction,
+  as before; *Colour by* chooses, starting at bundle. The column has 20
+  values at most (``streamlines.max_bundles`` of ``viewer.yaml``); a
+  streamline of several bundles is of the first, in alphabetical order.
+
 - Brain viewer: the views take the width of the page, the 3 slices in a
   row as tall as a third of it allows (340 to 640 px), where they were
   960 by 340 px whatever the page; the options of the display start
@@ -218,6 +225,24 @@ Unreleased
   than 300 s on the engine neurosynth). The rules sharing the variables
   of such a stored relation now bind before it, and the literals needing
   them after it.
+- The magic-sets rewrite of a query over a large program (the tracts of
+  an engine) took most of its time: the relations of the extensional
+  database were built again for each literal checked (15 000 times), and
+  rules were ordered definitions first by reading every body on each pass.
+  A symbol table now keeps the symbols of each type it was asked for until
+  it or a scope enclosing it changes (``symbols_by_type``, so
+  ``extensional_database`` and ``builtins``), and each body is read once. The Fig. 2b query of the bundles co-activated by
+  language studies on neurosynth_iit took 240 to 267 s, now 118 to 120 s,
+  with the same answer.
+  
+- The semi-naive chase no longer evaluates again a rule with several atoms
+  of its stratum's predicates when none of them has new tuples: the rules
+  of tract queries rewritten with magic sets, 90 % of whose evaluations
+  found nothing. A chase step looks up in the instance the relations its
+  plan reads, rather than copying them all, and drops the tuples already
+  derived only when it found some. The chase of the Fig. 2b query of the
+  bundles co-activated by language studies (neurosynth_iit) took 46 s in
+  1 334 steps, now 30 s in 952.
 
 - A choice over a few rows of an engine's view (the voxels of an image) by
   the view reads those rows alone, and a vector over a few of its columns
