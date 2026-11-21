@@ -6,18 +6,21 @@ import { History } from "./history.js";
 import { AskedHistory } from "./asked.js";
 import { LlmSettings } from "./llm_settings.js";
 import { answerTabs, imageButtons, renderTable } from "./table_view.js";
+import { networkViews } from "./network_view.js";
+import { removedUploads, uploadRows, uploadsSummary } from "./uploads.js";
 import { AgentLog, noAnswer, renderAgentLog, tickWaiting } from "./agent_view.js";
 import { DOCS_URL, PAGES, topicAt } from "./docs.js";
 import { Editor } from "./editor.js";
+import { keepHistory } from "./undo.js";
 import { layoutQuery } from "./layout.js";
-import { renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
+import { exampleQuestion, renderGroupedQuestions, queryOf, questionOf, filterQuestions, renderCommands, renderExamples, renderPredicates, startingQuery, suggestedQuestion } from "./guide.js";
 import { highlightNodes, loadWords } from "./highlight.js";
 import { decodeShare, encodeShare } from "./share.js";
 import { TEMPLATES, availableTemplates, buildQuery } from "./builder.js";
 import { followUps } from "./follow_up.js";
 import { logSummary } from "./log_view.js";
 import { explainStartError } from "./start_error.js";
-import { Session, parseSession, replayTexts } from "./session.js";
+import { Session, parseSession, replayTexts, withoutUploads } from "./session.js";
 import { PmcLookup } from "./study_links.js";
 import { frameHeight, themeMessage, themed } from "./frames.js";
 import { tabAfter } from "./tabs.js";
@@ -28,11 +31,14 @@ const $ = (id) => document.getElementById(id);
 const [statusBox, out, input, question, history_] = ["status", "out", "input", "question", "history"].map($);
 const llmForm = $("llm");
 const results = $("results");
-const TABS = ["table", "brain", "graph"]; // the tabs of the results, in order
+const TABS = ["table", "network", "brain", "graph"]; // the tabs of the results, in order
 const DEFAULT_REPO = "NeuroLang/NeuroLang";
 const busyControls = [input, question, $("run"), $("ask-run"), $("view"), $("explain"), $("refine-run"), $("session-open"), $("upload")];
 // The code box colours its text as the language of the mode select.
 const editor = new Editor(input, $("mirror"), () => $("mode").value === "squall");
+// Undo and redo that keep what the page writes in the boxes (undo.js).
+keepHistory(input);
+keepHistory(question);
 // A query the page puts in the box, laid out for its width: a long rule a line
 // per atom of its body (layout.js). What the visitor typed is kept as it is.
 const laidOut = (text) => ($("mode").value === "squall" ? text : layoutQuery(text, editor.columns()));
@@ -69,16 +75,17 @@ const live = $("live");
 const liveLog = $("live-log");
 // What the query the assistant wrote does, above the box it is in: the model's
 // explanation, and the query read back in English, with the check's doubts.
+// Out of steps, the query is no final answer: the explanation, which says so, is a warning.
 const summary = $("summary");
 function hideSummary() {
   summary.hidden = true;
 }
-function showSummary({ valid, explanation, back_translation: reads, verified, verification }, question = "") {
+function showSummary({ valid, explanation, back_translation: reads, verified, verification, out_of_steps: out }, question = "") {
   if (!valid || !(explanation || reads || question)) return hideSummary();
   $("summary-question").textContent = question ? `Asked: ${question}` : "";
-  $("summary-text").textContent = explanation ?? "";
+  $("summary-text").textContent = out ? "" : explanation ?? "";
   $("summary-reads").textContent = reads ? `Reads back as: ${reads}` : "";
-  $("summary-warning").textContent = verified === false ? `The check found that the query may not answer the question: ${verification}` : "";
+  $("summary-warning").textContent = out ? explanation : verified === false ? `The check found that the query may not answer the question: ${verification}` : "";
   summary.hidden = false;
 }
 
@@ -181,20 +188,38 @@ function showHint() {
 }
 ["keyup", "click", "focus"].forEach((type) => input.addEventListener(type, showHint));
 
+// Both boxes get an example: the question in English, and its query in the
+// language chosen, when the bank of the assistant has one.
+function pickQuestion(text) {
+  question.value = text;
+  const query = queryOf(guide.questionQueries, text, $("mode").value);
+  if (query) {
+    putQuery(query);
+    hideSummary();
+  }
+  question.focus();
+}
+
 // The questions and examples of the engine and its predicates, which put their text in a box.
-let guide = { examples: {}, questions: [], predicates: [], commands: [] };
+let guide = { examples: {}, questions: [], moreQuestions: [], questionQueries: {}, questionTopics: {}, predicates: [], commands: [] };
 function showGuide() {
   if (!$("guide").open) return;
   const squall = $("mode").value === "squall";
   $("guide-questions-box").hidden = !guide.questions.length;
-  renderExamples($("guide-questions"), guide.questions, (text) => {
-    question.value = text;
-    question.focus();
-  }, "Put this question in the box of the assistant");
+  const putQuestion = (text) => pickQuestion(text);
+  renderExamples($("guide-questions"), guide.questions, putQuestion, "Put this question in the box of the assistant");
+  const more = filterQuestions(guide.moreQuestions, $("guide-more-filter").value);
+  $("guide-more-box").hidden = !guide.moreQuestions.length;
+  $("guide-more-count").textContent = `${guide.moreQuestions.length} more, of the assistant's examples`;
+  $("guide-more-status").textContent = more.length === guide.moreQuestions.length ? "" : more.length ? `${more.length} of ${guide.moreQuestions.length} questions` : "No question has all these words.";
+  renderGroupedQuestions($("guide-more"), more, guide.questionTopics, putQuestion, "Put this question in the box of the assistant");
   const list = $("guide-examples");
   const width = Math.max(30, Math.floor((list.clientWidth - 24) / 7.5)); // 12.5px monospace
   renderExamples(list, guide.examples[squall ? "squall" : "datalog"], (query) => {
     putQuery(query);
+    // the question this query answers, when the assistant's bank has it
+    const asked = questionOf(guide.questionQueries, query, $("mode").value);
+    if (asked) question.value = asked;
     hideSummary();
     input.focus();
   }, undefined, (query) => (squall || !list.clientWidth ? query : layoutQuery(query, width)));
@@ -244,6 +269,15 @@ builder.addEventListener("submit", (event) => {
 $("guide").addEventListener("toggle", showGuide);
 $("guide-queries").addEventListener("toggle", showGuide); // the examples are laid out for the width of their list
 $("guide-filter").addEventListener("input", showGuide);
+$("guide-more-filter").addEventListener("input", showGuide);
+// Another example question in the box of the assistant, whatever it holds.
+$("guide-shuffle").addEventListener("click", () => {
+  const pick = exampleQuestion([...guide.questions, ...guide.moreQuestions], question.value);
+  if (!pick) return;
+  pickQuestion(pick);
+  suggested = pick;
+  question.select();
+});
 
 // A query shared as a link is put in the box, not run.
 function restoreShared() {
@@ -335,7 +369,7 @@ function useAsked(entry) {
     run(`.mode ${entry.language}`);
   }
   putQuery(entry.query);
-  showSummary({ valid: true, explanation: entry.explanation }, entry.question);
+  showSummary({ valid: true, explanation: entry.explanation, out_of_steps: entry.out_of_steps }, entry.question);
   input.focus();
 }
 
@@ -391,8 +425,17 @@ let suggested = "";
 // An example question of the engine, at random, in the box of the
 // assistant, when the box is empty and the assistant can answer.
 function suggestQuestion() {
-  const pick = suggestedQuestion(guide.questions, question.value, assistantReady);
-  if (pick) suggested = question.value = pick;
+  const pool = [...guide.questions, ...guide.moreQuestions];
+  const pick = suggestedQuestion(pool, question.value, assistantReady);
+  if (pick) {
+    suggested = question.value = pick;
+    return;
+  }
+  // The assistant cannot answer, or the box has text: the example is the
+  // box's hint, in grey.
+  const example = exampleQuestion(pool);
+  askPlaceholder = example ? `Ask in English, e.g. ${example}` : DEFAULT_ASK;
+  placeAsk();
 }
 
 // Whether the page gives a key of its own, rather than the server's, and
@@ -497,8 +540,10 @@ function start({ restore = null } = {}) {
   $("table").replaceChildren();
   $("brain").replaceChildren();
   $("tab-brain").hidden = true;
+  $("network").replaceChildren();
+  $("tab-network").hidden = true;
   selectTab("table");
-  $("fatal").hidden = true;
+  $("fatal").hidden = $("failed").hidden = true;
   $("boot").hidden = false;
   agentLog.reset();
   live.hidden = true;
@@ -542,7 +587,10 @@ const workerMessages = {
   // The login expired: the login page, then back here.
   login: () => location.assign(`/login?next=${encodeURIComponent(location.pathname + location.search)}`),
   status: (data) => setStatus(data.message, "busy"),
-  error: (data) => fail(data.message),
+  error: (data) => {
+    afterReply = null; // what was to run after is not
+    fail(data.message);
+  },
   ready: (data, restore) => {
     setStatus("Ready.");
     $("boot").hidden = true;
@@ -555,7 +603,7 @@ const workerMessages = {
     // This server logs what the user runs (--activity-db).
     $("log-note").textContent = data.logNote ?? "";
     $("log-note").hidden = !data.logNote;
-    guide = { examples: data.examples ?? {}, questions: data.questions ?? [], predicates: data.predicates ?? [], commands: data.commands ?? [] };
+    guide = { examples: data.examples ?? {}, questions: data.questions ?? [], moreQuestions: data.moreQuestions ?? [], questionQueries: data.questionQueries ?? {}, questionTopics: data.questionTopics ?? {}, predicates: data.predicates ?? [], commands: data.commands ?? [] };
     suggestQuestion();
     if (!input.value && !decodeShare(location.hash)) guideForStart = $("guide").open = true; // examples to start from
     $("guide-queries").open = !guide.questions.length; // the queries, when there is no question to start from
@@ -578,6 +626,7 @@ const workerMessages = {
     agentLog.apply(data);
     showAgent();
     if (data.event === "ask") {
+      live.open = true; // the steps are seen while they come; closed by the user, they stay closed
       showNoAnswer(null);
       asking = { question: data.question ?? "", language: data.language ?? $("mode").value };
       hideSummary();
@@ -587,7 +636,7 @@ const workerMessages = {
       showNoAnswer(noAnswer(data), asking?.question);
       showSummary(data, asking?.question);
       showRating();
-      if (asking) asked.add({ ...asking, query: data.query ?? "", valid: data.valid, explanation: data.explanation });
+      if (asking) asked.add({ ...asking, query: data.query ?? "", valid: data.valid, explanation: data.explanation, out_of_steps: data.out_of_steps });
       asking = null;
       showAsked();
     }
@@ -615,9 +664,19 @@ const workerMessages = {
   },
   reply: (data) => {
     rerun = null;
+    if (quietRun) {
+      const { before, after } = quietRun;
+      quietRun = null;
+      before?.(data);
+      applyReply(data);
+      setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
+      setBusy(false);
+      after?.(data);
+      return replied(data);
+    }
     setStatus(data.failed ? "Ready (the last statement failed)." : "Ready.", data.failed ? "warn" : "");
     if (!data.failed) session.add(lastRun, $("mode").value);
-    showLog(html(data.html), !data.failed && Boolean(data.tables?.length));
+    showLog(html(data.html), !data.failed && Boolean(data.tables?.length), Boolean(data.failed));
     if (data.ratable) showRating();
     applyReply(data);
     // A failure without a table hides the last result, not to be taken for its own.
@@ -631,11 +690,133 @@ const workerMessages = {
     // On a narrow screen the result is under the query: it is brought into view.
     if (stacked.matches && !$("no-answer").hidden) $("no-answer").scrollIntoView({ behavior: "smooth", block: "start" });
     else if (stacked.matches && (data.tables?.length || data.graph || data.failed)) $("result-title").scrollIntoView({ behavior: "smooth", block: "start" });
+    replied(data);
   },
 };
 
+// The buttons of a row of the uploads: an icon and a word each.
+const UPLOAD_ICONS = {
+  download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  // a brain with a spark: the image is decoded into the concepts it resembles
+  decode: '<path d="M9.5 5a3 3 0 0 0-5.3 1.9A3.6 3.6 0 0 0 2.7 12a3.6 3.6 0 0 0 1.4 5.2A3.2 3.2 0 0 0 9.5 19.3V5"/><path d="M9.5 5a3 3 0 0 1 4.2-1.5M16.3 9a3.6 3.6 0 0 1 .5 5.5 3.6 3.6 0 0 1-1.7 2.7 3.2 3.2 0 0 1-5.6 2.1"/><path d="M5.2 11.5h2.3M9.5 14c1.5 0 2.6-.8 3.2-2.2"/><path fill="currentColor" stroke-width="1" d="M19.6 1.2c.4 2.2 1.1 2.9 3.2 3.3-2.1.4-2.8 1.1-3.2 3.3-.4-2.2-1.1-2.9-3.3-3.3 2.2-.4 2.9-1.1 3.3-3.3z"/>',
+  remove: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  // a bundle of streamlines whose ends are in regions of the atlas: indexed, each is labelled by them
+  index: '<rect x="2" y="15" width="6" height="6" rx="1.5" fill="currentColor" stroke="none"/><rect x="16" y="3" width="6" height="6" rx="1.5" fill="currentColor" stroke="none"/><path d="M5 15C5 9 13 13 16 7"/><path d="M8 17c4 0 6-6 10-8" opacity=".75"/><path d="M5 12c1-4 6-3 9-6" opacity=".5"/>',
+};
+function iconButton(kind, text, label, action) {
+  const button = Object.assign(document.createElement("button"), {
+    type: "button", className: `upload-${kind}`, title: label,
+  });
+  button.setAttribute("aria-label", label);
+  button.setAttribute("aria-describedby", "uploaded-note");
+  button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${UPLOAD_ICONS[kind]}</svg>`;
+  button.append(text);
+  button.addEventListener("click", action);
+  return button;
+}
+// Remove the uploaded file *name* from the session, quietly: its panel
+// says so, with an Undo, and the focus goes to the next file's Remove.
+function removeUpload(name) {
+  const bytes = uploads.get(name);
+  const entries = session.entries.map((entry) => ({ ...entry }));
+  const rows = [...$("uploaded-list").rows];
+  const at = rows.findIndex((row) => row.cells[0].textContent === name);
+  run(`.uploads remove '${name}'`, { quiet: { after: (data) => {
+    if (data.failed) return setUploadsStatus(plainText(data.html), null, true);
+    setUploadsStatus(plainText(data.html), bytes && (() => restoreUpload(name, bytes, entries)));
+    const removes = $("uploaded-list").querySelectorAll("button.upload-remove");
+    (removes[Math.min(at, removes.length - 1)] ?? $("uploaded-summary")).focus();
+  } } });
+}
+// Undo a removal: the session brings the file back, and the page its bytes
+// and the statements loading it.
+function restoreUpload(name, bytes, entries) {
+  run(`.uploads restore '${name}'`, { quiet: {
+    before: (data) => {
+      if (data.failed) return;
+      uploads.set(name, bytes);
+      session.replace(entries);
+    },
+    after: (data) => {
+      setUploadsStatus(plainText(data.html), null, data.failed);
+      $("uploaded-summary").focus();
+    },
+  } });
+}
+// The line of the uploads panel telling what was done, with an Undo.
+function setUploadsStatus(text, undo = null, failed = false) {
+  const line = $("uploads-status");
+  line.replaceChildren(text);
+  line.classList.toggle("agent-bad", failed);
+  if (undo) {
+    const button = Object.assign(document.createElement("button"), { type: "button", textContent: "Undo" });
+    button.addEventListener("click", undo);
+    line.append(" ", button);
+  }
+  line.hidden = !text;
+}
+const plainText = (markup) => Object.assign(document.createElement("div"), { innerHTML: markup }).textContent.trim();
+
+// The type of an uploaded file, for its download.
+function uploadMime(name) {
+  if (/\.gz$/i.test(name)) return "application/gzip";
+  if (/\.csv$/i.test(name)) return "text/csv";
+  if (/\.tsv$/i.test(name)) return "text/tab-separated-values";
+  return "application/octet-stream";
+}
+
+// The files uploaded in the session, as the latest reply tells them: hidden
+// without any.
+function showUploads(listed) {
+  const summary = uploadsSummary(listed);
+  $("uploaded").hidden = !summary;
+  $("uploaded-summary").textContent = summary;
+  $("uploaded-list").replaceChildren(...uploadRows(listed).map((cells, n) => {
+    const file = listed.files[n];
+    const row = document.createElement("tr");
+    for (const text of cells) row.append(Object.assign(document.createElement("td"), { textContent: text, title: text }));
+    const name = cells[0];
+    const actions = document.createElement("td");
+    actions.className = "upload-actions";
+    if (!file.engine && uploads.has(name)) { // the page has its bytes (it uploaded it)
+      actions.append(iconButton("download", "Download", `Download ${name}`,
+        () => saveFile({ name, mime: uploadMime(name), bytes: uploads.get(name) })));
+    }
+    const decoding = decodings.get(name); // an image: its decoding query may be offered again
+    if (decoding) {
+      actions.append(iconButton("decode", "Decode", `Decode ${name}`, () => {
+        offerDecoding(name, decoding.query, decoding.kind, decoding.threshold, decoding.cortex_query, decoding.relation, decoding.radius, decoding.index);
+        $("decode-offer").scrollIntoView({ block: "nearest" });
+      }));
+    }
+    // A tractogram, on an engine of tractography: one is indexed at a time.
+    if (file.index) {
+      actions.append(iconButton("index", "Index", file.engine
+        ? `Index the engine's tractogram ${name} again, for the rules of the bundles`
+        : `Index ${name} for the rules of the bundles, in place of the tractogram indexed`,
+        () => indexTractogram(name, file.index, file.engine)));
+    } else if (file.indexed) {
+      const button = iconButton("index", "Indexed", `${name} is the tractogram the rules of the bundles select from, as ${file.indexed}`, () => {});
+      button.disabled = true;
+      actions.append(button);
+    }
+    // The engine's tractogram is listed to be indexed again, never removed.
+    if (!file.engine) actions.append(iconButton("remove", "Remove", `Remove ${name}`, () => removeUpload(name)));
+    row.append(actions);
+    return row;
+  }));
+}
+
 // What a reply changes in the page besides its output: the predicates, the language, and the box.
 function applyReply(data) {
+  if (data.uploads) {
+    // A file the session no longer has (.uploads remove) is not uploaded,
+    // nor loaded, again when the session is given back.
+    const removed = removedUploads([...uploads.keys()], data.uploads);
+    for (const name of removed) { uploads.delete(name); decodings.delete(name); }
+    if (removed.length) session.replace(withoutUploads(session.entries, removed));
+    showUploads(data.uploads);
+  }
   if (data.predicates) guide.predicates = data.predicates;
   if (data.mode) $("mode").value = data.mode; // the assistant may have switched it
   showGuide();
@@ -658,6 +839,15 @@ function showTables({ tables, prompt }) {
   });
   if (tables.length > 1) show("table", answerTabs(tables, render));
   else show("table", ...tables.map(render));
+  showNetwork(tables);
+}
+
+// The network of the answers whose rows are edges (concept_1, concept_2,
+// weight), in the network tab; an answer that is none hides that of the last.
+function showNetwork(tables) {
+  const view = networkViews(tables);
+  $("network").replaceChildren(...(view ? [view] : []));
+  $("tab-network").hidden = !view;
 }
 
 // The brain viewer page of a reply, in the brain tab, with the buttons of the images of the tables.
@@ -730,8 +920,13 @@ function showGraph({ graph, tables }) {
 
 // The log of a query, under its last line, which folds it: folded when the
 // query gave a table, open otherwise.
-function showLog(log, fold) {
+function showLog(log, fold, failed = false) {
   const last = logSummary(log.textContent);
+  $("failed").hidden = !failed; // a failure says so above its log, which wraps
+  // the message: the first line of the error, the last of a traceback
+  const lines = log.textContent.split("\n").map((line) => line.trim()).filter(Boolean);
+  $("failed-text").textContent = failed ? `Failed: ${/^Traceback/.test(lines[0]) ? last : lines[0] ?? ""}` : "";
+  out.classList.toggle("failed", failed);
   out.classList.toggle("quiet", Boolean(last));
   if (!last) return out.replaceChildren(log);
   const details = Object.assign(document.createElement("details"), { open: !fold });
@@ -761,11 +956,15 @@ function goOn(text) {
 // The files uploaded in this tab (.load NAME), by name: a session started
 // anew has none, so they are sent again before its statements are restored.
 const uploads = new Map();
+const decodings = new Map(); // the answer of the upload of each image that can be decoded
 let uploaded = null; // resolves on the worker's answer to an upload
 
 function sendUpload(name, bytes) {
   return new Promise((resolve) => {
-    uploaded = resolve;
+    uploaded = (answer) => { // an image that can be decoded keeps what its Decode button offers
+      if (answer.query) decodings.set(name, answer); else decodings.delete(name);
+      resolve(answer);
+    };
     worker.postMessage({ type: "upload", name, bytes: bytes.slice() });
   });
 }
@@ -803,15 +1002,40 @@ function replayStep(data) {
   replayNext();
 }
 
-function run(text, { remember = false } = {}) {
+// A run of the page's own (Remove, Undo), *quiet*: its reply changes the
+// uploads and says what it did in their panel, not the output nor the
+// results being read; ``before`` and ``after`` take the reply.
+let quietRun = null;
+// What runs once the statement running replies (whenReady), given the reply.
+let afterReply = null;
+function whenReady(action) {
+  if ($("run").disabled) afterReply = action;
+  else action();
+}
+function replied(data) {
+  const next = afterReply;
+  afterReply = null;
+  next?.(data);
+}
+function run(text, { remember = false, quiet = null, keepOffer = false } = {}) {
   text = text.trim();
   if (!text) return;
+  if (quiet) {
+    quietRun = quiet;
+    setBusy(true);
+    setStatus("Running…", "busy");
+    worker.postMessage({ text });
+    return;
+  }
+  setUploadsStatus(""); // what was undoable is so no longer
+  if (!keepOffer && $("decode-offer-back") && !$("decode-offer-back").hidden) closeDecodingOffer();
   if (remember) {
     history.add(text);
     showHistory();
   }
   setBusy(true);
   $("stop").hidden = false;
+  $("failed").hidden = true;
   lastRun = text;
   if (guideForStart) guideForStart = $("guide").open = false;
   setStatus("Running…", "busy");
@@ -821,6 +1045,11 @@ function run(text, { remember = false } = {}) {
   }
   hideRating();
   worker.postMessage({ text });
+}
+
+// The shortcuts say ⌘ on Apple's systems, where it is the key that asks and runs.
+if (/mac|iphone|ipad/i.test(navigator.userAgentData?.platform ?? navigator.platform)) {
+  for (const key of document.querySelectorAll("kbd.mod")) key.textContent = "⌘";
 }
 
 // The theme: light, dark or the computer's, which the page's head applied.
@@ -845,7 +1074,8 @@ system.addEventListener("change", () => applyTheme(chosen()));
 applyTheme(chosen());
 
 // The question box is narrow on a phone: its example is left out there.
-const askPlaceholder = question.placeholder;
+const DEFAULT_ASK = question.placeholder;
+let askPlaceholder = DEFAULT_ASK;
 const narrow = matchMedia("(max-width: 40rem)");
 // The panes of the page side by side (index.html), or one under the other.
 const stacked = matchMedia("(max-width: 71.99rem)");
@@ -892,14 +1122,36 @@ question.addEventListener("keydown", (event) => {
 $("share").addEventListener("click", async (event) => {
   const url = `${location.origin}${location.pathname}${location.search}#${encodeShare(editor.value, $("mode").value)}`;
   window.history.replaceState(null, "", url);
-  try {
-    await navigator.clipboard.writeText(url);
+  if (await copied(url, "Copy this link")) {
     event.target.textContent = "Copied";
     setTimeout(() => { event.target.textContent = "Copy link"; }, 1200);
-  } catch {
-    window.prompt("Copy this link", url); // no clipboard here, e.g. an unsecured address
   }
 });
+// Put *text* on the clipboard; without one (e.g. at an unsecured address) a
+// dialog, titled *title*, offers it to copy.
+async function copied(text, title) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    window.prompt(title, text);
+    return false;
+  }
+}
+// The copy buttons of the boxes, which work while a box waits for a reply.
+for (const [id, box] of [["copy-query", input], ["copy-question", question]]) {
+  const button = $(id);
+  const label = button.title;
+  button.addEventListener("click", async () => {
+    if (!box.value || !(await copied(box.value, label))) return;
+    button.classList.add("copied");
+    button.title = button.ariaLabel = "Copied";
+    setTimeout(() => {
+      button.classList.remove("copied");
+      button.title = button.ariaLabel = label;
+    }, 1200);
+  });
+}
 $("key").addEventListener("click", () => {
   const details = $("llm-details");
   details.open = !details.open;
@@ -916,6 +1168,19 @@ $("format").addEventListener("click", () => {
   $("format").closest("details").open = false;
 });
 $("explain").addEventListener("click", () => run(".explain"));
+// A menu (Docs, More, the Download of a table) closes with Escape, which gives the focus back to its
+// button, and with a click anywhere else.
+const openMenus = () => document.querySelectorAll("details.nav-menu[open], details.menu[open], details.rt-menu[open]");
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  for (const menu of openMenus()) {
+    if (menu.contains(document.activeElement)) menu.querySelector("summary").focus();
+    menu.open = false;
+  }
+});
+document.addEventListener("click", (event) => {
+  for (const menu of openMenus()) if (!menu.contains(event.target)) menu.open = false;
+});
 history_.addEventListener("change", () => {
   if (history_.value) {
     editor.value = history_.value;
@@ -959,7 +1224,9 @@ $("llm-forget").addEventListener("click", () => {
   $("refine-run").hidden = true;
 });
 $("restart").addEventListener("click", () => {
-  uploads.clear(); // a fresh session: without the rules, nor the files uploaded
+  uploads.clear(); decodings.clear(); // a fresh session: without the rules, nor the files uploaded
+  closeDecodingOffer();
+  showUploads(null);
   start();
 });
 // The next user of this browser does not have this one's key.
@@ -988,6 +1255,91 @@ $("upload-file").addEventListener("change", async (event) => {
   }
   uploads.set(answer.name, bytes);
   run(answer.statement, { remember: true });
+  // An image comes with the query decoding it: the visitor is asked
+  // whether it goes in the box, where it replaces what they wrote.
+  if (answer.query || answer.index) offerDecoding(answer.name, answer.query, answer.kind, answer.threshold, answer.cortex_query, answer.relation, answer.radius, answer.index);
+  $("uploaded").open = true; // the file is listed, with its buttons
+});
+
+// The offer to put the query decoding an uploaded image in the box, and,
+// once taken, to bring back the query it replaced, until the next run. A
+// map of values is decoded as z-scores or as a mask from its threshold:
+// it is loaded again so (.image --zscore or --mask); a tractogram is
+// decoded on the voxels near the ends of its streamlines. Only the cortex
+// takes the query choosing the voxel in the cortex (--cortex).
+let decodingQuery = "";
+let cortexQuery = "";
+let replacedQuery = "";
+let decodedMap = ""; // the map of values to load again, decoded so
+let decodedRelation = ""; // the relation it is loaded as
+function offerDecoding(name, query, kind, threshold = 3.1, cortex = "", relation = "image", radius = 3, index = "") {
+  decodingQuery = query;
+  decodedRelation = relation;
+  cortexQuery = cortex;
+  $("decode-offer-cortex").checked = false;
+  $("decode-offer-cortex-label").hidden = !cortex;
+  decodedMap = kind === "map" ? name : "";
+  const what = kind === "map"
+    ? `${name} is uploaded, a map of values. A query can decode it, ranking the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line. As z-scores, each voxel weighs the probability that it is active; as a mask, its voxels from ${threshold} weigh the same.`
+    : kind === "tractogram"
+    ? `${name} is uploaded, a tractogram. A query can decode the voxels within ${radius} mm of the ends of its streamlines: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit them, a comment explaining each line.`
+    : `${name} is uploaded. A query can decode it: it ranks the concepts of the Cognitive Atlas by how much more often their studies hit the image, a comment explaining each line.`;
+  const where = cortex ? " Only the cortex decodes the voxels of the image in the cortex alone." : "";
+  const indexed = index ? " Index, on its row of the uploaded files, puts its streamlines in place of the engine's tractogram, for the rules of the bundles (uf(x, \"left\")…) to select them." : "";
+  $("decode-offer-text").textContent = (query ? what + where + (editor.value.trim() ? " It replaces the query in the box." : "") : `${name} is uploaded, a tractogram.`) + indexed;
+  $("decode-offer-yes").textContent = kind === "map" ? "Decode as z-scores" : "Run the decoding query";
+  $("decode-offer-mask").textContent = `Decode as a mask (from ${threshold})`;
+  $("decode-offer-mask").hidden = kind !== "map";
+  $("decode-offer-yes").hidden = !query;
+  $("decode-offer-no").hidden = false;
+  $("decode-offer-back").hidden = true;
+  $("decode-offer").hidden = false;
+}
+function closeDecodingOffer() {
+  $("decode-offer").hidden = true;
+  decodingQuery = cortexQuery = replacedQuery = decodedMap = "";
+}
+// Index the uploaded tractogram *name* in place of the engine's (the
+// statements of its row), and say how its streamlines are queried.
+function indexTractogram(name, statements, engine = false) {
+  const ident = /index_tracts\("([^"]+)"/.exec(statements)?.[1] ?? name;
+  whenReady(() => run(statements, { remember: true, keepOffer: true }));
+  setUploadsStatus(engine
+    ? `The engine's tractogram ${ident} is indexed again: the rules of the bundles select its streamlines.`
+    : `${name} is indexed as the tractogram ${ident}, in place of the one indexed before: the rules of the bundles select its streamlines, e.g. ans(x) :- uf(x, "left"), and .view draws them.`);
+}
+// Put the decoding query in the box and run it, a map loaded again as
+// *flag* says first; once the statement running (the upload's .image)
+// has replied.
+function insertDecoding(flag) {
+  const cortex = cortexQuery && $("decode-offer-cortex").checked;
+  const query = cortex ? cortexQuery : decodingQuery;
+  const reload = decodedMap && `.image '${decodedMap}' --name ${decodedRelation} ${flag}${cortex ? " --cortex" : ""}`;
+  const decode = () => run(query, { remember: true, keepOffer: true });
+  whenReady(() => {
+    if (!reload) return decode();
+    afterReply = (data) => data.failed || decode();
+    run(reload, { remember: true, keepOffer: true });
+  });
+  replacedQuery = editor.value;
+  putQuery(query);
+  if (!replacedQuery.trim()) {
+    closeDecodingOffer();
+  } else {
+    $("decode-offer-text").textContent = "The decoding query is in the box, in place of the query that was there, and runs.";
+    $("decode-offer-yes").hidden = $("decode-offer-mask").hidden = $("decode-offer-no").hidden = true;
+    $("decode-offer-cortex-label").hidden = true;
+    $("decode-offer-back").hidden = false;
+  }
+  input.focus();
+}
+$("decode-offer-yes").addEventListener("click", () => insertDecoding("--zscore"));
+$("decode-offer-mask").addEventListener("click", () => insertDecoding("--mask"));
+$("decode-offer-no").addEventListener("click", closeDecodingOffer);
+$("decode-offer-back").addEventListener("click", () => {
+  editor.value = replacedQuery;
+  closeDecodingOffer();
+  input.focus();
 });
 $("session-open").addEventListener("click", () => $("session-file").click());
 $("session-file").addEventListener("change", async (event) => {

@@ -623,7 +623,33 @@ completes in about 20 seconds.
     its rows bind its variables in the IDB predicates right of it: in
     ``ans(x) :- e("c", y) & p(y, x)``, with ``e`` an EDB predicate and
     ``p`` defined by rules, the values of ``y`` in the rows of ``e``
-    with ``"c"`` are passed to ``p``.
+    with ``"c"`` are passed to ``p``. In the query's own rule, a small
+    EDB predicate (``[MAGIC_SETS] seed_rows``, 100 tuples, at most) binds
+    its variables without a constant, and is put first: in
+    ``ans(t, i, j, k, u) :- chosen(t) & uniformity(t, i, j, k, u)``,
+    ``uniformity`` is computed for the terms of ``chosen`` alone.
+    A predicate whose rule binds a variable only through its head, as
+    ``q`` in ``similar_study(q, s) :- study(s) & (v ==
+    query_similarity(q, s)) & ...``, is a relation over the values the
+    rules using it bind: there, an EDB predicate with a variable at
+    such an argument binds it, as ``skos:definition`` does ``d`` in
+    ``uses(s) :- cogat_term(t, 'stroop task') & skos:definition(t, d) &
+    similar_study(d, s)``. It is put first, after the constants and the
+    rules sharing its variables: in ``uses(s) :- ri_task(t) &
+    skos:definition(t, d) & similar_study(d, s)``, ``similar_study`` is
+    computed for the definitions of ``ri_task`` alone.
+
+    The rewrite gives all the call sites of a predicate with the same
+    bound arguments one adorned and one magic predicate. Two rules
+    reading ``p`` and ``q`` in opposite orders, ``a(x) :- p(x, y) &
+    q(y)`` and ``b(x) :- q(x) & p(x, y)``, then make ``magic_q`` depend
+    on ``p``, and ``magic_p`` on ``q``: a cycle, though neither is
+    recursive, which would have the whole program evaluated as one
+    recursive stratum, rule by rule until nothing changes. When the
+    rewrite has a cycle without a predicate recursive in the program
+    (the WMQL tract bundles have them), the query is solved unrewritten,
+    unless it has a predicate bound only through its head, such as
+    ``similar_study``, which needs the rewrite.
 
 
 Part 9: The Complete Program

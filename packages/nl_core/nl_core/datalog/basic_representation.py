@@ -8,6 +8,7 @@ sets.
 
 import operator as op
 from itertools import tee
+from types import MappingProxyType
 from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
@@ -310,11 +311,27 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
         return head_args
 
     def extensional_database(self):
-        ret = self.symbol_table.symbols_by_type(AbstractSet)
-        for keyword in self.protected_keywords:
-            if keyword in ret:
-                del ret[keyword]
-        return ret
+        """
+        A read-only mapping of the relations of the symbol table but
+        those of :meth:`not_relations`, filtered once while the table
+        keeps the mapping of its relations, until it or a scope enclosing
+        it changes: the symbols not relations are in the table too.
+        """
+        relations = self.symbol_table.symbols_by_type(AbstractSet)
+        cached = getattr(self, "_extensional_database", None)
+        if cached is None or cached[0] is not relations:
+            excluded = self.not_relations()
+            cached = self._extensional_database = (
+                relations, MappingProxyType({
+                    symbol: value for symbol, value in relations.items()
+                    if symbol not in excluded
+                })
+            )
+        return cached[1]
+
+    def not_relations(self):
+        """The symbols of sets of the symbol table not relations."""
+        return self.protected_keywords
 
     def builtins(self):
         return self.symbol_table.symbols_by_type(Callable)

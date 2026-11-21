@@ -122,7 +122,7 @@ existential_predicate : exists "(" existential_body ")"
 SUCH_THAT_WORD : "st"
 
 ?head : head_predicate
-head_predicate : identifier "(" [ arguments ] ")"
+head_predicate : (identifier | iri_identifier) "(" [ arguments ] ")"
 
 // "|" (or "\N{LOGICAL OR}") is a disjunction; "," binds tighter than it.
 ?body : disjunction
@@ -144,6 +144,7 @@ NEG_UNICODE : "\u00AC"
 // reduce/reduce collision): the priority reads it as a body formula, so
 // write "(f(x) < 3)" rather than "((f(x)) < 3)".
 predicate.2 : id_application
+          | iri_identifier "(" [ arguments ] ")" -> id_application
           | negated_predicate
           | existential_predicate
           | "(" parenthesised_disjunction ")"
@@ -256,8 +257,10 @@ text : TEXT
 TEXT : DOUBLE_QUOTE /[^"\\n]*/ DOUBLE_QUOTE
      | SINGLE_QUOTE /[^'\\n]*/ SINGLE_QUOTE
 
-// An IRI, as in SPARQL and Turtle: <http://example.org/a>
+// An IRI, as in SPARQL and Turtle: <http://example.org/a>; as the functor
+// of an atom, the predicate named by the IRI.
 iri : IRI
+iri_identifier : IRI
 IRI : /<[a-zA-Z][a-zA-Z0-9+.-]*:[^<>"{}|^`\\\\\\s]*>/
 DOUBLE_QUOTE : "\\""
 SINGLE_QUOTE : "'"
@@ -1315,6 +1318,9 @@ class DatalogTransformer(Transformer):
     def iri(self, ast):
         return Constant(ast[0][1:-1])
 
+    def iri_identifier(self, ast):
+        return Symbol(ast[0][1:-1])
+
     def tuple_literal(self, ast):
         # Filter out Lark terminal tokens (commas, parens) which are str/Token
         # instances. Actual values are already transformed to Constant/Symbol
@@ -1507,11 +1513,12 @@ def _doc_signature(lines, name, arity, line):
     return tuple(arguments)
 
 
-def documentation_command(name, description, arguments=()):
+def documentation_command(name, description, arguments=(), replace=False):
     """
     Return the command documenting the predicate *name*: its
     *description* and its *arguments*, ``(name, sort)`` pairs, the sort
-    ``""`` when not given.
+    ``""`` when not given; with *replace*, in place of the description it
+    had.
     """
     return Command(DOCUMENT_COMMAND, (
         Symbol(name), Constant[str](description),
@@ -1519,7 +1526,7 @@ def documentation_command(name, description, arguments=()):
             tuple(tuple(a) for a in arguments),
             auto_infer_type=False, verify_type=False,
         ),
-    ), ())
+    ), ((Symbol("replace"), Constant[bool](True)),) if replace else ())
 
 
 def _documentation(expression, lines, line):

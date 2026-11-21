@@ -1,6 +1,8 @@
 """Unit tests for the SQUALL syntax lark parser."""
 import pytest
 
+pytestmark = pytest.mark.squall
+
 
 @pytest.fixture
 def nl_setup():

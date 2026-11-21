@@ -19,6 +19,524 @@ Unreleased
 
 **New features:**
 
+- Brain viewer: the streamlines of a result with one other column, such
+  as ``ans(x, side) :- uncinate(x, side)``, can be coloured by bundle, a
+  colour per value of the column, which a legend names, or by direction,
+  as before; *Colour by* chooses, starting at bundle. The column has 20
+  values at most (``streamlines.max_bundles`` of ``viewer.yaml``); a
+  streamline of several bundles is of the first, in alphabetical order.
+
+- Brain viewer: the views take the width of the page, the 3 slices in a
+  row as tall as a third of it allows (340 to 640 px), where they were
+  960 by 340 px whatever the page; the options of the display start
+  folded under *Display*, the image close to the threshold; the colour
+  and the width of the crosshair are named for screen readers.
+
+- ``neurolang-query --mcp`` and the REPL server's ``/mcp``: an answer's
+  rows are shown by their value, highest first; its glass brain is a file
+  too, linked; a page lists the answers of the session with their glass
+  brains (``index.html``); the answers are kept (``answer.json``), and
+  ``list_answers`` lists those of the earlier sessions, which ``ask``
+  refines by their ids. New tools: ``examples`` (the assistant's example
+  questions by topic) and ``status`` (the engine, its grid, its folders,
+  whether it is built). ``--allow-dir DIR`` lets the confined statements
+  read a folder of one's own (``.load`` reads the files of the folders
+  they may read); the options may be kept in
+  ``~/.config/neurolang/mcp.yaml``; ``--print-mcp-command`` prints the
+  command adding the server to Claude Code; the data directory is
+  ``~/neurolang_data`` by default. On the REPL server, each user's answers
+  are in a folder of their own. The meta-analysis engines answer "where in
+  the brain is X reported" with the lift of each voxel of the cortex.
+  
+- REPL server (``--users --local``): ``--session-memory-mb`` stops, on Linux,
+  a query taking its session's process more than that much memory of its own,
+  with a message, the session staying, instead of the OOM killer taking the
+  builder or the server; ``doc/repl_server.rst`` gives the matching systemd
+  ``MemoryHigh``/``MemoryMax``.
+
+- REPL server (``--users --local``): it answers at once and prepares the
+  engines in the background (those the page offers first), instead of
+  after their preparation, which took minutes after an update that
+  changed the tables kept (the page did not answer meanwhile). A session
+  of an engine not yet prepared waits for it, its page telling so; the
+  others start at once. Without ``--users`` the engines are still
+  prepared before serving.
+  
+- REPL page: the question and query boxes have a copy button at their top
+  right, and keep their own history of edits: Ctrl or Cmd Z undoes a run of
+  typing at a time (the browser's undid a character at a time in Chrome) and
+  also what the page wrote in the box (an example, the History menu, the
+  assistant's query, Format); Shift Ctrl or Cmd Z, and Ctrl Y, redo.
+  
+- NeuroStore engine: a build no longer depends on the network when it has
+  what it needs.  The listing of the releases is kept in the data directory
+  for ``release_listing_ttl_hours`` (24, in ``engines.yaml``), a downloaded
+  release is used as it is, a nightly release is downloaded again (and the
+  old copy replaced only once the new one is there) when a fresh listing
+  says it was rebuilt, and without the network the newest downloaded
+  release is used with a logged message.  ``NEUROLANG_NEUROSTORE_UPDATE=1``
+  lists the releases again.
+
+- Magic sets no longer copy the rows of a stored relation they restrict:
+  a restriction rule, ``p^bf(x, y) :- magic_p^bf(x), r(x, y)`` of a
+  stored relation ``r``, is unfolded into the rules using it
+  (``unfold_restrictions``, the last step of ``magic_rewrite``), whose
+  plans join ``r`` with the magic predicate: relational algebra as any
+  join, the contractions as a product with the sparse view of ``r``.
+  Magic sets bind every predicate again, those of sparse views included
+  (no ``unbound_predicates``); the decoding of a mask reads
+  ``activated`` as its view, without the 20-million-row copy. See
+  :doc:`probabilistic_lifting`, *Restrictions of magic sets left to the
+  plans*.
+
+- Probabilistic queries whose plans are sums of products (joins,
+  projections and selections over choices, probabilistic facts and
+  deterministic relations, the independent and disjoint projections of
+  lifted plans, and conditionals) are computed as contractions of sparse
+  tensors: the provenance plan is translated into tensor expressions
+  (``nl_core.relational_algebra.linear_algebra.expressions``), rewritten
+  into a normal form, and computed with ``scipy.sparse``, reading the
+  engines' sparse views (``activated``, the atlas activations) as
+  matrices. Plans it cannot write so are computed as before. With it,
+  the restrictions of stored relations by magic sets are joined by the
+  plans rather than copied (see below). Answers are
+  unchanged (see :doc:`probabilistic_lifting`, *Computing the plans as
+  tensor contractions*); ``[PROBABILISTIC_SOLVER] contractions = False``
+  in ``config.ini`` turns it off.
+- ``nl_core.relational_algebra.linear_algebra``, the encoding of
+  relations for linear algebra: ``EntityIndex`` numbers the entities of a
+  sort (a voxel ``(i, j, k)`` is one; strings through a dictionary) and
+  back, and ``SparseView`` holds a relation between two entities, with
+  the value of a third column or not, as a ``scipy.sparse`` CSR matrix
+  with int32 indices, under set semantics, built once for the frame of
+  its rows (``sparse_view``). An engine declares the views it builds with
+  it, before the REPL server forks its sessions, which share them, in
+  ``sparse_views`` of ``engines.yaml`` (``activated: [voxel, study]``),
+  the entities of a sort numbered alike in all; the views of predicates
+  the engine does not define (left out of a lightweight engine) are not
+  built. The engines of the registry declare none yet, as no query reads
+  them. ``SparseView.weighted()`` gives the matrix with float64 entries
+  over the same indices, for products of views, made once with the views
+  and shared by the sessions. Reading the rows of an
+  empty relation of no columns no longer fails.
+
+- The sparse views of an engine are kept with the tables of its build
+  (``derived_tables`` of the data directory, a ``.npy`` file per array,
+  named by a checksum of the relations they are built from) and read
+  memory-mapped by the next build: their arrays (13 bytes a tuple, 1.8
+  GB for neurostore_iit) are pages of the files, shared by the
+  processes, by the engines built from the same tables, and reclaimed by
+  the system when memory is short, rather than private memory of each
+  builder; a build no longer spends time building them (24 s for
+  neurostore_iit). A table a build reads back from its file is named,
+  for what is found from it, by the name of the file, without reading
+  its rows again.
+
+- REPL in the browser: a *Network* tab draws an answer whose rows are edges
+  (two columns of the same sort, such as ``concept_1`` and ``concept_2``,
+  and a numeric weight) as a network laid out by force, with a slider for
+  the weakest edge shown; it starts with the strongest, two per node, and
+  says which edges and nodes it leaves out; of more than 40 nodes it names
+  the most linked, the others under the pointer. The size and the shade of
+  the nodes show a measure chosen (links, rows in a column, such as the
+  children of a parent, or the nodes under it in a hierarchy), the shade
+  of the edges their weight; a hierarchy can be drawn as a radial tree.
+  It zooms (Ctrl or ⌘ and the wheel, a pinch, buttons) and pans, naming
+  more nodes the closer; a node found by name or clicked is focused, with
+  its neighbours, and a panel lists them to go from one to the next.
+  The limits are in ``settings.yaml`` (``network``).
+
+- REPL server (``--users --local``): with ``--mcp``, it answers MCP
+  clients, LLM agents such as Claude Code, at ``/mcp``, each user with a
+  personal token of their account page (only its hash kept, in the users
+  file), in a session of their own whose REPL answers in plain text: the
+  tools of ``neurolang-query --mcp`` over the network. The login page tells
+  how to add the server to a client; the files of the answers (viewer,
+  images, rows, query, graph) are kept in ``--mcp-results-dir`` and served
+  to the users logged in, the pages sandboxed. The server's builder and
+  sessions draw with matplotlib without a window: on macOS its default
+  backend aborted a forked session drawing a glass brain.
+
+- ``neurolang-query --mcp`` serves a session of the interactive REPL to an
+  MCP client, such as Claude Code, over stdin and stdout (extra ``mcp``).
+  The client's model answers questions as the query assistant does, in
+  Datalog: ``ask`` gives the assistant's prompt for a question, the
+  assistant's tools find the predicates and values and run queries, and
+  ``final_answer`` checks the answer as the assistant's, then returns its
+  explanation, the query with a comment on each rule, its first rows, glass
+  brains of its images and the links to its viewer, images, rows, query and
+  graph (``--results-dir``). ``--build-on-first-call`` builds the engine at
+  the first tool call, and ``--log FILE`` writes the build and each tool
+  call, with its time and outcome, to a file. ``ask`` with ``refine``
+  changes an answer, or the last query run, for a new question; ``repl``
+  runs statements and dot-commands in the session. See *From an MCP
+  client* in the LLM Query Assistant documentation.
+
+- REPL server (``--users --local``): the builder builds the engines the
+  page offers when the server starts, the default first, and an engine
+  the admin console turns on when it does, so that no session waits for
+  a build (up to 75 s for ``neurostore_iit``); a session then starts in
+  under two seconds. ``--no-prebuild`` (``prebuild: false``) leaves each
+  engine to its first session, as before. The builder also finds the
+  names the notes on a query's constants look up, once, rather than each
+  session at its first query: that of ``neurostore_iit`` takes 6 s
+  instead of 18 s. After each query, once it has replied, a session frees
+  what the query left (``gc.collect`` and, on Linux, ``malloc_trim``,
+  13 ms): with the chase fix of #1335, a session that decoded an image
+  keeps 90 MB of its own instead of 0.8 GB.
+- Query assistant, meta-analysis engines (``neurosynth``, ``neurostore``):
+  the regions a question lists (which regions, parcels or structures a
+  term, a topic or a seed activates or co-activates) are answered with the
+  lift of each, P(active | topic) / P(active), or with the Bayes factor
+  when the question decodes, rather than with the probability of their
+  activation; the guidance and the examples of the assistant say so. The
+  Schaefer atlas of the questions is that of 400 parcels: the engines
+  have ``schaefer400_activated`` and ``schaefer400_covered``, and the
+  assistant uses them unless a question asks for 100 parcels
+  (``schaefer_activated``). They take about 90 s to compute the first
+  time, then are kept with the engine's other tables (8 MB).
+
+- REPL: the box of the assistant starts with one of the assistant's example
+  questions chosen at random: filled in when the assistant can answer, as the
+  grey hint otherwise. "Surprise me" picks another. Picking an example, a question or a query, fills
+  both boxes, the English one and the query. The Questions list of
+  "Examples and relations" is followed by the rest of the assistant's bank,
+  "More questions", listed under topics (decoding, encoding, functional and
+  structural connectivity, atlases...; the ``topic:`` of an entry of the bank
+  overrides the one the page derives) and narrowed by a filter. Two new
+  decoding examples: the terms of a Schaefer parcel and of a Tian region.
+  
+* On an engine of tractography (``neurosynth_iit``…), an uploaded
+  tractogram is queried with the rules of the bundles: ``.load_tractogram``
+  reads it by its name, and *Index*, on its row of the uploaded files,
+  indexes it in place of the tractogram indexed before
+  (``.index_tracts(..., replace=1)``, which removes that one from the
+  relations, with a note); one tractogram is indexed at a time.  The
+  engine's own tractogram is listed first, never removed, its *Index*
+  putting it back (:doc:`tutorial_decoding`).
+
+**Performance:**
+
+- ``uses(s) :- ri_task(t), skos:definition(t, d), similar_study(d, s)``
+  computes ``similar_study`` for the definitions of ``ri_task`` alone, as
+  fast as with ``skos:definition`` in a rule of its own: magic sets put
+  ``skos:definition``, which binds ``d``, ahead of ``ri_task``, and the
+  similarity was computed for every definition of the ontology (more
+  than 300 s on the engine neurosynth). The rules sharing the variables
+  of such a stored relation now bind before it, and the literals needing
+  them after it.
+- The magic-sets rewrite of a query over a large program (the tracts of
+  an engine) took most of its time: the relations of the extensional
+  database were built again for each literal checked (15 000 times), and
+  rules were ordered definitions first by reading every body on each pass.
+  A symbol table now keeps the symbols of each type it was asked for until
+  it or a scope enclosing it changes (``symbols_by_type``, so
+  ``extensional_database`` and ``builtins``), and each body is read once. The Fig. 2b query of the bundles co-activated by
+  language studies on neurosynth_iit took 240 to 267 s, now 118 to 120 s,
+  with the same answer.
+  
+- The magic-sets rewrite of the Fig. 2b query (neurosynth_iit) took 18.5 s
+  of its 70 s, now 6.5 s, the rewritten programs of the three engines'
+  questions and examples unchanged. Rules are ordered definitions first
+  in one reading of their bodies, not one comparison of thousands of
+  symbols a pass; ``symbols_by_type`` returns the read-only mapping it
+  keeps rather than a copy, and ``extensional_database`` filters it once
+  while it is kept, not once a literal checked (15 000 times). When the
+  seeded rewrite finds no constant to bind, it is not tried again
+  unseeded, which only binds less (on master before this change, 7 more
+  attempts for each of the 3 answers).
+
+- The semi-naive chase no longer evaluates again a rule with several atoms
+  of its stratum's predicates when none of them has new tuples: the rules
+  of tract queries rewritten with magic sets, 90 % of whose evaluations
+  found nothing. A chase step looks up in the instance the relations its
+  plan reads, rather than copying them all, and drops the tuples already
+  derived only when it found some. The chase of the Fig. 2b query of the
+  bundles co-activated by language studies (neurosynth_iit) took 46 s in
+  1 334 steps, now 30 s in 952.
+
+- Magic sets no longer make a non-recursive program recursive. All the
+  call sites of a predicate with the same bound arguments share one
+  adorned and one magic predicate, which can close a cycle of predicates
+  none of which is recursive (``traverses^bbb`` reads
+  ``magic_traverses^bbb``, which reads ``traverses^bbb``, in the WMQL
+  tract bundles): the program was then one recursive stratum, rule by
+  rule until nothing changed. Such a query is now solved unrewritten,
+  unless it has a predicate bound only through its head
+  (``similar_study``), which needs the rewrite. The rewrite leaves unbound
+  at most one non-recursive predicate whose binding would leave the
+  program unstratified, then gives up; a rewrite given up for a cycle of
+  its own is not tried again without seeding from the stored relations,
+  since binding fewer predicates does not undo the cycle. On
+  ``neurosynth_iit`` at 2 mm, the ``af`` bundle took 22.5 s, now 7.1 s,
+  ``extreme_capsule`` 19.4 s, now 4.3 s, and Fig. 2b's program without
+  its bootstrap 19.4 s, now 14.8 s, with the same answers.
+
+- A choice over a few rows of an engine's view (the voxels of an image) by
+  the view reads those rows alone, and a vector over a few of its columns
+  reads them through the view's index by column entities, rather than the
+  whole view: decoding an image by the terms with ``selected_voxel`` on
+  neurostore, 10 voxels against ``activated``'s 1 billion entries, took 7
+  to 18 s, now 4 to 15 s; the product itself 1.7 s warm, 55 s cold, now
+  next to nothing. ``FEW_CELLS`` and ``INDEX_SHARE`` are in the
+  configuration: ``[PROBABILISTIC_SOLVER] few_cells`` and ``index_share``.
+
+- A natural join of a small relation (``[RAS] join_cut_rows``, 10 000 rows)
+  with one ``join_cut_ratio`` (100) times larger first keeps the rows of
+  the larger one whose values of the common columns are among the smaller
+  one's, before dropping its duplicates and merging (pandas). The magic
+  set of a term, one row, was merged with the 10 M rows of NeuroStore's
+  TF-IDF: ``mentions(s, 'pain'), mentions(s, 'emotion')`` took 9.2 s, now
+  2.9 s.
+
+- Decoding an image by the terms (``p_image_given_term``) took 110 s on
+  neurosynth, now 3.7 s, with the same answer. Lifting tests whether
+  columns of a relation determine another: two of its first rows
+  (``[PROBABILISTIC_SOLVER] function_sample_rows``, 10 000) with one key
+  and two values now disprove it, rather than counting the distinct
+  values of the whole relation (346 M rows of ``activated``, 30 to 45 s a
+  test). And a sparse view weighted by probabilities on a few of its rows
+  (the voxels of the image) is multiplied by their diagonal, which reads
+  those rows alone, rather than copied and scaled entry by entry (25 s).
+  
+- A selection or a projection by functions that apply to whole columns
+  (comparisons, arithmetic, and functions marked ``columnwise``, as
+  ``euclidean``) is computed once on the columns rather than once a row:
+  the studies with a peak within 3 mm of an MNI point,
+  ``peak_mni(x, y, z, s), (euclidean(x, y, z, -24, -4, -20) <= 3)``, took
+  15 s over the 508 000 peaks of Neurosynth, now 1.2 s. A backend other
+  than pandas computes it a row at a time, as before.
+
+- Contractions multiply an engine's view by an operand of a few rows (the
+  studies of a term) as a sparse by dense product, one pass over the view
+  in its own layout, and build their operands with indices of 32 bits, as
+  the views: ``uniformity('pain', ...)`` on neurostore went from 89-96 s
+  to 63-68 s, the product of the term's studies by ``activated`` from 12 s
+  to 2.8 s.
+
+- A view can be kept by its column entities as well
+  (``sparse_view_indexes`` of ``engines.yaml``; ``activated`` in the
+  coordinate-based engines): a product with a few of them (the studies of
+  a term) reads their entries alone, not the whole view.
+  ``uniformity('pain', ...)`` on neurostore: 63-68 s to 13 s; the index
+  of ``activated`` is 3.9 GB, built once.
+
+- Magic sets: in the query's own rule, a small stored relation (at most
+  ``[MAGIC_SETS] seed_rows``, 100 tuples) binds its variables without a
+  constant, and is put first. ``chosen(t), uniformity(t, i, j, k, u)``
+  computed ``uniformity`` for all 3 228 terms before keeping the chosen
+  ones (30 minutes without an answer on neurostore); it now computes it
+  for the chosen terms alone.
+
+- Magic sets: of a cycle with an aggregation and a negation that a binding
+  would create, the predicate left unbound is chosen in a fixed order, the
+  aggregation's first. It was the first of a set, so a query could be
+  planned differently from one run to the next: a functional connectivity
+  query took 5 or 17 s, its aggregation computed once or twice.
+
+- Engine builds read the cached atlas activations as arrays instead of
+  rebuilding a list of tuples, and ``engine_cache.digest`` hashes string
+  arrays as fixed-width bytes instead of through ``repr``; the cache
+  ``VERSION`` is 2, so caches kept by earlier versions are found again once.
+
+**Bug fixes:**
+
+- AI assistant: an answer given when the ReAct agent ran out of steps,
+  the last query that gave rows, says so: its summary reads *Out of steps:
+  no final answer after N steps*, as a warning on the web page and in
+  yellow in the terminal, where it read as a final answer.
+
+- A predicate whose rule binds a variable only through its head, as
+  ``q`` in ``similar_study(q, s)`` of the engine neurosynth, gets the
+  values of a stored relation of the rules using it:
+  ``uses(s) :- cogat_term(t, 'stroop task'), skos:definition(t, d),
+  similar_study(d, s)`` raised ``UnboundVariablesError``, as did
+  ``study_similarity``, ``p_similar``, ``p_a_given_similar``,
+  ``lift_llm``, ``uniformity_llm`` and the other ``*_llm`` predicates.
+  When magic sets cannot bind every predicate without leaving the
+  program unstratified (two WMQL bundles of the engine neurosynth_iit),
+  only those predicates are bound, where the rewrite was dropped.
+  
+- Tractography: ``.index_tracts(t, a, replace=1)`` also removes from the
+  relations the atlases that indexed only the tractograms it removes. Their
+  labels stayed in the box of a term (``term_box_*``), so that the
+  directional rules of the bundles (``endpoint_anterior_of``...) of the
+  tractogram indexed depended on them: HCP842 indexed by ``cvs_avg35``'s
+  wmparc in place of the IIT tractogram indexed by its wmparc (the commands
+  of ``neurosynth_iit``) selected 715 left uncinate streamlines instead of
+  tract_querier's 724, the left amygdala's box reaching 1.5 mm forward in
+  IIT's wmparc and 0.5 mm in ``cvs_avg35``'s. The atlas removed keeps its
+  options (``extent``, ``term_mapping``) for when it indexes again.
+
+- An aggregation over a body with a negated atom, as
+  ``r(sum(x)) :- p(x), ~q(x)``, is no longer refused as not conjunctive:
+  it gives the aggregation over an intermediate rule holding the negation.
+  An aggregate whose negated atom depends on its own head is refused, as
+  with a positive one.
+  
+- REPL in the browser: the output of a query is legible on its dark panel.
+  Its colours were Rich's, made for a light terminal: an error was dark red
+  on navy (a contrast of 1.6). They are now the page's, each with a
+  contrast of at least 4.5 (WCAG AA), dim text included.
+  
+- REPL in the browser: *Map the studies* is offered for the columns of
+  studies only. A map of voxels, ``ans(i, j, k, lift)``, offered a map of
+  the studies in ``i``, ``j`` and ``k``, its voxel indices taken for
+  studies; integer columns of an unknown sort count only when no column is
+  of studies.
+
+- REPL in the browser: a map of voxels, such as ``ans(i, j, k, lift)``,
+  no longer gets a *Network* tab: its ``i`` and ``j``, of the one sort of
+  a voxel, were taken for the two ends of an edge. A sort of several
+  columns now ends no edge; the page is sent the position of each column
+  in its sort.
+
+- A probabilistic plan computed as contractions whose answer could not be
+  built as a relation set failed the query: the building of the answer is
+  within the fallback, which logs the error and computes the plan by
+  relational algebra, as for any error of the contraction.
+
+- With the Polars backend, a probabilistic query computed as contractions
+  failed (``IndexError``): the named relation sets of Polars take the rows
+  of a pandas frame, as those of pandas do, columns in the set's order;
+  columns of values Polars does not hold natively are read row by row.
+
+- REPL server (``--users --local``): each engine has a builder process of
+  its own, started by a coordinator, rather than one builder for all: a
+  session of an engine built starts at once while another engine builds,
+  rather than after that build: on ``neurosynth_iit`` while
+  ``neurostore_iit`` builds, in 1.4-1.6 s rather than 96-98 s. A builder
+  that dies fails the starts of its engine only, is told in the log, and
+  the next session of its engine builds it again, rather than no session
+  starting until a restart. One engine still builds at a time, in the
+  order asked. The coordinator and each builder's own interpreter take
+  about 0.5 GB more memory than one builder did (resident and private,
+  both engines built, on Linux).
+
+- The relational-algebra chase no longer keeps every chase that ran: three
+  of its rewritings were cached with ``lru_cache`` on the method, a cache
+  of the class whose keys held the chase, its program and the relations
+  of its query. A REPL session kept 0.6 GB more after each query decoding
+  an image on ``neurosynth_iit``; the caches are now each chase's own
+  (the same hits), and that session keeps 0.18 GB, however many queries.
+- Example programs that did not work: the start-up example of the
+  Neurosynth and NeuroStore engines joining the Cognitive Atlas subclasses
+  of *working memory* with the mentions returned no row (none of its seven
+  subclass labels is a term of Neurosynth), it now takes those of
+  *attention* (574 studies); two assistant examples on structural
+  connectivity defined a probabilistic choice named ``ends_in``, a
+  predicate of the vocabulary of tractography, and failed with
+  ``ForbiddenDisjunctionError`` (renamed ``ending_region``); and the
+  assistant example of the left uncinate fasciculus, which compared the
+  definitions of the 583 Cognitive Atlas concepts with the 14,371 studies
+  and timed out, takes the 21 kinds of *memory*.
+
+
+v0.1a23 (2026-11-15)
+--------------------
+
+**New features:**
+
+* ``destrieux_name(label, name)`` and ``tian_name(label, name)``, in every
+  engine of the MNI atlases (and ``destrieux_name`` in ``destrieux``): the full anatomical names of the 148
+  Destrieux regions (Destrieux et al. 2010, Table 1) and of the 32 regions
+  of Tian's subcortex, scale 2 (the atlas's nomenclature), with their
+  hemisphere, as 'Superior frontal gyrus (F1), left' or 'Ventroanterior
+  thalamus, left', to join with a result of their labels; and
+  ``schaefer_name`` (100 parcels) and ``schaefer400_name`` (400), the network
+  and the component of each Schaefer parcel ('Default A network, dorsal
+  prefrontal cortex 1, left', from the glossary of the atlas's authors), and
+  ``atlas_abbreviation(atlas, abbreviation, meaning)``, what each
+  abbreviation of the labels of the three atlases stands for; with
+  ``lcase`` and ``str_contains`` to find a region by its name or an
+  abbreviation, and examples for the query assistant.
+  ``tools/make_atlas_names.py`` makes the tables from their sources.
+
+* A tractogram is decoded as an image is, where its streamlines end:
+  ``.image`` and **Upload data** take a ``.trk`` or ``.tck`` in MNI mm and
+  load the voxels of the brain within 3 mm (``image.endpoint_radius``,
+  ``--radius MM``) of the ends of its streamlines, each of probability 1,
+  and draw its streamlines in the brain viewer; the page offers the
+  decoding query, and the query assistant has an example.  The page's
+  decoding buttons now run the query they put in the box.  The left arcuate fasciculus of HCP842 decodes to sentence
+  comprehension, reading and language (:doc:`tutorial_decoding`).
+
+* ``rdf:type(x, C)`` makes ``x`` an instance of the class ``C``, as RDF
+  says, for the types a program states with rules as for those of the
+  files: ``rdf:type(e, t) :- our_experiment(e, n), cogat_term(t, n)``
+  types our experiments as Cognitive Atlas tasks by their names, and the
+  Atlas's axioms then apply to them.  In a question, ``rdf:type(c, k),
+  cogat_term(k, 'response inhibition')`` names the class by its label,
+  for an unnamed ``c`` too, in the query and in the program's rules.  Only
+  the classes with instances get them, so the rewriting still drops the
+  others.  The example (IV) of :doc:`ontologies` is rewritten on it, with
+  no identifier of the Atlas in its queries: our experiments, then the
+  Stroop studies of Neurosynth, in the closed and the open world, every
+  query of it now ending.
+
+* Upload a brain image to the REPL: the page's *Upload data* takes a NIfTI
+  image of activations (``.nii``/``.nii.gz``), a binary mask or a z-map,
+  kept with the session as the CSV files are, so a server reading none of
+  its files loads it.  On a server (``--users --local``), the files a
+  session's page uploads go to a folder of its own in ``--uploads-dir``
+  (``uploads_dir`` of ``server.yaml``), removed when the session ends,
+  stopped or unused for ``--idle-minutes``, or when its process died; their
+  sizes are its ``--max-upload-mb`` (50) and ``--max-uploads-mb`` (200).
+  The admin console shows them by session, with their sizes, ages and the
+  free disk space, and erases a file, a session's or all.  ``.uploads`` lists, in a session, the files its page uploaded, their
+  kind, size and age, the relations loaded from them and the room left.
+  The page has *Upload data* in its toolbar, and lists the files uploaded
+  in the session (each reply carries them).  ``.image`` describes the image
+  to the query assistant (its file, a mask or a map of values, its voxels),
+  replacing the description of an image loaded before under the same name
+  (``document_predicate(..., replace=True)``, ``.document(p, "...",
+  replace=True)``).  ``.document(p, "...")`` in the REPL says ``documented p`` (not
+  "nothing defined"), and the page keeps it with the rules of the session,
+  after *Stop* or in a saved session.  ``.uploads remove NAME``, the
+  *Remove* of the page's list, deletes an uploaded file from the session
+  (from its folder on a server), and the page forgets it: the relations
+  loaded from it stay until ``.drop``.  The list has a *Download* and a *Remove* button for each file;
+  *Remove* leaves the output as it was and offers an *Undo*
+  (``.uploads restore NAME``, the file removed last).  ``.image PATH|UPLOADED [--name
+  NAME]`` loads it as ``NAME(i, j, k, value)``, NAME the file's name by
+  default (``motor_map`` for ``motor map.nii.gz``; an upload of another
+  file of the same name gets another), on the grid of the engine
+  (resampled, a mask to the nearest voxel; at most ``image.max_mb``
+  uncompressed, ``viewer.yaml``), shows it in the brain viewer and tells
+  the query assistant what it is; the page gives it back after *Stop* or
+  *Open session*.
+
+* Decoding a brain image (:doc:`tutorial_decoding`): ``.image`` loads, with
+  the image, ``image_probability(i, j, k, p)``, the probability that each
+  voxel is active: 1 for a mask, or a map of values from 3.1 taken as one
+  (``.image --mask``, masked decoding); for a map of z-scores, which
+  ``.image --zscore`` says it is, 1 - the local false discovery rate of its
+  z-score (Efron 2004: an empirical null of the map's median and MAD, a
+  kernel density; ``image.min_probability`` and ``image.kde_sample`` in
+  ``viewer.yaml``), with no threshold.  It prints, on the meta-analysis
+  engines, the query decoding the image (``image_decoding_query`` in
+  ``engines.yaml``, a comment explaining each line), and the page asks,
+  after an upload, whether it goes in the box, and, for a map of values,
+  how to decode it (*Decode as z-scores*, *Decode as a mask*), in the
+  brain or, *Only the cortex* (``.image --cortex``), in its cortex: a plain
+  Datalog query over the
+  probabilities, so any relation of voxels and probabilities is decoded
+  the same way.  Each voxel is a probabilistic fact of its probability and
+  a voxel of the brain is chosen at random (``selected_voxel``); its score
+  is the lift of each term: the
+  probability that a study of the term activates the chosen voxel, which
+  is active, over the same for all the studies.
+  The query assistant's bank and guidance decode an uploaded image, and
+  have the overlap query too (each voxel a probabilistic fact, a study
+  hitting the image if it activates one), for a mask or a small region.
+
+* The admin console of ``neurolang-repl-serve`` has *Update and restart*:
+  it asks whether origin/master (the upstream of the server's checkout)
+  moved, lists its new commits, and, confirmed, fast-forwards the checkout,
+  syncs the environment to the lock with the extras installed (``uv sync
+  --frozen --inexact``) and restarts the server in place; the page reloads
+  once the server is back. A checkout with changes of its own is not
+  updated.
 * A dense whole-brain tractogram for tract_querier's bundles, the engines
   ``neurosynth_disconnectome7t`` and ``neurostore_disconnectome7t``:
   Disconnectome7T's tractography of the Human Connectome Project's 7 T
@@ -43,40 +561,46 @@ Unreleased
   Oranges, Greens...), and the colours of the atlas start off, which would
   hide them.
   
-* The resting-state functional connectivity, a small engine of its own,
-  ``functional_connectivity``, which ``coordinate_meta_analysis`` extends
-  with ``structural_connectivity``: the correlation of the spontaneous
-  fMRI activity of two regions at rest over 964 HCP subjects (four runs,
-  ICA-FIX, MSMAll; the tanh of the mean Fisher z), between the parcels of
-  Schaefer (100 or 400, 17 networks) or Destrieux
-  (``schaefer_functional_connectivity``...), the subcortical regions of
-  Tian (``tian_functional_connectivity``), and the cortex and the
-  subcortex (``schaefer_tian_functional_connectivity``...), and its linear
-  gradients (``schaefer_functional_gradient``...; the first is the
-  principal gradient, from sensory to default cortex). It is dataset
-  ``v2.0`` (``tools/hcp_connectivity``; against the ENIGMA toolbox's HCP
-  functional connectivity, Pearson 0.992). Its examples teach the query
-  assistant seeds, networks, anticorrelations, the subcortex, shared
-  variance (r²), the correlations as probabilistic facts and choices, the
-  gradients, and with the structural connectivity and the meta-analytic
-  co-activation on the meta-analysis engines; the guidance of the engines
-  tells the three connectivities apart (the examples that called the
-  co-activation the functional connectivity call it the meta-analytic
-  co-activation). ``connectivity_atlases`` (abstract) holds the atlas of
-  400 Schaefer parcels and the gradient sorts the connectivity engines
-  share.
+* The connectivity of the brain from the Human Connectome Project, two
+  small engines that ``coordinate_meta_analysis`` (``neurosynth``,
+  ``neurostore``) extends, each of two relations over the cortex and the
+  subcortex of an atlas, Schaefer 400 + Tian and Destrieux + Tian:
 
-* Structural connectivity of the subcortex, a stop-gap, in
-  ``structural_connectivity``: ``schaefer400_tian_structural_connectivity(l,
-  t, n)`` (a Schaefer 400 parcel and a Tian region) and
-  ``tian_structural_connectivity(t1, t2, n)`` (two Tian regions), the
-  streamlines of ONE population-average tractogram, Yeh's HCP1065 atlas
-  (1,065 HCP subjects; CC BY-SA 4.0), counted between the regions by
-  ``python -m hcp_connectivity population`` (``tools/hcp_connectivity``).
-  They are counts of that tractogram, not means over subjects, and not of
-  the scale of ``schaefer400_structural_connectivity``; structural, not
-  functional; to be replaced by subject-level tractography. With examples
-  and a guidance line for the query assistant.
+  - ``structural_connectivity``:
+    ``schaefer400_tian_structural_connectivity(l1, l2, n)`` and
+    ``destrieux_tian_structural_connectivity(l1, l2, n)``, the mean number
+    of streamlines joining two regions over 100 HCP subjects' own
+    tractography (MRtrix3: multi-shell CSD, anatomically constrained
+    iFOD2, 5 million streamlines, SIFT2; Schaefer's and Tian's atlases
+    brought to each subject through the HCP's warp, Destrieux's parcels
+    of the subject's own FreeSurfer segmentation);
+  - ``functional_connectivity``:
+    ``schaefer400_tian_functional_connectivity(l1, l2, r)`` and
+    ``destrieux_tian_functional_connectivity(l1, l2, r)``, the correlation
+    of two regions' resting-state fMRI over 964 HCP subjects (ICA-FIX,
+    MSMAll; the tanh of the mean Fisher z).
+
+  Made by ``tools/hcp_connectivity`` (``tractography``, ``functional``,
+  ``combine``, ``engine-tables``; ``--task``/``--tasks`` or a Slurm array)
+  and published, with their standard deviations, the SIFT2 weights and a
+  per-subject QC, at https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity
+  (tag v2.4), which the engines download, checked by md5. The cortex of
+  the structural connectivity agrees with the connectomes of Mansour et
+  al. (2021; Pearson 0.92 of the logarithms).  The guidance and the
+  examples of the query assistant tell the three connectivities apart
+  (structural, resting-state functional and the meta-analytic
+  co-activation of regions by the same studies), turn counts and
+  correlations into probabilities (computed, probabilistic facts,
+  choices), and join them with the activations of a term.
+  Two builtins, declared by the connectivity and meta-analysis engines,
+  let a query test a difference and correct many tests:
+  ``t_pvalue(t, df)``, the two-sided p-value of Student's t (computed
+  from ``mean``, ``std`` and ``sum``), and the aggregation
+  ``fdr_threshold(p, alpha)``, the p-value at or under which a group's
+  tests are significant at the false discovery rate alpha
+  (Benjamini-Hochberg).  The column of the structural connectivity is
+  ``streamline_count`` (dataset v2.4), the mean number of streamlines, not
+  SIFT2 weights.
 * Ontologies: the property axioms ``subPropertyOf``, ``equivalentProperty``,
   ``inverseOf``, ``domain``, ``range``, ``SymmetricProperty`` and
   ``TransitiveProperty`` are read as constraints without existential
@@ -180,55 +704,6 @@ Unreleased
   repl-downloads``), so that a rebuild does not need its sources (OSF,
   GitHub) to be up.
 
-* The structural connectivity of the cortex, a small engine of its own,
-  ``structural_connectivity`` (the MNI atlases and their connectivity),
-  which ``coordinate_meta_analysis`` extends, so ``neurosynth`` and
-  ``neurostore`` have it: ``schaefer_structural_connectivity(l1, l2, n)`` and
-  ``destrieux_structural_connectivity(l1, l2, n)``, the mean number of
-  streamlines joining two parcels over 1,064 subjects of the Human
-  Connectome Project, from the high-resolution connectomes of Mansour et
-  al. (2021), parcellated by ``tools/hcp_connectivity``. The
-  engines download them, at a tag, checked by their md5 (a relation's
-  ``md5``), from the public dataset
-  https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity, which has
-  those of 22 atlases (Schaefer 100 to 1000, Glasser, Destrieux) and their
-  standard deviations, in parquet; ``.view`` draws a result of them as a
-  network. The Schaefer atlas of 400 parcels (17 networks) is also there,
-  as ``schaefer400(label, region)`` (a second atlas of the engine, with
-  its own ``kind: schaefer`` option and label sort) and
-  ``schaefer400_structural_connectivity``,
-  ``schaefer400_structural_gradient`` and
-  ``schaefer400_structural_gradient_variance``, finer than the 100 parcels. There is no subcortex in them, so no Tian. Its questions and
-  their queries teach the query assistant to tell the structural
-  connectivity (white-matter streamlines) from the functional one (the
-  meta-analytic co-activation of regions by the same studies): the
-  structural connectivity of a region, a network, the strength of a
-  parcel; its counts turned into probabilities, computed (the fraction
-  of a region's streamlines) or as a probabilistic program (a choice of
-  where a random streamline ends; probabilistic facts, each connection
-  present with probability 1 - exp(-n / 5000), for the probability of a
-  path or of reaching a network); and, on the meta-analysis engines, the
-  two connectivities of a region side by side, the structural
-  connectivity of the regions a term activates or co-activates, and the
-  probability that a random streamline of a region ends in one a term
-  activates. ``assistant_guidance`` is inherited, the base's first.
-* The linear gradients of the structural connectivity,
-  ``schaefer_structural_gradient(l, d, v)`` and
-  ``destrieux_structural_gradient(l, d, v)``, with the variance each
-  explains (``*_structural_gradient_variance``): a principal component
-  analysis of the regions' connectivity profiles (log streamlines) within
-  each hemisphere, the right hemisphere's rotated onto the left's
-  (orthogonal Procrustes over the regions of the same name), 10
-  dimensions; over the whole brain the first component would only split
-  the hemispheres (|r| = 0.92). On Schaefer's parcels the first runs from
-  somatomotor to visual cortex, the second from lateral to medial cortex;
-  ``.view --threshold 0`` paints them on the cortex, one overlay per
-  gradient. ``tools/hcp_connectivity/gradients.py`` makes them,
-  for the 22 atlases of the dataset (its ``v1.1``), with examples for the
-  query assistant (the ends of a gradient, a network's position, the
-  regions near a region, a term's activations along a gradient). The help
-  of ``.view`` tells the default threshold of a result of regions with
-  values, the highest values only.
 * An engine names the sources of its data, with their citations and the
   acknowledgements their terms ask for (``acknowledgements``, inherited
   from the engines it extends), and the REPL's ``.credits`` prints them:
@@ -357,6 +832,40 @@ Unreleased
   engines with the Cognitive Atlas (decoding an image on neurosynth at 2 mm:
   7.1 s to 6.0 s).
 
+* Assistant: the two requests that check an answer (its translation back
+  into English and the judgement of it) start with the same message, the
+  engine and its predicates, which the Anthropic provider now caches as a
+  block of its own, so that the second reads it from the cache instead of
+  sending it again, as does each check of a retried answer.
+
+* The greedy join ordering starts from the join of two relations with the
+  fewest rows at most, and adds at each step the relation whose join with
+  the joined ones has the fewest rows at most, rather than the smallest
+  relation: a relation all of whose columns are joined, which cannot add
+  rows, is joined first.  Decoding a whole map of z-scores with its voxels
+  as probabilistic facts and one chosen at random, which ran out of memory
+  (more than 24 GB) on neurosynth at 2 mm, takes 13.4 s and 6 GB for the
+  motor map of nilearn: the image is joined with the activations and
+  summed per study before the terms.
+
+* The plans of the lifted probabilistic queries sum each side of a join
+  over the columns the projection drops before joining it
+  (``PushSumsThroughJoins``), the
+  product of the probabilities distributing over their sum: the same
+  probabilities, from smaller joins.  Decoding an image with each voxel a
+  probabilistic fact of its probability and one chosen at random takes
+  8.4 s instead of 13.5 s on neurosynth
+  at 2 mm for a mask, the voxels summed out per study before the terms
+  are joined; ``uniformity('pain', ...)`` 5.9 s instead of 6.4 s.  The
+  other queries of the example banks take the same time.
+
+* The pattern matching of the walkers, which every compilation of a
+  program goes through, tries for an expression only the patterns its class
+  does not rule out, from a list made once per walker class, and builds its
+  log messages only when logging is on.  The matches are the same; an
+  open-world query on the Cognitive Atlas that the rewriting by its
+  constraints dominates takes 215 s instead of 330 s.
+
 * The query assistant caches its prompts on the Anthropic API, and on
   OpenRouter for Claude: the steps of
   an answer repeat the system prompt and the conversation so far, which are
@@ -376,6 +885,31 @@ Unreleased
 
 **Bug fixes:**
 
+* ``.view`` draws the regions of a result of the connectivity relations:
+  their labels, of the sorts ``schaefer400_tian_label`` and
+  ``destrieux_tian_label``, are looked up in ``schaefer400`` or ``destrieux``,
+  then in ``tian``; a result of their regions beside names and numbers
+  failed with *The result has no voxel columns*, and a result of pairs of
+  regions is now a network.
+* The engine ``destrieux`` builds: the ``description`` of an atlas of an
+  engine is no longer passed to the atlas's fetcher (``fetch_atlas_destrieux_2009``
+  refused it), and its ``left_region`` and ``right_region`` hold the
+  regions of each hemisphere (they selected labels starting with ``lh`` and
+  ``rh``, which none does: Destrieux's start with ``L`` and ``R``).
+* ``exists(t; ...)`` in the rule of a query, ``ans(s) :- study(s),
+  exists(t; mentions(s, t))``, failed in the probabilistic frontend, which
+  the engines use ("Not a Datalog function application", or no
+  ``functor``), and so did ``~exists(...)`` there; in a rule of the program
+  it worked.  The rule of a query now goes through the translation to
+  Datalog, as the other rules do: its ``exists`` and ``~exists`` become
+  rules, and a Datalog query is left as it is.
+* macOS: the query assistant's checks of a query no longer crash (SIGSEGV)
+  on a matrix product, such as a bootstrap interval or a similarity of
+  texts. Apple's Accelerate, the BLAS of numpy there, cannot run in a
+  forked child once the parent ran it with several threads:
+  ``neurolang_apps`` keeps it to one thread (``VECLIB_MAXIMUM_THREADS=1``,
+  unless set), and checks in-process where numpy loaded first.
+
 * ``.view`` drew nothing of a region, a result of voxels without a value,
   or of an overlay of one value: its default threshold, the 95th
   percentile, is that value, and NiiVue draws nothing of a colour range of
@@ -388,6 +922,35 @@ Unreleased
   ``p(x, y) :- rr(x, y)`` and ``rr(x, y) :- p(x, y)``, ``p`` lacked the
   first tuple of ``rr``.  In the first iteration a recursive atom now sees
   its whole relation.
+
+* The constraints of an ontology ignored the instances a rule derives:
+  with ``c:K(s) :- two_back(s)`` and ``c:K ⊑ ∃c:measures.c:WM``,
+  ``ans(s) :- c:measures(s, c)`` returned nothing, while a fact of ``c:K``
+  gave its answer.  The code a query needs is now followed through the
+  constraints, so the rules defining the predicates of their bodies are
+  solved with the query (:doc:`ontologies`).
+
+* The classes and properties of an ontology named by their IRI, those of a
+  namespace the file declares no prefix for, as the Cognitive Atlas's,
+  could not be written in Datalog: ``<iri>(x)`` is now an atom of the
+  predicate the IRI names, in heads and bodies.  ``load_ontology`` and the
+  ``ontologies`` of ``engines.yaml`` take ``prefixes``, from prefix to
+  namespace, and the ``neurosynth`` and ``neurostore`` engines name the
+  Cognitive Atlas's ``cogat:CAO_00587``, ``cogat:measures``.  Their
+  ``cogat_subclass_of`` is now the closure of ``rdfs:subClassOf`` on
+  classes, whose values are IRIs, as ``rdfs:label``'s: that of
+  ``neurolang:subClassOf``, on the names of the classes, would join with
+  nothing, and gave the CogPO and SKOS classes by name.
+
+* The rewriting of a query over an ontology drops a rewriting as soon as
+  one of its atoms, over a predicate without values, can never be
+  rewritten, instead of exploring all the rewritings it gives: on the
+  Cognitive Atlas, ``ans(s) :- cogat:measures(s, c), cogat:CAO_00587(c)``
+  explores 224 rewritings instead of 26,600 and takes 24 s instead of 60 s
+  (:doc:`ontologies`).  The W3C OWL test cases in the fragment NeuroLang
+  reads are run as tests, the others listed with the reason they are
+  skipped.
+
 * An engine extending another with the same ``text_embeddings`` entry
   (``neurosynth_iit``, ``neurostore_iit``, the ``_tracts`` ones) shares its
   caches (document embeddings, PubMed texts, model copies) in the
@@ -396,6 +959,7 @@ Unreleased
   abstracts again under its own name, which took hours on NeuroStore.  An
   engine whose documents differ from the shared embeddings, or whose own
   directory alone has them, keeps its own.
+
 * Arithmetic in the head of a rule (``ans(x, n / 2) :- r(x, n)``) was
   taken for an aggregation, the operator applied to each group's values,
   and gave rows of missing values or failed in pandas; it is now refused
@@ -486,6 +1050,81 @@ Unreleased
   its results on both engines: the 95th percentile of the null is 0.750
   over NeuroSynth's 14,371 studies and 0.762 over NeuroStore's 64,920,
   where 0.75 would let 9% of the null through.
+
+* The SQUALL tests are skipped by default, ahead of the deprecation of the
+  SQUALL syntax: the ``squall`` pytest marker is on the tests of its
+  parser, grammar, translation, completion and command-line flags, and
+  ``pytest --run-squall`` runs them.
+
+* The page of the REPL, after a design review: the border of a field (the
+  boxes, the selects, the query) is seen at 3:1 on its card, ``--control``
+  in ``tokens.css``, where it was at 1.3:1, and the placeholder of the
+  light theme at 4.5:1; a focused field keeps an outline in forced-colours
+  mode; the page has its ``h1`` and the examples their heading; on a touch
+  screen the buttons, menus, links and selects are 44 px high; the API key
+  is the page's main button while the assistant has none; the shortcuts say
+  ⌘ on Apple's systems; and the third theme is called Computer. A second
+  look, at the page as it is with a result, the assistant at work and its
+  menus, which is kept as a way to render these states without the engine
+  (``doc/tools/repl_page_states``), found and fixed that on a phone the
+  menus (More, Docs, a table's Download) opened off the left of the screen,
+  out of reach, and now open in the flow, or rightwards; that the log of the
+  assistant was wider than its box, its first line cut; that the faint text
+  (the row numbers) was at 4.3:1 where a row is hovered; that the chips DOI
+  and PMC were 14 px high targets; that the previous and next page buttons,
+  the filter, the Download menu and the folds of the logs were short of
+  44 px on a touch screen; that a sorted column's arrow was read aloud; that the ticks of a
+  plot of 18 million and some said 18.1M twice; and that the "#" of a
+  table's head touched its border. The login page has the field border and
+  the faint text of the REPL's tokens, and the account and admin pages
+  read their notes and states at 4.5:1 in a dark system and have 44 px
+  controls on a touch screen, as the activity page, which had them only on
+  narrow ones. The menus close with Escape and with a click elsewhere; the
+  result card says "Running…" while a query runs, telling that the answer
+  comes as a table that the Brain tab can then show on the brain, and shows a failed
+  statement as one line with an icon above its log, which wraps; the steps
+  of the assistant are open while it works; a disabled menu item says why in
+  text; and, on a phone, the legend of the empty result still draws the
+  probability bars it explains.
+
+* The account and admin pages of the REPL server (``neurolang-repl-serve
+  --users``) look like its login and activity pages: the tokens of the
+  REPL's page, light and dark with the REPL's choice of theme, its logo and
+  heading, cards and fields with a border read at 3:1, a focus ring on
+  every control, a mark with the colour of an error or a success, 44 px
+  controls on a touch screen, and tables that scroll by themselves on a
+  narrow one, with their column heads scoped and the empty ones named.  The
+  activity page keeps its theme under the same key as the others, so that one
+  choice serves the REPL and all its pages.
+  
+* The slider of the streamlines in the brain viewer sets their number, from
+  one to all of those the page has, on a logarithmic scale (a linear one
+  would put the counts worth seeing in its first notch), where it set their
+  opacity.  The file ranks the streamlines (``rank``, which NiiVue reads as
+  a value of each, ``dps``) so that the ``k`` drawn are an even sample of
+  them, spread over all, not the first ``k`` of the file, and the page asks
+  NiiVue to hide those under the rank of the ``k``-th: the count is exact,
+  not a multiple of a stride, and the label says it.
+  
+* The graph of a query (the Graph tab of the REPL, ``.graph``) opens at a
+  size its text can be read at, where it was shrunk to fit its frame (about
+  4 px text in the REPL's result column, 3 px on a phone): from the data on
+  its left, in a box as high as a frame can show, which pans by dragging the
+  mouse, with a finger or with the arrow keys and zooms around the point
+  under the pointer, ``+`` and ``-`` too; ``Fit`` and ``Actual size`` say
+  which is on, and a hint says when there is more to pan to.  Its intro is a
+  line, with the long text and the descriptions of the legend folded under
+  "How to read this", and its legend a row of short chips.  A node of an
+  ontology is a card with the three linked dots of a knowledge graph in a
+  band at its left, where it was an ellipse with four whiskers.
+
+* The graph of a query says what a random choice is once, on its node
+  ("random choice · 3 rows, 1/3 each", and "chooses one of its rows, each
+  with probability 1/3" when it is clicked), where each probability that
+  used it repeated it, and "so p is the share of those choices where A
+  holds", in a paragraph of its own.  A probability keeps one line on how it
+  is computed, ``p = P(A), the share of the choices where A holds`` (``p =
+  P(A, C) / P(C)`` given a condition), so that its card is shorter.
 
 
 v0.1a22 (2026-11-13)

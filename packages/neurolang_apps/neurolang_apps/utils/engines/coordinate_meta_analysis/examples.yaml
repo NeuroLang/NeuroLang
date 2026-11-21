@@ -4,7 +4,7 @@
 # bank of the query assistant below, the queries it shows (examples) and
 # the questions of the query assistant (assistant_examples).
 questions:
-  - Which studies mention pain?
+  - Which studies mention pain? Give their year and title.
   - Which gyri and sulci are activated by studies about language?
   - Which subcortical regions are activated by studies about fear?
   - What is the Bayes factor of fear for the activation of the left amygdala?
@@ -12,12 +12,12 @@ questions:
   - Where in the brain is working memory, by its definition in the Cognitive Atlas?
 examples:
   datalog:
-    - "ans(study) :- mentions(study, 'pain')"
+    - "ans(study, year, title) :- mentions(study, 'pain'), study_year(study, year), study_title(study, title)"
     - "ans(study, tfidf) :- weighted_mention(study, 'pain', tfidf), (tfidf > 0.1)"
     - "ans(i, j, k, uniformity) :- uniformity('pain', i, j, k, uniformity)"
     - "ans(i, j, k, uniformity) :- uniformity_llm('cortical response to noxious heat applied to the skin', i, j, k, uniformity)"
-    - "ans(concept) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, concept)"
-    - "ans(study) :- cogat_term(c, 'working memory'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(study, t)"
+    - "ans(concept) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, concept)"
+    - "ans(study) :- cogat_term(c, 'attention'), cogat_subclass_of(x, c), cogat_term(x, t), mentions(study, t)"
   squall:
     - "obtain every Study that mentions 'pain'."
     - "obtain every Weighted_mention (?s; ?t; ?w) such that ?t is 'pain' and ?w is greater than 0.1."
@@ -38,13 +38,22 @@ examples:
 # probabilistic query answering over selected_study, the uniform choice
 # of a study: a study is chosen at random and the answer is the
 # probability of what the question asks, conditioned on the term or
-# topic it names. A study activates a point when one
+# topic it names; the regions listed get the lift of each, P(active |
+# topic) / P(active), or the Bayes factor when the question decodes (from
+# the brain to the terms). A study activates a point when one
 # of its peaks is within kernel_radius_mm (6 mm):
 # peaks in MNI millimetres (peak_mni) for points given in MNI
 # coordinates, the Destrieux atlas for the classical anatomy of the
 # cortex (destrieux_activated), and the Schaefer networks of the cortex
 # and the Tian atlas of the subcortex for the functional anatomy
-# (schaefer_activated, tian_activated).
+# (schaefer400_activated, the Schaefer atlas of 400 parcels, and
+# tian_activated).
+#
+# The voxels of a map are those of the cortex, cortical_mask(i, j, k),
+# unless the question names the subcortex, the brainstem, the
+# cerebellum or the whole brain: few studies report peaks below the
+# cortex, and a single study activating such a voxel gives it a large
+# lift (that of the brainstem crowds the maps of lift_llm otherwise).
 #
 # A topic given as a description, or a cognitive process, task or
 # concept, is matched to the studies by the similarity of their title
@@ -61,9 +70,9 @@ examples:
 # boot_studies, and the interval is the percentiles 2.5 and 97.5 of the
 # replicates; two measures are compared on the same replicate b.
 assistant_examples:
-  - question: Which studies mention pain?
+  - question: Which studies mention pain? Give their year and title.
     datalog: |-
-      ans(study) :- mentions(study, 'pain')
+      ans(study, year, title) :- mentions(study, 'pain'), study_year(study, year), study_title(study, title)
 
   - question: Which terms are mentioned by the studies, and how often?
     datalog: |-
@@ -89,9 +98,13 @@ assistant_examples:
       term_association(s, t) :- mentions(s, t), selected_study(s)
       ans(term, probability) :- PROB[term_association(s, term) // term_association(s, 'fear')] = probability
 
+  - question: Where in the brain is pain reported?
+    datalog: |-
+      ans(i, j, k, lift) :- lift('pain', i, j, k, lift), cortical_mask(i, j, k)
+
   - question: Which voxels are activated by studies that mention pain?
     datalog: |-
-      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      activation(i, j, k, s) :- activated(i, j, k, s), cortical_mask(i, j, k), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
       ans(i, j, k, probability) :- PROB[activation(i, j, k, s) // term_association(s, 'pain')] = probability
 
@@ -115,7 +128,8 @@ assistant_examples:
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
-      ans(region, probability) :- cogat_definition('language', d), p_active_given_close(d, region, probability)
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- cogat_definition('language', d), p_active_given_close(d, region, p), p_active(region, p0), (lift == p / p0)
 
   - question: Is the left superior temporal gyrus activated by studies on speech?
     datalog: |-
@@ -128,22 +142,26 @@ assistant_examples:
       active(l, s) :- tian_activated(l, s), selected_study(s)
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
-      ans(region, probability) :- cogat_definition('fear', d), p_active_given_close(d, region, probability)
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- cogat_definition('fear', d), p_active_given_close(d, region, p), p_active(region, p0), (lift == p / p0)
 
   - question: Which parcels of the functional networks are activated by studies about the default mode?
     datalog: |-
-      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      active(l, s) :- schaefer400_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(parcel, probability) :- PROB[active(parcel, s) // term_association(s, 'default mode')] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // term_association(s, 'default mode')] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(parcel, lift) :- p_active_given(parcel, p), p_active(parcel, p0), (lift == p / p0)
 
   - question: Which functional regions, cortical networks and subcortex, are activated by studies about reward?
     datalog: |-
-      functional_region(l, s) :- schaefer_activated(l, s)
+      functional_region(l, s) :- schaefer400_activated(l, s)
       functional_region(l, s) :- tian_activated(l, s)
       active(l, s) :- functional_region(l, s), selected_study(s)
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
-      ans(region, probability) :- cogat_definition('reward', d), p_active_given_close(d, region, probability)
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- cogat_definition('reward', d), p_active_given_close(d, region, p), p_active(region, p0), (lift == p / p0)
 
   # Bayes factors (reverse inference): BF = P(T | R) / P(T | not R)
   # = (P(R, T) / P(R)) / ((P(T) - P(R, T)) / (1 - P(R))), the probabilities
@@ -159,6 +177,33 @@ assistant_examples:
       joint_probability(l, t, p_rt) :- PROB[cooccurrence(l, t)] = p_rt
       bayes_factor(l, t, bf) :- joint_probability(l, t, p_rt), region_probability(l, p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
       ans(term, bayes_factor) :- bayes_factor('L G temporal middle', term, bayes_factor), (bayes_factor > 3.16)
+
+  # The same decoding for a parcel of the Schaefer atlas (17Networks LH
+  # DefaultA pCunPCC 1): precuneus, posterior cingulate, autobiographical.
+  - question: Decode the left posterior cingulate and precuneus parcel of the Schaefer atlas, which terms have a Bayes factor above 3.16 for its activation?
+    topic: "Decoding: from the brain to terms"
+    datalog: |-
+      active_region(l) :- schaefer400_activated(l, s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(l, t) :- schaefer400_activated(l, s), mentions(s, t), selected_study(s)
+      region_probability(l, p_r) :- PROB[active_region(l)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(l, t, p_rt) :- PROB[cooccurrence(l, t)] = p_rt
+      bayes_factor(l, t, bf) :- joint_probability(l, t, p_rt), region_probability(l, p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(term, bayes_factor) :- bayes_factor('17Networks LH DefaultA pCunPCC 1', term, bayes_factor), (bayes_factor > 3.16)
+
+  # And for a region of the Tian atlas (pPUT lh): putamen, basal ganglia.
+  - question: Decode the left posterior putamen of the Tian atlas, which terms have a Bayes factor above 3.16 for its activation?
+    topic: "Decoding: from the brain to terms"
+    datalog: |-
+      active_region(l) :- tian_activated(l, s), selected_study(s)
+      mentioned_term(t) :- mentions(s, t), selected_study(s)
+      cooccurrence(l, t) :- tian_activated(l, s), mentions(s, t), selected_study(s)
+      region_probability(l, p_r) :- PROB[active_region(l)] = p_r
+      term_probability(t, p_t) :- PROB[mentioned_term(t)] = p_t
+      joint_probability(l, t, p_rt) :- PROB[cooccurrence(l, t)] = p_rt
+      bayes_factor(l, t, bf) :- joint_probability(l, t, p_rt), region_probability(l, p_r), term_probability(t, p_t), (bf == (p_rt / p_r) / ((p_t - p_rt) / (1.0 - p_r)))
+      ans(term, bayes_factor) :- bayes_factor('pPUT lh', term, bayes_factor), (bayes_factor > 3.16)
 
   - question: What is the Bayes factor of fear for the activation of the left amygdala?
     datalog: |-
@@ -228,11 +273,12 @@ assistant_examples:
   # its joint probability with that of independent activations.
   - question: Which pairs of Schaefer regions are co-activated by studies about reading?
     datalog: |-
-      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      active(l, s) :- schaefer400_activated(l, s), selected_study(s)
       co_active(l1, l2, s) :- active(l1, s), active(l2, s)
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_co_active_given_close(q, l1, l2, PROB) :- co_active(l1, l2, s) // close(q, s)
-      ans(region_1, region_2, probability) :- (region_1 < region_2), cogat_definition('reading', d), p_co_active_given_close(d, region_1, region_2, probability)
+      p_co_active(l1, l2, p0) :- PROB[co_active(l1, l2, s)] = p0
+      ans(region_1, region_2, lift) :- (region_1 < region_2), cogat_definition('reading', d), p_co_active_given_close(d, region_1, region_2, p), p_co_active(region_1, region_2, p0), (lift == p / p0)
 
   - question: What is the co-activation network of the subcortical regions in studies about fear?
     datalog: |-
@@ -240,7 +286,8 @@ assistant_examples:
       co_active(l1, l2, s) :- active(l1, s), active(l2, s)
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_co_active_given_close(q, l1, l2, PROB) :- co_active(l1, l2, s) // close(q, s)
-      ans(region_1, region_2, probability) :- (region_1 < region_2), cogat_definition('fear', d), p_co_active_given_close(d, region_1, region_2, probability)
+      p_co_active(l1, l2, p0) :- PROB[co_active(l1, l2, s)] = p0
+      ans(region_1, region_2, lift) :- (region_1 < region_2), cogat_definition('fear', d), p_co_active_given_close(d, region_1, region_2, p), p_co_active(region_1, region_2, p0), (lift == p / p0)
 
   - question: Which cortical regions are co-activated with the left amygdala?
     datalog: |-
@@ -248,26 +295,32 @@ assistant_examples:
       amygdala(s) :- tian_activated('mAMY lh', s)
       seed(s) :- amygdala(s), selected_study(s)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // seed(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   - question: Which gyri and sulci are co-activated with the left superior temporal gyrus?
     datalog: |-
       seed(s) :- destrieux_activated('L G temp sup Lateral', s), selected_study(s)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // seed(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   - question: Which functional networks are co-activated with the MNI point (40, -60, 10)?
     datalog: |-
       near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, 40.0, -60.0, 10.0) <= {kernel_radius_mm})
       seed(s) :- near(s), selected_study(s)
-      active(l, s) :- schaefer_activated(l, s), selected_study(s)
-      ans(parcel, probability) :- PROB[active(parcel, s) // seed(s)] = probability
+      active(l, s) :- schaefer400_activated(l, s), selected_study(s)
+      p_active_given(l, p) :- PROB[active(l, s) // seed(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(parcel, lift) :- p_active_given(parcel, p), p_active(parcel, p0), (lift == p / p0)
 
   - question: Which voxels are co-activated with the MNI point (-24, -4, -20)?
     datalog: |-
       near(s) :- peak_mni(x, y, z, s), (euclidean(x, y, z, -24.0, -4.0, -20.0) <= {kernel_radius_mm})
       seed(s) :- near(s), selected_study(s)
-      activation(i, j, k, s) :- activated(i, j, k, s), selected_study(s)
+      activation(i, j, k, s) :- activated(i, j, k, s), cortical_mask(i, j, k), selected_study(s)
       ans(i, j, k, probability) :- PROB[activation(i, j, k, s) // seed(s)] = probability
 
   - question: What is the probability that a study activating the MNI point (-24, -4, -20) also activates the MNI point (24, -4, -20)?
@@ -314,8 +367,8 @@ assistant_examples:
 
   - question: How likely are the studies of the n-back task to activate the left dorsal attention network?
     datalog: |-
-      dorsal_label(l) :- schaefer(l, r), startswith('17Networks LH DorsAttn', l)
-      dorsal(s) :- dorsal_label(l), schaefer_activated(l, s), selected_study(s)
+      dorsal_label(l) :- schaefer400(l, r), startswith('17Networks LH DorsAttn', l)
+      dorsal(s) :- dorsal_label(l), schaefer400_activated(l, s), selected_study(s)
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_dorsal_given_close(q, PROB) :- dorsal(s) // close(q, s)
       ans[dorsal_attention_parcels](parcel) :- dorsal_label(parcel)
@@ -329,13 +382,17 @@ assistant_examples:
     datalog: |-
       ans(study, title) :- cogat_definition('response inhibition', d), similar_study(d, study), study_title(study, title)
 
-  - question: Which voxels do the studies about holding information in mind over a delay activate?
+  - question: Which voxels do the studies about maintenance of visual information during a delay period activate?
     datalog: |-
-      ans(i, j, k, probability) :- p_a_given_similar('holding information in mind over a delay', i, j, k, probability)
+      ans(i, j, k, probability) :- p_a_given_similar('maintenance of visual information during a delay period', i, j, k, probability), cortical_mask(i, j, k)
+
+  - question: Which voxels are associated with cortical responses to noxious heat applied to the skin, with a lift above 2?
+    datalog: |-
+      ans(i, j, k, lift) :- lift_llm('cortical response to noxious heat applied to the skin', i, j, k, lift), cortical_mask(i, j, k), (lift > 2)
 
   - question: Where in the brain is working memory, by its definition in the Cognitive Atlas?
     datalog: |-
-      ans(i, j, k, uniformity) :- cogat_definition('working memory', d), uniformity_llm(d, i, j, k, uniformity)
+      ans(i, j, k, uniformity) :- cogat_definition('working memory', d), uniformity_llm(d, i, j, k, uniformity), cortical_mask(i, j, k)
 
   - question: How likely is a study about fear, by its Cognitive Atlas definition, to report an amygdala activation?
     datalog: |-
@@ -365,9 +422,9 @@ assistant_examples:
 
   - question: How likely are the studies about recalling personal memories from the past to activate the default mode network?
     datalog: |-
-      default_label(l) :- schaefer(l, r), startswith('17Networks LH Default', l)
-      default_label(l) :- schaefer(l, r), startswith('17Networks RH Default', l)
-      default_mode(s) :- default_label(l), schaefer_activated(l, s), selected_study(s)
+      default_label(l) :- schaefer400(l, r), startswith('17Networks LH Default', l)
+      default_label(l) :- schaefer400(l, r), startswith('17Networks RH Default', l)
+      default_mode(s) :- default_label(l), schaefer400_activated(l, s), selected_study(s)
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_default_given_close(q, PROB) :- default_mode(s) // close(q, s)
       ans(probability) :- p_default_given_close('recalling personal memories from the past', probability)
@@ -409,15 +466,19 @@ assistant_examples:
 
   - question: "Which Schaefer networks are activated by studies that mention cerebellum?"
     datalog: |-
-      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      active(l, s) :- schaefer400_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(parcel, probability) :- PROB[active(parcel, s) // term_association(s, 'cerebellum')] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // term_association(s, 'cerebellum')] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(parcel, lift) :- p_active_given(parcel, p), p_active(parcel, p0), (lift == p / p0)
 
   - question: "Which gyri and sulci are activated by studies that mention lesions?"
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(region, probability) :- PROB[active(region, s) // term_association(s, 'lesions')] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // term_association(s, 'lesions')] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   - question: "What is the probability that a study mentions motor cortex?"
     datalog: |-
@@ -463,7 +524,9 @@ assistant_examples:
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       close(s) :- similar_study('tasting bitter drinks', s), selected_study(s)
-      ans(region, probability) :- PROB[active(region, s) // close(s)] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // close(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   - question: "Which studies mention speech and activate left occipital pole?"
     datalog: |-
@@ -488,16 +551,17 @@ assistant_examples:
   - question: "Which cortical networks are activated by studies on daydreaming during rest?"
     datalog: |-
       close(q, s) :- similar_study(q, s), selected_study(s)
-      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      active(l, s) :- schaefer400_activated(l, s), selected_study(s)
       p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
-      ans(parcel, probability) :- p_active_given_close('daydreaming during rest', parcel, probability)
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(parcel, lift) :- p_active_given_close('daydreaming during rest', parcel, p), p_active(parcel, p0), (lift == p / p0)
 
   # How strongly, or how much of a region: the graded coverage of the
   # regions by the studies' activations, <atlas>_covered, in place of the
   # yes/no <atlas>_activated.
   - question: "How strongly do music studies engage each Schaefer parcel?"
     datalog: |-
-      covered(l, s) :- schaefer_covered(l, s), selected_study(s)
+      covered(l, s) :- schaefer400_covered(l, s), selected_study(s)
       topic(s) :- mentions(s, 'music'), selected_study(s)
       ans(region, probability) :- PROB[covered(region, s) // topic(s)] = probability
 
@@ -542,7 +606,9 @@ assistant_examples:
     datalog: |-
       seed(s) :- destrieux_activated('R S oc temp lat', s), selected_study(s)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // seed(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   - question: "Which studies do not mention learning?"
     datalog: |-
@@ -558,12 +624,13 @@ assistant_examples:
 
   - question: "Which parcels of the limbic network are activated by studies about naming?"
     datalog: |-
-      limbic_label(l) :- schaefer(l, r), startswith('17Networks LH Limbic', l)
-      limbic_label(l) :- schaefer(l, r), startswith('17Networks RH Limbic', l)
-      active(l, s) :- limbic_label(l), schaefer_activated(l, s), selected_study(s)
+      limbic_label(l) :- schaefer400(l, r), startswith('17Networks LH Limbic', l)
+      limbic_label(l) :- schaefer400(l, r), startswith('17Networks RH Limbic', l)
+      active(l, s) :- limbic_label(l), schaefer400_activated(l, s), selected_study(s)
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_active_given_close(q, l, PROB) :- active(l, s) // close(q, s)
-      ans(parcel, probability) :- cogat_definition('naming', d), p_active_given_close(d, parcel, probability)
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(parcel, lift) :- cogat_definition('naming', d), p_active_given_close(d, parcel, p), p_active(parcel, p0), (lift == p / p0)
 
   - question: "Which studies activate both globus pallidus and thalamus?"
     datalog: |-
@@ -582,7 +649,9 @@ assistant_examples:
       caudate(s) :- tian_activated('pCAU lh', s)
       seed(s) :- caudate(s), selected_study(s)
       active(l, s) :- tian_activated(l, s), selected_study(s)
-      ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // seed(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   - question: "How many studies mention sustained attention?"
     datalog: |-
@@ -590,9 +659,9 @@ assistant_examples:
 
   - question: "Is the peripheral visual network activated by studies on cognition?"
     datalog: |-
-      vp(l) :- schaefer(l, r), startswith('17Networks LH VisPeri', l)
-      vp(l) :- schaefer(l, r), startswith('17Networks RH VisPeri', l)
-      active(s) :- vp(l), schaefer_activated(l, s), selected_study(s)
+      vp(l) :- schaefer400(l, r), startswith('17Networks LH VisPeri', l)
+      vp(l) :- schaefer400(l, r), startswith('17Networks RH VisPeri', l)
+      active(s) :- vp(l), schaefer400_activated(l, s), selected_study(s)
       close(q, s) :- similar_study(q, s), selected_study(s)
       p_active_given_close(q, PROB) :- active(s) // close(q, s)
       ans(probability) :- cogat_definition('cognition', d), p_active_given_close(d, probability)
@@ -606,11 +675,13 @@ assistant_examples:
 
   - question: "Which networks are co-activated with peripheral visual in the same studies?"
     datalog: |-
-      vp(s) :- schaefer_activated(l, s), schaefer(l, r), startswith('17Networks LH VisPeri', l)
-      vp(s) :- schaefer_activated(l, s), schaefer(l, r), startswith('17Networks RH VisPeri', l)
+      vp(s) :- schaefer400_activated(l, s), schaefer400(l, r), startswith('17Networks LH VisPeri', l)
+      vp(s) :- schaefer400_activated(l, s), schaefer400(l, r), startswith('17Networks RH VisPeri', l)
       seed(s) :- vp(s), selected_study(s)
-      active(l, s) :- schaefer_activated(l, s), selected_study(s)
-      ans(parcel, probability) :- PROB[active(parcel, s) // seed(s)] = probability
+      active(l, s) :- schaefer400_activated(l, s), selected_study(s)
+      p_active_given(l, p) :- PROB[active(l, s) // seed(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(parcel, lift) :- p_active_given(parcel, p), p_active(parcel, p0), (lift == p / p0)
 
   - question: "Which terms are mentioned by studies that do not mention attentional?"
     datalog: |-
@@ -623,8 +694,8 @@ assistant_examples:
 
   - question: "What is the probability that a study activates the salience ventral attention network, given that it mentions angular gyrus?"
     datalog: |-
-      net(s) :- schaefer_activated(l, s), startswith('17Networks LH SalVentAttn', l)
-      net(s) :- schaefer_activated(l, s), startswith('17Networks RH SalVentAttn', l)
+      net(s) :- schaefer400_activated(l, s), startswith('17Networks LH SalVentAttn', l)
+      net(s) :- schaefer400_activated(l, s), startswith('17Networks RH SalVentAttn', l)
       active(s) :- net(s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
       ans(probability) :- PROB[active(s) // term_association(s, 'angular gyrus')] = probability
@@ -633,7 +704,9 @@ assistant_examples:
     datalog: |-
       active(l, s) :- tian_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      ans(region, probability) :- PROB[active(region, s) // term_association(s, 'precentral gyrus')] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // term_association(s, 'precentral gyrus')] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   - question: "Which gyri and sulci are co-activated with right fusiform gyrus (lateral occipitotemporal gyrus) in studies that mention pain?"
     datalog: |-
@@ -641,7 +714,9 @@ assistant_examples:
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
       cond(s) :- seed(s), term_association(s, 'pain')
-      ans(region, probability) :- PROB[active(region, s) // cond(s)] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // cond(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   # The publications of the studies: years and journals.
   - question: "Which gyri and sulci are activated by studies about pain published between 2010 and 2015?"
@@ -650,7 +725,8 @@ assistant_examples:
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       cond(q, s) :- similar_study(q, s), recent(s), selected_study(s)
       p_active_given_cond(q, l, PROB) :- active(l, s) // cond(q, s)
-      ans(region, probability) :- cogat_definition('pain', d), p_active_given_cond(d, region, probability)
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- cogat_definition('pain', d), p_active_given_cond(d, region, p), p_active(region, p0), (lift == p / p0)
 
   - question: "How many studies mention working memory each year?"
     datalog: |-
@@ -673,90 +749,150 @@ assistant_examples:
     datalog: |-
       seed(s) :- destrieux_activated('L G pariet inf Angular', s), selected_study(s)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+      p_active_given(l, p) :- PROB[active(l, s) // seed(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   - question: Which Schaefer parcels are co-activated by the same studies with the left posterior cingulate (precuneus) parcel?
     datalog: |-
-      seed(s) :- schaefer_activated('17Networks LH DefaultA pCunPCC 1', s), selected_study(s)
-      active(l, s) :- schaefer_activated(l, s), selected_study(s)
-      ans(region, probability) :- PROB[active(region, s) // seed(s)] = probability
+      seed(s) :- schaefer400_activated('17Networks LH DefaultA pCunPCC 1', s), selected_study(s)
+      active(l, s) :- schaefer400_activated(l, s), selected_study(s)
+      p_active_given(l, p) :- PROB[active(l, s) // seed(s)] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, lift) :- p_active_given(region, p), p_active(region, p0), (lift == p / p0)
 
   # Structural connectivity and co-activation together: the structural
   # connectivity, stored streamlines, is joined, by the labels of the
   # regions, with the probabilities of activation and co-activation that
   # PROB rules give; or, as a choice of where a random streamline ends,
-  # queried with them in one PROB.
+  # queried with them in one PROB. The activations are of the atlases
+  # schaefer400, destrieux and tian: with the connectivity of Schaefer 400
+  # and Tian, or of Destrieux and Tian (schaefer400_tian_*_connectivity,
+  # destrieux_tian_*_connectivity), their labels join.
   - question: How do the structural connectivity and the meta-analytic co-activation of the left angular gyrus compare, region by region?
+    topic: "Structural connectivity and tractography"
     datalog: |-
       seed(s) :- destrieux_activated('L G pariet inf Angular', s), selected_study(s)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       coactivation(l, p) :- PROB[active(l, s) // seed(s)] = p
-      ans(region, streamlines, probability) :- destrieux_structural_connectivity('L G pariet inf Angular', region, streamlines), coactivation(region, probability)
+      ans(region, streamlines, probability) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', region, streamlines), coactivation(region, probability)
 
   - question: Which cortical regions activated by studies about pain are strongly structurally connected to each other?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
       pain(l, p) :- PROB[active(l, s) // term_association(s, 'pain')] = p
-      ans(l1, l2, streamlines) :- pain(l1, p1), pain(l2, p2), (p1 > 0.4), (p2 > 0.4), destrieux_structural_connectivity(l1, l2, streamlines), (l1 < l2), (streamlines > 1000)
+      ans(l1, l2, streamlines) :- pain(l1, p1), pain(l2, p2), (p1 > 0.4), (p2 > 0.4), destrieux_tian_structural_connectivity(l1, l2, streamlines), (l1 < l2), (streamlines > 1000)
 
-  - question: Are the Schaefer parcels co-activated by studies about reading also structurally connected?
+  - question: Are the gyri and sulci co-activated by studies about reading also structurally connected?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
-      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
       co_active(l1, l2, s) :- active(l1, s), active(l2, s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
       co_activation(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
-      ans(l1, l2, probability, streamlines) :- co_activation(l1, l2, probability), schaefer_structural_connectivity(l1, l2, streamlines)
+      ans(l1, l2, probability, streamlines) :- co_activation(l1, l2, probability), destrieux_tian_structural_connectivity(l1, l2, streamlines)
 
   - question: Which regions structurally connected to the left angular gyrus are activated by studies about memory?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
-      connected(l, n) :- destrieux_structural_connectivity('L G pariet inf Angular', l, n), (n > 1000)
+      connected(l, n) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l, n), (n > 500)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
       memory(l, p) :- PROB[active(l, s) // term_association(s, 'memory')] = p
-      ans(region, streamlines, probability) :- connected(region, streamlines), memory(region, probability)
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, streamlines, lift) :- connected(region, streamlines), memory(region, p), p_active(region, p0), (lift == p / p0)
+
+  - question: Which cortical regions structurally connected to the left hippocampus are activated by studies about memory?
+    topic: "Encoding: from a term to the brain"
+    datalog: |-
+      connected(l, n) :- destrieux_tian_structural_connectivity('aHIP lh', l, n), destrieux(l, r), (n > 10)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      memory(l, p) :- PROB[active(l, s) // term_association(s, 'memory')] = p
+      p_active(l, p0) :- PROB[active(l, s)] = p0
+      ans(region, streamlines, lift) :- connected(region, streamlines), memory(region, p), p_active(region, p0), (lift == p / p0)
 
   - question: What is the probability that a white-matter streamline drawn at random from the left angular gyrus ends in a region activated by a study about memory?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
-      strength(sum(n)) :- destrieux_structural_connectivity('L G pariet inf Angular', l, n)
-      ends_in(l) ^ (n / t) :- destrieux_structural_connectivity('L G pariet inf Angular', l, n), strength(t)
+      strength(sum(n)) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l, n)
+      ending_region(l) ^ (n / t) :- destrieux_tian_structural_connectivity('L G pariet inf Angular', l, n), strength(t)
       active(l, s) :- destrieux_activated(l, s), selected_study(s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
-      reached(s) :- ends_in(l), active(l, s)
+      reached(s) :- ending_region(l), active(l, s)
       ans(probability) :- PROB[reached(s) // term_association(s, 'memory')] = probability
-
-  # The structural connectivity gradients against the activations of a
-  # term: where, along an anatomical axis of the cortex, a function lies.
-  - question: Where along the second structural connectivity gradient, from sensorimotor to occipital cortex, are the regions activated by studies about pain?
-    datalog: |-
-      active(l, s) :- destrieux_activated(l, s), selected_study(s)
-      term_association(s, t) :- mentions(s, t), selected_study(s)
-      pain(l, p) :- PROB[active(l, s) // term_association(s, 'pain')] = p
-      ans(region, gradient, probability) :- pain(region, probability), (probability > 0.3), destrieux_structural_gradient(region, 2, gradient)
 
   # The three connectivities together: the structural (white-matter
   # streamlines), the resting-state functional (correlation at rest) and
   # the meta-analytic co-activation, joined by the labels of the regions.
-  - question: How do the structural and the resting-state functional connectivity of the left posterior cingulate (precuneus) compare, parcel by parcel?
+  - question: How do the structural and the resting-state functional connectivity of the left posterior cingulate (precuneus) compare, region by region?
+    topic: "Structural connectivity and tractography"
     datalog: |-
-      ans(region, streamlines, correlation) :- schaefer_structural_connectivity('17Networks LH DefaultA pCunPCC 1', region, streamlines), schaefer_functional_connectivity('17Networks LH DefaultA pCunPCC 1', region, correlation)
+      ans(region, streamlines, correlation) :- schaefer400_tian_structural_connectivity('17Networks LH DefaultA pCunPCC 1', region, streamlines), schaefer400_tian_functional_connectivity('17Networks LH DefaultA pCunPCC 1', region, correlation)
 
-  - question: Which pairs of parcels are strongly functionally connected at rest (correlation above 0.4) without a strong direct structural connection (fewer than 10 streamlines)?
+  - question: Which pairs of parcels are strongly functionally connected at rest (correlation above 0.5) without a direct structural connection (fewer than 1 streamline)?
+    topic: "Functional connectivity"
     datalog: |-
-      wired(l1, l2) :- schaefer_structural_connectivity(l1, l2, n), (n >= 10)
-      ans(l1, l2, correlation) :- schaefer_functional_connectivity(l1, l2, correlation), (correlation > 0.4), (l1 < l2), ~wired(l1, l2)
+      wired(l1, l2) :- schaefer400_tian_structural_connectivity(l1, l2, n), (n >= 1)
+      ans(l1, l2, correlation) :- schaefer400_tian_functional_connectivity(l1, l2, correlation), (correlation > 0.5), (l1 < l2), ~wired(l1, l2)
 
-  - question: How do the first gradients of the structural and of the resting-state functional connectivity compare, parcel by parcel?
+  - question: Are the gyri and sulci co-activated by studies about reading also functionally connected at rest?
+    topic: "Encoding: from a term to the brain"
     datalog: |-
-      ans(region, structural, functional) :- schaefer_structural_gradient(region, 1, structural), schaefer_functional_gradient(region, 1, functional)
-
-  - question: Are the Schaefer parcels co-activated by studies about reading also functionally connected at rest?
-    datalog: |-
-      active(l, s) :- schaefer_activated(l, s), selected_study(s)
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
       co_active(l1, l2, s) :- active(l1, s), active(l2, s)
       term_association(s, t) :- mentions(s, t), selected_study(s)
       co_activation(l1, l2, p) :- (l1 < l2), PROB[co_active(l1, l2, s) // term_association(s, 'reading')] = p
-      ans(l1, l2, probability, correlation) :- co_activation(l1, l2, probability), (probability > 0.3), schaefer_functional_connectivity(l1, l2, correlation)
+      ans(l1, l2, probability, correlation) :- co_activation(l1, l2, probability), (probability > 0.3), destrieux_tian_functional_connectivity(l1, l2, correlation)
+
+  # Structure and function together, with statistics: a t-test of
+  # Student by parcel (t from mean, std and sum; std is the standard
+  # deviation of the population, so the pooled variance is (n1 s1^2 + n2
+  # s2^2) / (n1 + n2 - 2)), its p-value (t_pvalue) and the parcels
+  # significant at a false discovery rate (fdr_threshold, of
+  # Benjamini-Hochberg, an aggregation of the p-values); hubs; regions
+  # both wired and correlated; a term's activations and the resting state.
+  - question: For each Schaefer parcel, are its strongly wired partners (more than 100 streamlines) more correlated at rest than the parcels no streamline joins it to? Student t-tests, significant at a false discovery rate of 0.05.
+    topic: "Functional connectivity"
+    datalog: |-
+      fc(l1, l2, r) :- schaefer400_tian_functional_connectivity(l1, l2, r), schaefer400(l1, a), schaefer400(l2, b)
+      wired(l1, l2) :- schaefer400_tian_structural_connectivity(l1, l2, n), (n > 100)
+      touched(l1, l2) :- schaefer400_tian_structural_connectivity(l1, l2, n)
+      partner(l, g, m, r, one) :- fc(l, m, r), wired(l, m), (g == 'wired'), (one == 1)
+      partner(l, g, m, r, one) :- fc(l, m, r), ~touched(l, m), (g == 'unwired'), (one == 1)
+      group(l, g, mean(r), std(r), sum(one)) :- partner(l, g, m, r, one)
+      test(l, t, df) :- group(l, 'wired', m1, s1, n1), group(l, 'unwired', m2, s2, n2), (df == n1 + n2 - 2), (df > 0), (pooled == (n1 * s1 * s1 + n2 * s2 * s2) / df), (t == (m1 - m2) / (pooled * (1 / n1 + 1 / n2)) ** 0.5)
+      tested(l, t, p) :- test(l, t, df), (p == t_pvalue(t, df))
+      cutoff(fdr_threshold(p, 0.05)) :- tested(l, t, p)
+      ans(parcel, t_value, p_value) :- tested(parcel, t_value, p_value), cutoff(c), (p_value <= c)
+
+  - question: Which Schaefer parcels are structural hubs, the top 5% by their streamlines, and how strongly are they functionally connected at rest?
+    topic: "Structural connectivity and tractography"
+    datalog: |-
+      s_strength(l, sum(n)) :- schaefer400_tian_structural_connectivity(l, m, n), schaefer400(l, a)
+      f_strength(l, sum(r)) :- schaefer400_tian_functional_connectivity(l, m, r), schaefer400(l, a), (r > 0)
+      cut(percentile(s, 95)) :- s_strength(l, s)
+      ans(parcel, streamlines, correlation_sum) :- s_strength(parcel, streamlines), cut(c), (streamlines >= c), f_strength(parcel, correlation_sum)
+
+  - question: Which gyri and sulci are both structurally (more than 100 streamlines) and functionally (r above 0.2) connected to the left caudate, by their full names?
+    topic: "Structural connectivity and tractography"
+    datalog: |-
+      caudate(t) :- tian(t, b), (t == 'aCAU lh')
+      caudate(t) :- tian(t, b), (t == 'pCAU lh')
+      both(t, l, n, r) :- caudate(t), destrieux_tian_structural_connectivity(t, l, n), destrieux_tian_functional_connectivity(t, l, r), destrieux(l, a), (n > 100), (r > 0.2)
+      ans(structure, region, streamlines, correlation) :- both(t, l, streamlines, correlation), tian_name(t, structure), destrieux_name(l, region)
+
+  - question: Which regions activated by studies about pain are functionally connected at rest to the thalamus, and how strongly?
+    topic: "Encoding: from a term to the brain"
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      pain(l, p) :- PROB[active(l, s) // term_association(s, 'pain')] = p
+      thalamus(t) :- tian(t, x), startswith('THA', t)
+      strongest(l, max(r)) :- destrieux_tian_functional_connectivity(t, l, r), thalamus(t)
+      ans(region, probability, thalamus_r) :- pain(region, probability), (probability > 0.3), strongest(region, thalamus_r)
 
   # The titles, abstracts and identifiers of the studies: a PubMed id is an
   # integer, a DOI is in lower case without https://doi.org/.
@@ -792,3 +928,85 @@ assistant_examples:
       item(s) :- study_pmid(s, p), ~with_doi(s)
       ans(studies) :- AGGREGATE[](item(s) @ count(s)) = studies
 
+
+  # After ``.image PATH`` (an image of activations, a binary mask, or a
+  # map of z-scores with --zscore), NAME(i, j, k, value) holds its voxels,
+  # NAME the file's name (image in these examples), and
+  # NAME_probability(i, j, k, p) the probability that each is active:
+  # 1 for a mask, 1 - the local false discovery rate of a z-score. Decoding
+  # it: each voxel is a probabilistic fact, active with its probability, and
+  # a voxel of the brain is chosen at random (selected_voxel); a study hits
+  # the image when it activates the chosen voxel and the voxel is active
+  # (cortical_mask(i, j, k) in the rule decodes the cortex of the image
+  # only); the lift of a term is the
+  # probability of a hit for the studies of the term over the same for all
+  # the studies. A map of
+  # values without image_probability is decoded once loaded again with
+  # .image NAME --zscore, if its values are z-scores. A tractogram (.trk,
+  # .tck) loaded with .image has NAME_probability 1 for each voxel within
+  # 3 mm of an end of its streamlines, and is decoded the same way.
+  - question: Decode the z-score map I loaded towards the concepts of the Cognitive Atlas. Which terms have the largest lift?
+    datalog: |-
+      image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      term_studies(t, count(s)) :- term_in_study(s, t)
+      ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
+  - question: Decode the tractogram I uploaded from where its streamlines end. Which concepts of the Cognitive Atlas are most associated with the regions near the ends of its streamlines?
+    datalog: |-
+      image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      term_studies(t, count(s)) :- term_in_study(s, t)
+      ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
+  - question: Decode only the cortex of the image I uploaded, leaving out its subcortical and cerebellar voxels. Which concepts of the Cognitive Atlas have the largest lift?
+    datalog: |-
+      image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+      image_hit(s) :- selected_voxel(i, j, k), cortical_mask(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      term_studies(t, count(s)) :- term_in_study(s, t)
+      ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
+  - question: Which is the lift of working memory in the mask I uploaded?
+    datalog: |-
+      image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      ans(lift) :- p_image_given_term('working memory', a), p_image(b), (lift == a / b)
+  - question: Which terms of the studies, all of them and not only the concepts of the Cognitive Atlas, decode the image I uploaded?
+    datalog: |-
+      image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      term_studies(t, count(s)) :- term_in_study(s, t)
+      ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), (lift == a / b)
+  - question: Is fear more associated than pain with the image I uploaded? Give a 95% confidence interval of the difference of their lifts.
+    datalog: |-
+      image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+      image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      decoding(t, lift) :- p_image_given_term(t, a), p_image(b), (lift == a / b)
+      lift_replicate(r, t, x) :- RESAMPLE[boot_studies](decoding(t, x)) = r
+      difference(r, d) :- lift_replicate(r, 'fear', fear), lift_replicate(r, 'pain', pain), (d == fear - pain)
+      interval(percentile(d, 2.5), percentile(d, 50.0), percentile(d, 97.5)) :- difference(r, d)
+      ans(ci_low, median_difference, ci_high) :- interval(ci_low, median_difference, ci_high)
+  # Overlap: each voxel of the image active independently, a probabilistic
+  # fact of its probability, and a study hitting the image when it
+  # activates an active voxel (P = 1 - the product of 1 - p over the voxels
+  # it activates). For a mask or a small region (an ROI): how much more
+  # often the studies of a term report a peak in it; on a large map of
+  # z-scores nearly every study hits it, and the lifts are all near 1:
+  # decode those with a voxel chosen, as above.
+  - question: How much more often do the studies of each concept of the Cognitive Atlas report a peak in the region of interest I uploaded, a mask?
+    datalog: |-
+      image_active(i, j, k) :: p :- image_probability(i, j, k, p)
+      image_hit(s) :- activated(i, j, k, s), image_active(i, j, k)
+      p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+      p_image(PROB) :- image_hit(s) & selected_study(s)
+      term_studies(t, count(s)) :- term_in_study(s, t)
+      ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)

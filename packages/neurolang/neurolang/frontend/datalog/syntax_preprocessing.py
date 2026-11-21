@@ -1,6 +1,8 @@
 from nl_core.datalog.expression_processing import extract_logic_free_variables
 from nl_core.datalog.negation import is_conjunctive_negation
-from nl_expr.expression_walker import PatternWalker, add_match
+from nl_expr.expression_walker import (
+    ExpressionWalker, PatternWalker, add_match,
+)
 from nl_expr.expressions import ExpressionBlock, NeuroLangException, Symbol
 from nl_expr.logic import Implication, ExistentialPredicate
 from nl_core.datalog.horn_clauses import (
@@ -76,3 +78,27 @@ class ProbFol2DatalogMixin(PatternWalker):
         except NeuroLangException as e:
             raise Fol2DatalogTranslationException(str(e)) from e
         return self.walk(program)
+
+
+class TranslateRuleToDatalog(ProbFol2DatalogMixin, ExpressionWalker):
+    """``ProbFol2DatalogMixin`` on its own, outside a program."""
+
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+
+def rule_to_datalog(rule, symbol_table):
+    """
+    Translate *rule*, ``head :- body`` of first order logic, to Datalog, as
+    a program translates its rules: return the rule of its head and the
+    rules it needs.  ``exists(...)`` and ``~exists(...)`` become rules, a
+    Datalog rule is left as it is.
+    """
+    def rules(expression):
+        if isinstance(expression, ExpressionBlock):
+            return [r for e in expression.expressions for r in rules(e)]
+        return [expression]
+
+    translated = rules(TranslateRuleToDatalog(symbol_table).walk(rule))
+    head = next(r for r in translated if r.consequent == rule.consequent)
+    return head, [r for r in translated if r is not head]

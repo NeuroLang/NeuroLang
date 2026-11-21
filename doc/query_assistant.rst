@@ -379,6 +379,170 @@ before its result.
 The code box colours the query as the terminal does, with the same
 tokenizer (``query_highlight``), in Datalog and in SQUALL.
 
+.. _assistant-mcp:
+
+From an MCP client
+------------------
+
+``neurolang-query --mcp`` serves a session of the interactive REPL to an
+MCP client, such as Claude Code or Claude Desktop, over its standard input
+and output. The client's model answers questions as the assistant does,
+with the ReAct agent's instructions and tools (see *Strategies*), in
+Datalog: the server pays for no model, and no ``llm.yaml`` provider is
+needed. It needs the ``mcp`` extra (see :doc:`install`). The engine is built
+while the client starts, and the first tool call waits for it; a query
+given as argument or with ``--file`` runs first, in the session.
+
+``ask``
+    starts answering a question: it returns the assistant's prompt for it,
+    with the Datalog syntax, the guidance of the engine and the examples
+    closest to the question. The predicates are left to
+    ``list_predicates``: with them, the prompt would be longer than what
+    clients take of a tool's result (80,000 characters on ``neurosynth``).
+    The next calls of a session return only the examples closest to their
+    question and the task, as the client has the rest and reads it again
+    at each turn (``full=true`` returns it all again). With ``refine`` set
+    to the id of an answer (``a1``, ``a2``, ...) the task is to change that
+    answer for the new question, from its query and the rows it gave (an
+    answer of an earlier session too, by the id ``list_answers`` gives); with
+    ``refine`` set to ``last``, it is the last query run, such as one the
+    user corrected and ran with ``repl``, as ``.ask --refine`` does.
+``list_predicates``, ``describe_predicate``, ``search_values``, ``check_query``, ``run_query``
+    are the tools of the ReAct agent.
+``final_answer``
+    takes the query, a one-sentence explanation and a comment for each rule
+    of the query. It checks the answer as the agent's final answer is
+    checked: a query that fails, gives no rows or has constants not in the
+    data is sent back once, and comments that are not one per rule are sent
+    back before the query runs. The answer is in Markdown, for the client
+    to render: a heading with the question, the link to the viewer, the
+    commented query in a ``datalog`` block, each result as a table, the
+    links to the files and the references. An accepted answer gets an id
+    and is shown
+    in the session from the rows its check gave, without running again; a
+    result of more than 20 million cells (a whole-brain map at 1 mm is 7
+    million) is sent back to be restricted. The client receives:
+
+    - the explanation and the query with a ``%`` comment above each rule;
+    - the first 20 rows of each result, by its value (its last column of
+      decimal numbers, a probability or a lift), highest first, as the
+      table's heading says;
+    - a glass brain (PNG) of each of its first two images, for a result of
+      voxels or of regions with a value, as an image and as a file
+      (``glass-brain.png``), as a client may show its model the image but
+      not its user;
+    - as structured content (``structuredContent``), its id, the same
+      Markdown, which some clients, such as Claude Code, give their model in
+      place of the text, its links and its numbers of rows;
+    - the links to its files, the viewer's first, in the text, in the
+      structured content and as MCP resource links, which clients may show
+      as links of their own; the instructions ask the client's model to
+      always give them to the user. They are kept in a folder of
+      ``--results-dir`` (``~/.cache/neurolang/mcp`` by default): the
+      interactive viewer of
+      ``.view`` (``view.html``), the images (``result.nii.gz``), all the
+      rows (``rows.csv``), the query (``query.dl``), its graph
+      (``graph.html``, as ``.graph``), and the page of all the answers of
+      the session, with their glass brains (``index.html``); each answer is
+      kept there too (``answer.json``), for a later session to list and
+      refine it. They are the user's only (as the
+      ``--log`` file), and the folders of the sessions older than
+      ``--keep-results`` days (7 by default; 0 keeps them) are removed when
+      the server starts.
+    - the references to cite NeuroLang (the sources of the engine's data
+      are those of ``.credits``).
+``list_answers``
+    lists the answers of the session and of the earlier ones still kept,
+    latest first, with their questions and viewers: after a reconnection,
+    ``ask`` refines one by the id it gives (``SESSION/a1``).
+``examples``
+    gives the topics of the assistant's example questions on the engine,
+    or the questions of one, for a user who does not know what to ask.
+``status``
+    tells the engine, its grid, its data, where the answers' files go,
+    whether the statements are confined, and whether the engine is built
+    yet (it takes a minute when the server starts).
+``repl``
+    runs what is typed at the prompt, statements and dot-commands, and
+    returns the output and the first rows of each result (50 by default,
+    500 at most), tab-separated. A query runs within the same limits of
+    time and memory as the tools', in a process of its own, then is shown
+    from the rows it gave. The relations and the rules it defines alone
+    stay in the session (those given with a query are local to it, see
+    ``.scope``).
+
+The statements of the session are confined, as those of the users of the
+REPL server: they read the engine's data and the answers' files only
+(``--data-dir``, ``--results-dir``) and write no file, so that what the
+client's model is led to run, by a text of the data for instance, reaches
+no other file of the machine. ``--allow-dir DIR`` adds a folder they may
+read, to ``.load`` or ``.image`` files of one's own, such as a map to
+decode; ``--unconfined`` lifts it all. ``repl`` refuses ``.ask``, ``.llm``,
+``.explain``, ``.rate`` and ``.refine``: they would run the assistant of
+the machine's ``llm.yaml``, the client's model being the assistant.
+
+The time and memory a query may take are those of the ``assistant``
+settings of ``llm.yaml`` (``query_timeout``, ``query_memory_mb``): a query
+of every voxel of the brain may need more than their default 4 GB.
+
+The engine's MNI grid is of 2 mm unless ``--resolution`` gives another,
+as the REPL server's: at its native 1 mm, ``neurosynth`` takes 12 GB instead
+of 3, and a whole-brain map 76 s to answer instead of 9.
+
+The data directory is ``~/neurolang_data`` unless ``--data-dir`` gives
+another: not relative to the folder the client starts the server in,
+where it would build the engine anew. The options of the server may be
+kept in ``~/.config/neurolang/mcp.yaml`` (or the file of
+``NEUROLANG_MCP_CONFIG``), named as the options with underscores, which
+those of the command line win over; a change takes effect when the client
+reconnects (``/mcp``, *Reconnect* in Claude Code), with no new
+registration::
+
+    engine: neurostore
+    resolution: 2
+    log: ~/neurolang-mcp.log
+    allow_dir: [~/maps]
+
+``--print-mcp-command`` prints the command that adds the server to Claude
+Code, with absolute paths and the options given, and exits::
+
+    neurolang-query --mcp --engine neurosynth --print-mcp-command
+
+The engine is built when the server starts, so that it is ready at the
+first call; ``--build-on-first-call`` builds it at the first tool call
+instead, which then waits for it. ``--log FILE`` writes what the server
+does to *FILE*, to follow with ``tail -f`` (MCP clients do not show what a
+server prints): the build of the engine, with its time, and each tool call,
+with its arguments, time and outcome, such as an answer rejected and why or
+accepted with its rows, images and folder::
+
+    12:16:40 engine neurosynth: built in 56.3 s; the answers' files in ...
+    12:16:54 final_answer query=active(l, s) :- ... -> accepted a1 (ans: 400 rows; 1 images) in file:///.../a1 (13.7 s)
+
+The `MCP Inspector <https://github.com/modelcontextprotocol/inspector>`_
+runs the server and calls its tools by hand, in the browser:
+``npx @modelcontextprotocol/inspector neurolang-query --mcp --engine
+neurosynth``.
+
+For Claude Code, from the clone of the repository:
+
+.. code-block:: bash
+
+   claude mcp add neurolang -- \
+       uv run --directory "$PWD" --extra mcp \
+       neurolang-query --mcp --engine neurosynth
+
+or in the ``mcpServers`` of the client's configuration:
+
+.. code-block:: json
+
+   {
+     "neurolang": {
+       "command": "neurolang-query",
+       "args": ["--mcp", "--engine", "neurosynth"]
+     }
+   }
+
 .. _assistant-feedback:
 
 Rating and correcting the answers

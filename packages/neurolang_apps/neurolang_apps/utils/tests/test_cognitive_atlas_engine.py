@@ -62,6 +62,18 @@ def test_classes_below_a_concept(engine):
     ) == {("Working memory",), ("Spatial working memory",)}
 
 
+def test_subclasses_are_iris_of_classes(engine):
+    """The hierarchy is on IRIs, as the labels, without the restrictions
+    (blank nodes) a class is also a subclass of."""
+    cogat = "http://www.cognitiveatlas.org/ontology/cogat.owl#"
+    assert run(engine, "ans(x, y) :- cogat_subclass_of(x, y)") == {
+        (cogat + "CAO_00587", cogat + "CAO_00001"),
+        (cogat + "CAO_00588", cogat + "CAO_00587"),
+        (cogat + "CAO_00588", cogat + "CAO_00001"),
+        (cogat + "CAO_00032", cogat + "CAO_00031"),
+    }
+
+
 def test_contrasts_measuring_a_concept(engine):
     assert run(
         engine,

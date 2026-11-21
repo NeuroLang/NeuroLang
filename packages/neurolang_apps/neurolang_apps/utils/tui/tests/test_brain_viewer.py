@@ -482,7 +482,7 @@ class TestLayers:
         """The masks of the answers of a program with several, value 1
         each, are drawn in the top colours of their colormaps: those of
         the masks, single hues in turn, not those whose top is alike
-        (plasma and viridis both end in yellow)."""
+        (plasma and viridis both end in cyan)."""
         mask = np.zeros((4, 4, 4), dtype=np.float32)
         mask[1, 1, 1] = 1.0
         state = _state(brain_viewer.viewer_html(
@@ -509,13 +509,34 @@ class TestLayers:
     def test_the_cursor_starts_on_the_peak_of_the_first(self, state):
         assert state["initial"]["cursor"] == [1, 2, 3]
 
-    def test_the_images_must_share_a_grid(self):
-        with pytest.raises(ValueError, match="grid"):
-            brain_viewer.viewer_html(
-                [("a", _image(np.ones((2, 2, 2), np.float32))),
-                 ("b", _image(np.ones((3, 2, 2), np.float32)))],
-                None, title="t", threshold=0, cmap=None, symmetric=False,
-            )
+    def test_images_of_several_grids_are_drawn_on_the_finest(self):
+        """
+        The regions of an answer, on the 2 mm grid of their atlas, beside
+        the streamlines of another, counted on the 1 mm grid of the
+        background, failed ("not on the grid of the first one"). The
+        coarser image is resampled to the finer grid, each voxel taking the
+        value of the nearest: a mask stays a mask and a count keeps its
+        value.
+        """
+        coarse = np.zeros((4, 4, 4), dtype=np.float32)
+        coarse[1, 1, 1] = 1.0
+        fine_affine = AFFINE.copy()
+        fine_affine[:3, :3] /= 2
+        fine = np.zeros((8, 8, 8), dtype=np.float32)
+        fine[6, 6, 6] = 7.0
+        state = _state(brain_viewer.viewer_html(
+            [("regions: mask", _image(coarse)),
+             ("tract: streamlines", _image(fine, fine_affine))],
+            None, title="t", threshold="95%", cmap=None, symmetric=False,
+        ))
+        assert state["shape"] == [8, 8, 8]
+        assert np.allclose(state["affine"], fine_affine)
+        mask = _overlay_volume(state["overlays"][0], (8, 8, 8))
+        assert set(np.unique(mask)) == {0.0, 1.0}
+        # the 2 mm voxel (1, 1, 1), at (-1, -3, -5) mm, is the 1 mm voxel
+        # (2, 2, 2) and some of its neighbours, no more than the 8 it covers
+        assert mask[2, 2, 2] == 1 and 1 <= mask.sum() <= 8
+        assert _overlay_volume(state["overlays"][1])[6, 6, 6] == 7.0
 
 
 _LAYERS_CHECK = _CHECK_HELPERS + """
@@ -817,6 +838,23 @@ class TestStreamlines:
         assert len(trk.streamlines) == 3
         for read, line in zip(trk.streamlines, _LINES):
             assert np.allclose(read, line)
+        # each with its rank, for the page to draw as many as asked
+        ranks = trk.tractogram.data_per_streamline["rank"]
+        assert ranks.ravel().tolist() == [3.0, 1.0, 2.0]
+
+    def test_the_k_highest_ranks_are_an_even_sample(self):
+        for n in (1, 3, 10, 16, 100):
+            ranks = brain_viewer.streamline_ranks(n)
+            assert sorted(ranks.tolist()) == list(range(1, n + 1))
+        ranks = brain_viewer.streamline_ranks(16)
+        # the 4 highest of 16 are every fourth; the 2 highest, 0 and 8
+        assert np.flatnonzero(ranks >= 16 - 4 + 1).tolist() == [0, 4, 8, 12]
+        assert np.flatnonzero(ranks >= 16 - 2 + 1).tolist() == [0, 8]
+        # not the first k of the file, whatever n is
+        ranks = brain_viewer.streamline_ranks(100)
+        shown = np.flatnonzero(ranks >= 100 - 10 + 1)
+        assert shown.max() > 80 and np.diff(shown).max() < 25
+        assert len(brain_viewer.streamline_ranks(0)) == 0
 
     def test_the_page_holds_the_streamlines(self):
         html = brain_viewer.viewer_html(
@@ -832,8 +870,19 @@ class TestStreamlines:
         assert state["initial"]["display"] == {
             "renderTile": True, "layout": "grid",
         }
-        assert 'id="streamline-opacity"' in html
+        assert 'id="streamline-number"' in html
+        assert 'id="streamline-opacity"' not in html
         assert state["space"] == "MNI"
+        assert "bundles" not in streamlines
+
+    def test_the_page_holds_the_bundles(self):
+        state = brain_viewer.streamlines_state(
+            _LINES, 7, (["left", "right"], ["#1f77b4", "#aec7e8"], [1, 0, 1])
+        )
+        bundles = state["bundles"]
+        assert bundles["names"] == ["left", "right"]
+        assert bundles["colours"] == ["#1f77b4", "#aec7e8"]
+        assert _decode(bundles["of"], np.uint16).tolist() == [1, 0, 1]
 
 
 _STREAMLINES_CHECK = _CHECK_HELPERS + """
@@ -856,8 +905,60 @@ brainViewer.ready.then(function () {
   set('streamlines-visible', false, 'change');
   out.hidden = mesh.visible === false && changed(before, pixels());
   set('streamlines-visible', true, 'change');
-  set('streamline-opacity', '0.3');
+  // The number: all of them at first; at the foot of the slider, one, the
+  // first of the ranks; the label tells it. Back to the top, all again.
+  var label = document.getElementById('streamline-count');
+  out.all = {drawn: mesh.indexCount, label: label.textContent};
+  set('streamline-number', '0');
+  out.one = {drawn: mesh.indexCount, label: label.textContent};
+  set('streamline-number', '1000');
+  out.again = {drawn: mesh.indexCount, label: label.textContent};
   out.opacity = mesh.opacity;
+  out.colourControl = !document.getElementById('streamline-colour-control').hidden;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+_BUNDLES_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var nv = brainViewer.nv, mesh = nv.meshes[0];
+  var legend = document.getElementById('bundle-legend');
+  // the number of pixels near magenta and near cyan, the colours of the
+  // bundles (NiiVue dithers each streamline a little)
+  function near(p) {
+    var magenta = 0, cyan = 0;
+    for (var i = 0; i < p.length; i += 4) {
+      if (p[i] > 200 && p[i + 1] < 60 && p[i + 2] > 200) magenta++;
+      if (p[i] < 60 && p[i + 1] > 200 && p[i + 2] > 200) cyan++;
+    }
+    return {magenta: magenta, cyan: cyan};
+  }
+  function colours() {
+    return Array.from(legend.querySelectorAll('.swatch'))
+      .map(function (s) { return s.style.background; });
+  }
+  var out = {
+    control: !document.getElementById('streamline-colour-control').hidden,
+    choice: document.getElementById('streamline-colour').value,
+    legend: Array.from(legend.children).map(function (li) {
+      return li.textContent; }),
+    colours: colours(), legendShown: !legend.hidden,
+    groups: mesh.groups.map(function (g) { return Array.from(g.vals); }),
+    byBundle: mesh.fiberGroupColormap !== null
+  };
+  out.drawnColours = near(pixels());
+  set('streamline-colour', 'direction', 'change');
+  out.direction = {
+    byBundle: mesh.fiberGroupColormap !== null, legendShown: !legend.hidden,
+    colours: near(pixels()), drawn: mesh.indexCount
+  };
+  set('streamline-colour', 'bundle', 'change');
+  out.back = near(pixels());
+  // the number still follows the ranks, whatever the colours
+  set('streamline-number', '0');
+  out.one = mesh.indexCount;
   report(out);
 }).catch(function (e) { report({failed: String(e)}); });
 </script>
@@ -865,10 +966,41 @@ brainViewer.ready.then(function () {
 
 
 @pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_bundles_in_a_headless_browser(tmp_path):
+    """Check the streamlines of bundles are in the colours of their
+    bundles, which a legend names, or by direction, as "Colour by"
+    chooses, and the number of them drawn still follows their ranks."""
+    html = brain_viewer.viewer_html(
+        _image(np.ones((4, 4, 4), dtype=np.float32)), None,
+        title="bundles", threshold=0, cmap=None, symmetric=False,
+        streamlines=brain_viewer.streamlines_state(
+            _LINES, 7, (["a", "b"], ["#ff00ff", "#00ffff"], [0, 1, 0])
+        ), space="RAS",
+    )
+    result = _run_in_chrome(tmp_path, html, _BUNDLES_CHECK)
+    assert result["errors"] == [] and "failed" not in result, result
+    assert result["control"] and result["choice"] == "bundle"
+    assert result["legend"] == ["a (2)", "b (1)"] and result["legendShown"]
+    assert result["colours"] == ["rgb(255, 0, 255)", "rgb(0, 255, 255)"]
+    assert result["groups"] == [[0, 2], [1]] and result["byBundle"]
+    # pixels of the colours of the bundles, which no direction of these
+    # streamlines gives, and again when back to bundles
+    by_bundle, by_direction = result["drawnColours"], result["direction"]
+    for colour in ("magenta", "cyan"):
+        assert by_bundle[colour] > 0
+        assert by_direction["colours"][colour] == 0
+    assert by_direction["byBundle"] is False
+    assert by_direction["legendShown"] is False
+    assert by_direction["drawn"] == 11
+    assert result["back"] == pytest.approx(by_bundle, rel=0.2)
+    assert result["one"] == 4
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
 def test_the_streamlines_in_a_headless_browser(tmp_path):
     """Check NiiVue reads every streamline of the page, at its points,
     coloured by direction, and the controls hide them and set their
-    opacity."""
+    number."""
     html = brain_viewer.viewer_html(
         _image(np.ones((4, 4, 4), dtype=np.float32)), None,
         title="streamlines", threshold=0, cmap=None, symmetric=False,
@@ -887,7 +1019,17 @@ def test_the_streamlines_in_a_headless_browser(tmp_path):
     assert result["space"] == "RAS"
     assert result["count"] == "3 of 7 streamlines shown"
     assert result["shown"] == "" and result["hidden"]
-    assert result["opacity"] == 0.3
+    # 3 + 2 + 3 points, and an end of line each: 11 indices for all of them,
+    # 4 for the first, the highest rank
+    assert result["all"] == {
+        "drawn": 11, "label": "3 of 7 streamlines shown",
+    }
+    assert result["one"] == {
+        "drawn": 4, "label": "1 of 7 streamlines shown",
+    }
+    assert result["again"] == result["all"]
+    assert result["opacity"] == 1
+    assert result["colourControl"] is False
 
 
 _REGIONS_CHECK = _CHECK_HELPERS + """
@@ -1040,6 +1182,42 @@ def test_the_threshold_sliders_follow_the_histogram(tmp_path):
         assert max(result[offsets]) < 2, (offsets, result[offsets])
     assert result["dragged"] >= 1.5  # half way along the values, not percentiles
 
+
+_OVERLAP_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var histogram = document.getElementById('threshold-histogram');
+  var out = {};
+  set('threshold', '2.9', 'change');  // the low thumb under the high one
+  set('threshold-high-slider', '500', 'input');  // dragged down
+  out.down = histogram.dataset.range;
+  set('threshold-high-slider', '900', 'input');  // dragged up
+  out.up = histogram.dataset.range;
+  set('threshold-slider', '950', 'input');  // the low one past the high one
+  out.past = histogram.dataset.range;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_overlapping_threshold_thumbs_can_both_be_dragged(tmp_path):
+    """Check the high thumb, on top of the low one when the thresholds
+    are close, moves the low threshold when dragged below it, and the
+    low thumb dragged above the high one moves the high threshold."""
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[0, 0, 3], data[1, 1, 3], data[2, 2, 3] = 1.0, 2.0, 3.0
+    html = brain_viewer.viewer_html(
+        _image(data), None, title="overlap", threshold=0.5, cmap="hot",
+        symmetric=False,
+    )
+    result = _run_in_chrome(tmp_path, html, _OVERLAP_CHECK)
+    assert result["errors"] == [] and "failed" not in result
+    assert result["down"] == "1.5 3"
+    assert result["up"] == "1.5 2.7"
+    assert result["past"] == "1.5 2.85"
+
 _EDGE_VALUE_CHECK = _CHECK_HELPERS + """
 <script>
 brainViewer.ready.then(function () {
@@ -1108,10 +1286,15 @@ def test_the_defaults_of_the_viewer_are_those_of_its_file():
     assert brain_viewer.MAX_EDGES == network["max_edges"]
     assert brain_viewer.MAX_STREAMLINES == defaults["streamlines"][
         "max_shown"]
+    assert brain_viewer.MAX_BUNDLES == defaults["streamlines"][
+        "max_bundles"]
     assert nifti.VIEW_THRESHOLD == defaults["view_threshold"]
     help_text = " ".join(nifti.VIEW_HELP.split())
     assert f"default: {defaults['view_threshold']}" in help_text
     assert f"default: {defaults['colormap']}" in help_text
+    streamlines = defaults["streamlines"]
+    assert f"{streamlines['max_shown']} at most are drawn" in help_text
+    assert f"of {streamlines['max_bundles']} values at most" in help_text
     img = nib.Nifti1Image(np.ones((2, 2, 2), np.float32), np.eye(4))
     state = _state(brain_viewer.viewer_html(
         img, None, title="t", threshold=0, cmap=None, symmetric=False,

@@ -12,7 +12,15 @@ data_dir: neurolang_data      # --local: the engines' data
 resolution: 2.0               # --local: mm, the engines' MNI grid
 prepare: true                 # --local: build each engine before serving
 preload_embeddings: true      # --local: load the engines' text embeddings when built
+prebuild: true                # --users --local: build the offered engines when the server starts
+prebuild_reserve: 0.35        # --users --local: the share of the memory building ahead leaves to the queries
 max_sessions: 8               # --users --local: sessions at once
 idle_minutes: 120             # --users --local: an unused session ends
 query_minutes: 60             # --users --local: a query is stopped (0: never)
+session_memory_mb: 0          # --users --local: a query taking a session more memory of its own is stopped (0: never)
 max_guest_sessions: 2         # --guests: sessions of the guests at once
+uploads_dir: ~/.cache/neurolang/repl-uploads  # --users --local: a folder per session, removed when it ends
+mcp: false                    # --users --local: answer MCP clients at /mcp, with the users' tokens
+mcp_results_dir: ~/.cache/neurolang/repl-mcp  # --mcp: the files of the MCP answers, a folder per session
+max_upload_mb: 50             # --local: a file a page uploads, at most
+max_uploads_mb: 200           # --local: all those of a session, at most

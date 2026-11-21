@@ -47,7 +47,8 @@ function downloadMenu(payload, download) {
   };
   const images = Array.isArray(payload.nifti)
     ? payload.nifti.map((value) => item(imageName(value), "nifti", value ?? ""))
-    : [item("NIfTI image", "nifti", "", payload.nifti_reason || "This result is not an image")];
+    : [item("NIfTI image", "nifti", "", payload.nifti_reason || "This result is not an image"),
+      element("p", { className: "note", textContent: payload.nifti_reason || "This result is not an image" })]; // the reason, to read, not only a tooltip
   const menu = element("details", { className: "rt-menu" },
     element("summary", { textContent: "Download", title: "Save the whole result as a file" }),
     element("div", { className: "rt-menu-items" }, item("All rows, CSV", "csv"), item("All rows, TSV", "tsv"), ...images));
@@ -162,7 +163,7 @@ export function renderTable(payload, { download = null, followUps = null, use = 
       const th = element("th", {
         className: NUMERIC.has(model.kinds[column]) ? "rt-num" : "",
         title: extent ? `${name}: from ${extent.low} to ${extent.high}` : name,
-      }, element("button", { type: "button", textContent: name + (arrows[sorted] ?? "") }));
+      }, element("button", { type: "button" }, name, ...(sorted ? [element("span", { textContent: arrows[sorted], ariaHidden: "true" })] : []))); // aria-sort says it
       if (sorted) th.setAttribute("aria-sort", sorted === "asc" ? "ascending" : "descending");
       th.firstChild.addEventListener("click", () => {
         model.toggleSort(column);

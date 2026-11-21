@@ -148,6 +148,44 @@ may specify the following keys, all of them optional:
   intervals, ``name: {choice: selected_study, n: 500, scheme: bayesian,
   seed: 0}``, queried with ``RESAMPLE[name](pred(x)) = b`` (see the
   tutorial :doc:`tutorial_datalog`, section 10.7)
+- ``sparse_views`` — relations also kept as sparse matrices, built with
+  the engine (so before the REPL server forks its sessions, which share
+  them): ``activated: [voxel, study]`` holds ``activated`` as a matrix
+  whose rows are its voxels and columns its studies, and a third sort,
+  of one column, gives the values of the entries (``term_in_study_tfidf:
+  [study, term, tfidf]``).  The sorts are those of the predicate's
+  ``arguments``, each once; the view spans all of them.  The predicate is
+  a stored relation or a rule renaming one (as the ``EUCLIDEAN`` rule of
+  ``activated``).  The entities of a sort are numbered alike in every
+  view (one :class:`~nl_core.relational_algebra.linear_algebra.EntityIndex`
+  per sort, a voxel ``(i, j, k)`` being one entity); the engine's
+  ``sparse_views`` holds the
+  :class:`~nl_core.relational_algebra.linear_algebra.SparseView` of each
+  predicate, a ``scipy.sparse`` CSR matrix with int32 indices, of
+  booleans when there is no value (its ``weighted()`` matrix, of
+  float64 entries over the same indices, is the one to multiply: ``R @
+  R.T`` counts the studies two regions share).  A view of a predicate
+  the engine does not define (one a lightweight engine leaves out) is
+  not built.  The probabilistic solver reads them when it computes sums
+  of products as contractions; with ``[PROBABILISTIC_SOLVER]
+  contractions`` off in the configuration, no view is built.  A build
+  keeps the views with its tables (``derived_tables``) and the next one
+  reads them memory-mapped, shared by the processes.  The
+  engines of ``coordinate_meta_analysis`` declare ``activated`` and the
+  activations of the atlases
+- ``sparse_view_indexes`` — views of ``sparse_views`` also kept by their
+  column entities (a
+  :class:`~nl_core.relational_algebra.linear_algebra.ColumnIndex`, the
+  view's ``by_columns``): for each, the row entities it is stored with,
+  and the values of a view that has some (the entries of a view without
+  values are 1 and not stored).  A product of the view with an operand
+  of a few of its column entities, whose entries are at most
+  ``[PROBABILISTIC_SOLVER] index_share`` (a tenth) of the view's, reads their entries alone
+  rather than the whole view: ``activated`` (``[activated]`` in the
+  engines of ``coordinate_meta_analysis``) by the studies of a term.
+  Kept with the build's tables apart from the views, memory-mapped and
+  shared as they are; on neurostore, 4 GB for the 1 billion entries of
+  ``activated``
 - ``ontologies`` — list of OWL/RDF ontologies to load: ``url`` (a URL or
   a local path) or ``urls`` (several files loaded together), and the
   ``format``, ``individuals`` and ``names`` options of
@@ -188,7 +226,8 @@ engine's directory next to it (see `Files of an engine`_).
 
 The init phases run in the order described in :doc:`concepts`: builtins,
 base symbols, Python init, downloads, templates, atlases, Datalog init,
-relations, text embeddings, probabilistic choices and ontologies.
+relations, text embeddings, probabilistic choices, ontologies and sparse
+views.
 
 Example — the ``neurosynth`` engine (abridged)::
 
@@ -310,14 +349,25 @@ A column of unknown sort, such as one of a relation loaded with
 ``.load``, is of the sort it is named as.  ``--voxel I J K`` and ``--mm
 X Y Z`` give the columns, on the template's grid (see ``.help save``).
 
-A sort of region labels may name, with ``atlas``, the atlas whose
-regions it labels, by its key under ``atlases``; it has one column and
-no ``space``::
+A sort of region labels names, with ``atlas``, the atlas whose regions
+it labels, by its key under ``atlases``; it has one column and no
+``space``.  Its name is ``label`` or ends in ``_label``, and the tests
+check that every such sort of the engines names an atlas: without one,
+``.view`` cannot draw its regions::
 
     destrieux_label:
       columns: [label]
       type: str
       atlas: destrieux
+
+A sort labelling the regions of several atlases names them all, the
+first being the one whose grid they are painted on; a label is looked
+up in each in turn::
+
+    schaefer400_tian_label:
+      columns: [label]
+      type: str
+      atlas: [schaefer400, tian]
 
 A result with a column of such a sort is then a result on the regions of
 the atlas: ``.save out.nii.gz`` and ``.view`` paint each region, on the
@@ -437,6 +487,37 @@ numpy or pandas, so the terminal REPL and the REPL in the browser read the same
 ones, whichever implementation of Python wrote them. The engine itself cannot
 be kept: its expressions cannot be pickled, and a snapshot of the memory of
 Pyodide is 780 MB (270 MB compressed).
+
+The tables an engine's rules derive from its source tables while it is built
+are kept apart, as Arrow files of ``DATA_DIR/derived_tables``, one directory
+for all engines: the pairs of points of a Euclidean bound, as ``activated``,
+the voxels of the brain within reach of each peak (46 million rows for
+``neurosynth``, 137 million for ``neurostore``, 35 s to find). Each file is
+named by a checksum of the rows of the source tables it was derived from
+(``brain_mask``, ``peak_reported``) and of the rule's bound
+(:class:`~neurolang_apps.utils.engine_cache.DerivedTables`): another release
+of the data makes another one, and engines deriving the same table from the
+same data (``neurostore``, ``neurostore_iit``) find the same file. A file
+kept is read memory-mapped, in under a second, its columns views of it, whose
+pages the processes reading it share and the system may drop and read again
+when memory is short. Only the build keeps them: a session's own rules
+derive their tables as they are, and the browser, whose data zip does not
+carry them, derives them too. Remove the directory to find them again.
+
+The large source tables of the build are kept there the same way, each named
+by a checksum of what it is found from, which is all it depends on: the
+studies activating and covering the regions of the atlases and the points of
+the regions (by the atlas image, its labels, the rows of the peaks and the
+radius or kernel), the relation files of ``relations`` (by their bytes), the
+bootstrap replicates of ``resamplings`` (by the rows of the choice, ``n``,
+the scheme and the seed), and NeuroStore's peaks, TF-IDF and labels of the
+studies (by the files of the release, the grid and the options). The next
+build maps them rather than reading the arrays of ``engine_cache`` into
+Python objects and finding them again. The tables held as Python objects
+(the regions of an atlas) are not kept. ``build_engine(...,
+map_tables=False)`` builds without any of them, as the build of the
+browser's bundle and ``python -m neurolang_apps.utils.engine_cache`` do: the
+files the browser reads are then all written.
 
 ``python -m neurolang_apps.utils.engine_cache ENGINE -d DATA_DIR -r MM`` builds
 the engine at the resolution it will be used with, so that the tables are

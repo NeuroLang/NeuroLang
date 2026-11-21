@@ -26,7 +26,7 @@ from typing import Callable, Optional
 
 from neurolang.confine import lifted
 from neurolang_apps.utils import engine_registry
-from neurolang_apps.utils.tui import web
+from neurolang_apps.utils.tui import constant_notes, session, web
 from neurolang_apps.utils.tui.interrupt import _raise_in_thread
 
 
@@ -40,6 +40,7 @@ def reply_payload(reply: web.Reply) -> dict:
         "ratable": getattr(reply, "ratable", False),
         "graph": getattr(reply, "graph", ""),
         "tokens": getattr(reply, "tokens", {}),
+        "uploads": getattr(reply, "uploads", {}),
     }
 
 
@@ -59,6 +60,15 @@ RATING_NOTE = (
     "answer of the assistant the question and its steps, on this server, "
     "with your user name and groups."
 )
+
+
+def _is_initialize(body: bytes) -> bool:
+    """Whether the JSON-RPC *body* of an MCP client starts a session."""
+    try:
+        message = json.loads(body)
+    except ValueError:
+        return False
+    return isinstance(message, dict) and message.get("method") == "initialize"
 
 
 def apply_env(env: dict) -> None:
@@ -85,21 +95,31 @@ class LocalBackend:
     by default
     :func:`~neurolang_apps.utils.engine_registry.build_engine`. With
     *preload_embeddings*, an engine built has its text embeddings loaded
-    too (see :meth:`build`).
+    too (see :meth:`build`). With *memory_mb*, a request that takes this
+    process more than that much memory of its own (on Linux; see
+    :func:`~.sessions.process_usage`) is interrupted as a stop does, and
+    its reply says so.
     """
 
     def __init__(
         self, data_dir, resolution: float = 2.0, light: bool = False,
         feedback: Optional[tuple] = None, build: Optional[Callable] = None,
-        preload_embeddings: bool = False,
+        preload_embeddings: bool = False, uploads: Optional[dict] = None,
+        memory_mb: float = 0, memory_seconds: float = 0.5,
     ):
         self.data_dir = Path(data_dir).resolve()
+        # Where the page's uploads go and how large they may be
+        # (session.Uploads), in memory without a directory.
+        self.uploads = uploads or {}
         self.resolution = resolution
         self.light = light
         self.feedback = feedback
         self._build = build or self._build_engine
         self.preload_embeddings = preload_embeddings
         self.repl: Optional[web.WebRepl] = None
+        self._engine = ""
+        # The MCP server on the REPL, once a client asked (see mcp).
+        self._mcp = None
         self._page_key = False  # whether the page gave the assistant's key
         # The values the variables of the user's identity had before it
         # (see use_identity).
@@ -108,6 +128,9 @@ class LocalBackend:
         # that does, for a stop to interrupt it.
         self._lock = threading.Lock()
         self._worker: Optional[threading.Thread] = None
+        self.memory_mb = memory_mb
+        self.memory_seconds = memory_seconds
+        self._over: Optional[float] = None  # MB, when the cap stopped a request
         self._listeners = []
         self._listeners_lock = threading.Lock()
 
@@ -145,7 +168,9 @@ class LocalBackend:
         from their cache or computed into it, and the query model), so
         that its first query of them does not, nor do the sessions forked
         from this process (see
-        :func:`~neurolang_apps.utils.text_embeddings.preload`)."""
+        :func:`~neurolang_apps.utils.text_embeddings.preload`); and find the
+        values of its string sorts, which the notes of a query look up
+        (:func:`~neurolang_apps.utils.tui.constant_notes.prepare`)."""
         nl = self._build(name, say)
         if self.preload_embeddings and \
                 getattr(nl, "text_embedding_indexes", None):
@@ -153,6 +178,8 @@ class LocalBackend:
 
             say("Loading the text embeddings")
             text_embeddings.preload(nl)
+        say("Finding the names of the engine")
+        constant_notes.prepare(nl, name)
         return nl
 
     def _build_engine(self, name: str, say: Callable):
@@ -169,14 +196,35 @@ class LocalBackend:
             progress=say,
         )
 
-    def _working(self, work: Callable):
-        """Return *work()*, one request at a time, which a stop interrupts."""
+    def _working(self, work: Callable, watched: bool = False):
+        """Return *work()*, one request at a time, which a stop interrupts,
+        and so does the memory cap if the request is *watched*."""
         with self._lock:
             self._worker = threading.current_thread()
+            self._over = None
+            done = threading.Event()
+            if watched and self.memory_mb:
+                threading.Thread(target=self._watch, args=(done,),
+                                 daemon=True).start()
             try:
                 return work()
             finally:
+                done.set()
                 self._worker = None
+
+    def _watch(self, done: threading.Event) -> None:
+        """Stop the request at work, until *done*, if this process takes
+        more than *memory_mb* of memory of its own (nothing off Linux)."""
+        from neurolang_apps.utils.tui.sessions import process_usage
+
+        while not done.wait(self.memory_seconds):
+            usage = process_usage(os.getpid())
+            if usage is None:
+                return
+            if usage["private"] > self.memory_mb and not done.is_set():
+                self._over = usage["private"]
+                self.stop()
+                return
 
     def stop(self) -> bool:
         """Interrupt the request at work, if any; return whether there was
@@ -187,15 +235,17 @@ class LocalBackend:
         _raise_in_thread(worker, KeyboardInterrupt)
         return True
 
-    def start(self, engine: str) -> dict:
+    def start(self, engine: str, text: bool = False) -> dict:
         """
         Build the engine *engine* and a REPL on it, and return what the page
         is told when it is ready. Each start builds them anew, as the page
-        does when it restarts: the rules of a session are not kept.
+        does when it restarts: the rules of a session are not kept. With
+        *text*, the REPL answers in plain text, not in HTML (that of an MCP
+        client, see :meth:`mcp`).
         """
-        return self._working(lambda: self._start(engine))
+        return self._working(lambda: self._start(engine, text))
 
-    def _start(self, engine: str) -> dict:
+    def _start(self, engine: str, text: bool = False) -> dict:
         with lifted():  # the engine's commands are the server's
             nl = self.build(engine, self.say)
         self.say("Starting the REPL")
@@ -213,7 +263,10 @@ class LocalBackend:
             except Exception:
                 pass
         self._page_key = False
-        repl = web.WebRepl(nl, engine, self.resolution, **options)
+        repl = web.WebRepl(
+            nl, engine, self.resolution, html=not text, **options
+        )
+        repl.app.uploads = session.Uploads(**self.uploads)
         repl.set_event_sink(lambda text: self.emit(json.loads(text)))
         self._use_machine_llm(repl)
         can_rate = False
@@ -224,6 +277,7 @@ class LocalBackend:
             repl.set_feedback(*self.feedback)
             can_rate = repl.can_rate()
         self.repl = repl
+        self._engine = engine
         from neurolang_apps.utils.llm.browser import providers_for_form
         import neurolang
         return {
@@ -233,6 +287,9 @@ class LocalBackend:
             "providers": providers_for_form(),
             "examples": repl.examples(),
             "questions": repl.questions(),
+            "moreQuestions": repl.more_questions(),
+            "questionQueries": repl.question_queries(),
+            "questionTopics": repl.question_topics(),
             "predicates": repl.predicates(),
             "commands": repl.commands(),
             "canRate": can_rate,
@@ -247,6 +304,32 @@ class LocalBackend:
             "assistant": getattr(repl, "assistant_ready", lambda: False)(),
         }
 
+    def mcp(self, verb: str, path: str, headers: dict, body: bytes,
+            base_url: str, results_dir: str) -> tuple:
+        """
+        Answer the HTTP request of an MCP client, (status, headers, body),
+        with the MCP server on the REPL (see
+        :mod:`~neurolang_apps.utils.mcp_server`), made at the first: the
+        files of its answers in a folder of *results_dir*, linked under
+        *base_url*. A client's ``initialize`` starts a conversation.
+        """
+        from neurolang_apps.utils import mcp_server
+
+        repl = self._repl()
+        if self._mcp is None or self._mcp[0] is not repl:
+            session = mcp_server.McpSession(
+                self._engine, repl=repl, results_dir=Path(results_dir),
+                token_bytes=16,
+            )
+            session.about = {"Grid": f"{self.resolution} mm"}
+            bridge = mcp_server.HttpBridge(mcp_server.http_app(session))
+            self._mcp = (repl, session, bridge)
+        _, session, bridge = self._mcp
+        session.store.base_url = base_url
+        if _is_initialize(body):
+            session.new_conversation()
+        return bridge.call(verb, path, headers, body)
+
     def _repl(self) -> web.WebRepl:
         if self.repl is None:
             raise RuntimeError("The engine is not started")
@@ -260,13 +343,25 @@ class LocalBackend:
                 if payload["tokens"]:  # whose key: the page's, or the server's
                     payload["tokens"]["key"] = \
                         "page" if self._page_key else "server"
-                return payload
+                if not (self._over and payload["failed"]):
+                    return payload
             except KeyboardInterrupt:
-                return {
-                    "html": "<pre>Stopped.</pre>", "failed": True,
-                    "viewers": [], "tables": [],
-                }
-        return self._working(work)
+                pass
+            # Stopped, by the page or by the memory cap (the REPL tells
+            # "Query interrupted" only).
+            message = "Stopped."
+            if self._over:
+                message = (
+                    f"Stopped: the query took {self._over:.0f} MB of "
+                    f"memory, over the {self.memory_mb:g} MB a session "
+                    "may take (session_memory_mb). Narrow it (a smaller "
+                    "region, fewer terms, a restriction before a join) "
+                    "and run it again; the rules of the session stay.")
+            return {
+                "html": f"<pre>{message}</pre>", "failed": True,
+                "viewers": [], "tables": [],
+            }
+        return self._working(work, watched=True)
 
     def set_llm(
         self, provider: str = "", key: str = "", model: str = "",

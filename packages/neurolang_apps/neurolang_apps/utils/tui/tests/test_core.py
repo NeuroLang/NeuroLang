@@ -110,6 +110,7 @@ class TestInteractiveTuiApp:
         app = InteractiveTuiApp(engine, TuiSettings(engine_name="neurosynth"))
         assert app._get_prompt() == "nl(neurosynth:DL)> "
 
+    @pytest.mark.squall
     def test_squall_prompt(self, engine):
         app = InteractiveTuiApp(
             engine, TuiSettings(engine_name="destrieux", squall=True)
@@ -199,6 +200,7 @@ def test_parse_error_is_formatted(small_app):
     assert "Traceback" not in out
 
 
+@pytest.mark.squall
 def test_squall_error_is_formatted(engine):
     engine.add_tuple_set([(1,)], name="person")
     app = _app(engine, squall=True)
@@ -388,17 +390,23 @@ def vocabulary_engine():
     nl.add_tuple_set(
         [(1, 2, 3, 10), (4, 5, 6, 11)], name="peak_reported"
     )
+    nl.add_tuple_set([(10, 2001), (11, 2010)], name="study_year")
+    nl.add_tuple_set(
+        [(10, "Pain in the brain"), (11, "Fear")], name="study_title"
+    )
     nl.add_tuple_set(
         [
             (10, "pain", 0.5), (11, "pain", 0.02), (11, "fear", 0.4),
             (10, "spatial working memory", 0.5),
+            (11, "selective attention", 0.5),
         ],
         name="term_in_study_tfidf",
     )
     # The Cognitive Atlas of the engine, reduced to a few classes.
     from neurolang_apps.utils import conftest, engine_registry
 
-    nl.add_symbol(engine_registry._BUILTIN_SYMBOLS["lcase"], name="lcase")
+    for builtin in ("lcase", "startswith"):
+        nl.add_symbol(engine_registry._BUILTIN_SYMBOLS[builtin], name=builtin)
 
     nl.load_ontology(
         str(conftest.MINI_COGAT), individuals=True, names="prefixed"
@@ -457,12 +465,17 @@ def test_banner_lists_relations_and_example(vocabulary_engine):
     ) in out
     assert "term_in_study_tfidf(study_id, term, tfidf)" in out
     assert "weighted_mention(study_id, term, tfidf)" in out
-    example = "ans(study) :- mentions(study, 'pain')"
-    assert f"Try: {example}" in out
-    app._execute_and_display(example)
-    assert app.results[0].frame.iloc[:, 0].tolist() == [10]
+    assert "Try: ans(study, year, title) :- mentions(study, 'pain')" in out
+    app._execute_and_display(
+        "ans(study, year, title) :- mentions(study, 'pain'), "
+        "study_year(study, year), study_title(study, title)"
+    )
+    assert app.results[0].frame.values.tolist() == [
+        [10, 2001, "Pain in the brain"]
+    ]
 
 
+@pytest.mark.squall
 def test_banner_squall_example(vocabulary_engine):
     app = _app(vocabulary_engine, engine_name="neurosynth", squall=True)
     app._print_banner()
@@ -517,6 +530,7 @@ def _primer_lines(out):
     return lines[start:end]
 
 
+@pytest.mark.squall
 def test_help_squall_is_a_primer(small_app):
     small_app.settings.engine_name = "neurosynth"
     small_app._handle_dot_command(".help squall")
@@ -544,6 +558,7 @@ def test_primer_shows_the_declared_sorts_of_several_columns(small_app):
     assert "study(study_id)" not in primer
 
 
+@pytest.mark.squall
 def test_help_in_squall_mode_adds_the_primer(small_app):
     small_app._handle_dot_command(".help")
     assert "SQUALL primer" not in _output(small_app)
@@ -564,6 +579,7 @@ def test_help_of_an_unknown_topic(small_app):
     out = _output(small_app)
     assert "No help on 'sql'" in out and ".help squall" in out
 
+@pytest.mark.squall
 def test_squall_obtain_shows_declared_column_names(peaks_engine):
     app = _app(peaks_engine, engine_name="neurosynth", squall=True)
     app._execute_and_display("obtain every peak_reported.")

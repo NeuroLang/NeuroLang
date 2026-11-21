@@ -113,6 +113,7 @@ class TestBuildParser:
         args = parser.parse_args(["--grammar-json"])
         assert args.grammar_json is True
 
+    @pytest.mark.squall
     def test_grammar_json_output(self, capsys):
         """main(["--grammar-json"]) prints the SQUALL grammar as JSON."""
         main(["--grammar-json"])
@@ -229,10 +230,12 @@ class TestEngineRegistry:
         assert set(nl.symbols["rel"].value) == {(1, "x")}
 
     def test_phase_relations_unsupported(self, tmp_path):
+        from neurolang.frontend import NeurolangPDL
+
         cfg = {"relations": {"rel": "r.txt"}}
         with pytest.raises(ValueError, match="Relation 'rel': Unsupported"):
             engine_registry._phase_relations(
-                None, cfg, "e", tmp_path, tmp_path
+                NeurolangPDL(), cfg, "e", tmp_path, tmp_path
             )
 
     def test_datalog_init_in_config(self):
@@ -852,6 +855,7 @@ class TestMiscGrammar:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.squall
 class TestSquallFlag:
     def test_squall_defaults_to_false(self):
         parser = _build_parser()
@@ -939,6 +943,7 @@ class TestShowRewrittenFlag:
         assert "magic" in captured.out
         assert result is not None
 
+    @pytest.mark.squall
     def test_show_rewritten_prints_for_squall(self, capsys):
         from neurolang.frontend import NeurolangDL
 
@@ -1178,6 +1183,7 @@ class TestShowRAFlag:
         main(["--show-ra"] + flags + ["ans(x) :- P(x)"])
         assert calls[0]["show_ra"] == options
 
+    @pytest.mark.squall
     def test_show_ra_squall_dry_run(self, engine_with_p, capsys):
         """
         Check that --show-ra with --squall prints the RA plan only.
@@ -1243,6 +1249,7 @@ class TestShowDatalogFlag:
         args = parser.parse_args([])
         assert args.show_datalog is False
 
+    @pytest.mark.squall
     def test_show_datalog_flag_long(self):
         parser = _build_parser()
         args = parser.parse_args(
@@ -1251,6 +1258,7 @@ class TestShowDatalogFlag:
         assert args.show_datalog is True
         assert args.squall is True
 
+    @pytest.mark.squall
     def test_show_datalog_flag_short(self):
         parser = _build_parser()
         args = parser.parse_args(
@@ -1259,12 +1267,14 @@ class TestShowDatalogFlag:
         assert args.show_datalog is True
         assert args.squall is True
 
+    @pytest.mark.squall
     def test_show_datalog_requires_squall(self):
         from neurolang_apps.utils.cli import main
 
         with pytest.raises(SystemExit):
             main(["--show-datalog", "ans(x) :- R(x)"])
 
+    @pytest.mark.squall
     def test_show_datalog_prints_ir(self, capsys):
         from neurolang_apps.utils.cli import _show_squall_datalog
 
@@ -1347,6 +1357,7 @@ class TestFormatIR:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.squall
 class TestExecuteSquallProgram:
 
     """Integration tests with a real NeurolangPDL engine and squall queries."""
@@ -1518,12 +1529,14 @@ class TestErrorReporting:
         assert "a" in captured.out
         assert "error" not in captured.err.lower()
 
+    @pytest.mark.squall
     def test_squall_flag_selects_squall_hints(self, capsys):
         err = self.run_failing(capsys, "--squall", "get every item.")
         assert err.startswith("SQUALL parse error")
         assert "Use 'obtain' instead of 'get' in SQUALL." in err
         assert "':-'" not in err
 
+    @pytest.mark.squall
     def test_squall_unexpected_end_of_input(self, capsys):
         err = self.run_failing(
             capsys, "--squall", "obtain every item that plays and"
@@ -1663,6 +1676,7 @@ class TestResultToDataFrame:
         assert "sort column 'y' not found" in capsys.readouterr().err
 
 
+@pytest.mark.squall
 def test_squall_obtain_relation_uses_declared_column_names(
     monkeypatch, capsys
 ):
@@ -1754,6 +1768,7 @@ class TestResultToDataFrameUsesBackendFrame:
         assert result_to_dataframe(full).values.tolist() == [[1, "a"]]
 
 
+@pytest.mark.squall
 @pytest.mark.parametrize(
     "program, expected",
     [
@@ -1772,6 +1787,7 @@ def test_squall_column_names_follow_the_obtained_noun(program, expected):
     assert {k: v for k, v in names.items()} == expected
 
 
+@pytest.mark.squall
 def test_squall_column_names_keep_user_variables():
     """Check a user-named variable keeps its name in the result."""
     import pandas as pd
@@ -1795,6 +1811,7 @@ _SELECTED = (
 )
 
 
+@pytest.mark.squall
 @pytest.mark.parametrize(
     "program, expected",
     [
@@ -1843,6 +1860,7 @@ def test_squall_column_names_of_generated_columns(program, expected):
     assert squall_column_names("neurosynth", program) == expected
 
 
+@pytest.mark.squall
 def test_squall_column_names_of_rules_defined_before():
     """Check a rule defined by an earlier program names its columns."""
     from neurolang_apps.utils.cli import squall_column_names

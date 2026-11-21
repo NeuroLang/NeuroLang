@@ -23,6 +23,7 @@ from nl_expr.expressions import (
 )
 from nl_expr.utils.orderedset import OrderedSet
 from ..utils.relational_algebra_set import (
+    ColumnwiseFunction,
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
     RelationalAlgebraSet,
@@ -33,6 +34,29 @@ from ..utils.relational_algebra_set import (
 
 eq_ = Constant(operator.eq)
 COUNT = Constant(len)
+
+#: The operators numpy applies to whole columns as to single values.
+COLUMNWISE_OPERATORS = frozenset((
+    operator.add, operator.sub, operator.mul, operator.truediv,
+    operator.floordiv, operator.mod, operator.pow, operator.neg,
+    operator.lt, operator.le, operator.gt, operator.ge, operator.eq,
+    operator.ne, operator.and_, operator.or_, operator.invert,
+))
+
+
+def is_columnwise(expression) -> bool:
+    """Whether every function *expression* applies is a numpy operator or
+    a function marked ``columnwise`` (whose arguments may be arrays, as
+    ``euclidean``): it can then be computed on whole columns at once."""
+    for _, sub in ew.expression_iterator(expression):
+        if isinstance(sub, FunctionApplication):
+            function = getattr(sub.functor, "value", None)
+            if not (
+                function in COLUMNWISE_OPERATORS
+                or getattr(function, "columnwise", False)
+            ):
+                return False
+    return True
 
 
 class Column:
@@ -816,7 +840,9 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(Constant[str])
     def process_constant_str(self, cst):
-        value = cst.value.replace('"', r'\"')
+        # A Python string literal of the value: its backslashes escaped
+        # first, else one ending it (``'a\'``) would escape its quote.
+        value = cst.value.replace("\\", "\\\\").replace('"', r'\"')
         value = f'"{value}"'
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(value),
@@ -907,7 +933,9 @@ class RelationalAlgebraSolver(
         compiled_formula = self._compile_function_application_to_sql_fun_exp(
             selection.formula
         )
-        if callable(compiled_formula):
+        if callable(compiled_formula) and not isinstance(
+            compiled_formula, ColumnwiseFunction
+        ):
             fun, args = self._fa_2_lambda.walk(
                 self._rccsbs.walk(selection.formula)
             )
@@ -1129,6 +1157,10 @@ class RelationalAlgebraSolver(
                 return self._saw.walk(fun_exp).value
             except NeuroLangPatternMatchingNoMatch:
                 fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
+                if is_columnwise(fun_exp):
+                    # once on the columns, not once a row: euclidean over
+                    # the 508 000 peaks of Neurosynth, 14 s a row at a time
+                    return ColumnwiseFunction(fun, args)
                 return lambda t: fun(
                     **{arg: getattr(t, arg) for arg in args}
                 )

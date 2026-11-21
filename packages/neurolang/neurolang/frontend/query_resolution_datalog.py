@@ -37,7 +37,11 @@ from nl_expr import expressions as ir
 from nl_expr import logic
 from nl_core.datalog.chase import Chase
 from nl_core.datalog.constraints_representation import RightImplication
-from nl_core.datalog.exceptions import InvalidMagicSetError
+from nl_core.datalog.exceptions import (
+    InvalidMagicSetError,
+    NewRecursionInMagicSetsRewriteError,
+    NoConstantPredicateFoundError,
+)
 from nl_core.datalog.expression_processing import (
     remove_conjunction_duplicates,
     stratify,
@@ -75,6 +79,7 @@ from nl_core.datalog.wrapped_collections import (
 )
 from nl_core.datalog.horn_clauses import Fol2DatalogTranslationException
 from . import query_resolution_expressions as fe
+from .datalog.syntax_preprocessing import rule_to_datalog
 from .show_ra import (
     generated_query_symbol,
     print_deterministic_ra_plan,
@@ -419,20 +424,28 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             if isinstance(rule, ir.Query)
         ]
         if len(queries) == 0:
-            self._walk_program(intermediate_representation.formulas)
+            self._walk_program(
+                self._typed_rules(intermediate_representation.formulas)
+            )
             return
         elif len(queries) == 1:
+            # The query in Datalog, as the other rules: an exists(...) of
+            # its body becomes rules, which the program gets.
+            rule, helpers = rule_to_datalog(logic.Implication(
+                queries[0].head, queries[0].body
+            ), self.symbol_table)
+            rule, types = self._resolve_types(rule)
+            helpers = helpers + types
+            query = ir.Query(rule.consequent, rule.antecedent)
             counts = self._rule_counts()
-            self._walk_program(
-                [
-                    rule
-                    for rule in intermediate_representation.formulas
-                    if not isinstance(rule, ir.Query)
-                ]
-            )
+            self._walk_program(self._typed_rules([
+                rule
+                for rule in intermediate_representation.formulas
+                if not isinstance(rule, ir.Query)
+            ]) + helpers)
             self._warn_added_rules(counts)
             query = self.frontend_translator.walk(
-                self._expand_resamplings(queries[0])
+                self._expand_resamplings(query)
             )
             return self.query(
                 query.head.arguments, query.body,
@@ -575,6 +588,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             for symbol, rules in self.program_ir.intensional_database().items()
         }
 
+    def _resolve_types(self, rule):
+        """The rule of a query and the rules it needs, with the classes its
+        ``rdf:type`` atoms name, in a frontend with ontologies."""
+        return rule, []
+
+    def _typed_rules(self, rules):
+        """The rules of a program, those with ``rdf:type`` atoms with the
+        classes they name, in a frontend with ontologies."""
+        return list(rules)
+
     def _warn_added_rules(self, counts):
         """
         Warn that a query's rules were added to predicates that had
@@ -583,6 +606,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         added = sorted({
             symbol.name for symbol, count in self._rule_counts().items()
             if counts.get(symbol, count) < count
+            # the types a program states add to those of the ontologies
+            and symbol.name != getattr(self, "_type_predicate", None)
         })
         if added:
             warnings.warn(
@@ -1329,6 +1354,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             goal, mr = magic_rewrite(
                 query_expression.consequent, self.program_ir
             )
+        except (
+            NewRecursionInMagicSetsRewriteError, NoConstantPredicateFoundError
+        ):
+            # not seeding only binds less: it would bind nothing either,
+            # and it would not undo a recursion of the rewrite's own
+            raise
         except InvalidMagicSetError:
             goal, mr = magic_rewrite(
                 query_expression.consequent, self.program_ir,
@@ -1465,15 +1496,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def document_predicate(
         self, name: str, description: str,
-        arguments: Iterable[Tuple[str, str]] = (),
+        arguments: Iterable[Tuple[str, str]] = (), replace: bool = False,
     ) -> None:
         """
         Document the predicate *name* with its *description* and its
         *arguments*, ``(name, sort)`` pairs, as a ``%%`` block before its
-        rule does (see :meth:`predicate_documentation`).
+        rule does (see :meth:`predicate_documentation`); with *replace*,
+        in place of the description it had.
         """
         self.program_ir.walk(
-            documentation_command(name, description, arguments)
+            documentation_command(name, description, arguments, replace)
         )
 
     def predicate_parameter_names(

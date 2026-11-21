@@ -11,6 +11,7 @@ from nl_expr.exceptions import NeuroLangException
 from typing import Any, Tuple, TypeVar
 import types
 from warnings import warn
+from weakref import WeakKeyDictionary
 
 from . import expressions
 from .type_system import replace_type_variable
@@ -262,6 +263,33 @@ def add_entry_point_match(pattern, guard=None):
     return bind_entry_point_match
 
 
+def _could_match(pattern, expression_type):
+    """
+    Whether ``pattern`` may match an expression of class
+    ``expression_type``: False only when that class rules it out, which
+    :meth:`PatternMatcher.pattern_match` would find for every such
+    expression.  An Expression class or instance matches only expressions
+    whose class is a subclass of its generic class, and a tuple only a
+    tuple; ``...`` and any other pattern stay.
+    """
+    if isclass(pattern) and issubclass(pattern, expressions.Expression):
+        base = pattern
+    elif isinstance(pattern, expressions.Expression):
+        base = type(pattern)
+    elif isinstance(pattern, tuple):
+        return issubclass(expression_type, tuple)
+    else:
+        return True
+    return issubclass(
+        expression_type, getattr(base, '__generic_class__', base)
+    )
+
+
+# For each pattern matcher class, its patterns in order and, by class of
+# expression, those that may match it: fixed once the class is made.
+_DISPATCH = WeakKeyDictionary()
+
+
 class PatternMatcher(metaclass=PatternMatchingMetaClass):
     """Class for expression pattern matching."""
 
@@ -281,10 +309,30 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
         - ``action``: is the method receiving the matching ``expression``
           instance to be executed upon pattern and match being ``True``.
         """
-        return chain(*(
-            pm.__patterns__ for pm in self.__class__.mro()
-            if hasattr(pm, '__patterns__')
-        ))
+        return iter(self._dispatch()[0])
+
+    def _dispatch(self):
+        """The patterns of this class in order, and the cache of those
+        that may match each class of expression."""
+        cls = self.__class__
+        dispatch = _DISPATCH.get(cls)
+        if dispatch is None:
+            dispatch = _DISPATCH[cls] = (tuple(chain(*(
+                pm.__patterns__ for pm in cls.mro()
+                if hasattr(pm, '__patterns__')
+            ))), {})
+        return dispatch
+
+    def _candidate_patterns(self, expression):
+        """The patterns, in order, that may match ``expression``."""
+        patterns, by_type = self._dispatch()
+        expression_type = type(expression)
+        candidates = by_type.get(expression_type)
+        if candidates is None:
+            candidates = by_type[expression_type] = tuple(
+                p for p in patterns if _could_match(p[0], expression_type)
+            )
+        return candidates
 
     def match(self, expression):
         """Find the action for a given expression by going through the ``patterns``.
@@ -293,11 +341,22 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
         specified by the first satisfied triplet.
         """
 
+        if LOG.isEnabledFor(logging.INFO):
+            return self._match_logged(expression)
+        for pattern, guard, action in self._candidate_patterns(expression):
+            if self.pattern_match(pattern, expression) and (
+                guard is None or guard(expression)
+            ):
+                return action(self, expression)
+        raise NeuroLangPatternMatchingNoMatch(f'No match for {expression}')
+
+    def _match_logged(self, expression):
+        """:meth:`match`, logging each pattern tried."""
         LOG.info(
             '\033[1m\033[91mExpression\033[0m: %(expression)s',
             {'expression': expression}
         )
-        for pattern, guard, action in self.patterns:
+        for pattern, guard, action in self._candidate_patterns(expression):
             name = '\033[1m\033[91m' + action.__qualname__ + '\033[0m'
             pattern_match = self.pattern_match(pattern, expression)
             guard_match = pattern_match and (
@@ -373,11 +432,12 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
             log_message = "\t\t\t\tMatch other %(pattern)s vs %(expression)s",
             result = pattern == expression
 
-        LOG.log(
-            FINEDEBUG,
-            log_message,
-            {'expression': expression, 'pattern': pattern}
-        )
+        if log_message is not None and LOG.isEnabledFor(FINEDEBUG):
+            LOG.log(
+                FINEDEBUG,
+                log_message,
+                {'expression': expression, 'pattern': pattern}
+            )
 
         return result
 

@@ -36,13 +36,18 @@ from nl_core.datalog.constraints_representation import (
     RightImplication,
     iter_implications,
 )
-from nl_core.datalog.exceptions import InvalidMagicSetError
+from nl_core.datalog.exceptions import (
+    InvalidMagicSetError,
+    NewRecursionInMagicSetsRewriteError,
+    NoConstantPredicateFoundError,
+)
 from nl_expr.exceptions import SymbolNotFoundError
 from nl_core.datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
     InlineEqualityConstantsMixin,
     extract_logic_atoms,
     is_aggregation_rule,
+    reachable_code,
 )
 from nl_core.datalog.magic_sets import magic_rewrite
 from nl_core.datalog.negation import DatalogProgramNegationMixin
@@ -56,15 +61,18 @@ from nl_core.datalog.ontologies_rewriter import (
 )
 
 from nl_expr.exceptions import (
+    NeuroLangException,
     UnsupportedQueryError,
     UnsupportedSolverError,
     UnsupportedProgramError,
 )
 from nl_expr.expression_walker import (
     ExpressionBasicEvaluator,
+    ReplaceExpressionWalker,
     TypedSymbolTableMixin,
 )
-from nl_expr.logic import Implication, Union, Symbol
+from nl_expr.expressions import Constant
+from nl_expr.logic import Conjunction, Implication, Union, Symbol
 from nl_expr.logic.expression_processing import extract_logic_free_variables
 from nl_core.probabilistic import (
     dalvi_suciu_lift,
@@ -74,6 +82,7 @@ from nl_core.probabilistic.cplogic.program import CPLogicMixin
 from nl_core.probabilistic.expressions import PROB, Condition
 from .resampling import (
     ResampledProgram,
+    relation_sums,
     resampling_relation,
     rewrite_resample_markers,
 )
@@ -117,7 +126,10 @@ from .datalog.sugar.spatial import (
     TranslateEuclideanDistanceBoundMatrixMixin,
     TranslateRegionDestroy,
 )
-from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
+from .datalog.syntax_preprocessing import (
+    ProbFol2DatalogMixin,
+    rule_to_datalog,
+)
 from .type_resolution import ProbabilisticTypeResolutionMixin
 from .datalog.squall import (
     CheckPredicateArities,
@@ -272,6 +284,13 @@ class NeurolangPDL(QueryBuilderDatalog):
         self.current_program_rewritten = None
         # The names of the predicates the loaded ontologies define.
         self.ontology_predicates = set()
+        # The predicate of rdf:type, and the predicate of each class of
+        # the ontologies by its IRI (see _type_bridges).
+        self._type_predicate = None
+        self._class_names = {}
+        # The (individual, class IRI) of the rdf:type facts of the files.
+        self._stated_types = set()
+        self._bridging = False
         self.check_qbased_pfact_tuple_unicity = (
             check_qbased_pfact_tuple_unicity
         )
@@ -285,6 +304,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         format=None,
         individuals=False,
         names="local",
+        prefixes=None,
     ) -> None:
         """
         Loads and parses ontology stored at the specified paths, and
@@ -309,8 +329,13 @@ class NeurolangPDL(QueryBuilderDatalog):
         names : str
             ``local`` names classes and properties by their local name
             (``Dean``, ``rdf-schema:label``); ``prefixed`` by the
-            prefixes the files declare (``pv:name``, ``rdfs:label``),
-            else by their full IRI.
+            prefixes the files declare (``pv:name``, ``rdfs:label``)
+            and the ``prefixes``, else by their full IRI.
+        prefixes : dict, optional
+            more prefixes for ``names="prefixed"``, from prefix to
+            namespace, such as ``{"cogat":
+            "http://www.cognitiveatlas.org/ontology/cogat.owl#"}`` for a
+            file that declares none for it.
 
         Returns
         -------
@@ -325,6 +350,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         onto = OntologyParser(
             paths, connector_symbol=self.connector_symbol.expression,
             load_format=format, individuals=individuals, names=names,
+            prefixes=prefixes,
         )
         constraints, est_knowledge, entity_rules = onto.parse_ontology()
         self.ontology_predicates.update(constraints)
@@ -343,15 +369,203 @@ class NeurolangPDL(QueryBuilderDatalog):
         for symbol, expressions in entity_rules.items():
             for e in expressions:
                 self.program_ir.walk(e)
+        self._class_names.update(onto.class_names())
         if individuals:
+            self._type_predicate = onto.type_name()
+            classes = set(self._class_names.values())
             for name, rows in onto.parse_individuals().items():
-                self.add_tuple_set(rows, name=name)
+                if name in classes:
+                    # the instances of a class are its rdf:type facts,
+                    # through _type_bridges, as those the program states
+                    continue
+                if name == self._type_predicate:
+                    self._add_stated_types(rows)
+                else:
+                    self.add_tuple_set(rows, name=name)
                 self.ontology_predicates.add(name)
 
         self._rewrite_det_idb.cache_clear(self)
         self._constraints_that_can_hold.cache_clear(self)
         self._projecting_rewritings.cache_clear(self)
         return self.connector_symbol
+
+    def _add_stated_types(self, rows):
+        """The ``rdf:type`` facts of the files, in a relation of their
+        own that a rule of ``rdf:type`` reads: the rules of a program can
+        state more types, ``rdf:type(e, t) :- …``."""
+        stated = Symbol(f"{self._type_predicate}@files")
+        self.add_tuple_set(rows, name=stated.name)
+        self._stated_types |= {
+            (x, c) for x, c in rows if c in self._class_names
+        }
+        x, c = Symbol.fresh(), Symbol.fresh()
+        self.program_ir.walk(Union((Implication(
+            Symbol(self._type_predicate)(x, c), stated(x, c)
+        ),)))
+
+    def _closed_world_rows(self, body, variables):
+        """The rows of ``variables`` in ``body``, by the rules and facts of
+        the program alone: the ontologies' constraints do not apply, and
+        none of their predicates may be reached."""
+        constrained = {
+            symbol for symbol in self.program_ir.constraints()._symbols
+        }
+        with self.scope:
+            fresh = Symbol.fresh()
+            self.program_ir.walk(Union((Implication(fresh(*variables), body),)))
+            rule = self.program_ir.symbol_table[fresh].formulas[0]
+            rules = reachable_code(rule, self.program_ir)
+            reached = {
+                atom.functor for r in rules.formulas
+                for atom in extract_logic_atoms(r.antecedent)
+            }
+            if reached & constrained:
+                return None
+            solution = self.chase_class(
+                self.program_ir, rules=rules
+            ).build_chase_solution()
+            relation = solution.get(fresh)
+            if relation is None:
+                return set()
+            return {
+                tuple(row)
+                for row in relation.value.unwrap()
+            }
+
+    def _type_bridges(self):
+        """
+        The rules that make the instances of the classes of the
+        ontologies from ``rdf:type``, RDF's meaning of it: ``C(x) :-
+        rdf:type@files(x, <C>)`` for the types the files state, and, for a
+        rule ``rdf:type(x, t) :- body`` of the program, ``C(x) :- body``
+        with ``t`` the IRI of ``C``.  Only for the classes of which they
+        give an instance: the rewriting drops the rewritings over the
+        others.  Each class takes its instances from the data that type
+        them, of whatever type their values are.
+        """
+        if (
+            self._type_predicate is None
+            or "__constraints__" not in self.symbol_table
+        ):
+            return ()
+        x = Symbol.fresh()
+        stated = Symbol(f"{self._type_predicate}@files")
+        bridges = [
+            Implication(
+                Symbol(self._class_names[iri])(x),
+                stated(x, Constant[str](iri)),
+            )
+            for iri in sorted({c for _, c in self._stated_types})
+        ]
+        rules = self.program_ir.symbol_table.get(
+            Symbol(self._type_predicate)
+        )
+        for rule in getattr(rules, "formulas", ()):
+            if stated in rule.antecedent._symbols:
+                continue
+            instance, iri_term = rule.consequent.args
+            rows = self._closed_world_rows(
+                rule.antecedent, tuple(
+                    a for a in (instance, iri_term) if isinstance(a, Symbol)
+                ),
+            )
+            if rows is None:
+                raise NeuroLangException(
+                    f"{self._type_predicate} is defined from a predicate the "
+                    "ontology constrains: the types of the program must "
+                    "come from its data"
+                )
+            if isinstance(iri_term, Symbol):
+                iris = {row[-1] for row in rows}
+            else:
+                iris = {iri_term.value} if rows else set()
+            for iri in sorted(i for i in iris if i in self._class_names):
+                bridges.append(Implication(
+                    Symbol(self._class_names[iri])(instance),
+                    ReplaceExpressionWalker(
+                        {iri_term: Constant[str](iri)}
+                    ).walk(rule.antecedent) if isinstance(iri_term, Symbol)
+                    else rule.antecedent,
+                ))
+        return tuple(bridges)
+
+    def _typed_rules(self, rules):
+        """The ``rules`` of a program, those with an ``rdf:type`` atom in
+        their body translated to Datalog and with the classes they name
+        (:meth:`_resolve_types`), with the rules they need."""
+        if self._type_predicate is None:
+            return list(rules)
+        typed = []
+        for rule in rules:
+            if not isinstance(rule, Implication) or self._type_predicate not in {
+                getattr(atom.functor, "name", None)
+                for atom in extract_logic_atoms(rule.antecedent)
+                if hasattr(atom, "functor")
+            }:
+                typed.append(rule)
+                continue
+            translated, needed = rule_to_datalog(rule, self.symbol_table)
+            resolved, more = self._resolve_types(translated)
+            typed += [resolved] + needed + more
+        return typed
+
+    def _resolve_types(self, rule):
+        """
+        The rule ``rule`` of a query with ``rdf:type(v, k)``, ``k`` fixed
+        by atoms of the query without ``v`` and with no other variable, as
+        ``cogat_term(k, 'response inhibition')``, as the rule of the class
+        they name: ``C(v)``, which the ontology's constraints apply to,
+        an unnamed ``v`` included.  Rules defining the query's head, one
+        for each class when they name several, and the rules they need.
+        """
+        if self._type_predicate is None:
+            return rule, []
+        formulas = list(getattr(rule.antecedent, "formulas", (rule.antecedent,)))
+        for atom in formulas:
+            if (
+                getattr(getattr(atom, "functor", None), "name", None)
+                != self._type_predicate
+                or not all(isinstance(a, Symbol) for a in atom.args)
+            ):
+                continue
+            v, k = atom.args
+            lookups = [
+                f for f in formulas
+                if f is not atom and k in f._symbols and v not in f._symbols
+            ]
+            if not lookups or any(
+                set(extract_logic_free_variables(f)) != {k} for f in lookups
+            ):
+                continue
+            body = lookups[0] if len(lookups) == 1 else Conjunction(
+                tuple(lookups)
+            )
+            rows = self._closed_world_rows(body, (k,))
+            if not rows or any(row[0] not in self._class_names for row in rows):
+                continue
+            rules = [
+                Implication(
+                    rule.consequent,
+                    Conjunction(tuple(
+                        Symbol(self._class_names[iri])(v) if f is atom
+                        else ReplaceExpressionWalker(
+                            {k: Constant[str](iri)}
+                        ).walk(f)
+                        for f in formulas
+                    )),
+                )
+                for iri, in sorted(rows)
+            ]
+            if len(rules) == 1:
+                return rules[0], []
+            head = rule.consequent
+            if not all(isinstance(a, Symbol) for a in head.args):
+                continue
+            union = Symbol.fresh()
+            return Implication(head, union(*head.args)), [
+                Implication(union(*head.args), r.antecedent) for r in rules
+            ]
+        return rule, []
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -479,6 +693,19 @@ class NeurolangPDL(QueryBuilderDatalog):
             S{Z: Unknown}
         )
         """
+        if not self._bridging:
+            bridges = self._type_bridges()
+            if bridges:
+                self._bridging = True
+                try:
+                    with self.scope:
+                        self.program_ir.walk(Union(bridges))
+                        return self._execute_query(
+                            head, predicate, show_rewritten=show_rewritten,
+                            dry_run=dry_run, show_ra=show_ra,
+                        )
+                finally:
+                    self._bridging = False
         if _has_probability(head):
             return self._execute_probabilistic_head_query(
                 head, predicate, show_rewritten=show_rewritten,
@@ -838,6 +1065,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         try:
             return self._magic_rewrite_query_seeded(query, True)
         except (
+            NewRecursionInMagicSetsRewriteError, NoConstantPredicateFoundError
+        ):
+            # not seeding only binds less: it would bind nothing either,
+            # and it would not undo a recursion of the rewrite's own
+            raise
+        except (
             InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError
         ):
             return self._magic_rewrite_query_seeded(query, False)
@@ -1189,7 +1422,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 _split_aggregation(rule, constraints)
                 for rule in deterministic_program.formulas
             ), ())),
-            constraints, chased=True,
+            constraints, chased=True, holds=holds,
         ).Xrewrite()
         projecting, valued = self._projecting_rewritings(holds)
         return Union(chase_rules(
@@ -1363,7 +1596,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         choice : str
             name of a probabilistic choice of the program.
         n : int, optional
-            number of replicates, by default 1000.
+            number of replicates, at least 1, by default 1000.
         scheme : str, optional
             ``"bayesian"`` (Dirichlet weights, the Bayesian bootstrap),
             ``"multinomial"`` (the classical bootstrap) or ``"poisson"``,
@@ -1394,10 +1627,22 @@ class NeurolangPDL(QueryBuilderDatalog):
         choices = self.program_ir.probabilistic_choices()
         if choice_symbol not in choices:
             raise ValueError(f"{choice} is not a probabilistic choice")
+        if n < 1:
+            raise ValueError(f"A resampling needs replicates, not n={n}")
         rows = choices[choice_symbol].value.as_pandas_dataframe()
-        relation, sums = resampling_relation(rows, n, scheme, seed)
+
+        def compute():
+            return resampling_relation(rows, n, scheme, seed)
+
+        # The replicates follow from the choice and the draws only: a
+        # program may keep them (``derived_tables``, an engine's build), as
+        # it keeps the pairs of a Euclidean bound.
+        derived = getattr(self.program_ir, "derived_tables", None)
+        relation = compute() if derived is None else derived(
+            "resampling", [rows], (n, scheme, seed), compute
+        )
         symbol = self.add_tuple_set(relation, name=name)
-        self.resamplings[name] = choice_symbol, sums
+        self.resamplings[name] = choice_symbol, relation_sums(relation, n)
         return symbol
 
     def _expand_resamplings(self, rule):

@@ -2,32 +2,38 @@
 Sessions of the REPL page, each in a process of its own, for the users of
 ``neurolang-repl-serve --local --users FILE``.
 
-The server's process answers the pages; a *builder* process, started
-fresh (``spawn``) before the server answers anything, builds each engine
-once, then forks a process per session from it: the sessions share the
-memory of the engine's data, as the pages of a fork do until they are
-written, and each has its own rules, AI assistant and requests. A session
-is that of a tab of a user: its key is (user, the tab's id). Its process
-talks to the server through a socket of this machine; a stop kills it (the
-page starts a session again), as does a session idle for too long.
+The server's process answers the pages; a *coordinator* process, started
+fresh (``spawn``) before the server answers anything, starts a *builder*
+process per engine, anew too, which builds the engine once, then forks a
+process per session from it: the sessions share the memory of the engine's
+data, as the pages of a fork do until they are written, and each has its
+own rules, AI assistant and requests. A build does not hold up the
+sessions of the engines built, nor does the end of a builder those of the
+other engines. A session is that of a tab of a user: its key is (user, the
+tab's id). Its process talks to the server through a socket of this
+machine; a stop kills it (the page starts a session again), as does a
+session idle for too long.
 
 :class:`Sessions` is what the server holds; its :meth:`Sessions.session`
 is a :class:`Session`, which answers as a
 :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend` does.
 """
 
+import ctypes
 import gc
 import itertools
 import json
 import multiprocessing
 import os
+import shutil
 import signal
 import sys
 import threading
 import time
 import traceback
-from multiprocessing.connection import Client, Listener
-from typing import Callable, Optional
+from multiprocessing.connection import Client, Listener, wait
+from pathlib import Path
+from typing import Callable, Optional, Tuple
 
 from neurolang.confine import lifted
 from neurolang_apps.utils.tui.local_backend import LocalBackend
@@ -81,40 +87,303 @@ def process_usage(pid: int, memory: bool = True) -> Optional[dict]:
     }
 
 
-# -- In the builder's process ---------------------------------------------
+# -- In the processes of the builders ---------------------------------------
+
+def _anonymous_memory() -> int:
+    """The memory of this process of its own (``RssAnon``) in bytes, on
+    Linux (0 elsewhere): not the pages of files it maps, which the system
+    may drop and read again."""
+    try:
+        with open("/proc/self/status") as status:
+            for line in status:
+                if line.startswith("RssAnon:"):
+                    return int(line.split()[1]) * 1024
+    except OSError:
+        pass
+    return 0
+
+
+def available_memory() -> Optional[Tuple[int, int]]:
+    """
+    Return the memory this process may still take and all the memory it
+    may take, in bytes: the machine's (``MemAvailable``, ``MemTotal``), or
+    that its control group and those above it leave, the tightest limit
+    (``memory.max`` less ``memory.current``, cgroup v2: a service's slice,
+    a batch job's). None where it cannot be read (not Linux).
+    """
+    try:
+        info = {}
+        with open("/proc/meminfo") as meminfo:
+            for line in meminfo:
+                name, value = line.split(":", 1)
+                info[name] = int(value.split()[0]) * 1024
+        available, total = info["MemAvailable"], info["MemTotal"]
+    except (OSError, KeyError, ValueError):
+        return None
+    try:
+        with open("/proc/self/cgroup") as cgroup:
+            path = next(line.split("::", 1)[1].strip() for line in cgroup
+                        if line.startswith("0::"))
+    except (OSError, StopIteration):
+        return available, total
+    root = Path("/sys/fs/cgroup")
+    group = root / path.lstrip("/")
+    while group != root and root in group.parents:
+        try:
+            limit = (group / "memory.max").read_text().strip()
+            if limit != "max":
+                used = int((group / "memory.current").read_text())
+                # less the pages of files not used lately, which the system
+                # takes back before it kills
+                for line in (group / "memory.stat").read_text().splitlines():
+                    if line.startswith("inactive_file "):
+                        used -= int(line.split()[1])
+                total = min(total, int(limit))
+                available = min(available, int(limit) - used)
+        except (OSError, ValueError):
+            pass
+        group = group.parent
+    return available, total
+
+
+def _room_for_another(grown: int, reserve: float,
+                      memory: Optional[Tuple[int, int]]) -> bool:
+    """Whether an engine may be built ahead: whether, after it takes one
+    and a half times the most a build took (*grown*, bytes), the fraction
+    *reserve* of the memory is left for the queries of the sessions.
+    Without the memory (*memory* None), or without a build before, yes."""
+    if memory is None or not grown:
+        return True
+    available, total = memory
+    return available - 1.5 * grown >= reserve * total
+
+
+def _headless() -> None:
+    """Draw with matplotlib without a window, in the builder and so in the
+    sessions forked from it: on macOS its default backend loads AppKit,
+    which aborts a forked process (a session drawing a glass brain)."""
+    os.environ["MPLBACKEND"] = "Agg"
+    try:
+        import matplotlib
+    except ImportError:
+        return
+    matplotlib.use("Agg")
+
 
 def _builder(conn, address, authkey, options: dict, build,
-             preload_embeddings: bool = True) -> None:
-    """Build the engines asked for, once each, and fork a session's
-    process from them for each ``("fork", key, start, engine, env)`` of
-    *conn* (*start* numbering each start of a session once, *env* the
-    variables of its user, *feedback* where its ratings go); end when the
-    server does. With *preload_embeddings*, an engine's text embeddings
-    are loaded before its first fork, for its sessions to share them."""
+             preload_embeddings: bool = True, reserve: float = 0.0) -> None:
+    """Coordinate the builders of the engines, a process each, started
+    anew (``spawn``, as this one, whose environment it has) at the first
+    request of its engine: :func:`_engine_builder` builds the engine once
+    and forks its sessions' processes. The requests of *conn* (see
+    :func:`_engine_builder`) go to their engine's builder, the messages of
+    the builders to *conn*, told first ``("builder", None, None, (engine,
+    pid))``. One engine builds at a time, in the order asked; the sessions
+    of an engine built fork at once, whatever builds meanwhile. A builder
+    that ends (killed, out of memory) fails the starts it had not
+    answered, is told (``ended``), and the next request of its engine
+    starts another; the others go on. End, with the builders, when the
+    server does. An engine asked to be built ahead only (``build``, with
+    no start waiting for it), when its turn comes, is built if, an engine
+    built before, it leaves the fraction *reserve* of the memory to the
+    sessions (:func:`available_memory`, :func:`_room_for_another`: a
+    build takes up to the most one did, ``grown``, its builder tells);
+    else it is ``skipped``, and built by its first session. The other
+    arguments are the builders' (see :func:`_engine_builder`)."""
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the builders reap
+    # It starts processes, which a daemon may not; it ends by os._exit.
+    multiprocessing.current_process().daemon = False
+    arguments = (address, authkey, options, build, preload_embeddings)
+    builders = {}  # by engine
+    try:
+        _coordinate(conn, builders, arguments, reserve)
+    except BaseException:
+        traceback.print_exc()
+    finally:
+        # However it ends, so do the builders, at once, rather than finish
+        # a build (and nothing waits for them).
+        for builder in builders.values():
+            builder.kill()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
+
+
+def _coordinate(
+    conn, builders: dict, arguments: tuple, reserve: float = 0.0
+) -> None:
+    """Pass the requests of *conn* to the *builders*, by engine, started
+    with *arguments* as needed, and their messages to *conn*, until the
+    server ends (see :func:`_builder`)."""
+    turns = []  # the engines whose build waits, in order
+    building = None
+    grown = 0  # the most memory a build took, in bytes
+    while True:
+        if building is None and turns:
+            building = turns.pop(0)
+            builder = builders[building]
+            memory = available_memory()
+            if builder.conn is None and all(
+                waiting[0] == "build" for waiting in builder.waiting
+            ) and not _room_for_another(grown, reserve, memory):
+                conn.send(("skipped", None, None, (
+                    f"{building}: {memory[0] / 2**30:.1f} GB free of "
+                    f"{memory[1] / 2**30:.1f} GB, a build takes up to "
+                    f"{grown / 2**30:.1f} GB and {reserve:.0%} stay for "
+                    "the queries")))
+                builder.waiting.clear()
+                building = None
+                continue
+            if builder.conn is None:
+                builder.start(building, arguments)
+                conn.send(("builder", None, None, (building, builder.pid)))
+            builder.send(builder.waiting.pop(0))
+        engines = {b.conn: e for e, b in builders.items() if b.conn}
+        for ready in wait([conn, *engines]):
+            if ready is conn:
+                try:
+                    message = conn.recv()
+                except (EOFError, OSError):
+                    return  # the server ended
+                engine = message[3]
+                builder = builders.setdefault(engine, _EngineBuilder())
+                if builder.built:
+                    if message[0] == "fork":  # a build of it is done
+                        builder.send(message)
+                    continue
+                builder.waiting.append(message)
+                if engine != building and engine not in turns:
+                    turns.append(engine)
+                continue
+            engine = engines[ready]
+            builder = builders[engine]
+            try:
+                message = ready.recv()
+            except (EOFError, OSError):  # the builder died
+                for key, start in builder.end():
+                    conn.send(("failed", key, start, f"The builder of "
+                               f"{engine} ended: see the server's log"))
+                conn.send(("ended", None, None, engine))
+                if engine == building:
+                    building = None
+                if builder.waiting and engine not in turns:
+                    turns.append(engine)
+                continue
+            kind, key, start, _ = message
+            if kind == "grown":  # the memory its build took
+                grown = max(grown, message[3])
+                continue
+            if kind != "status":
+                builder.sent.discard((key, start))
+                if engine == building:  # its build is over
+                    building = None
+                    builder.built = kind != "failed"
+                    if builder.built:
+                        for waiting in builder.waiting:
+                            if waiting[0] == "fork":
+                                builder.send(waiting)
+                        builder.waiting.clear()
+                    elif builder.waiting:  # tried again, in its turn
+                        turns.append(engine)
+            conn.send(message)
+
+
+class _EngineBuilder:
+    """In the coordinator (:func:`_builder`), the builder of an engine:
+    its connection and process, whether it built the engine, the requests
+    waiting for its build and the starts it has not answered."""
+
+    def __init__(self):
+        self.conn = self.pid = None
+        self.built = False
+        self.waiting = []
+        self.sent = set()
+
+    def start(self, engine: str, arguments: tuple) -> None:
+        """Start the builder of *engine*, :func:`_engine_builder` with
+        *arguments*. It is started anew rather than forked: on macOS, a
+        session forked from a forked process failed in CoreFoundation (it
+        crashed asking the system's proxies)."""
+        context = multiprocessing.get_context("spawn")
+        ours, theirs = context.Pipe()
+        process = context.Process(
+            target=_engine_builder, args=(theirs, engine, *arguments),
+            name=f"neurolang-repl-builder-{engine}")
+        process.start()
+        theirs.close()
+        self.conn, self.pid = ours, process.pid
+
+    def send(self, message) -> None:
+        if message[0] == "fork":
+            self.sent.add((message[1], message[2]))
+        try:
+            self.conn.send(message)
+        except OSError:  # it died: its end is read next
+            pass
+
+    def end(self) -> set:
+        """Forget the process, ended; return the starts it left
+        unanswered."""
+        self.conn.close()
+        self.conn = self.pid = None
+        self.built = False
+        sent, self.sent = self.sent, set()
+        return sent
+
+    def kill(self) -> None:
+        if self.pid is not None:
+            _kill(self.pid)
+
+
+def _engine_builder(conn, engine: str, address, authkey, options: dict,
+                    build, preload_embeddings: bool) -> None:
+    """Build *engine* at the first request of *conn* (again at the next,
+    if it failed), with *build* (see :class:`Sessions`), then fork a
+    session's process from it for each
+    ``("fork", key, start, engine, env, feedback)`` (*start* numbering each
+    start of a session once, *env* the variables of its user, *feedback*
+    where its ratings go); for a ``("build", None, None, engine, None,
+    None)``, build it only, and tell it (``built`` or ``failed``, without
+    a key), and, after it, ``("grown", None, None, bytes)``, the memory
+    of its own the build took (:func:`_anonymous_memory`); end when the
+    coordinator does. With *preload_embeddings*, the engine's text
+    embeddings are loaded before its first fork, for its sessions to
+    share them."""
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)  # the sessions reap
+    _headless()
     backend = LocalBackend(build=build,
                            preload_embeddings=preload_embeddings, **options)
-    engines = {}
+    nl = None
     while True:
         try:
-            _, key, start, engine, env, feedback = conn.recv()
+            kind, key, start, _, env, feedback = conn.recv()
         except (EOFError, OSError):
-            # The server ended: so does the builder, at once, rather than
-            # wait for threads that building an engine may have left.
+            # The coordinator ended: so does the builder, at once, rather
+            # than wait for threads that building an engine may have left.
             os._exit(0)
-        try:
-            if engine not in engines:
+        if nl is None:
+            try:
+                began, before = time.monotonic(), _anonymous_memory()
                 with lifted():  # the engine's commands are the server's
-                    engines[engine] = backend.build(
+                    nl = backend.build(
                         engine,
                         lambda text: conn.send(("status", key, start, text)),
                     )
+                gc.collect()
+                conn.send((
+                    "grown", None, None, max(0, _anonymous_memory() - before)
+                ))
                 gc.freeze()  # a session's process then writes fewer pages
                 _warn_of_threads(engine)
-        except Exception as error:
-            traceback.print_exc()
-            conn.send(("failed", key, start,
-                       f"{type(error).__name__}: {error}"))
+            except Exception as error:
+                traceback.print_exc()
+                conn.send(("failed", key, start,
+                           f"{type(error).__name__}: {error}"))
+                continue
+            if kind == "build":
+                conn.send(("built", None, None, f"{engine} in "
+                           f"{time.monotonic() - began:.0f} s"))
+        if kind == "build":
             continue
         pid = os.fork()
         if pid == 0:
@@ -123,7 +392,9 @@ def _builder(conn, address, authkey, options: dict, build,
             try:
                 _session(address, authkey, key, start, env,
                          {**options, "feedback": feedback or
-                          options["feedback"]}, engines[engine])
+                          options["feedback"],
+                          "uploads": _session_uploads(options, start)},
+                         nl)
                 code = 0
             except BaseException:
                 traceback.print_exc()
@@ -132,6 +403,16 @@ def _builder(conn, address, authkey, options: dict, build,
                 sys.stderr.flush()
                 os._exit(code)
         conn.send(("forked", key, start, pid))
+
+
+def _session_uploads(options: dict, start: int) -> dict:
+    """Return where the uploads of the session started *start* go: the
+    folder of that number of the uploads directory, if the server has one
+    (see :class:`Sessions`), and how large they may be."""
+    uploads = dict(options.get("uploads") or {})
+    if uploads.get("directory"):
+        uploads["directory"] = os.path.join(uploads["directory"], str(start))
+    return uploads
 
 
 def _warn_of_threads(engine: str) -> None:
@@ -146,6 +427,22 @@ def _warn_of_threads(engine: str) -> None:
         print(f"Building {engine} left {threads - 1} threads in the "
               "builder: a session's process may hang", file=sys.stderr,
               flush=True)
+
+
+def free_memory() -> None:
+    """
+    Free what a query left in a session's process: the cycles of the
+    objects of its solving (``gc.collect``), then, on Linux, give the
+    memory freed back to the system (glibc's ``malloc_trim``). A session
+    that decoded an image on ``neurosynth_iit`` keeps 90 MB of its own
+    instead of 812 MB, for 13 ms; the builder's objects, frozen before
+    the fork, are not looked through.
+    """
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):  # not glibc
+        pass
 
 
 def _session(address, authkey, key, start: int, env: dict, options: dict,
@@ -178,6 +475,8 @@ def _session(address, authkey, key, start: int, env: dict, options: dict,
         except BaseException as error:
             send(("reply", request, False,
                   f"{type(error).__name__}: {error}"))
+        if method == "submit":  # once replied: the page does not wait
+            free_memory()
 
     while True:
         try:
@@ -219,6 +518,7 @@ class Session:
         self._lock = threading.Lock()  # a process attaches, or it ends
         self._forked = threading.Event()
         self._failure: Optional[str] = None
+        self._failure_type = RuntimeError
         self._replies = {}
         self._requests = itertools.count()
         self._listeners = []
@@ -245,10 +545,26 @@ class Session:
             for listener in self._listeners:
                 listener.put(text)
 
+    def _wait_for_preparation(self, engine: str) -> None:
+        """Wait until the server has prepared *engine* (see
+        :attr:`Sessions.preparing`), telling the page; the session may
+        end meanwhile."""
+        preparing = self.sessions.preparing
+        if preparing is None or preparing.wait(engine, 0):
+            return
+        self.emit_text(json.dumps({
+            "type": "status",
+            "message": f"The server is preparing the engine {engine}…",
+        }))
+        while not preparing.wait(engine, 5):
+            if self.sessions.dead or not self.sessions._owns(self):
+                self.end("ended while it waited for its engine")
+
     # The requests of the page.
 
-    def start(self, engine: str) -> dict:
-        """Start the session anew, in a new process, on *engine*."""
+    def start(self, engine: str, text: bool = False) -> dict:
+        """Start the session anew, in a new process, on *engine*; with
+        *text*, its REPL answers in plain text (an MCP client's)."""
         with self._starting:
             self.end("restarted")
             self.engine = engine
@@ -256,19 +572,22 @@ class Session:
             self._failure = None
             self.busy += 1
             try:
+                self._wait_for_preparation(engine)
                 self.sessions._fork(self, engine)
                 # The build may take minutes; the session may end meanwhile.
                 while not self._forked.wait(5):
                     if self.sessions.dead or not self.sessions._owns(self):
                         self.end("ended while it started")
                 if self._failure:
-                    raise RuntimeError(self._failure)
+                    raise self._failure_type(self._failure)
                 identity = self.sessions.identity(self.key[0])
                 if identity != self.identity:  # changed while it was forked
                     self._call("use_identity", env=identity[0],
                                groups=identity[1])
                     self.identity = identity
-                ready = self._call("start", engine=engine)
+                ready = self._call(
+                    "start", engine=engine, **({"text": True} if text else {})
+                )
                 self.sessions._log(self, "start", text=engine)
                 if self.sessions.activity is not None:
                     from neurolang_apps.utils.tui.activity import LOG_NOTE
@@ -338,6 +657,11 @@ class Session:
     def download(self, **options):
         return self._run("download", **options)
 
+    def mcp(self, **request) -> tuple:
+        """Answer the HTTP request of an MCP client (LocalBackend.mcp),
+        as a query: once a slot is free, within the server's time."""
+        return self._run("mcp", **request)
+
     def _run(self, method: str, **arguments):
         """Return what the session's process answers to *method*, a query,
         once fewer than the server's most queries run (meanwhile the page
@@ -401,11 +725,14 @@ class Session:
             pid, conn, self.pid, self._conn = self.pid, self._conn, None, None
             if pid is not None:
                 _kill(pid)
+            self.sessions._remove_uploads(self.starts)
             if conn is not None:
                 conn.close()
                 self._fail_replies(conn)
             if not self._forked.is_set():  # a start waiting for its process
-                self._failed("The session ended")
+                # by a stop or a restart, as the page asks before a start:
+                # the page that waited is gone, or starts it again
+                self._failed("The session ended", SessionEnded)
         if pid is not None:
             usage = self.usage if self.usage and self.usage["pid"] == pid \
                 else {}
@@ -473,20 +800,21 @@ class Session:
             if of is conn:
                 done.set()
 
-    def _failed(self, message: str) -> None:
-        self._failure = message
+    def _failed(self, message: str, error=RuntimeError) -> None:
+        self._failure, self._failure_type = message, error
         self._forked.set()
 
 
 class Sessions:
     """
     The sessions of the users of the server, each in a process forked
-    from the builder's, at most *most* running at once; one unused for *idle*
-    seconds ends. *identity*, ``identity(user)``, gives the variables of
-    the sessions of *user* (the key of their AI assistant) and their groups,
-    at each start; by default those of *env*, by user, and no groups. With
-    *feedback_db*, the sessions store their ratings in that database,
-    signed by their user and groups. With *activity_db*, the inputs of the
+    from that of the builder of its engine, at most *most* running at
+    once; one unused for *idle* seconds ends. *identity*,
+    ``identity(user)``, gives the variables of the sessions of *user* (the
+    key of their AI assistant) and their groups, at each start; by default
+    those of *env*, by user, and no groups. With *feedback_db*, the
+    sessions store their ratings in that database, signed by their user and
+    groups. With *activity_db*, the inputs of the
     sessions, their results and the resources they took are logged there
     (:class:`~neurolang_apps.utils.tui.activity.ActivityLog`). The
     variables *withhold* (the keys of
@@ -495,11 +823,16 @@ class Sessions:
     :class:`~neurolang_apps.utils.tui.local_backend.LocalBackend`. At most
     *running* queries (and downloads) run at once (by default, as many as
     the machine has CPUs), the others waiting; one running longer than
-    *query_seconds*, if given, ends its session's process. With
-    *preload_embeddings*, the builder loads the text embeddings of an
+    *query_seconds*, if given, ends its session's process. A query taking
+    its session's process more than *memory_mb* MB of memory of its own is
+    stopped, with a message, the session staying (0: no limit; Linux). With
+    *preload_embeddings*, the builders load the text embeddings of an
     engine (its documents' and its query model) before forking its
-    sessions, which share them. *build* must be importable by name, as the
-    builder is started anew.
+    sessions, which share them. The engines built ahead (:meth:`prebuild`)
+    are built while the fraction *prebuild_reserve* of the memory stays
+    for the queries (see :func:`available_memory`). *build* must be
+    importable by name, as the coordinator of the builders is started
+    anew.
     """
 
     def __init__(
@@ -510,9 +843,19 @@ class Sessions:
         identity: Optional[Callable] = None, feedback_db=None,
         withhold=(), activity_db=None, running: Optional[int] = None,
         query_seconds: Optional[float] = None,
-        preload_embeddings: bool = True,
+        preload_embeddings: bool = True, uploads: Optional[dict] = None,
+        prebuild_reserve: float = 0.35, memory_mb: float = 0,
     ):
         env = env or {}
+        #: Where the sessions' uploads go, a folder each in its directory,
+        #: and how large they may be (session.Uploads).
+        self.uploads = dict(uploads or {})
+        if self.uploads.get("directory"):
+            # No session outlives the server: what an earlier run left goes.
+            directory = Path(self.uploads["directory"]).expanduser()
+            shutil.rmtree(directory, ignore_errors=True)
+            directory.mkdir(parents=True, exist_ok=True)
+            self.uploads["directory"] = str(directory)
         self.identity = identity or (lambda user: (env.get(user, {}), ""))
         self.feedback_db = feedback_db
         self.activity = None
@@ -522,9 +865,11 @@ class Sessions:
             self.activity = ActivityLog(activity_db)
             # This run of the server, for its uptime (see _measure).
             self._run = self.activity.start_run()
-        #: The latest usage of the builder's process (process_usage): the
-        #: memory the sessions share.
+        #: The latest usage of the builders' processes (process_usage),
+        #: summed: the memory the sessions share.
         self.builder_usage: Optional[dict] = None
+        #: The process of the builder of each engine, by engine.
+        self.builders = {}
         self.most = most
         self.idle = idle
         self.running = running or os.cpu_count() or 1
@@ -539,11 +884,12 @@ class Sessions:
         context = multiprocessing.get_context("spawn")
         self._builder_conn, theirs = context.Pipe()
         options = {"data_dir": str(data_dir), "resolution": resolution,
-                   "light": light, "feedback": feedback}
+                   "light": light, "feedback": feedback,
+                   "uploads": self.uploads, "memory_mb": memory_mb}
         self._builder = context.Process(
             target=_builder, daemon=True, name="neurolang-repl-builder",
             args=(theirs, self._listener.address, authkey, options, build,
-                  preload_embeddings),
+                  preload_embeddings, prebuild_reserve),
         )
         # The variables *withhold* (the server's keys) are not the
         # builder's, nor so of the sessions it forks: a session has those
@@ -580,11 +926,15 @@ class Sessions:
             session.end("the server stopped")
         if self.activity is not None:
             self.activity.beat(self._run, stopped=True)
+        if self.preparing is not None:
+            self.preparing.close()
         self._builder_conn.close()
         self._builder.join(5)
-        if self._builder.is_alive():
+        if self._builder.is_alive():  # nor so its builders
             self._builder.kill()
             self._builder.join(5)
+            for pid in list(self.builders.values()):
+                _kill(pid)
         self._listener.close()
 
     def _owns(self, session: Session) -> bool:
@@ -612,8 +962,8 @@ class Sessions:
             f"made room for a session of {starting.key[0]}")
 
     def _fork(self, session: Session, engine: str) -> None:
-        """Number a start of *session* and ask the builder for its
-        process."""
+        """Number a start of *session* and ask the builder of *engine*, by
+        the coordinator, for its process."""
         if self.dead:
             raise RuntimeError(self.dead)
         with self._lock:
@@ -637,6 +987,21 @@ class Sessions:
         except OSError:  # the builder is gone, its reader may not know yet
             raise RuntimeError("The builder of the engines ended: see the "
                                "server's log")
+
+    def prebuild(self, engines) -> None:
+        """Have the builders build the *engines*, in their order, before
+        their sessions ask for them: a session's start then takes no build.
+        An engine built already is not built again; one that fails, or
+        that would leave too little memory to the queries
+        (*prebuild_reserve*), is told in the log, and built by its first
+        session."""
+        try:
+            with self._forking:
+                for engine in engines:
+                    self._builder_conn.send(
+                        ("build", None, None, engine, None, None))
+        except OSError:  # the builder is gone, its reader tells it
+            pass
 
     def _owner(self, key, start: int) -> Optional[Session]:
         """Return the session *key* if its latest start is *start*."""
@@ -730,6 +1095,28 @@ class Sessions:
                 kind, key, start, value = self._builder_conn.recv()
             except (EOFError, OSError):
                 break
+            except TypeError:  # close() closed it while it read
+                if self._closed:
+                    break
+                raise
+            if key is None:  # of an engine built before its sessions
+                if kind == "builder":
+                    self.builders[value[0]] = value[1]
+                elif kind == "ended":
+                    print(f"The builder of the engine {value} ended (see "
+                          "above): its next session builds it again",
+                          flush=True)
+                    self.builders.pop(value, None)
+                elif kind == "built":
+                    print(f"Built the engine {value}", flush=True)
+                elif kind == "skipped":
+                    print(f"Did not build the engine {value}: its first "
+                          "session builds it", flush=True)
+                elif kind == "failed":
+                    print("An engine could not be built before its "
+                          f"sessions (see above): {value}; its first "
+                          "session tries again", flush=True)
+                continue
             session = self._owner(key, start)
             if session is None:
                 continue
@@ -747,11 +1134,30 @@ class Sessions:
 
         # The builder is gone: no session starts any more.
         self.dead = "The builder of the engines ended: see the server's log"
+        if self.exit_without_builder and not self._closed:
+            print(f"{self.dead}: the server stops, for its service manager "
+                  "to start it again", flush=True)
+            sys.stdout.flush()
+            os._exit(1)
         with self._lock:
             sessions = list(self._sessions.values())
         for session in sessions:
             if not session._forked.is_set():
                 session._failed(self.dead)
+
+    #: Whether the server's process ends (status 1) when the builder ends
+    #: on its own (killed for memory): a service manager then starts it
+    #: again, rather than it serve pages that can start no session.
+    exit_without_builder = False
+
+    #: Whether the server has the engines the admin console turns on
+    #: built at once (:meth:`prebuild`), as those offered at its start.
+    prebuilds = False
+
+    #: The engines the server prepares while it serves, if it does (a
+    #: :class:`serve_repl.Preparation`, whose ``wait(engine, timeout)`` and
+    #: ``close()`` are used): a session of an engine not yet prepared waits.
+    preparing = None
 
     #: Why no session starts any more, if the builder ended.
     dead: Optional[str] = None
@@ -775,7 +1181,7 @@ class Sessions:
 
     def _measure(self) -> None:
         """Take the usage of the processes of the sessions running, and of
-        the builder, every USAGE_SECONDS; tell the activity log the server
+        the builders, every USAGE_SECONDS; tell the activity log the server
         is alive every ALIVE_SECONDS."""
         beaten = time.monotonic()
         while not self._closed:
@@ -786,13 +1192,24 @@ class Sessions:
                     self.activity.beat(self._run)
                 except Exception:
                     traceback.print_exc()
-            self.builder_usage = process_usage(self._builder.pid)
+            self._measure_builders()
             with self._lock:
                 sessions = [s for s in self._sessions.values()
                             if s.pid is not None]
             for session in sessions:
                 session._sample()
             time.sleep(self.USAGE_SECONDS)
+
+    def _measure_builders(self) -> None:
+        """Take the usage of the builders, summed, that of the coordinator
+        with them (whose process is that of ``pid``)."""
+        usages = [process_usage(pid) for pid in
+                  (self._builder.pid, *list(self.builders.values()))]
+        usages = [usage for usage in usages if usage is not None]
+        self.builder_usage = usages and {
+            "pid": self._builder.pid,
+            **{name: round(sum(usage[name] for usage in usages), 2)
+               for name in ("cpu", "rss", "pss", "private")}} or None
 
     def _log(self, session: Session, kind: str, **fields) -> None:
         """Log the event *kind* of *session*, if the activity is logged;
@@ -818,3 +1235,108 @@ class Sessions:
                     del self._sessions[session.key]
             for session in idle:
                 session.end("idle")
+            self._sweep_uploads()
+
+    def _remove_uploads(self, start) -> None:
+        """Remove the folder of the uploads of the session started
+        *start*, if any."""
+        directory = self.uploads.get("directory")
+        if directory and start is not None:
+            shutil.rmtree(Path(directory) / str(start), ignore_errors=True)
+
+    def uploads_info(self) -> Optional[dict]:
+        """
+        Return the uploads of the sessions, for the admin console, or None
+        without an uploads directory: its ``directory``, the bytes its files
+        take (``size``) and those free on its disk (``free``), the most of a
+        file and of a session (``most_file``, ``most_all``), and its
+        ``folders``: each by its session's ``start``, with that session's
+        ``user`` and ``tab`` (None for a folder of no session) and whether it
+        is ``running``, and its ``files``: ``name``, ``size`` and ``age`` in
+        seconds.
+        """
+        directory = self.uploads.get("directory")
+        if not directory:
+            return None
+        with self._lock:
+            owners = {str(s.starts): s for s in self._sessions.values()}
+        now = time.time()
+        folders = []
+        for folder in sorted(Path(directory).iterdir(), key=lambda p: p.name):
+            if not folder.is_dir():
+                continue
+            files = []
+            for path in sorted(folder.iterdir(), key=lambda p: p.name):
+                if not path.is_file():  # the file removed last, kept aside
+                    continue
+                try:
+                    stat = path.stat()
+                except OSError:  # erased meanwhile
+                    continue
+                files.append({"name": path.name, "size": stat.st_size,
+                              "age": max(0, round(now - stat.st_mtime))})
+            owner = owners.get(folder.name)
+            folders.append({
+                "start": folder.name,
+                "user": owner.key[0] if owner else None,
+                "tab": owner.key[1] if owner else None,
+                "running": bool(owner and owner.pid is not None),
+                "files": files, "size": sum(f["size"] for f in files),
+            })
+        return {
+            "directory": directory,
+            "size": sum(f["size"] for f in folders),
+            "free": shutil.disk_usage(directory).free,
+            "most_file": self.uploads.get("most_file"),
+            "most_all": self.uploads.get("most_all"),
+            "folders": folders,
+        }
+
+    def erase_uploads(self, start: Optional[str] = None,
+                      name: Optional[str] = None) -> int:
+        """
+        Erase, for the admin console, the file *name* of the folder of the
+        session *start*, every file of that folder without *name*, or every
+        folder without *start*; return how many files were erased. A
+        ValueError tells a *start* or a *name* that is not one of the
+        uploads directory (no path reaches out of it).
+        """
+        directory = self.uploads.get("directory")
+        if not directory:
+            raise ValueError("The server keeps no uploads: no --uploads-dir")
+        root = Path(directory)
+        if start is None:
+            folders = [p for p in root.iterdir() if p.is_dir()]
+        elif str(start).isdigit():
+            folders = [root / str(start)]
+        else:
+            raise ValueError(f"{start!r} is not the folder of a session")
+        if name is not None and (
+            Path(str(name)).name != name or str(name).startswith(".")
+        ):
+            raise ValueError(f"{name!r} is not the name of a file")
+        erased = 0
+        for folder in folders:
+            paths = [folder / name] if name is not None else (
+                list(folder.iterdir()) if folder.is_dir() else [])
+            for path in paths:
+                try:
+                    path.unlink()
+                    erased += 1
+                except OSError:  # erased meanwhile, or never there
+                    pass
+            if name is None:
+                shutil.rmtree(folder, ignore_errors=True)
+        return erased
+
+    def _sweep_uploads(self) -> None:
+        """Remove the folders of uploads of no session the server has, such
+        as those of a session whose process died."""
+        directory = self.uploads.get("directory")
+        if not directory:
+            return
+        with self._lock:
+            kept = {str(s.starts) for s in self._sessions.values()}
+        for folder in Path(directory).iterdir():
+            if folder.name not in kept:
+                shutil.rmtree(folder, ignore_errors=True)

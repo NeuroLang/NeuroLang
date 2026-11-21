@@ -49,6 +49,8 @@ from nl_expr.logic.transformations import ExtractBoundVariables
 from nl_core.probabilistic.expressions import PROB, ProbabilisticQuery
 from ..anaphora_resolution import AnaphoraPredicate
 
+pytestmark = pytest.mark.squall
+
 
 LOGGER = logging.getLogger()
 

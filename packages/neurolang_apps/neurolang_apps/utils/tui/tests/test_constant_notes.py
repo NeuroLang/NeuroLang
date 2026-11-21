@@ -2,6 +2,7 @@
 
 import pytest
 
+from neurolang_apps.utils.tui import constant_notes as notes
 from neurolang_apps.utils.tui.constant_notes import constant_notes
 
 
@@ -63,11 +64,26 @@ def test_known_constants_and_variables_are_not_noted(terms, program):
     assert constant_notes(terms, "neurosynth", program, False) == []
 
 
+def test_the_values_found_before_a_query_are_not_found_again(terms):
+    """prepare, run where the engine is built, finds the terms; the notes
+    of a query, in a session forked from there, read them."""
+    notes.prepare(terms, "neurosynth")
+    found = dict(notes._COLUMN_VALUES)
+    assert any("pain" in values for _, values in found.values())
+    assert constant_notes(
+        terms, "neurosynth", "ans(s) :- mentions(s, 'pian')", False
+    ) == ["'pian' is not a term of the engine: mentions(...) matches no "
+          "row with it; did you mean 'pain'?"]
+    assert notes._COLUMN_VALUES == found  # nothing more to find
+    notes.prepare(terms, "")  # an engine without sorts has none to find
+
+
 def test_without_declared_sorts_nothing_is_noted(terms):
     assert constant_notes(terms, "", "ans(s) :- mentions(s, 'x')", False) \
         == []
 
 
+@pytest.mark.squall
 def test_squall_constants_are_noted(terms):
     assert constant_notes(
         terms, "neurosynth", "obtain every Study that mentions 'Pain'.", True

@@ -8,6 +8,9 @@ from ..squall import (
     _DIMENSION_TYPE_PREDICATE_NAMES,
     make_dimension_type_stripper,
 )
+import pytest
+
+pytestmark = pytest.mark.squall
 
 
 class _TestWalker(StripDimensionTypePredicatesMixin, ExpressionWalker):

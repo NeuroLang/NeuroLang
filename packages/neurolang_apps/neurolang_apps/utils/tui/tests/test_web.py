@@ -1,6 +1,7 @@
 """Tests for the REPL driven from a web page."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,9 @@ import numpy as np  # noqa: E402
 
 from neurolang.frontend import NeurolangPDL  # noqa: E402
 from neurolang_apps.utils.tui import nifti  # noqa: E402
-from neurolang_apps.utils.tui.web import WebRepl  # noqa: E402
+from neurolang_apps.utils.tui.web import (  # noqa: E402
+    QUESTION_TOPICS, WebRepl, question_topic,
+)
 from neurolang_apps.utils.tui.tests import test_nifti  # noqa: E402
 
 tiny = test_nifti.tiny  # the REPL on the tiny engine, with its template
@@ -552,7 +555,10 @@ def test_the_examples_leave_out_the_missing_predicates(repl):
     assert examples["datalog"] and examples["squall"]
     for query in examples["datalog"] + examples["squall"]:
         assert "uniformity" not in query and "activated(" not in query
-    assert "ans(study) :- mentions(study, 'pain')" in examples["datalog"]
+    assert (
+        "ans(study, year, title) :- mentions(study, 'pain'), "
+        "study_year(study, year), study_title(study, title)"
+    ) in examples["datalog"]
 
 
 def test_the_banner_says_what_the_engine_leaves_out(repl):
@@ -603,6 +609,18 @@ class TestStudyLinks:
     def test_a_column_of_studies_tells_its_sort(self, studies_repl):
         [table] = studies_repl.submit("ans(s, t) :- mentions(s, t)").tables
         assert table["sorts"] == ["study", "term"]
+        assert table["positions"] == [0, 0]
+
+    def test_the_columns_of_a_voxel_tell_their_position(self, studies_repl):
+        studies_repl.submit(
+            "peak_reported(i, j, k, s) :- (i == 1), (j == 2), (k == 3), "
+            "study(s)"
+        )
+        [table] = studies_repl.submit(
+            "ans(i, j, k, s) :- peak_reported(i, j, k, s)"
+        ).tables
+        assert table["sorts"][:3] == ["voxel"] * 3
+        assert table["positions"] == [0, 1, 2, 0]
 
     def test_the_records_of_the_studies_shown_come_with_the_table(
         self, studies_repl
@@ -863,3 +881,234 @@ def test_the_page_uploads_a_file_that_load_loads(repl, monkeypatch, tmp_path):
                        ("big.csv", b"a" * (session.MOST_UPLOAD_BYTES + 1))):
         with pytest.raises(ValueError):
             repl.upload(name, data)
+
+
+def test_the_page_uploads_an_image_that_image_loads(repl):
+    """A NIfTI image the page uploads is loaded by .image, replacing the
+    image of the session; an engine that cannot decode it gives no query."""
+    answer = repl.upload("my map.nii.gz", b"\x1f\x8b")
+    assert answer == {
+        "name": "my map.nii.gz", "relation": "my_map",
+        "statement": ".image 'my map.nii.gz' --name my_map",
+        "query": "", "kind": "", "cortex_query": "",
+        "threshold": nifti.IMAGE_DEFAULTS["threshold"],
+        "radius": nifti.IMAGE_DEFAULTS["endpoint_radius"], "index": "",
+    }
+
+
+def test_the_page_uploads_a_tractogram_that_image_loads(repl, monkeypatch):
+    """A tractogram the page uploads is loaded by .image, named after its
+    file, and comes with the queries decoding it: of kind tractogram, the
+    voxels within radius mm of the ends of its streamlines."""
+    monkeypatch.setattr(nifti, "decoding_query",
+                        lambda app, name, voxels="brain": (f"{voxels}", []))
+    answer = repl.upload("my uf.tck", b"mrtrix tracks")
+    assert answer["statement"] == ".image 'my uf.tck' --name my_uf"
+    assert answer["kind"] == "tractogram"
+    assert (answer["query"], answer["cortex_query"]) == ("brain", "cortex")
+    assert answer["radius"] == nifti.IMAGE_DEFAULTS["endpoint_radius"]
+    assert answer["index"] == ""  # an engine without tractography
+    (listed,) = repl.uploads()["files"]
+    assert (listed["index"], listed["indexed"]) == ("", "")
+
+
+def test_the_engines_tractogram_is_listed_first_with_the_uploads(
+    repl, monkeypatch
+):
+    """The tractogram of an engine of tractography is listed before the
+    uploads, the engine's, with how it is indexed again."""
+    monkeypatch.setattr(
+        nifti, "tractogram_index",
+        lambda app, source, ident="": {"index": f"index {ident}",
+                                       "indexed": ""})
+    repl.app.engine_tractograms = ["iit"]
+    repl.upload("t.csv", b"a,b\n1,2\n")
+    first, upload = repl.uploads()["files"]
+    assert first == {"name": "iit", "size": 0, "age": 0, "loaded": ["iit"],
+                     "engine": True, "index": "index iit", "indexed": ""}
+    assert upload["name"] == "t.csv" and "engine" not in upload
+
+
+def test_the_page_is_told_if_an_uploaded_image_is_a_mask(repl):
+    """A mask is decoded as it is; a map of values once said of
+    z-scores (.image --zscore): the page asks."""
+    import gzip
+
+    import nibabel as nib
+    import numpy as np
+
+    for values, kind in (([1, 1], "mask"), ([1.5, 4.0], "map")):
+        data = np.zeros((4, 4, 4), dtype=np.float32)
+        data[1, 1, 1], data[2, 2, 2] = values
+        image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+        assert repl.upload("i.nii.gz", image)["kind"] == kind
+
+
+def test_each_uploaded_image_is_a_relation_of_its_own(repl):
+    """Two images uploaded are loaded as two relations, each of its file's
+    name; the same file uploaded again replaces its own."""
+    import gzip
+
+    import nibabel as nib
+    import numpy as np
+
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[1, 1, 1] = 1
+    image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+    relations = []
+    for name in ("first.nii.gz", "second.nii.gz", "first.nii.gz"):
+        answer = repl.upload(name, image)
+        relations.append(answer["relation"])
+        assert answer["statement"].endswith(f"--name {answer['relation']}")
+        repl.app.uploads.loaded(name, answer["relation"])
+        repl.app._nl.add_tuple_set([(1, 1, 1, 1.0)], name=answer["relation"])
+    assert relations == ["first", "second", "first"]
+
+
+def test_the_page_gets_the_queries_decoding_the_brain_and_the_cortex(
+    repl, monkeypatch
+):
+    """An uploaded image comes with the query decoding it, a voxel chosen
+    in the brain, and the one choosing it in the cortex (Only the cortex,
+    .image --cortex)."""
+    import gzip
+
+    import nibabel as nib
+    import numpy as np
+
+    monkeypatch.setattr(nifti, "decoding_query",
+                        lambda app, name, voxels="brain": (f"{voxels}", []))
+    data = np.zeros((4, 4, 4), dtype=np.float32)
+    data[1, 1, 1] = 1
+    image = gzip.compress(nib.Nifti1Image(data, np.eye(4)).to_bytes())
+    answer = repl.upload("i.nii.gz", image)
+    assert (answer["query"], answer["cortex_query"]) == ("brain", "cortex")
+
+
+@pytest.mark.parametrize("name", ["my roi.nii.gz", "my roi.nii"])
+def test_a_server_loads_shows_and_tells_an_uploaded_image(
+    repl, monkeypatch, tmp_path, name
+):
+    """The whole path of an image on a server (neurolang.confine): the
+    page uploads it, runs the statement the upload returns, and gets the
+    viewer back; an engine without the peaks of studies says it does not
+    decode it."""
+    import gzip
+    import re
+
+    import nibabel as nib
+    import numpy as np
+    from neurolang.confine import CONFINE_ENV
+
+    monkeypatch.setenv(CONFINE_ENV, str(tmp_path / "data"))
+    monkeypatch.setattr(
+        nifti, "_viewer_page", lambda *args, **kwargs: "<html>page</html>"
+    )
+    repl.app._nl.template = nib.Nifti1Image(
+        np.ones((4, 4, 4), dtype=np.uint8), np.eye(4)
+    )
+    data = np.zeros((4, 4, 4), dtype=np.uint8)
+    data[1, 1, 1] = data[2, 2, 2] = 1
+    image = nib.Nifti1Image(data, np.eye(4)).to_bytes()  # .nii
+    if name.endswith(".gz"):
+        image = gzip.compress(image)
+    answer = repl.upload(name, image)
+    reply = repl.submit(answer["statement"])
+    text = " ".join(re.sub(r"<[^>]+>", "", reply.html).split())
+    assert not reply.failed, text
+    assert f"loaded my_roi(i, j, k, value): 2 voxels from {name}, " \
+        "a mask" in text
+    assert "cannot decode the image: it has no activated" in text
+    assert answer["query"] == answer["cortex_query"] == ""  # nor does the
+    # page offer the query
+    assert reply.viewers == ["<html>page</html>"]
+    assert not (tmp_path / "data").exists()  # nothing written there
+
+
+def test_a_reply_tells_the_uploads_of_the_session(repl):
+    """Each reply carries the files the page uploaded, what they were
+    loaded as and the room taken, for the page to list them."""
+    from neurolang_apps.utils.tui.local_backend import reply_payload
+
+    assert repl.submit("ans(x, n) :- person(x, n)").uploads["files"] == []
+    repl.upload("my scores.csv", b"study,score\ns1,0.5\n")
+    reply = repl.submit(".load 'my scores.csv' scores")
+    (upload,) = reply.uploads["files"]
+    assert (upload["name"], upload["size"], upload["loaded"]) == (
+        "my scores.csv", 19, ["scores"])
+    assert reply.uploads["used"] == 19
+    assert reply.uploads["most"] == repl.app.uploads.most_all
+    assert reply_payload(reply)["uploads"] == reply.uploads
+
+
+def test_more_questions_are_those_of_the_bank_the_page_does_not_list(repl):
+    """The REPL lists some questions first; the rest of the assistant's
+    bank on the engine follows, each once."""
+    first = repl.questions()
+    more = repl.more_questions()
+    assert first and more
+    assert not set(first) & set(more)
+    assert len(more) == len(set(more))
+
+
+def test_question_queries_give_the_query_of_each_question(repl):
+    """Picking a question fills the box of the query too: the page has
+    the query of every question the REPL lists."""
+    queries = repl.question_queries()
+    for question in repl.questions() + repl.more_questions():
+        assert queries[question]["datalog"]
+
+
+@pytest.mark.parametrize("question, query, topic", [
+    ("Which studies mention pain?", "ans(s) :- mentions(s, 'pain')", 0),
+    ("Which gyri are activated by studies about language?",
+     "ans(r) :- destrieux_activated(r, s)", 1),
+    ("Which terms have a Bayes factor above 3 for the left putamen?",
+     "bayes_factor(l, t, bf) :- p(l, t, bf)\n"
+     "ans(term, bf) :- bayes_factor('pPUT lh', term, bf)", 2),
+    ("Which regions are functionally connected at rest with the thalamus?",
+     "ans(r) :- f(r)", 3),
+    ("How many white-matter streamlines connect the hemispheres?",
+     "ans(n) :- n = 1", 4),
+    ("Which regions are hippocampal, with their full names?",
+     "ans(r, n) :- tian_name(r, n)", 5),
+])
+def test_the_topic_of_a_question(question, query, topic):
+    assert question_topic(question, query) == QUESTION_TOPICS[topic]
+
+
+def test_the_topics_of_the_questions_are_known_and_grouped(repl):
+    """Every question of the bank has a topic of the list, and the more
+    questions come in the order of the topics."""
+    topics = repl.question_topics()
+    more = repl.more_questions()
+    assert set(topics.values()) <= set(QUESTION_TOPICS)
+    ranks = [QUESTION_TOPICS.index(topics[q]) for q in more]
+    assert ranks == sorted(ranks)
+
+
+def _luminance(hex_colour: str) -> float:
+    """Return the relative luminance (WCAG) of a colour ``#rrggbb``."""
+    def channel(value: int) -> float:
+        value /= 255
+        return value / 12.92 if value <= 0.03928 else (
+            (value + 0.055) / 1.055
+        ) ** 2.4
+    r, g, b = (int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+@pytest.mark.parametrize("panel", ["#070d19", "#0f1b33"])
+def test_the_colours_of_the_output_are_legible_on_its_panel(repl, panel):
+    # the dark panel of the output, --term in tokens.css, in either theme
+    repl.app.console.print(
+        "[red]failed[/red] [dim]a note[/dim] [green]saved[/green] "
+        "[magenta]a path[/magenta] [cyan]1[/cyan] [yellow]warned[/yellow]"
+    )
+    colours = re.findall(r"color: (#[0-9a-f]{6})", repl._output())
+    assert len(colours) >= 6
+    for colour in colours:
+        bright, dark = sorted(
+            (_luminance(colour), _luminance(panel)), reverse=True
+        )
+        assert (bright + 0.05) / (dark + 0.05) >= 4.5, colour

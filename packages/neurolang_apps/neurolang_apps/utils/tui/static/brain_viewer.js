@@ -183,8 +183,6 @@
     });
     await nv.attachTo('gl');
     followZoom(nv);
-    // On a phone the options of the display start folded, the views close to the main controls.
-    if (NARROW) $('display-options').open = false;
     addColormaps(nv);
     var background = await loadVolume(data.background, 'background.nii.gz');
     background.colormap = 'gray';
@@ -445,8 +443,11 @@
   }
 
   // The streamlines, a .trk file NiiVue reads as a mesh of fibres,
-  // coloured by the direction of each segment, and the controls of their
-  // visibility and opacity.
+  // coloured by the direction of each segment or by their bundle
+  // (bundleColours), and the controls of their visibility and number.
+  // The file ranks them (their dps, from n down to 1) so that the k
+  // highest are an even sample: NiiVue hides those under a threshold, so
+  // the page draws k of them with n - k + 1.
   async function loadStreamlines(nv, streamlines) {
     var mesh = await niivue.NVMesh.loadFromUrl({
       url: 'streamlines.trk', buffer: await inflate(streamlines.trk),
@@ -456,14 +457,64 @@
     nv.setMeshProperty(mesh.id, 'fiberColor', 'Local');
     viewer.streamlines = mesh;
     $('streamlines').style.display = '';
-    $('streamline-count').textContent = streamlines.shown + ' of ' +
-      streamlines.total + ' streamlines shown';
+    if (streamlines.bundles) {
+      bundleColours(nv, mesh, streamlines.bundles,
+        new Uint16Array(await inflate(streamlines.bundles.of)));
+    }
+    var slider = $('streamline-number');
+    function drawFirst(count) {
+      nv.setMeshProperty(mesh.id, 'dpsThreshold', streamlines.shown - count + 1);
+      $('streamline-count').textContent = count + ' of ' +
+        streamlines.total + ' streamlines shown';
+      slider.setAttribute('aria-valuetext', count + ' streamlines');
+    }
+    // The slider is on a logarithmic scale, from 1 to all of those sent:
+    // a linear one would put the counts worth seeing in its first notch.
+    function countAt(position) {
+      return Math.max(1, Math.round(Math.pow(
+        streamlines.shown, position / parseFloat(slider.max))));
+    }
+    slider.disabled = streamlines.shown < 2;
+    drawFirst(streamlines.shown);
     $('streamlines-visible').addEventListener('change', function (e) {
       nv.setMeshProperty(mesh.id, 'visible', e.target.checked);
     });
-    $('streamline-opacity').addEventListener('input', function (e) {
-      nv.setMeshProperty(mesh.id, 'opacity', parseFloat(e.target.value));
+    slider.addEventListener('input', function (e) {
+      drawFirst(countAt(parseFloat(e.target.value)));
     });
+  }
+
+  // The bundles of the streamlines, which the result names: the n-th
+  // streamline is of the bundle of number of[n]. NiiVue colours each
+  // group of fibres of the mesh in the colour of its number in the
+  // colormap fiberGroupColormap, and by direction when it is null; the
+  // control "Colour by" chooses, and a legend names the colours.
+  function bundleColours(nv, mesh, bundles, of) {
+    var groups = bundles.names.map(function () { return {vals: []}; });
+    of.forEach(function (b, n) { groups[b].vals.push(n); });
+    mesh.groups = groups;
+    var map = {R: [], G: [], B: [], I: []}, legend = $('bundle-legend');
+    legend.replaceChildren();
+    bundles.colours.forEach(function (hex, b) {
+      map.R.push(parseInt(hex.substr(1, 2), 16));
+      map.G.push(parseInt(hex.substr(3, 2), 16));
+      map.B.push(parseInt(hex.substr(5, 2), 16));
+      map.I.push(b);
+      var item = document.createElement('li'), swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = hex;
+      item.append(swatch, bundles.names[b] + ' (' + groups[b].vals.length + ')');
+      legend.appendChild(item);
+    });
+    var select = $('streamline-colour');
+    function apply() {
+      var byBundle = select.value === 'bundle';
+      legend.hidden = !byBundle;
+      nv.setMeshProperty(mesh.id, 'fiberGroupColormap', byBundle ? map : null);
+    }
+    $('streamline-colour-control').hidden = false;
+    select.addEventListener('change', apply);
+    apply();
   }
 
   /* ---------------------------------------------------------------
@@ -1047,15 +1098,21 @@
     var onThreshold = function (e) { setThreshold(parseFloat(e.target.value)); };
     $('threshold').addEventListener('change', onThreshold);
     $('threshold').addEventListener('input', onThreshold);
-    $('threshold-slider').addEventListener('input', function (e) {
-      setThreshold(thresholdAt(e.target.value));
-    });
+    // A thumb dragged past the other moves that one instead: when the two
+    // overlap, the one on top, the high one, can then be dragged down too.
+    var onSlider = function (e) {
+      var p = parseInt(e.target.value, 10);
+      var low = positionOf(thresholdValue(viewer.state.active));
+      var high = positionOf(upperValue(viewer.state.active));
+      var isLow = e.target.id === 'threshold-slider';
+      if (isLow ? p <= high : p < low) setThreshold(thresholdAt(p));
+      else setUpper(thresholdAt(p));
+    };
+    $('threshold-slider').addEventListener('input', onSlider);
     var onUpper = function (e) { setUpper(parseFloat(e.target.value)); };
     $('threshold-high').addEventListener('change', onUpper);
     $('threshold-high').addEventListener('input', onUpper);
-    $('threshold-high-slider').addEventListener('input', function (e) {
-      setUpper(thresholdAt(e.target.value));
-    });
+    $('threshold-high-slider').addEventListener('input', onSlider);
     $('threshold-mode').addEventListener('change', function (e) {
       setThresholdMode(e.target.value);
     });

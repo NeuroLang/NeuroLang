@@ -64,7 +64,11 @@ The restrictions themselves are facts on class names; the 323
        owl:someValuesFrom(r, d)
 
 These instances cover what the procedure must handle: a value no fact names
-in (I), a recursion in (II), and the size of a real ontology in (III).
+in (I), a recursion in (II), and the size of a real ontology in (III).  A
+fourth, (IV), puts (III) to work on the studies of Neurosynth, in
+:ref:`ontologies-open-closed`.
+
+.. _ontologies-loading:
 
 Loading an ontology
 -------------------
@@ -74,9 +78,10 @@ files with rdflib and splits them in two.  The *TBox*, the axioms on classes,
 becomes constraints, ``body → head`` implications kept apart from the rules
 of the program.  The *ABox*, the facts on individuals, becomes relations: the
 data added with ``add_tuple_set``, or, with ``individuals=True``, every triple
-``s p o`` as the fact ``p(s, o)`` and every ``s rdf:type C`` also as
-``C(s)``.  On (I), with the Turtle above in ``deans.ttl`` and loaded from
-Python as in :ref:`python-ontology`:
+``s p o`` as the fact ``p(s, o)``, an ``s rdf:type C`` making ``s`` an
+instance of ``C``, ``C(s)``, as do the types a program states
+(:ref:`ontologies-types`).  On (I), with the Turtle above in
+``deans.ttl`` and loaded from Python as in :ref:`python-ontology`:
 
 .. code-block:: python
 
@@ -140,6 +145,8 @@ an axiom removes answers, never adds one.  Hence the constraints NeuroLang
 uses are a subset of the ontology's, and every answer is entailed by the
 ontology.
 
+.. _ontologies-certain-answers:
+
 Open world and certain answers
 ------------------------------
 
@@ -171,6 +178,8 @@ Unit(y)`` has only ``('Ana', 'Physics')``, as Juan's department has no name.
 A constraint ``C ⊑ ∃p.C`` makes the chase infinite, so it is not run as such.
 NeuroLang runs the part of it that ends, and rewrites the query for the
 rest.
+
+.. _ontologies-two-mechanisms:
 
 Two mechanisms
 --------------
@@ -211,6 +220,46 @@ full constraint ``aux(z, y) → Dept(y)``; the two ``aux`` atoms are factorised
 into ``aux(x, y)``, where ``y`` occurs once; finally, the existential
 constraint rewrites ``aux(x, y)`` into ``Dean(x)``.  The rules over
 ``aux``, which has no values, are dropped before evaluation.
+
+**Dead rewritings.**  Some rewritings are dropped as soon as they appear,
+with all those they would give.  Let ``P`` be a predicate without facts or
+rules whose constraints are all existential in a position ``i``, as
+``aux``, and ``P(…)`` an atom of a rewriting with the term ``t`` in position
+``i``.  ``P(…)`` can only be rewritten once ``t`` is a variable that occurs
+nowhere else.  A constant, a variable of the head and an occurrence in a
+negated atom stay so in every rewriting.  A rewriting step on another atom
+keeps ``t``, at the positions of the constraint's variable it unifies with,
+since a full constraint has all its head's variables in its body and an
+existential one applies to ``t`` in its existential position only if ``t``
+occurs once.  Hence ``t`` leaves the other atoms only by becoming the term
+in position ``i`` of an atom over ``P`` that is factorised with this one.
+NeuroLang follows, for each occurrence of ``t``, the predicates and
+positions the rewriting steps that keep it can move it to; if one
+occurrence cannot reach position ``i`` of ``P``, every rewriting of the
+query has an atom over ``P``, which has no values, and none is evaluated.
+On (III) these are the rewritings ``aux_i(s, c), aux_j(z, c)`` of
+``measures(s, c), CAO_00587(c)`` with ``i ≠ j``: ``c`` is shared, in the
+existential position of both, and neither atom can become the other.  The
+rewritings evaluated are the same with and without this step.
+
+The test needs only the atoms a step adds, so it is made before the step
+builds its query.  NeuroLang puts the terms of the rewritten atom in place
+of the variables of the constraint's head in its body, gives the body's
+other variables names no query has, and tests the query that results.  It
+is the query the step would build, up to the names renaming gives those
+variables, and the test looks only at which terms are equal, constant or
+in the head.  A step whose query is dead is not built.  When the head of
+the constraint has a constant or a repeated variable, its unifier binds
+terms of the query: that step is built and tested as before.  The
+rewritings are the same, their variable names included.
+
+The rules of the program that define a predicate in the body of a
+constraint are solved with the query, even when the query names only what
+the constraint derives: the code a query needs is followed through the
+constraints.  With ``Dean(x) :- professor(x), chairs(x)`` in place of the
+facts of ``Dean``, ``ans(x) :- headOf(x, y)`` is rewritten into ``ans(x)
+:- Dean(x)``, and the rule of ``Dean`` is part of the program that answers
+it.
 
 **The split.**  Full constraints are in the rewriting too: (I) needs
 ``Dept ⊑ Unit`` applied to Juan's unnamed department, which the chase never
@@ -296,6 +345,8 @@ instance, the five queries keep their answers and their times, under 2 s.
 The chase takes the recursion and the hierarchy; the rewriting is left with
 the values the existential constraints create.
 
+.. _ontologies-complete:
+
 When the answers are complete
 -----------------------------
 
@@ -355,6 +406,23 @@ alternatives multiply.  The rewriting need not end at all when recursive
 ``C1 ⊑ ∀p.C2``, ``C2 ⊑ C1`` and ``C1 ⊑ ∃p.C3`` with the query
 ``ans(y) :- C3(z), p(z, y)``.
 
+The same multiplication sets the time on (III).  With one instance of the
+contrast ``cogat:CAO_01210`` (N-back 2-back, which measures some working
+memory), ``ans(s) :- cogat:measures(s, c)`` takes 7 s, and ``ans(s) :-
+cogat:measures(s, c), cogat:CAO_00587(c)`` 60 s without the dropping of
+dead rewritings: the 522 ``someValuesFrom`` restrictions on ``measures``
+give as many ``aux_i(s, c)`` for the first atom, the subclasses of working
+memory and the restrictions to them as many atoms for the second, and
+XRewrite explores their 26,600 pairs.  Dropping the dead ones leaves 224 to
+explore; testing each step for them before building it, as above, the
+query takes 2.0 s, and ``ans(s) :- cogat:measures(s, c)`` 6.5 s.  A query
+of three such atoms, ``ans(s) :- cogpo:has_contrast(s, x),
+cogat:measures(x, c), cogat:CAO_00487(c)`` (the tasks with a contrast
+that measures some response inhibition), did not end within 16 minutes
+when its dead rewritings were built and then dropped, 146,000 of them in
+its first 210 s; with the tests, (IV) asks it of the Stroop studies in
+31.0 s.
+
 Outside these assumptions the answers stay sound.  On 480 more random
 queries, of up to 4 atoms, over ontologies with ``hasValue`` and, for half
 of them, recursive full constraints, none returned an answer that is not
@@ -378,10 +446,13 @@ One more limit concerns rules.  XRewrite rewrites each rule of the program
 on its own, so an unnamed value does not pass from one rule to another:
 with ``heads(x, y) :- headOf(x, y)``, ``ans(x) :- heads(x, y)`` returns Ana
 and not Juan, as ``y`` is in the head of ``heads``.  ``heads(x) :- headOf(x,
-y)`` returns both.  These assumptions delimit the guarantee: complete
-answers for Horn ontologies in which ``allValuesFrom`` reaches no named
-value from an unnamed one and no existential value meets a transitive
-property, for queries whose rewriting ends.
+y)`` returns both.  A class defined by a rule over a probabilistic
+predicate, as ``Dean(x) :- p(x)`` with ``p`` a probabilistic fact, gives no
+instance to the constraints of a deterministic query.  These assumptions
+delimit the guarantee: complete answers for Horn ontologies in which
+``allValuesFrom`` reaches no named value from an unnamed one and no
+existential value meets a transitive property, for queries whose rewriting
+ends.
 
 Negation and aggregation
 ------------------------
@@ -426,11 +497,340 @@ probabilistic rule is not rewritten.  The ontology thus acts as certain
 knowledge: it defines deterministic relations, and the probabilistic layer
 of [Zanitti2023]_ reasons on top of them.
 
+.. _ontologies-open-closed:
+
+Open and closed worlds on the Cognitive Atlas
+---------------------------------------------
+
+Which studies used a task that, according to the Cognitive Atlas, measures
+response inhibition?  And which form of response inhibition did each one
+measure?
+
+The data record particular facts, while an ontology records general ones.
+The curators of the Cognitive Atlas state each general fact once and leave
+the particulars out.  Read in an open world, these general facts answer
+questions about particular studies; read in a closed world, they answer
+none.
+
+**Two readings.**  In the *closed world*, what is not recorded is false.  In
+the *open world*, what is not recorded is unknown, and the ontology can
+imply it.  The Atlas says that every Stroop task has an incongruent −
+congruent contrast, that this contrast measures some response inhibition,
+and that motor inhibition is a kind of response inhibition.  It names no
+study, no contrast of a particular study and no particular instance of a
+concept; nor does it decide which form of response inhibition the contrast
+measures.  Under the closed world, the curators would have to enter every
+study, its contrasts and what each measures before a query found anything.
+Under the open world, what they left out stays unknown, and the general
+facts still yield answers.
+
+NeuroLang reads the predicates an ontology constrains in the open world.
+It returns their *certain answers*, those true in every completion of the
+data that agrees with the ontology (:ref:`ontologies-certain-answers`).
+Each axiom is a *constraint*, an implication ``body → head`` kept apart
+from the rules of the program (:ref:`ontologies-loading`).  A constraint
+is *existential* when its head states that some value exists without
+naming it; such a value is an *unnamed value*.  The constraints are applied
+in two ways (:ref:`ontologies-two-mechanisms`): the *chase* adds, as rules
+would, the facts that the constraints without existentials imply, and the
+*rewriting* turns the query into a union of queries over the data that
+also finds the answers holding through unnamed values.
+
+(IV) *Experiments and studies in the Cognitive Atlas*.  The ``neurosynth``
+engine holds 14,371 studies and loads the Atlas, ``cogat.v2.owl``, as in
+(III).  The Atlas has no instance of any task: it is about tasks,
+contrasts and concepts, not about experiments.  Our data say which task
+each experiment used, by its name, and ``rdf:type`` links them: in RDF,
+which OWL builds on, ``x rdf:type C`` means that ``x`` is an instance of
+the class ``C``, and NeuroLang reads it so, for the types a rule states as
+for those of a file (:ref:`ontologies-types`).
+
+.. code-block:: neurolang
+
+   % Our data: experiments we ran, and the task of each, by its name.
+   our_experiment('e1', 'stroop task')
+   our_experiment('e2', 'stop signal task')
+   our_experiment('e3', 'go-no-go task')
+
+   % Linked to the Cognitive Atlas: each is an instance of the task of that name.
+   rdf:type(e, t) :- our_experiment(e, n), cogat_term(t, n)
+
+   % Does each experiment have a contrast?
+   ans(e) :- exists(x; cogpo:has_contrast(e, x))
+
+   % ... one that measures response inhibition?
+   ans(e) :- exists(x, c, k; cogpo:has_contrast(e, x), cogat:measures(x, c),
+       rdf:type(c, k), cogat_term(k, 'response inhibition'))
+
+   % Which contrast does each have?
+   ans(e, x) :- cogpo:has_contrast(e, x)
+
+No class is named by its identifier: the tasks and the concept are found
+by their labels, through ``cogat_term``.  The questions rest on axioms of
+the Atlas such as these, where ``A ⊑ B`` reads "every ``A`` is a ``B``"
+and ``∃p.D`` "related by the property ``p`` to some ``D``":
+
+.. list-table:: Axioms of the Atlas behind (IV)
+   :header-rows: 1
+   :widths: 50 50
+
+   * - In plain English
+     - Formally
+   * - Every Stroop task has an incongruent − congruent contrast.
+     - ``cogat:CAO_00872 ⊑ ∃cogpo:has_contrast.cogat:CAO_01515``
+   * - Every incongruent − congruent contrast of the Stroop task measures
+       some response inhibition.
+     - ``cogat:CAO_01515 ⊑ ∃cogat:measures.cogat:CAO_00487``
+   * - Motor inhibition is a kind of response inhibition.
+     - ``cogat:CAO_00407 ⊑ cogat:CAO_00487``
+
+``cogat:CAO_00872`` is the Stroop task, ``cogat:CAO_01515`` its contrast
+``Stroop_task-incongruent_minus_congruent``, ``cogat:CAO_00487`` response
+inhibition and ``cogat:CAO_00407`` motor inhibition; ``cogat:`` is the
+namespace ``http://www.cognitiveatlas.org/ontology/cogat.owl#``, and
+``cogpo:`` that of the Cognitive Paradigm Ontology, from which the Atlas
+takes ``has_contrast``.  The go/no-go task (``cogat:CAO_00827``) has a
+contrast that measures some response inhibition too.  The stop signal
+task (``cogat:CAO_00871``) has six contrasts, and none has a ``measures``
+axiom.  Every identifier, axiom and count on the Atlas in this section was
+checked with rdflib on the engine's copy of the file.
+
+The closed world is computed on the same engine with the constraints
+removed and ``cogpo:has_contrast`` and ``cogat:measures`` as empty
+relations: the plain Datalog reading of the same program.  The results
+were computed on 15 November 2026 with NeuroLang master ``167e48b0`` and the
+reading of ``rdf:type`` this section describes, one query at a time, each
+stopped after 1,500 s; each time includes the compilation of the query.
+
+.. list-table:: Our experiments, in the closed and the open world
+   :header-rows: 1
+   :widths: 34 22 22 22
+
+   * - Question
+     - Closed world
+     - Open world
+     - Why
+   * - Which task is each? ``rdf:type(e, t)``
+     - e1 Stroop, e2 stop signal, e3 go/no-go; 0.7 s
+     - the same; 8.0 s
+     - our data
+   * - Has a contrast?
+     - none; 0.3 s
+     - e1, e2, e3; 2.8 s
+     - every one of these tasks has some contrast
+   * - … one that measures response inhibition?
+     - none; 0.8 s
+     - e1, e3; 33.3 s
+     - the Stroop and go/no-go contrasts measure some response inhibition
+   * - Which contrast?
+     - none; 0.3 s
+     - none; 2.0 s
+     - the Atlas says that one exists, not which
+
+Nobody recorded a contrast for these experiments, so the closed world
+answers none.  The open world answers from what the Atlas says of every
+task of each kind.  It does not give e2 for response inhibition: the
+Atlas never says what the stop signal contrasts measure, and the open
+world completes what the curators stated, never what they left out.  Nor
+does it say which contrast: it adds answers, never values.  The answers
+are as complete as the ontology.
+
+**Which studies measure response inhibition?**  The studies of Neurosynth
+are linked the same way, through the Stroop task, by the term of its name,
+and the condition is kept in a rule of its own:
+
+.. code-block:: neurolang
+
+   rdf:type(s, t) :- mentions(s, 'stroop task'), cogat_term(t, 'stroop task')
+   inhibition_study(s) :- exists(x, c, k; cogpo:has_contrast(s, x),
+       cogat:measures(x, c), rdf:type(c, k), cogat_term(k, 'response inhibition'))
+   ans(s) :- inhibition_study(s)
+
+.. list-table:: The Stroop studies of Neurosynth
+   :header-rows: 1
+   :widths: 40 20 20 20
+
+   * - Query, after the rule of ``rdf:type``
+     - Closed world
+     - Open world
+     - Why
+   * - ``ans(s) :- exists(x; cogpo:has_contrast(s, x))``
+     - none; 0.3 s
+     - 139 studies; 8.5 s
+     - every Stroop task has some contrast
+   * - … ``rdf:type(x, k), cogat_term(k, 'stroop_task-incongruent_minus_congruent')``
+     - none; 1.0 s
+     - 139 studies; 3.3 s
+     - that contrast is an incongruent − congruent one
+   * - ``ans(s) :- inhibition_study(s)``
+     - none; 1.4 s
+     - 139 studies; 31.0 s
+     - and it measures some response inhibition
+   * - ``ans(s, c)``, the response inhibition each measured
+     - none; 1.1 s
+     - none; 4.4 s
+     - it is an unnamed value
+
+The curators stated one axiom; they did not enter 139 contrasts.  The same
+139 studies mention the Stroop task, ``mentions(s, 'stroop task')``, in
+1.4 s.  The question, however, is about a concept, and the
+ontology decides which tasks count: a curator who gives another task a
+contrast that measures response inhibition changes the answer without
+changing the query.  Of the tasks of the Atlas with a contrast that
+measures response inhibition, only ``'stroop task'`` is a term of
+Neurosynth; the vocabulary of the ``neurostore`` engine has five of them.
+
+**The Atlas, twice.**  Once loaded, the Atlas is in the engine in two
+forms.  Its axioms are constraints over one predicate per class and per
+property (:ref:`ontologies-loading`): the open world above.  Its triples
+are also facts on the names of its classes: ``rdfs:subClassOf``,
+``owl:onProperty``, ``owl:someValuesFrom`` and ``rdfs:label`` relate a
+class to its restrictions and to its label, and the engine's
+``cogat_measures``, ``cogat_subclass_of`` and ``cogat_term`` join them.
+Read as facts, the axioms say which tasks have a contrast that measures
+response inhibition, or one of its subclasses:
+
+.. code-block:: neurolang
+
+   has_contrast_class(t, k) :- rdfs:subClassOf(t, r), owl:onProperty(r, <http://www.cogpo.org/ontologies/working/CogPOver2011.owl#has_contrast>), owl:someValuesFrom(r, k)
+   inhibition(c) :- cogat_term(c, 'response inhibition')
+   inhibition(c) :- cogat_subclass_of(c, d), cogat_term(d, 'response inhibition')
+   inhibition_task(t, c) :- has_contrast_class(t, k), cogat_measures(k, c), inhibition(c)
+   ans(t, n, m) :- inhibition_task(t, c), cogat_term(t, n), cogat_term(c, m)
+
+It returns 7 tasks in 4.1 s: the colour-word Stroop, the
+conditional stop signal, the choice reaction time, the go/no-go, the
+Simon and the Stroop tasks, and the Hayling sentence completion test, each
+with response inhibition.  With the same first four rules, ``ans(s, n) :-
+inhibition_task(t, c), cogat_term(t, n), mentions(s, n)`` returns the 139
+studies in 4.5 s.  This
+reading needs no instance, but it finds only what the axioms say of the
+classes as written: it reaches a study through the name of its task, and
+never through a contrast of the study itself.
+
+**Where in the brain?**  The open-world condition of a probabilistic query:
+
+.. code-block:: neurolang
+
+   rdf:type(s, t) :- mentions(s, 'stroop task'), cogat_term(t, 'stroop task')
+   inhibition_study(s) :- exists(x, c, k; cogpo:has_contrast(s, x),
+       cogat:measures(x, c), rdf:type(c, k), cogat_term(k, 'response inhibition'))
+   p_active_given_inhibition(i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (inhibition_study(s) & selected_study(s))
+   ans(i, j, k, p) :- p_active_given_inhibition(i, j, k, p)
+
+Here ``p`` is the probability that a study, among those that measure
+response inhibition, reports a peak within 6 mm of the voxel
+``(i, j, k)``.  In the closed world the condition holds of no study, and
+the query returns none, in 2.2 s.  In the open world it returns
+1,296,985 voxels with ``p > 0`` in 84.4 s, with the highest ``p`` 0.180:
+the map conditioned on the 139 Stroop studies, as
+``p_active_given_stroop(i, j, k, PROB) :- (activated(i, j, k, s) &
+selected_study(s)) // (mentions(s, 'stroop task') & selected_study(s))``
+gives in 12.8 s.  The highest ``p`` of that map in each region of the
+Destrieux atlas, with the MNI coordinates of the voxel that reaches it,
+are:
+
+.. list-table:: The six Destrieux regions with the highest ``p``
+   :header-rows: 1
+
+   * - Destrieux region
+     - MNI (mm)
+     - ``p``
+   * - L S precentral inf part
+     - (−43, 5, 31)
+     - 0.180
+   * - L G front sup
+     - (−4, 11, 49)
+     - 0.173
+   * - L S front inf
+     - (−42, 20, 28)
+     - 0.151
+   * - R G front sup
+     - (3, 19, 43)
+     - 0.151
+   * - R G and S cingul Mid Ant
+     - (5, 22, 37)
+     - 0.151
+   * - L G and S cingul Mid Ant
+     - (−6, 12, 48)
+     - 0.137
+
+The highest, 0.180, is 25 of the 139 studies.
+
+**What the curators did not state.**  The studies that mention the stop
+signal, linked to its task, ``rdf:type(s, t) :- mentions(s, 'stop
+signal'), cogat_term(t, 'stop signal task')``: 99 of them mention it, in
+1.5 s, and none is an ``inhibition_study(s)``, in 3.0 s.
+No constraint gives a contrast of the stop signal task a ``measures``, so
+every rewriting through ``cogat:measures`` is dead, and the rewriting drops
+it before building it (:ref:`ontologies-complete`).
+
+.. _ontologies-types:
+
+Types
+~~~~~
+
+``rdf:type(x, C)`` makes ``x`` an instance of ``C``, whether a file states
+it, ``ex:our_experiment a cogat:CAO_00872``, or a rule of the program,
+``rdf:type(e, t) :- our_experiment(e, n), cogat_term(t, n)``.  The facts
+of ``rdf:type`` the files state are kept in a relation of their own, which
+a rule of ``rdf:type`` reads, so that the rules of a program can add
+types.  At each query, NeuroLang finds the classes of which ``rdf:type``
+gives an instance and makes their instances, ``C(x)``, from the data that
+type them; the other classes keep no instance, and the rewriting drops the
+rewritings over them (:ref:`ontologies-complete`).  The types of a program
+must come from its data: a rule of ``rdf:type`` that depends on a
+predicate the ontology constrains is refused, as its types would depend on
+the instances they make.
+
+In a question, ``rdf:type(c, k)``, with ``k`` fixed by atoms without ``c``
+and with no other variable, as ``cogat_term(k, 'response inhibition')``,
+is the atom of the class they name, ``cogat:CAO_00487(c)``, which the
+constraints apply to an unnamed ``c`` too.  NeuroLang finds the class
+before rewriting, in the query's rule and in the rules of the program; a
+label of several classes gives a rule for each, and a label of none gives
+no answer.  ``rdf:type(e, t)`` with ``t`` free reads the types stated,
+those of the files and of the rules; with ``k`` fixed, the instances of
+the class include those of its subclasses.
+
+Writing such queries
+~~~~~~~~~~~~~~~~~~~~
+
+Keep a chain through unnamed values inside one rule.  The rewriting treats
+each rule on its own (:ref:`ontologies-complete`), so
+``inhibition_study(s)`` holds the whole chain and projects it onto ``s``; a
+rule with ``x`` or ``c`` in its head loses the answers reached through the
+unnamed contrast.  Type the instances with a deterministic rule, as with
+``mentions`` above, and bring ``PROB`` in afterwards, as the brain map
+does.
+
+In short, the open world lets the curators of an ontology be
+non-exhaustive.  On (IV), one axiom stated once gave our experiments and
+139 studies a contrast that no one entered, and only what was never stated
+stayed out of reach.
+
 What would confirm and what limits this
 ---------------------------------------
 
 The completeness claim rests on an argument and on 2,265 random queries,
-not on a mechanised proof.  A cross-check against an OWL reasoner, such as
+not on a mechanised proof.  The W3C OWL test cases [OWLTest2004]_ check
+the reading of OWL itself: of the 84 tests of the approved and proposed
+archives, the 8 entailment and non-entailment tests whose premises are in
+the fragment NeuroLang reads and whose conclusion is a set of facts on
+individuals (on ``allValuesFrom``, ``someValuesFrom``, ``inverseOf``,
+``SymmetricProperty``, ``TransitiveProperty`` and an unread
+``owl:imports``) pass, as ``test_w3c_owl_tests.py``.  The 76 others are
+skipped, each with its reason in
+``frontend/tests/w3c_owl_tests/skipped.tsv``: 13 consistency and
+inconsistency tests (NeuroLang does not check consistency), 7 on
+``owl:imports``, 5 not about an OWL feature, 44 whose premises use what
+NeuroLang does not read (functional and inverse functional properties,
+``owl:samePropertyAs``, cardinalities, equality of individuals and
+classes, ``unionOf``, ``complementOf``, ``oneOf``, ``disjointWith``,
+``intersectionOf`` other than as a superclass, a class expression as a
+subclass) and 7 whose conclusion is an axiom on classes or properties
+rather than a query.  The OWL 2 test repository no longer
+resolves.  A cross-check against an OWL reasoner, such as
 HermiT or Konclude, on ontologies with instances of the Cognitive Atlas,
 would test it at scale.  The termination of the rewriting on recursive
 ``allValuesFrom`` is not guaranteed.  A Datalog rewriting of the anonymous
@@ -486,6 +886,10 @@ ends.
    In Proceedings of the 22nd International Joint Conference on Artificial
    Intelligence (IJCAI), 2656–2660, 2011.
    doi:10.5591/978-1-57735-516-8/IJCAI11-442
+
+.. [OWLTest2004] J. J. Carroll and J. De Roo (eds.). *OWL Web Ontology
+   Language Test Cases*. W3C Recommendation, 10 February 2004.
+   https://www.w3.org/TR/owl-test/
 
 .. [Lutz2009] C. Lutz, D. Toman and F. Wolter. *Conjunctive query answering
    in the description logic EL using a relational database system*. In

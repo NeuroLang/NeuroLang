@@ -596,6 +596,26 @@ def test_ask_shows_the_summary_above_the_query_in_a_panel_of_its_own(app):
     assert "Reads back as" not in text[query:]
 
 
+def test_ask_out_of_steps_says_it_is_no_final_answer(app):
+    """
+    Out of steps, the last query that gave rows is shown under a summary
+    saying it is no final answer, and the ``done`` event says so too.
+    """
+    from neurolang_apps.utils.llm.agent import AgentResult
+    from neurolang_apps.utils.tui.assistant import _done_event
+
+    script(app, REACT_PAIN[0])
+    app._run_line(".llm --steps 1 Which studies mention pain?")
+    text = output(app)
+    summary = text.index("Summary")
+    assert summary < text.index("Out of steps", summary) < text.index(
+        "DATALOG query"
+    )
+    assert app.pending_input.endswith("ans(s) :- mentions(s, 'pain')")
+    done = _done_event(AgentResult(valid=True, out_of_steps=True))
+    assert done["out_of_steps"]
+
+
 def test_ask_shows_the_query_read_back(app):
     app.assistant._config.assistant.verify_rounds = 1
     script(
@@ -616,9 +636,9 @@ def test_explain_reads_the_last_query_in_english(app):
     app._run_line(".explain")
     assert not app.failed
     assert "Reads as: The studies that mention the term pain." in output(app)
-    request = client.requests[0]["messages"][1]["content"]
+    request = client.requests[0]["messages"][2]["content"]
     assert "ans(s) :- mentions(s, 'pain')" in request
-    assert "Datalog" in client.requests[0]["messages"][0]["content"]
+    assert "Datalog" in client.requests[0]["messages"][1]["content"]
 
 
 def test_explain_follows_the_language_of_the_query(app):
@@ -626,7 +646,7 @@ def test_explain_follows_the_language_of_the_query(app):
     app._run_line(PAIN)
     client = script(app, "Every study that mentions pain.")
     app._run_line(".explain")
-    assert "SQUALL" in client.requests[0]["messages"][0]["content"]
+    assert "SQUALL" in client.requests[0]["messages"][1]["content"]
     assert "Reads as: Every study that mentions pain." in output(app)
 
 

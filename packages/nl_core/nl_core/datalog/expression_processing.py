@@ -94,7 +94,9 @@ def is_conjunctive_expression(expression):
     )
 
 
-def is_conjunctive_expression_with_nested_predicates(expression):
+def is_conjunctive_expression_with_nested_predicates(
+    expression, allow_negation=False
+):
     tr = TranslateToDatalogSemantics()
     expression = tr.walk(expression)
     stack = [expression]
@@ -110,6 +112,8 @@ def is_conjunctive_expression_with_nested_predicates(expression):
             stack += exp.formulas
         elif isinstance(exp, Quantifier):
             stack.append(exp.body)
+        elif allow_negation and isinstance(exp, Negation):
+            stack.append(exp.formula)
         else:
             return False
 
@@ -343,11 +347,23 @@ def _recursive_components(rules):
     depends_on = {head: set() for head in heads}
     for r in rules:
         depends_on[r.consequent.functor] |= _body_predicates(r) & heads
-    component = _strongly_connected_components(depends_on)
+    component = strongly_connected_components(depends_on)
     components = {}
     for r in rules:
         components.setdefault(component[r.consequent.functor], []).append(r)
     return components.values()
+
+
+def recursive_components(rules):
+    """The sets of the predicates defined by *rules* which are in a cycle
+    of their dependencies: a component of several predicates, or of one
+    whose rules use it."""
+    for component in _recursive_components(rules):
+        heads = {r.consequent.functor for r in component}
+        if len(heads) > 1 or any(
+            r.consequent.functor in _body_predicates(r) for r in component
+        ):
+            yield heads
 
 
 @functools.lru_cache(maxsize=1 << 14)
@@ -359,7 +375,7 @@ def _body_predicates(implication):
     )
 
 
-def _strongly_connected_components(edges):
+def strongly_connected_components(edges):
     """``{node: index of its component}``, Tarjan's algorithm without
     recursion; the nodes with no rule of their own are in no cycle."""
     index, low, on_stack, stack = {}, {}, set(), []

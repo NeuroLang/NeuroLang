@@ -17,13 +17,16 @@ Datalog, and the Datalog rules of a predicate (``.datalog``).
 
 import re
 import shlex
+import shutil
+import time
 import traceback
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
-from neurolang.confine import confined_roots
+from neurolang.confine import ConfinedError, check_read, confined_roots
 from rich import box
 from rich.table import Table
 
@@ -351,12 +354,13 @@ def default_relation_name(path) -> str:
     """
     Return the default name of the relation loaded from *path*.
 
-    It is the file name without its ``.csv``/``.tsv`` and ``.gz``
-    extensions, in lower case, with the characters other than letters
-    and digits replaced by ``_`` and ``rel_`` prepended if it would start
-    with a digit.
+    It is the file name without its ``.csv``/``.tsv``/``.nii``/``.trk``/
+    ``.tck`` and ``.gz`` extensions, in lower case, with the characters
+    other than letters and digits replaced by ``_`` and ``rel_`` prepended
+    if it would start with a digit.
     """
-    stem = re.sub(r"(\.(csv|tsv))?(\.gz)?$", "", Path(path).name.lower())
+    stem = re.sub(r"(\.(csv|tsv|nii|trk|tck))?(\.gz)?$", "",
+                  Path(path).name.lower())
     name = re.sub(r"[^a-z0-9]", "_", stem)
     return f"rel_{name}" if not name or name[0].isdigit() else name
 
@@ -448,32 +452,196 @@ def _load_arguments(arg: str):
     return words if 1 <= len(words) <= 2 else None
 
 
-# The files a page uploads (WebRepl.upload): their names, the bytes of
-# one, and of all those of a session, which keeps them in its memory.
+# The files a page uploads (WebRepl.upload): their names, and by default
+# the bytes of one and of all those of a session (a server sets its own:
+# neurolang-repl-serve --max-upload-mb, --max-uploads-mb).
 UPLOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,99}\Z")
 MOST_UPLOAD_BYTES = 50 << 20
 MOST_UPLOADS_BYTES = 200 << 20
+# Those of an image or a tractogram, which .image loads (nifti.py), not
+# .load: a tractogram as the voxels near the ends of its streamlines.
+TRACTOGRAM_SUFFIXES = (".trk", ".tck")
+IMAGE_SUFFIXES = (".nii", ".nii.gz") + TRACTOGRAM_SUFFIXES
+
+
+def is_image(name: str) -> bool:
+    """Whether the file *name* is a NIfTI image or a tractogram, which
+    ``.image`` loads."""
+    return name.lower().endswith(IMAGE_SUFFIXES)
+
+
+def is_tractogram(name: str) -> bool:
+    """Whether the file *name* is a tractogram (``.trk``, ``.tck``)."""
+    return name.lower().endswith(TRACTOGRAM_SUFFIXES)
+
+
+class Uploads:
+    """
+    The files the page of a session uploaded, by name, for ``.load NAME``
+    and ``.image NAME``: in the memory of the session, or, on a server that
+    gives one (neurolang-repl-serve --uploads-dir), as the files of the
+    session's *directory*, which the server removes when the session ends
+    and its admins may erase (what the folder holds is the session's). A
+    file is at most *most_file* bytes, and all those of the session
+    *most_all*: a ValueError tells which is exceeded. A new store of a
+    directory empties it, as the page forgets its files on a restart.
+    """
+
+    def __init__(self, directory=None, most_file: int = MOST_UPLOAD_BYTES,
+                 most_all: int = MOST_UPLOADS_BYTES):
+        self.directory = Path(directory) if directory else None
+        self.most_file = int(most_file)
+        self.most_all = int(most_all)
+        self._memory = {}  # name -> data, without a directory
+        self._times = {}  # name -> when it was uploaded, without one
+        self._loaded = {}  # name -> the relations loaded from it
+        # The last file removed, for an undo (restore): its name, its
+        # bytes (without a directory) and the relations loaded from it.
+        self._removed = None
+        if self.directory is not None and self.directory.exists():
+            shutil.rmtree(self.directory, ignore_errors=True)
+
+    def _sizes(self) -> dict:
+        """Return the sizes of the files kept, by name."""
+        if self.directory is None:
+            return {name: len(data) for name, data in self._memory.items()}
+        if not self.directory.is_dir():
+            return {}
+        return {path.name: path.stat().st_size
+                for path in self.directory.iterdir() if path.is_file()}
+
+    def get(self, name: str) -> Optional[bytes]:
+        """Return the bytes of the file *name*, or None."""
+        if self.directory is None:
+            return self._memory.get(name)
+        try:
+            return (self.directory / name).read_bytes()
+        except OSError:  # never uploaded, or erased
+            return None
+
+    def put(self, name: str, data: bytes) -> None:
+        """Keep the bytes *data* as the file *name*, replacing one of that
+        name; *name* is that of a file of the directory (store_upload
+        checks it)."""
+        if len(data) > self.most_file:
+            raise ValueError(f"{name} is over {self.most_file >> 20} MB")
+        kept = sum(size for n, size in self._sizes().items() if n != name)
+        if kept + len(data) > self.most_all:
+            raise ValueError(f"The uploads of a session hold at most "
+                             f"{self.most_all >> 20} MB")
+        self._forget_removed()  # another change: no undo of a removal
+        if self.directory is None:
+            self._memory[name] = bytes(data)
+            self._times[name] = time.time()
+        else:
+            self.directory.mkdir(parents=True, exist_ok=True)
+            (self.directory / name).write_bytes(data)
+        self._loaded.pop(name, None)  # new bytes, nothing loaded of them
+
+    __setitem__ = put
+
+    def __contains__(self, name) -> bool:
+        return name in self._sizes()
+
+    def remove(self, name: str) -> bool:
+        """Remove the file *name*, from the memory of the session or from
+        its folder; return whether there was one. It is kept aside, for
+        :meth:`restore`, until the next change of the uploads."""
+        if name not in self:
+            return False
+        self._forget_removed()
+        loaded = self._loaded.pop(name, set())
+        self._times.pop(name, None)
+        if self.directory is None:
+            self._removed = (name, self._memory.pop(name), loaded)
+        else:
+            aside = self.directory / self.REMOVED
+            aside.mkdir(exist_ok=True)
+            (self.directory / name).replace(aside / name)
+            self._removed = (name, None, loaded)
+        return True
+
+    #: The folder, in that of a session, of the file removed last.
+    REMOVED = ".removed"
+
+    def restore(self, name: str) -> bool:
+        """Bring back the file *name*, if it was the last removed and
+        nothing changed since; return whether it was."""
+        if self._removed is None or self._removed[0] != name:
+            return False
+        _, data, loaded = self._removed
+        self._removed = None
+        if self.directory is None:
+            self._memory[name] = data
+            self._times[name] = time.time()
+        else:
+            (self.directory / self.REMOVED / name).replace(
+                self.directory / name)
+        if loaded:
+            self._loaded[name] = loaded
+        return True
+
+    def _forget_removed(self) -> None:
+        """Forget the file removed last: it can no longer be restored."""
+        self._removed = None
+        if self.directory is not None:
+            shutil.rmtree(self.directory / self.REMOVED, ignore_errors=True)
+
+    def loaded(self, name: str, relation: str) -> None:
+        """Tell that the relation *relation* was loaded from the file
+        *name* (.load NAME, .image NAME)."""
+        self._loaded.setdefault(name, set()).add(relation)
+
+    def used(self) -> int:
+        """Return the bytes the files take."""
+        return sum(self._sizes().values())
+
+    def listing(self) -> list:
+        """Return the files, by name: each one's ``name``, ``size``, ``age``
+        in seconds since it was uploaded, and the relations ``loaded`` from
+        it, by name."""
+        now = time.time()
+        listing = []
+        for name, size in sorted(self._sizes().items()):
+            when = self._times.get(name) if self.directory is None else None
+            if when is None and self.directory is not None:
+                try:
+                    when = (self.directory / name).stat().st_mtime
+                except OSError:  # erased meanwhile
+                    continue
+            listing.append({
+                "name": name, "size": size,
+                "age": max(0, round(now - (when or now))),
+                "loaded": sorted(self._loaded.get(name, ())),
+            })
+        return listing
 
 
 def store_upload(app, name: str, data: bytes) -> None:
     """
     Keep the file *name*, of the bytes *data*, that the page uploaded, for
-    ``.load NAME``: in the memory of the session, never on a disk, and
-    gone with it. A ValueError tells why it is refused (its name, its
-    format, its size).
+    ``.load NAME`` (``.image NAME`` for a NIfTI image or a tractogram), in
+    the uploads of
+    the session (:class:`Uploads`), gone with it. A ValueError tells why it
+    is refused (its name, its format, its size).
     """
     if not isinstance(name, str) or not UPLOAD_NAME.match(name) \
             or ".." in name:
         raise ValueError(f"{name!r} is not the name of a file: letters, "
                          "digits, '.', '_', '-' and spaces")
-    engine_registry.relation_file_separator(name)  # .csv, .tsv(.gz)
-    if len(data) > MOST_UPLOAD_BYTES:
-        raise ValueError(f"{name} is over {MOST_UPLOAD_BYTES >> 20} MB")
-    kept = sum(len(d) for n, d in app.uploads.items() if n != name)
-    if kept + len(data) > MOST_UPLOADS_BYTES:
-        raise ValueError(f"The uploads of a session hold at most "
-                         f"{MOST_UPLOADS_BYTES >> 20} MB")
-    app.uploads[name] = bytes(data)
+    if not is_image(name):
+        engine_registry.relation_file_separator(name)  # .csv, .tsv(.gz)
+    app.uploads.put(name, data)
+
+
+def _confined_may_read(path: str) -> bool:
+    """Whether the confined statements may read the file *path*: one of
+    the directories they may read (neurolang.confine)."""
+    try:
+        check_read(Path(path).expanduser(), "file")
+    except ConfinedError:
+        return False
+    return True
 
 
 @command(
@@ -491,10 +659,13 @@ def cmd_load(app, arg: str) -> None:
         _load_failed(app, "Usage: .load PATH|UPLOADED [NAME]")
         return
     data = app.uploads.get(words[0])
-    if data is None and confined_roots() is not None:
-        _load_failed(app, f"No file {words[0]} was uploaded: this server "
-                     "loads the files you upload (the Upload button) by "
-                     "their name, not its own files")
+    if data is None and confined_roots() is not None and \
+            not _confined_may_read(words[0]):
+        _load_failed(app, f"No file {words[0]} was uploaded: here the "
+                     "statements load the files uploaded (the page's Upload "
+                     "button) by their name, and those of the folders they "
+                     "may read (neurolang-query --mcp --allow-dir), not the "
+                     "machine's other files")
         return
     path = Path(words[0]) if data is not None else \
         Path(words[0]).expanduser()
@@ -512,6 +683,105 @@ def cmd_load(app, arg: str) -> None:
         _add_relation(app, name, df, path)
     except Exception as exc:
         _load_failed(app, _load_error_message(path, exc), exc)
+        return
+    if data is not None:
+        app.uploads.loaded(words[0], name)
+
+
+UPLOADS_USAGE = ".uploads [remove NAME | restore NAME]"
+
+
+@command(
+    ".uploads", "List the files the page uploaded in this session (Upload "
+    "data): their kind, size, age and the relations loaded from them; "
+    "remove NAME deletes one, restore NAME brings back the one removed last",
+    UPLOADS_USAGE,
+)
+def cmd_uploads(app, arg: str) -> None:
+    """Print the files of the session's uploads (session.Uploads), or
+    remove one."""
+    try:
+        words = shlex.split(arg)
+    except ValueError:
+        words = None
+    if words and len(words) == 2 and words[0] == "remove":
+        _remove_upload(app, words[1])
+        return
+    if words and len(words) == 2 and words[0] == "restore":
+        if app.uploads.restore(words[1]):
+            app.console.print(f"restored {words[1]}", style="green",
+                              markup=False)
+        else:
+            _warn(app, f"{words[1]} cannot be restored: only the file "
+                       "removed last can, before another is uploaded or "
+                       "removed.")
+        return
+    if words != []:
+        _warn(app, f"Usage: {UPLOADS_USAGE}")
+        return
+    listing = app.uploads.listing()
+    if not listing:
+        app.console.print(
+            "No file was uploaded in this session: Upload data, on the "
+            "page, uploads one; .load NAME or .image NAME loads it.",
+            markup=False,
+        )
+        return
+    table = Table(box=box.ROUNDED, header_style="bold cyan")
+    for column in ("File", "Kind", "Size", "Uploaded", "Loaded as"):
+        table.add_column(column, justify="right" if column == "Size"
+                         else "left")
+    for upload in listing:
+        table.add_row(
+            upload["name"],
+            "tractogram" if is_tractogram(upload["name"])
+            else "image" if is_image(upload["name"]) else "table",
+            _megabytes(upload["size"]), _ago(upload["age"]),
+            ", ".join(upload["loaded"]) or "not loaded",
+        )
+    app.console.print(table)
+    app.console.print(
+        f"{_megabytes(app.uploads.used())} of "
+        f"{app.uploads.most_all >> 20} MB used; a file takes at most "
+        f"{app.uploads.most_file >> 20} MB.", markup=False,
+    )
+
+
+def _remove_upload(app, name: str) -> None:
+    """Delete the uploaded file *name* from the session, telling which
+    relations loaded from it stay."""
+    listing = {upload["name"]: upload for upload in app.uploads.listing()}
+    if not app.uploads.remove(name):
+        _warn(app, f"No file {name} was uploaded in this session: "
+                   ".uploads lists them.")
+        return
+    loaded = listing.get(name, {}).get("loaded", [])
+    message = f"removed {name}"
+    if loaded:
+        relations = ", ".join(loaded)
+        message += (f"; {relations}, loaded from it, "
+                    f"{'stays' if len(loaded) == 1 else 'stay'} in this "
+                    f"session (.drop {loaded[0]} removes it)")
+    app.console.print(message, style="green", markup=False)
+
+
+def _megabytes(size: int) -> str:
+    """Return the *size* in bytes as a text: bytes below a kilobyte, kB
+    below a megabyte."""
+    if size < 1024:
+        return f"{size} B"
+    if size < 1 << 20:
+        return f"{size / 1024:.1f} kB"
+    return f"{size / (1 << 20):.1f} MB"
+
+
+def _ago(seconds: int) -> str:
+    """Return how long ago *seconds* was, as a text."""
+    if seconds < 120:
+        return f"{seconds} s ago"
+    if seconds < 7200:
+        return f"{seconds // 60} min ago"
+    return f"{seconds // 3600} h ago"
 
 
 @command(".sets", "List the engine's sets (EDB relations) and the loaded ones")

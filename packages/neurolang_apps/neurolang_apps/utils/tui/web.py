@@ -27,7 +27,7 @@ import math
 import re
 import shlex
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, NamedTuple
@@ -35,6 +35,7 @@ from unittest import mock
 
 import pandas as pd
 from rich.console import Console
+from rich.terminal_theme import TerminalTheme
 from rich.text import Text
 
 from neurolang_apps.utils import engine_registry
@@ -54,6 +55,22 @@ MAX_ROWS = 200_000
 HTML_FORMAT = (
     '<pre class="repl-output" style="font-family: inherit">'
     "<code>{code}</code></pre>"
+)
+
+# The colours of the output on the page: on its dark panel (--term in
+# tokens.css, in either theme), those of the page's palette, each with a
+# contrast of at least 4.5 to the panel (WCAG AA), where Rich's default
+# theme, made for a light terminal, wrote the red of an error at 1.6. Text
+# of no colour takes the page's; dim text is blended halfway from the
+# foreground, white, to the background, the lighter of the two panels.
+LOG_THEME = TerminalTheme(
+    (0x0F, 0x1B, 0x33), (0xFF, 0xFF, 0xFF),
+    [(0x83, 0x92, 0xAF), (0xFF, 0x8F, 0x87), (0x4C, 0xCF, 0x8A),
+     (0xF2, 0xC1, 0x4E), (0x7D, 0xB7, 0xF8), (0xD7, 0xA6, 0xF5),
+     (0x4C, 0xC3, 0xDE), (0xE8, 0xEE, 0xF9)],
+    [(0xA9, 0xB8, 0xD0), (0xFF, 0xB3, 0xAD), (0x7F, 0xE0, 0xAD),
+     (0xF7, 0xD6, 0x83), (0xA9, 0xCF, 0xFB), (0xE6, 0xC6, 0xF9),
+     (0x8A, 0xDC, 0xEC), (0xFF, 0xFF, 0xFF)],
 )
 
 # The precomputed analyses of the meta-analysis engines: ``activated``
@@ -170,10 +187,10 @@ class Reply:
     """
     The answer to a submission.
 
-    *html* is its output, *viewers* the HTML pages of the brain viewer
-    the submission made (``.view``), *tables* its results (see
-    :func:`table_payload`), *failed* tells whether a statement of it
-    failed, *prompt* is the query the assistant wrote, for the page
+    *html* is its output (text if the REPL is not of HTML), *viewers*
+    the HTML pages of the brain viewer the submission made (``.view``),
+    *tables* its results (see :func:`table_payload`), *failed* tells
+    whether a statement of it failed, *prompt* is the query the assistant wrote, for the page
     to put in its input, and *mode* the language of the REPL, ``datalog``
     or ``squall``, which the assistant may have switched, *predicates*
     those of the engine and the session (see :meth:`WebRepl.predicates`),
@@ -183,6 +200,9 @@ class Reply:
     :mod:`~neurolang_apps.utils.tui.query_graph`). *tokens*, if the
     assistant answered, are the tokens it sent (``input``) and received
     (``output``), its requests (``calls``), its ``provider`` and ``model``.
+    *uploads* are the files the page uploaded in the session, which it
+    lists: their ``files`` (see :meth:`session.Uploads.listing`), the bytes
+    they take, ``used``, and the most the session may keep, ``most``.
     """
 
     html: str
@@ -195,6 +215,7 @@ class Reply:
     ratable: bool = False
     graph: str = ""
     tokens: dict = field(default_factory=dict)
+    uploads: dict = field(default_factory=dict)
 
 
 class Download(NamedTuple):
@@ -298,8 +319,10 @@ def table_payload(
     The ``columns`` and their ``kinds`` (bool, int, float, str or other,
     for the sort), the first *max_rows* ``rows`` of cells, the ``total``
     number of rows, whether the rows are ``truncated`` and the ``title``.
-    With the *sorts* of the columns (the name of each, None if unknown),
-    ``sorts``; and if some columns are of studies, and the *studies* are
+    With the *sorts* of the columns (the :class:`~.provenance.ColumnSort`
+    of each, None if unknown), ``sorts``, the name of each, and
+    ``positions``, the column of each among those of its sort (0 to 2 for
+    the ``i, j, k`` of a voxel); and if some columns are of studies, and the *studies* are
     known (see :func:`study_records`), ``study_links``: those ``columns``,
     and the ``records`` of the studies the rows hold, by id.
     """
@@ -314,7 +337,8 @@ def table_payload(
         "truncated": len(frame) > len(kept),
     }
     if sorts is not None:
-        payload["sorts"] = list(sorts)
+        payload["sorts"] = [s.sort if s else None for s in sorts]
+        payload["positions"] = [s.position if s else None for s in sorts]
         links = _study_links(kept, payload["sorts"], studies)
         if links:
             payload["study_links"] = links
@@ -357,22 +381,66 @@ def _arguments(info, described: dict) -> list:
     ]
 
 
+# The topics the questions of the assistant's bank are listed under, in the
+# order of the page; an entry of the bank can name its own with ``topic:``.
+QUESTION_TOPICS = (
+    "Studies and terms",
+    "Encoding: from a term to the brain",
+    "Decoding: from the brain to terms",
+    "Functional connectivity",
+    "Structural connectivity and tractography",
+    "Atlases and region names",
+)
+
+
+def question_topic(question: str, query: str = "") -> str:
+    """
+    Return the topic of a question of the bank, from its words and the
+    predicates of its query: the connectivity and the tractography first,
+    then the decoding (a term, concept or task asked of a region or an
+    image), then the encoding (a region or voxels asked of a term).
+    """
+    text = f"{question} {query}".lower()
+    if re.search(r"(destrieux|tian|schaefer\w*)_name|atlas_abbreviation",
+                 text):
+        return QUESTION_TOPICS[5]
+    heads = [line for line in query.lower().splitlines()
+             if line.startswith("ans")]
+    asked = f"{question} {heads[-1] if heads else ''}".lower()
+    if re.search(r"functional_connectivity|functionally|resting|at rest",
+                 text):
+        return QUESTION_TOPICS[3]
+    if re.search(r"structural|streamline|tract|bundle|white-matter|"
+                 r"disconnect", text):
+        return QUESTION_TOPICS[4]
+    if (re.search(r"decode|reverse inference|bayes_factor\(|lift", text)
+            and re.search(r"term|concept|task|process", asked)):
+        return QUESTION_TOPICS[2]
+    if re.search(r"activated\(|activation|co-?activat|peak|voxel|"
+                 r"similar_study|image", text):
+        return QUESTION_TOPICS[1]
+    return QUESTION_TOPICS[0]
+
+
 class WebRepl:
     """A REPL on the engine *nl*, which a web page submits input to."""
 
     def __init__(
         self, nl, engine_name: str = "", resolution=None, width: int = 100,
-        max_rows: int = MAX_ROWS, study_metadata=None,
+        max_rows: int = MAX_ROWS, study_metadata=None, html: bool = True,
     ):
         """
         Set up the REPL on *nl*, the engine *engine_name* at *resolution*.
 
-        The output is laid out on *width* columns, and at most *max_rows*
+        The output is laid out on *width* columns, as HTML or, unless
+        *html*, as plain text, with the pages of ``.view`` and ``.graph``
+        in files, as on a terminal, and at most *max_rows*
         rows of a result are sent to the page. The *study_metadata* (see
         :func:`study_records`) of the engine's studies, whose ids are
         those of PubMed, let the page link the studies of a result.
         """
         self.max_rows = max_rows
+        self.html = html
         self._studies = (
             study_records(study_metadata) if study_metadata is not None
             else None
@@ -408,9 +476,11 @@ class WebRepl:
         nl.left_out_predicates = left_out_predicates(nl, engine_name)
         # The page shows the rows, in a table it can sort and filter.
         self.app.print_block = self._print_block
-        # and the graph of a query in a tab of its own.
+        # and the graph of a query in a tab of its own; as text, the pages
+        # of the graph and the viewer are files, as on a terminal.
         self._graph = ""
-        self.app.show_graph = self._show_graph
+        if html:
+            self.app.show_graph = self._show_graph
         try:
             # Until the visitor gives a key, the assistant asks for it.
             self.set_llm("anthropic", "")
@@ -546,7 +616,8 @@ class WebRepl:
         self._graph = ""
         answered = self.app.assistant.last_run
         query = self.app.last_query
-        with _viewers_returned() as viewers:
+        returned = _viewers_returned() if self.html else nullcontext([])
+        with returned as viewers:
             try:
                 self.app._run_line(text)
             except QuitRepl:
@@ -556,7 +627,7 @@ class WebRepl:
                 )
         prompt, self.app.pending_input = self.app.pending_input, ""
         ran = self.app.last_query  # a new tuple for each query run
-        if not self._graph and ran is not None and ran is not query:
+        if self.html and not self._graph and ran not in (None, query):
             try:
                 self._graph = query_graph.last_query_page(self.app)
             except Exception:  # a query that does not parse has no graph
@@ -576,7 +647,27 @@ class WebRepl:
             self._output(), viewers, self.app.failed, self._tables, prompt,
             "squall" if self.app.settings.squall else "datalog",
             self.predicates(), self._rated is not None, self._graph, tokens,
+            self.uploads(),
         )
+
+    def uploads(self) -> dict:
+        """Return the files the page uploaded in the session, as a reply
+        carries them (see :class:`Reply`), after the tractograms of the
+        engine (``engine``), which the page lists to index them again."""
+        uploads = self.app.uploads
+        files = uploads.listing()
+        for upload in files:  # a tractogram, indexed or not (index)
+            if session.is_tractogram(upload["name"]):
+                upload.update(
+                    nifti.tractogram_index(self.app, upload["name"]))
+        # the engine's tractograms, first, which are not removed
+        files[:0] = [
+            {"name": ident, "size": 0, "age": 0, "loaded": [ident],
+             "engine": True, **nifti.tractogram_index(self.app, "", ident)}
+            for ident in getattr(self.app, "engine_tractograms", ())
+        ]
+        return {"files": files, "used": uploads.used(),
+                "most": uploads.most_all}
 
     def _show_graph(self, page: str) -> None:
         """Keep the *page* of the graph of a query for the reply."""
@@ -611,7 +702,7 @@ class WebRepl:
             self.console.print(
                 f"── {block.title} ──", style="bold magenta", markup=False
             )
-        sorts = [s.sort if s else None for s in block.sorts or ()]
+        sorts = list(block.sorts or ())
         self._frames.append(block.frame)
         table = table_payload(
             block.frame, block.title, self.max_rows,
@@ -654,6 +745,57 @@ class WebRepl:
             return []
         config = engine_registry.get_engine_config(engine)
         return list(config.get("questions") or [])
+
+    def question_queries(self) -> dict:
+        """Return the queries of the assistant's bank on the engine, by
+        the question they answer: ``{question: {language: query}}``, for
+        the page to fill both boxes when an example is picked."""
+        return {e["question"]: e["queries"]
+                for e in self._bank() if e["queries"]}
+
+    def _bank(self) -> List[dict]:
+        """Return the entries of the assistant's bank on the engine, each
+        question once: ``question``, ``topic`` and ``queries``."""
+        engine = self.app.settings.engine_name
+        if not engine:
+            return []
+        config = engine_registry.get_engine_config(engine)
+        bank = {}
+        for entry in config.get("assistant_examples") or []:
+            question = (entry.get("question") or "").strip()
+            if not question or question in bank:
+                continue
+            queries = {
+                language: entry[language].strip()
+                for language in ("datalog", "squall") if entry.get(language)
+            }
+            topic = entry.get("topic") or question_topic(
+                question, queries.get("datalog", "")
+            )
+            bank[question] = {
+                "question": question, "topic": topic, "queries": queries
+            }
+        return list(bank.values())
+
+    def more_questions(self) -> List[str]:
+        """Return the other questions of the assistant's bank on the
+        engine, those that :meth:`questions` does not list, each once,
+        grouped by topic, in the order of ``QUESTION_TOPICS``."""
+        engine = self.app.settings.engine_name
+        if not engine:
+            return []
+        shown = set(
+            engine_registry.get_engine_config(engine).get("questions") or []
+        )
+        rank = {topic: i for i, topic in enumerate(QUESTION_TOPICS)}
+        more = [e for e in self._bank() if e["question"] not in shown]
+        more.sort(key=lambda e: rank.get(e["topic"], len(rank)))
+        return [e["question"] for e in more]
+
+    def question_topics(self) -> dict:
+        """Return the topic of each question of the bank, ``{question:
+        topic}``, for the page to list them by topic."""
+        return {e["question"]: e["topic"] for e in self._bank()}
 
     def predicates(self) -> List[dict]:
         """
@@ -724,10 +866,45 @@ class WebRepl:
         """
         Keep the file *name* of the bytes *data* the page uploaded, in the
         memory of the session, and return the statement that loads it
-        (``.load NAME``): a ValueError tells why it is refused.
+        (``.load NAME``, or ``.image NAME --name RELATION``, the
+        ``relation`` of the file's name, which an upload of the same file
+        replaces) and for an image the ``query`` decoding it, if the engine
+        can, the ``cortex_query`` decoding its cortex only (``--cortex``),
+        and its ``kind``: ``mask``, ``map`` (of values: decoded once
+        loaded with ``--zscore``), or ``tractogram`` (decoded on the voxels
+        within ``radius`` mm of the ends of its streamlines; the uploads
+        of a reply tell how it is indexed for the rules of the bundles,
+        :func:`.nifti.tractogram_index`). A ValueError tells why it is
+        refused.
         """
+        replaced = next((upload["loaded"] for upload in
+                         self.app.uploads.listing()
+                         if upload["name"] == name), ())
         session.store_upload(self.app, name, data)
-        return {"name": name, "statement": f".load {shlex.quote(name)}"}
+        if not session.is_image(name):
+            return {"name": name, "statement": f".load {shlex.quote(name)}"}
+        relation = nifti.image_relation_name(self.app, name, replaced)
+        try:  # a mask is decoded as it is, a map once said of z-scores
+            kind = "tractogram" if session.is_tractogram(name) else \
+                "mask" if nifti.is_mask(nifti.read_image(data)) else "map"
+            query, missing = nifti.decoding_query(self.app, relation)
+            cortex, missing_cortex = nifti.decoding_query(
+                self.app, relation, "cortex"
+            )
+        except Exception:  # .image tells what is wrong with the file
+            kind, query, missing, cortex, missing_cortex = "", "", [], "", []
+        return {
+            "name": name, "relation": relation,
+            "statement": f".image {shlex.quote(name)} --name {relation}",
+            "query": "" if missing else query, "kind": kind,
+            "cortex_query": "" if missing or missing_cortex else cortex,
+            # a map, decoded as a mask, keeps its voxels from it (--mask)
+            "threshold": nifti.IMAGE_DEFAULTS["threshold"],
+            "radius": nifti.IMAGE_DEFAULTS["endpoint_radius"],
+            # a tractogram the engine can index (its row's Index)
+            "index": nifti.tractogram_index(self.app, name)["index"]
+            if kind == "tractogram" else "",
+        }
 
     def download(self, block: int, kind: str, value: str = "") -> Download:
         """
@@ -757,10 +934,11 @@ class WebRepl:
         )
 
     def _output(self) -> str:
-        """Return the HTML of what was printed since last asked."""
+        """Return the HTML, or text, of what was printed since last asked."""
         html = self.console.export_html(
-            clear=True, inline_styles=True, code_format=HTML_FORMAT
-        )
+            clear=True, inline_styles=True, code_format=HTML_FORMAT,
+            theme=LOG_THEME,
+        ) if self.html else self.console.export_text(clear=True)
         self.console.file.seek(0)
         self.console.file.truncate()
         return html

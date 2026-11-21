@@ -136,8 +136,10 @@ graph is queried as a SPARQL endpoint would be::
 * a triple ``s p o`` is the fact ``p(s, o)`` and ``s rdf:type C`` is also
   ``C(s)``;
 * with ``names="prefixed"``, classes and properties are named after the
-  prefixes the files declare (``pv:name``, ``rdfs:label``), or their full
-  IRI when no prefix is declared;
+  prefixes the files declare (``pv:name``, ``rdfs:label``) and those of
+  ``prefixes``, a dictionary from prefix to namespace, or their full IRI
+  when no prefix is declared, written ``<http://...>`` as the predicate of
+  an atom: ``<http://ex.org/c#K>(s) :- d(s)``;
 * IRIs are the strings of their full IRI, written ``<http://...>`` in
   Datalog; literals are their value (numbers, strings without their
   language tag, dates as ISO strings).
@@ -206,7 +208,7 @@ module handles YAML loading, MNI mask retrieval, and delegating to the
 engine's init script.
 
 **Init phases.**  When :func:`~neurolang.utils.engine_registry.build_engine`
-builds an engine, it runs up to ten phases, in this order:
+builds an engine, it runs up to eleven phases, in this order:
 
 #. **Builtins** (``builtins``) — registers known functions (``exp``,
    ``log``, ``startswith``) as callable symbols.  Simple list in YAML::
@@ -323,7 +325,8 @@ builds an engine, it runs up to ten phases, in this order:
    ``urls``.  ``format`` is the rdflib format (guessed from the file
    extension by default); with ``individuals: true`` every triple is also
    loaded as a fact, and ``names: prefixed`` names classes and properties
-   ``prefix:local`` (see :ref:`neurolang-rdf-data`)::
+   ``prefix:local`` (see :ref:`neurolang-rdf-data`), with the prefixes the
+   files declare and those of ``prefixes``::
 
        ontologies:
          - url: "https://example.com/ontology.owl"
@@ -332,6 +335,8 @@ builds an engine, it runs up to ten phases, in this order:
              - "data/instances.ttl"
            individuals: true
            names: prefixed
+           prefixes:
+             ex: "https://example.com/vocab#"
 
 #. **Datalog init** (``datalog_init``) — an optional YAML multiline string
    of Datalog rules.  These are evaluated after templates and atlases
@@ -373,6 +378,13 @@ builds an engine, it runs up to ten phases, in this order:
          selected_study:
            source: study
            description: "Uniform choice over studies"
+
+#. **Sparse views** (``sparse_views``) — builds, last, the relations kept
+   as well as sparse matrices over the entities of two sorts of their
+   arguments (see :doc:`engine_configuration`)::
+
+       sparse_views:
+         activated: [voxel, study]
 
 All phases are optional — include only what your engine needs.
 If ``use_base_symbols`` and the declarative YAML fields (``atlases``,

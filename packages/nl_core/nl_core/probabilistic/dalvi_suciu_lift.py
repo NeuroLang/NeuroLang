@@ -2675,9 +2675,41 @@ def _functions_of(atom, variables, symbol_table):
     return {
         arg for i, arg in enumerate(atom.args)
         if key and isinstance(arg, Symbol) and arg not in variables and
-        len(relation.projection(*key)) ==
-        len(relation.projection(*key, relation.columns[i]))
+        _is_function(relation, key, relation.columns[i])
     }
+
+
+def _is_function(relation, key, column):
+    """Whether the *column* of *relation* is a function of its *key*
+    columns. Two of its first rows with one key and two values disprove it
+    without reading the rest: contiguous rows do at once when the relation
+    is ordered by its key, as ``activated`` is by voxel (in about 1 ms;
+    counting the distinct values of its 346 M rows took 30 to 45 s);
+    otherwise the distinct keys and the distinct pairs of key and value
+    are counted. The number of rows read is
+    ``[PROBABILISTIC_SOLVER] function_sample_rows`` of the configuration."""
+    rows = relation.sample_rows(
+        config.getint("PROBABILISTIC_SOLVER", "function_sample_rows"),
+        contiguous=True,
+    )
+    if rows is not None:
+        columns = list(relation.columns)
+        at = [columns.index(c) for c in key]
+        value_at = columns.index(column)
+        values = {}
+        for row in rows:
+            first = values.setdefault(
+                tuple(row[i] for i in at), row[value_at]
+            )
+            # two missing values are one, as distinct values count them
+            if first != row[value_at] and (
+                first == first or row[value_at] == row[value_at]
+            ):
+                return False
+    return (
+        len(relation.projection(*key)) ==
+        len(relation.projection(*key, column))
+    )
 
 
 class IsPureLiftedPlan(PatternWalker):

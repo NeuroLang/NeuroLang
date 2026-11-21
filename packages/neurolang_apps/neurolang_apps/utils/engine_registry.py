@@ -104,10 +104,12 @@ import contextlib
 import copy
 import functools
 import re
+import sys
 import warnings
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple, Optional, Tuple,
+    TYPE_CHECKING, Any, Callable, Dict, Iterable, List, NamedTuple, Optional,
+    Tuple,
 )
 
 import nibabel as nib
@@ -198,8 +200,30 @@ def _builtin_str(x) -> str:
     return str(x)
 
 
+def _builtin_t_pvalue(t, df) -> float:
+    """Return the two-sided p-value of the statistic *t* of Student's t
+    distribution with *df* degrees of freedom (a t-test's, e.g. Student's,
+    of n1 + n2 - 2)."""
+    from scipy.stats import t as student
+
+    return float(2 * student.sf(abs(float(t)), float(df)))
+
+
+def _builtin_fdr_threshold(p_values: Iterable, alpha: float) -> float:
+    """Return the p-value at or under which the tests of *p_values* are
+    significant at the false discovery rate *alpha*, by the procedure of
+    Benjamini and Hochberg: the largest p(i) with p(i) <= alpha i / m, of
+    the m p-values sorted; 0 when none is (an aggregation: in the head of
+    a rule, over a group's p-values)."""
+    p = np.sort(np.asarray(list(p_values), dtype=float))
+    passing = p <= float(alpha) * np.arange(1, len(p) + 1) / len(p)
+    return float(p[passing].max()) if passing.any() else 0.0
+
+
 _BUILTIN_SYMBOLS: Dict[str, object] = {
     "exp": np.exp,
+    "t_pvalue": _builtin_t_pvalue,
+    "fdr_threshold": _builtin_fdr_threshold,
     "log": np.log,
     "startswith": _builtin_startswith,
     # String and numeric functions of SPARQL, e.g. for RDF engines.
@@ -668,9 +692,9 @@ class Sort(NamedTuple):
     ``""`` otherwise. The *grid* of a sort of voxels is the grid it
     indexes: that of the engine's template (see :func:`build_engine`)
     when ``""`` or ``template``, else that of the atlas of this name.
-    The *atlas* of a sort of region labels is the atlas they name the
-    regions of, one the engine loads: ``.view`` paints the regions of a
-    result on its grid (see :func:`atlas_label_values`).
+    The *atlas* of a sort of region labels is the atlases they name the
+    regions of, ones the engine loads: ``.view`` paints the regions of a
+    result on the grid of the first (see :func:`atlas_label_values`).
     """
 
     name: str
@@ -679,7 +703,7 @@ class Sort(NamedTuple):
     description: str = ""
     space: str = ""
     grid: str = ""
-    atlas: str = ""
+    atlas: Tuple[str, ...] = ()
 
 
 SORT_SPACES = ("voxel", "mm")
@@ -718,24 +742,27 @@ def _sort_grid(name: str, info: Dict[str, Any], grids) -> str:
     return grid
 
 
-def _sort_atlas(name: str, info: Dict[str, Any], atlases) -> str:
+def _sort_atlas(name: str, info: Dict[str, Any], atlases) -> Tuple[str, ...]:
     """
-    Return the atlas whose regions the sort *name* declared by *info*
-    labels, or "".
+    Return the atlases whose regions the sort *name* declared by *info*
+    labels, or ().
 
-    Only a sort of one column and no space labels the regions of an
-    atlas, one of *atlases*.
+    Only a sort of one column and no space labels the regions of atlases,
+    of *atlases*: one, ``atlas: tian``, or several, ``atlas: [schaefer400,
+    tian]``.
     """
-    atlas = str(info.get("atlas", ""))
+    atlas = info.get("atlas") or ()
+    atlas = (atlas,) if isinstance(atlas, str) else tuple(map(str, atlas))
     if atlas and (info.get("space") or len(info.get("columns", ())) != 1):
         raise ValueError(
-            f"sort {name!r} names the atlas {atlas!r}; only a sort of one "
-            "column and no space labels the regions of an atlas"
+            f"sort {name!r} names the atlas {', '.join(atlas)}; only a sort "
+            "of one column and no space labels the regions of an atlas"
         )
-    if atlas and atlas not in atlases:
+    unknown = [a for a in atlas if a not in atlases]
+    if unknown:
         raise ValueError(
-            f"sort {name!r} names the atlas {atlas!r}; the atlases of the "
-            f"engine are {', '.join(atlases) or 'none'}"
+            f"sort {name!r} names the atlas {', '.join(unknown)}; the "
+            f"atlases of the engine are {', '.join(atlases) or 'none'}"
         )
     return atlas
 
@@ -1314,9 +1341,11 @@ def atlas_coverage(
 def cached_atlas_activation(
     cache_dir, img, label_names: dict, peaks_mm: np.ndarray,
     studies: np.ndarray, radius_mm: float = 3.0,
-) -> List[Tuple[str, Any]]:
+):
     """
-    Return the pairs of :func:`atlas_activation`, kept in *cache_dir*.
+    Return the pairs of :func:`atlas_activation`, kept in *cache_dir*, as
+    a frame of ``label`` and ``study`` (read as arrays, not rebuilt as
+    a list of tuples).
 
     They take about 15 s per atlas to find and depend only on the atlas
     image, its labels, the peaks, their studies and the radius, which
@@ -1326,7 +1355,7 @@ def cached_atlas_activation(
     """
     key = engine_cache.digest(
         float(radius_mm), engine_cache.image_digest(img),
-        sorted((int(value), str(name)) for value, name in label_names.items()),
+        _label_items(label_names),
         np.asarray(peaks_mm, dtype=float), np.asarray(studies),
     )
 
@@ -1343,8 +1372,12 @@ def cached_atlas_activation(
         }
 
     arrays = engine_cache.keep_arrays(cache_dir, "atlas_activation", key, find)
-    names = arrays["names"][arrays["codes"]].tolist()
-    return list(zip(names, arrays["studies"].tolist()))
+    import pandas as pd
+
+    return pd.DataFrame({
+        "label": arrays["names"][arrays["codes"]],
+        "study": arrays["studies"],
+    })
 
 
 def cached_atlas_coverage(
@@ -1357,7 +1390,7 @@ def cached_atlas_coverage(
     """
     key = engine_cache.digest(
         float(fwhm_mm), float(threshold), engine_cache.image_digest(img),
-        sorted((int(value), str(name)) for value, name in label_names.items()),
+        _label_items(label_names),
         np.asarray(peaks_mm, dtype=float), np.asarray(studies),
     )
 
@@ -1401,15 +1434,24 @@ def _register_atlas_activation(
     each region of the atlas (see :func:`atlas_activation`), from the
     peaks in millimetres of the relation ``peaks`` (``x, y, z, study``),
     ``peak_mni`` by default, within ``radius_mm`` (3 by default). With a
-    *cache_dir* the pairs are kept there (:func:`cached_atlas_activation`).
+    *cache_dir* the pairs are kept there (:func:`cached_atlas_activation`),
+    and while the engine is built, as a table read mapped
+    (:func:`~neurolang_apps.utils.engine_cache.keep_table`).
     """
+    import pandas as pd
+
     peaks = _relation_frame(nl, settings.get("peaks", "peak_mni"))
     find = atlas_activation if cache_dir is None else functools.partial(
         cached_atlas_activation, cache_dir
     )
-    pairs = find(
-        img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
-        peaks.iloc[:, 3].to_numpy(), float(settings.get("radius_mm", 3)),
+    radius = float(settings.get("radius_mm", 3))
+    pairs = engine_cache.keep_table(
+        nl.program_ir, "atlas_activation", [peaks],
+        lambda: (engine_cache.image_digest(img), _label_items(labels), radius),
+        lambda: pd.DataFrame(find(
+            img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
+            peaks.iloc[:, 3].to_numpy(), radius,
+        ), columns=["label", "study"]),
     )
     name = settings.get("predicate_name", f"{pred_name}_activated")
     nl.add_tuple_set(pairs, name=name)
@@ -1424,16 +1466,23 @@ def _register_atlas_coverage(
     ``{pred_name}_covered``, the probabilistic facts of how much each study
     covers each region of the atlas (see :func:`atlas_coverage`), with a
     kernel of ``fwhm_mm`` (10) and the rows of at least ``threshold``
-    (0.001), from the peaks as :func:`_register_atlas_activation`.
+    (0.001), from the peaks as :func:`_register_atlas_activation`, and
+    kept as it.
     """
     peaks = _relation_frame(nl, settings.get("peaks", "peak_mni"))
     find = atlas_coverage if cache_dir is None else functools.partial(
         cached_atlas_coverage, cache_dir
     )
-    rows = find(
-        img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
-        peaks.iloc[:, 3].to_numpy(), float(settings.get("fwhm_mm", 10)),
-        float(settings.get("threshold", 1e-3)),
+    fwhm = float(settings.get("fwhm_mm", 10))
+    threshold = float(settings.get("threshold", 1e-3))
+    rows = engine_cache.keep_table(
+        nl.program_ir, "atlas_coverage", [peaks],
+        lambda: (engine_cache.image_digest(img), _label_items(labels), fwhm,
+                 threshold),
+        lambda: find(
+            img, labels, peaks.iloc[:, :3].to_numpy(dtype=float),
+            peaks.iloc[:, 3].to_numpy(), fwhm, threshold,
+        ),
     )
     nl.add_probabilistic_facts_from_tuples(
         rows, name=settings.get("predicate_name", f"{pred_name}_covered")
@@ -1447,7 +1496,19 @@ def _register_atlas_points(nl, atlas, settings: dict) -> None:
     the name of its region (:meth:`~neurolang.atlases.Atlas.points`);
     stored, so that ``EUCLIDEAN`` joins it with a tree.
     """
-    nl.add_tuple_set(atlas.points(), name=settings["predicate_name"])
+    nl.add_tuple_set(
+        engine_cache.keep_table(
+            nl.program_ir, "atlas_points", [],
+            lambda: (atlas.content_hash(),), atlas.points,
+        ),
+        name=settings["predicate_name"],
+    )
+
+
+def _label_items(labels: dict) -> list:
+    """The values and names of the regions *labels*, sorted, to name the
+    tables found from them."""
+    return sorted((int(value), str(name)) for value, name in labels.items())
 
 
 def _atlas_on_template(nl, atlas, cache_dir=None):
@@ -1497,7 +1558,8 @@ def _load_deterministic_atlas(
     fetch_kw = {
         k: v for k, v in params.items()
         if k not in (
-            "predicate_name", "activated", "covered", "points", "kind"
+            "predicate_name", "activated", "covered", "points", "kind",
+            "description",
         )
     }
     fetch_kw["data_dir"] = str(data_dir)
@@ -1872,7 +1934,12 @@ def _phase_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
             rel_cfg, engine_name, data_dir, base_dir=rel_base_dir
         )
         try:
-            df = read_relation_file(rel_path)
+            df = engine_cache.keep_table(
+                nl.program_ir, "relation_file", [],
+                lambda: (relation_file_separator(rel_path),
+                         engine_cache.file_digest(rel_path)),
+                lambda: read_relation_file(rel_path),
+            )
         except UnsupportedRelationFile as exc:
             raise UnsupportedRelationFile(
                 f"Relation {rel_name!r}: {exc}"
@@ -1897,7 +1964,99 @@ def _phase_resamplings(nl, cfg):
         })
 
 
-_ONTOLOGY_OPTIONS = ("format", "individuals", "names")
+def _view_declaration(name: str, sorts, predicates: Dict[str, Any]):
+    """
+    Return the view of the predicate *name* over the arguments of the
+    *sorts* (rows, columns and, if a third, value), each by its columns'
+    positions, from the arguments the engine declares for it.
+    """
+    from nl_core.relational_algebra.linear_algebra import (
+        Axis, ViewDeclaration,
+    )
+
+    arguments = predicates.get(name, {}).get("arguments") or ()
+    if len(sorts) not in (2, 3):
+        raise ValueError(
+            f"sparse view of {name!r}: give the sorts of its rows, of its "
+            "columns and, if any, of its value"
+        )
+    axes, start = {}, 0
+    for argument in arguments:
+        width = len(argument["columns"])
+        axes.setdefault(argument["sort"], []).append(
+            Axis(argument["sort"], tuple(range(start, start + width)))
+        )
+        start += width
+    found = []
+    for sort in sorts:
+        if len(axes.get(sort, ())) != 1:
+            raise ValueError(
+                f"sparse view of {name!r}: the predicate must have one "
+                f"argument of the sort {sort!r}"
+            )
+        found.append(axes[sort][0])
+    value = None
+    if len(found) == 3:
+        if len(found[2].columns) != 1:
+            raise ValueError(
+                f"sparse view of {name!r}: its value spans one column"
+            )
+        value = found[2].columns[0]
+    return ViewDeclaration(found[0], found[1], value)
+
+
+def _phase_sparse_views(nl, cfg):
+    """
+    Build the ``sparse_views`` of the engine, before any session is forked
+    from it, as the engine's ``sparse_views``: by predicate, its
+    :class:`~nl_core.relational_algebra.linear_algebra.SparseView`,
+    one numbering of the entities of each sort shared by all. The views
+    of the predicates the engine does not define (those a lightweight
+    engine leaves out, the activations of atlases it does not load) are
+    not built, nor any when the probabilistic solver, which reads them,
+    does not compute contractions (``[PROBABILISTIC_SOLVER] contractions``
+    of the configuration). The views of ``sparse_view_indexes`` are also
+    kept by their column entities, so that a product with few of them
+    reads their entries alone.
+    """
+    from nl_expr.config import config
+
+    nl.sparse_views = {}
+    if not config.getboolean(
+        "PROBABILISTIC_SOLVER", "contractions", fallback=False
+    ):
+        return
+    symbol_table = nl.program_ir.symbol_table
+    declared = {
+        name: sorts
+        for name, sorts in (cfg.get("sparse_views") or {}).items()
+        if name in symbol_table
+    }
+    if not declared:
+        return
+    from nl_core.relational_algebra.linear_algebra import build_sparse_views
+
+    predicates = _declared_predicates(cfg)
+    tables = getattr(nl.program_ir, "derived_tables", None)
+    nl.sparse_views = build_sparse_views(
+        symbol_table,
+        {
+            name: _view_declaration(name, sorts, predicates)
+            for name, sorts in declared.items()
+        },
+        # kept with the build's tables, read memory-mapped: their pages are
+        # shared by the processes, and by engines of the same tables
+        None if tables is None else functools.partial(
+            tables.arrays, "sparse_views"
+        ),
+        indexed=[
+            name for name in cfg.get("sparse_view_indexes") or ()
+            if name in declared
+        ],
+    )
+
+
+_ONTOLOGY_OPTIONS = ("format", "individuals", "names", "prefixes")
 
 
 def _ontology_file(source: str, engine_name, data_dir, base_dir) -> str:
@@ -1922,8 +2081,8 @@ def _phase_ontologies(nl, cfg, data_dir, engine_name, base_dir=None):
     Load the engine's ``ontologies``.
 
     Each entry gives a file with ``url`` (a URL or a local path), or
-    several, loaded together, with ``urls``. ``format``, ``individuals``
-    and ``names`` are passed to
+    several, loaded together, with ``urls``. ``format``, ``individuals``,
+    ``names`` and ``prefixes`` are passed to
     :meth:`~neurolang.frontend.NeurolangPDL.load_ontology`.
     """
     for onto_cfg in cfg.get("ontologies", []):
@@ -2053,6 +2212,7 @@ def build_engine(
     yaml_path: Optional[Path] = None,
     use_cache: bool = True,
     progress: Optional[Callable[[str], None]] = None,
+    map_tables: bool = True,
 ) -> "NeurolangPDL":
     """
     Create and populate a :class:`NeurolangPDL` engine from its
@@ -2079,6 +2239,14 @@ def build_engine(
         load, before each of the steps that take a while (``Loading the
         ontologies``…), e.g. for a page to show; only the steps the engine
         has are told.
+    map_tables :
+        With *use_cache*, and not in a browser, whether the large tables of
+        the build, those its rules derive and its source tables, are kept
+        in ``DATA_DIR/derived_tables`` as Arrow files and read from there
+        memory-mapped (see
+        :class:`~neurolang_apps.utils.engine_cache.DerivedTables`). The
+        build of the browser's bundle, which does not read them, builds
+        without.
 
     Returns
     -------
@@ -2090,7 +2258,9 @@ def build_engine(
         not require the MNI mask. Its ``grids`` attribute holds the
         images of the grids voxel indices may index, by name: the
         template, as ``template``, and each atlas, under its name (the
-        sorts naming a ``grid``).
+        sorts naming a ``grid``). Its ``sparse_views`` attribute holds the
+        :class:`~nl_core.relational_algebra.linear_algebra.SparseView` of
+        each relation of the engine's ``sparse_views``, by predicate.
 
     Raises
     ------
@@ -2143,26 +2313,42 @@ def build_engine(
     nl.engine_cache_dir = cache_dir
     _phase_builtins(nl, cfg)
     _phase_base_symbols(nl, cfg, mask)
-    if cfg.get("python_init"):
-        tell(f"Loading the data of {name}")
-    _phase_python_init(nl, cfg, mask, data_dir)
-    _phase_downloads(cfg, data_dir, name)
-    _phase_templates(nl, cfg, data_dir, name)
-    if cfg.get("atlases"):
-        tell("Loading the atlases: " + ", ".join(cfg["atlases"]))
-    _phase_atlases(nl, cfg, data_dir, name, use_cache)
-    # Before the rules, which may use the predicates of the ontologies.
-    if cfg.get("ontologies"):
-        tell("Loading the ontologies (parsing them takes a few seconds)")
-    _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
-    if cfg.get("datalog_init"):
-        tell(f"Defining the rules of {name}")
-    _phase_datalog_init(nl, cfg, data_dir, mask)
-    _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
-    _phase_text_embeddings(nl, cfg, data_dir, name, rel_base_dir, yaml_path)
-    _phase_probabilistic_choices(nl, cfg)
-    if cfg.get("resamplings"):
-        tell("Drawing the bootstrap replicates")
-    _phase_resamplings(nl, cfg)
-
+    # The large tables of the build, its source tables and those its rules
+    # derive from them (activated), are kept, the build's only: a session's
+    # rules derive theirs as they are.
+    if map_tables and use_cache and sys.platform != "emscripten":
+        nl.program_ir.derived_tables = engine_cache.DerivedTables(
+            Path(data_dir) / engine_cache.DERIVED_DIRECTORY
+        )
+    try:
+        if cfg.get("python_init"):
+            tell(f"Loading the data of {name}")
+        _phase_python_init(nl, cfg, mask, data_dir)
+        _phase_downloads(cfg, data_dir, name)
+        _phase_templates(nl, cfg, data_dir, name)
+        if cfg.get("atlases"):
+            tell("Loading the atlases: " + ", ".join(cfg["atlases"]))
+        _phase_atlases(nl, cfg, data_dir, name, use_cache)
+        # Before the rules, which may use the predicates of the ontologies.
+        if cfg.get("ontologies"):
+            tell("Loading the ontologies (parsing them takes a few seconds)")
+        _phase_ontologies(nl, cfg, data_dir, name, rel_base_dir)
+        if cfg.get("datalog_init"):
+            tell(f"Defining the rules of {name}")
+        _phase_datalog_init(nl, cfg, data_dir, mask)
+        _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
+        _phase_text_embeddings(
+            nl, cfg, data_dir, name, rel_base_dir, yaml_path
+        )
+        _phase_probabilistic_choices(nl, cfg)
+        if cfg.get("resamplings"):
+            tell("Drawing the bootstrap replicates")
+        _phase_resamplings(nl, cfg)
+        if cfg.get("sparse_views"):
+            tell(
+                "Building the sparse views: " + ", ".join(cfg["sparse_views"])
+            )
+        _phase_sparse_views(nl, cfg)
+    finally:
+        nl.program_ir.__dict__.pop("derived_tables", None)
     return nl

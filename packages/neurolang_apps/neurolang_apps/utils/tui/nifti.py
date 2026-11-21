@@ -29,7 +29,9 @@ has no voxel columns: ``ans(x, y, z)`` stays millimetres.
 """
 
 import gzip
+import io
 import os
+import re
 import shlex
 import tempfile
 import warnings
@@ -40,13 +42,16 @@ from typing import List, NamedTuple, Optional, Tuple
 import nibabel as nib
 import numpy as np
 import pandas as pd
-from neurolang.confine import ConfinedError, check_read, check_write
+from neurolang.confine import (
+    ConfinedError, check_read, check_write, confined_roots,
+)
+from nl_expr.expressions import Symbol
 
 from neurolang_apps.utils import engine_registry
 
 from . import brain_viewer
 from .commands import HELP_TOPICS, command
-from .provenance import COMPUTED
+from .provenance import COMPUTED, thresholded_columns
 
 SAVE_USAGE = ".save PATH [--value COLUMN] [--voxel I J K | --mm X Y Z]"
 
@@ -249,7 +254,7 @@ def _column(df: pd.DataFrame, name: str):
 def _sort_points(sort, columns: tuple) -> PointColumns:
     """Return the *columns* holding the points of *sort*, on its grid."""
     if sort.atlas:
-        return PointColumns(tuple(columns), LABEL_SPACE, sort.atlas)
+        return PointColumns(tuple(columns), LABEL_SPACE, sort.atlas[0])
     return PointColumns(
         tuple(columns), sort.space,
         sort.grid or engine_registry.TEMPLATE_GRID,
@@ -618,15 +623,17 @@ def _region_atlases(nl, sorts: dict, atlas: str) -> list:
     """
     Return the atlases of *nl* to look the labels of a column up in.
 
-    They are the *atlas* of the column's sort, then the others the
-    *sorts* label the regions of: a rule may join the regions of several
-    atlases, ``region(l) :- schaefer(l, r)`` and ``region(l) :- tian(l,
-    r)``, whose column is of the sort of the first.
+    They are the *atlas* of the column's sort, the first it names, then
+    the others it names, ``atlas: [schaefer400, tian]``, then the others
+    the *sorts* label the regions of: a rule may join the regions of
+    several atlases, ``region(l) :- schaefer(l, r)`` and ``region(l) :-
+    tian(l, r)``, whose column is of the sort of the first.
     """
-    atlases = [atlas] + [
-        sort.atlas for sort in sorts.values()
-        if sort.atlas and sort.atlas != atlas
-    ]
+    own = next(
+        (s.atlas for s in sorts.values() if s.atlas[:1] == (atlas,)),
+        (atlas,),
+    )
+    atlases = [*own, *(a for s in sorts.values() for a in s.atlas)]
     return [
         name for n, name in enumerate(atlases)
         if name not in atlases[:n]
@@ -1243,7 +1250,12 @@ A result of streamline ids, of an engine of tractograms, shows the
 streamlines, coloured by their direction, in the 3D render and on the
 slices near them, over the engine's background, and an overlay of the
 number of streamlines through each voxel; 20000 at most are drawn,
-evenly subsampled. A column holds streamline ids when, without voxel
+evenly subsampled. With one other column, of 20 values at most, each
+value is a bundle: the streamlines are in its colour, named in a legend,
+or by direction, as "Colour by" chooses; one of several bundles is of
+the first:
+  ans(x, side) :- uncinate(x, side)
+A column holds streamline ids when, without voxel
 columns, it is of the sort streamline (engines.yaml), or, the engine
 having streamlines, it is the one column of integers of unknown sort:
   ans(x) :- uncinate(x, "left")
@@ -1476,6 +1488,42 @@ def _open_in_browser(console, html: Path) -> None:
         console.print("Opened it in the browser.", style="dim")
     else:
         console.print("Open it in a browser to see the image.", style="dim")
+
+
+def render_png(image, title: str = "", threshold=VIEW_THRESHOLD) -> bytes:
+    """
+    Return a PNG of the NIfTI *image*, a glass brain of its voxels from
+    the *threshold* on, a value or a percentile such as ``"95%"`` of its
+    nonzero values, as the viewer starts; for the clients that show
+    images but not pages, such as those of the MCP server.
+    """
+    import sys
+
+    import matplotlib
+
+    if "matplotlib.pyplot" not in sys.modules:
+        # No window: nilearn's pyplot would load the macOS backend, whose
+        # AppKit aborts a forked process (a session of the REPL server).
+        matplotlib.use("Agg")
+    from matplotlib.figure import Figure
+    from nilearn import plotting
+
+    data = np.asarray(image.dataobj, dtype=float)
+    shown = brain_viewer.edge_threshold(data[data != 0], threshold)
+    figure = Figure(figsize=(8, 3), dpi=100)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        display = plotting.plot_glass_brain(
+            image, figure=figure, colorbar=True,
+            threshold=shown or None, plot_abs=False,
+            # one-sided as the viewer's, unless the image has negatives
+            cmap="cold_hot" if (data < 0).any() else "plasma",
+        )
+        if title:  # small enough for a question of a line
+            display.title(title, size=11)
+    png = io.BytesIO()
+    figure.savefig(png, format="png")
+    return png.getvalue()
 
 
 _COMPOUND_SUFFIXES = (".nii.gz", ".csv.gz", ".tsv.gz")
@@ -1773,6 +1821,37 @@ def streamline_background(nl):
     return background, "MNI"
 
 
+def streamline_bundles(df: pd.DataFrame, column, shown):
+    """
+    Return the bundles of the streamlines *shown* of the result *df*,
+    whose ids are in *column*: those its one other column names, as
+    :func:`~.brain_viewer.streamlines_state` takes them (names, colours,
+    the number of the name of each one shown), else None, if it has no
+    other column, several or one of more than
+    :data:`~.brain_viewer.MAX_BUNDLES` values. A streamline of several
+    bundles is of the first, in their order.
+    """
+    others = [c for c in df.columns if c != column]
+    if len(others) != 1:
+        return None
+    labels = df[others[0]].astype(str)
+    if labels.nunique() > brain_viewer.MAX_BUNDLES:
+        return None
+    first = (
+        pd.DataFrame({"id": df[column].astype(int), "label": labels})
+        .sort_values("label", kind="stable")
+        .drop_duplicates("id").set_index("id")["label"]
+    )
+    of = first.loc[list(shown)].tolist()
+    names = sorted(set(of))
+    number = {name: n for n, name in enumerate(names)}
+    # the dark colours of tab20 first, then the light: few bundles are of
+    # hues apart, rather than of pairs of one hue
+    palette = REGION_PALETTE[::2] + REGION_PALETTE[1::2]
+    colours = [palette[n % len(palette)] for n in range(len(names))]
+    return names, colours, [number[name] for name in of]
+
+
 def last_result_streamlines(app, block):
     """
     Return the result *block*, of streamline ids, as streamlines.
@@ -1783,7 +1862,8 @@ def last_result_streamlines(app, block):
     layer of the number of the streamlines drawn through each voxel of
     the background, (name, path) of a temporary NIfTI file, and the
     keyword arguments of the viewer: the streamlines
-    (:func:`~.brain_viewer.streamlines_state`) and the background
+    (:func:`~.brain_viewer.streamlines_state`), with their bundles
+    (:func:`streamline_bundles`), and the background
     (:func:`streamline_background`); an exception tells why they cannot
     be built.
     """
@@ -1804,14 +1884,21 @@ def last_result_streamlines(app, block):
     ]
     background, space = streamline_background(app._nl)
     counts = _visits(lines, background.shape, background.affine)
-    state = brain_viewer.streamlines_state(lines, len(ids))
-    subsampled = (
+    bundles = streamline_bundles(block.frame, column, shown)
+    state = brain_viewer.streamlines_state(lines, len(ids), bundles)
+    notes = (
         f", evenly subsampled to {brain_viewer.MAX_STREAMLINES} at most"
         if len(lines) < len(ids) else ""
     )
+    if bundles is not None:
+        other = next(c for c in block.frame.columns if c != column)
+        notes += (
+            f", coloured by the {len(bundles[0])} bundles of the column "
+            f"{str(other)!r}"
+        )
     app.console.print(
         f"Streamlines of the column {str(column)!r}: {len(lines)} of "
-        f"{len(ids)} shown{subsampled}", style="green", markup=False,
+        f"{len(ids)} shown{notes}", style="green", markup=False,
     )
     if not callable(getattr(app._nl, "streamline_background", None)):
         app.console.print(
@@ -1906,7 +1993,8 @@ def last_results_layers(app, request: ViewRequest):
     drawn. A block that cannot be drawn among several, as a table of
     terms beside regions, is told and left out. The *request*'s threshold
     (the top 5% by default) is 0 for results neither of voxels nor of
-    regions with a value (regions alone, networks, streamlines), unless
+    regions with a value (regions alone, networks, streamlines), nor of
+    values their query compares with a constant, ``(lift > 2)``, unless
     it is given: the one the viewer starts all the layers with.
     """
     if not app.results:
@@ -1933,8 +2021,13 @@ def last_results_layers(app, request: ViewRequest):
             continue
         if not _one_of_a_kind(extra, found, app.console, block.title):
             continue
-        kinds.add(kind)
         titles.append(block.title)
+        # a value its query thresholds, (lift > 2): all its voxels
+        if kind in ("voxels", "regions") and _thresholded_by_query(
+            app, block
+        ):
+            kind = "thresholded"
+        kinds.add(kind)
         # regions with a value, not a mask: their top 5% as voxels'
         if kind == "regions" and any(
             name != "mask" for name, _ in block_layers
@@ -1957,6 +2050,31 @@ def last_results_layers(app, request: ViewRequest):
         # the answers are told apart by the colours of their overlays
         extra["regions"] = extra["regions"]._replace(coloured=False)
     return layers, extra, request, titles
+
+
+def _thresholded_by_query(app, block) -> bool:
+    """
+    Whether the query of the result *block* compares one of its values
+    with a constant, ``ans(i, j, k, lift) :- ..., (lift > 2)``: the
+    viewer then shows all of its voxels, not its top 5%.
+    """
+    program, squall = app.results_query or (None, False)
+    if program is None:
+        return False
+    compared = thresholded_columns(app._nl, program, squall).get(
+        block.title, set()
+    )
+    try:
+        points = set(point_columns(
+            block.frame, _engine_sorts(app.settings.engine_name),
+            block.sorts,
+        ).columns)
+    except SaveError:
+        points = set()
+    columns = list(block.frame.columns)
+    return any(
+        n < len(columns) and columns[n] not in points for n in compared
+    )
 
 
 def _readable(app, path) -> bool:
@@ -2019,3 +2137,557 @@ def _view_title(request: ViewRequest, path: Path, titles) -> str:
     if len(titles) > 1:
         return f"Last results: {', '.join(titles)}"
     return f"Last result: {titles[0]}" if titles else "Last result"
+
+
+IMAGE_USAGE = (
+    ".image PATH|UPLOADED [--name NAME] [--mask | --zscore] [--cortex] "
+    "[--radius MM]"
+)
+
+# The defaults of .image (viewer.yaml): the value from which the voxels of
+# a z-map are activated, and the most bytes an image may take uncompressed.
+IMAGE_DEFAULTS = brain_viewer.DEFAULTS["image"]
+
+IMAGE_HELP = f"""\
+[bold cyan]{IMAGE_USAGE}[/bold cyan] loads a NIfTI image of
+activations, a binary mask or a z-score map, as the relation
+[bold]NAME(i, j, k, value)[/bold] (NAME is the file's name by default,
+motor_map for motor map.nii.gz):
+its voxels of the brain with a value other than 0, on the grid of the engine
+(the image is resampled to it if it has another, a mask to the nearest
+voxel), and shows it in the brain viewer. UPLOADED is the name of an image
+the page uploaded (Upload data).
+
+It loads, too, [bold]NAME_probability(i, j, k, p)[/bold], the probability
+that each voxel is active, which the decoding weighs the voxels by:
+  [bold]--mask[/bold]   1 for the voxels of a binary mask (its default), or
+           of a map from {IMAGE_DEFAULTS["threshold"]}: masked decoding;
+  [bold]--zscore[/bold] for a map of z-scores, 1 - the local false discovery
+           rate of each z-score (Efron), the voxels of less than
+           {IMAGE_DEFAULTS["min_probability"]} left out.
+A map without either has none, and is not decoded.
+
+A tractogram (.trk, .tck, in mm in the engine's space) is loaded as the
+voxels of the brain whose centre is within
+{IMAGE_DEFAULTS["endpoint_radius"]} mm of an end of one of its streamlines
+([bold]--radius MM[/bold] changes it), value the number of ends near each,
+shown with its streamlines, and decoded as a mask: p = 1 for each.
+
+On an engine of studies and their peaks (neurosynth, neurostore), it prints
+the query decoding the image towards the concepts of the Cognitive Atlas:
+each voxel active with its probability, the probability that a study of a
+term activates an active voxel chosen in the brain, over the same for all
+the studies. [bold]--cortex[/bold] chooses the voxel in the cortex: the
+cortex of the image only is decoded. Any relation
+NAME_probability(i, j, k, p) is decoded by the same query with its NAME.
+
+Load it again with --name and the same NAME to replace it."""
+
+HELP_TOPICS["image"] = IMAGE_HELP
+
+def image_description(source: str, values: np.ndarray, mask: bool) -> str:
+    """
+    Return what the query assistant is told of the image loaded from
+    *source* (``.document``), of the *values* of its voxels, a *mask* or
+    not: its file, its kind and voxels, which its schema of the engine and
+    describe_predicate show.
+    """
+    if mask:
+        kind = (f"a binary mask of {len(values)} voxels (value "
+                f"{values[0]:.3g})")
+    else:
+        kind = (f"a map of values of {len(values)} voxels, from "
+                f"{values.min():.3g} to {values.max():.3g}")
+    return (f"A brain image uploaded or loaded with .image, from {source}: "
+            f"{kind}. Its voxels (i, j, k) are on the grid of the engine, "
+            "value their value. Decode it as the examples decoding an image "
+            "do, from the probabilities of its voxels (its relation of the "
+            "same name and _probability); a map has them once loaded again "
+            "with .image --zscore (z-scores) or --mask (its voxels from the "
+            "threshold).")
+
+
+def tractogram_description(
+    source: str, streamlines: int, voxels: int, radius: float
+) -> str:
+    """Return what the query assistant is told of the tractogram loaded
+    from *source*: its number of *streamlines*, and of the *voxels* within
+    *radius* mm of their ends."""
+    return (f"A tractogram uploaded or loaded with .image, from {source}: "
+            f"the {voxels} voxels (i, j, k) of the brain, on the grid of the "
+            f"engine, within {radius:g} mm of an end of one of its "
+            f"{streamlines} streamlines, value the number of ends near each. "
+            "Decode it as the examples decoding an image do, from its "
+            "relation of the same name and _probability.")
+
+
+def probability_description(
+    source: str, mask: bool, null=None, radius=None
+) -> str:
+    """Return what the query assistant is told of the probabilities of
+    the image loaded from *source*: those of a *mask*, of the voxels
+    within *radius* mm of the ends of a tractogram's streamlines, or of
+    z-scores of the *null* (its mean and deviation)."""
+    how = (f"1 for each voxel within {radius:g} mm of an end of one of its "
+           "streamlines" if radius is not None else
+           "1 for each of its voxels in the mask" if mask else
+           "1 - the local false discovery rate of its z-score (Efron), the "
+           f"null of the map N({null[0]:.2f}, {null[1]:.2f})")
+    return (f"The probability p that each voxel (i, j, k) of the image from "
+            f"{source} is active: {how}. The examples decoding an image "
+            "weigh its voxels by it.")
+
+
+def activation_probability(z: np.ndarray):
+    """
+    Return the probability that each voxel of the z-scores *z* is active,
+    1 - its local false discovery rate (Efron 2004): pi0 f0(z) / f(z), f0
+    the empirical null, the normal of the median and the MAD of *z*, f
+    their density, a Gaussian kernel estimate of at most ``kde_sample`` of
+    them; pi0 is 1, and a z-score below the null's mean is never active.
+    Return the probabilities and the null's mean and deviation.
+    """
+    from scipy import stats
+
+    z = np.asarray(z, dtype=float)
+    delta0 = float(np.median(z))
+    sigma0 = float(stats.median_abs_deviation(z, scale="normal")) or 1.0
+    most = int(IMAGE_DEFAULTS["kde_sample"])
+    sample = z if len(z) <= most else np.random.default_rng(0).choice(
+        z, most, replace=False)
+    grid = np.linspace(z.min(), z.max(), 1024)
+    density = np.interp(z, grid, stats.gaussian_kde(sample)(grid))
+    null = stats.norm.pdf(z, delta0, sigma0)
+    lfdr = np.clip(null / np.maximum(density, np.finfo(float).tiny), 0, 1)
+    return np.where(z > delta0, 1 - lfdr, 0.0), (delta0, sigma0)
+
+
+def nifti_from_bytes(data: bytes, most: Optional[int] = None):
+    """
+    Return the NIfTI image of the bytes *data*, gzipped or not; a
+    SaveError when it takes more than *most* bytes uncompressed.
+    """
+    if data[:2] == b"\x1f\x8b":
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as compressed:
+            data = compressed.read(-1 if most is None else most + 1)
+    if most is not None and len(data) > most:
+        raise SaveError(f"The image takes more than {most >> 20} MB "
+                        "uncompressed.")
+    try:
+        return nib.Nifti1Image.from_bytes(data)
+    except Exception:
+        return nib.Nifti2Image.from_bytes(data)
+
+
+def read_image(data: bytes):
+    """Return the image of the bytes *data* of a NIfTI file, of at most
+    ``max_mb`` uncompressed, and its first volume if it has several."""
+    image = nifti_from_bytes(data, int(IMAGE_DEFAULTS["max_mb"]) << 20)
+    return image.slicer[..., 0] if len(image.shape) == 4 else image
+
+
+def is_mask(image) -> bool:
+    """Whether *image* is a mask: of one value other than 0."""
+    values = np.asanyarray(image.dataobj)
+    return np.unique(values[np.isfinite(values) & (values != 0)]).size <= 1
+
+
+def tractogram_endpoints(data: bytes) -> tuple:
+    """
+    Return the ends of the streamlines of the tractogram of the bytes
+    *data* (``.trk``, ``.tck``), in mm (RAS+, nibabel's ``to_world``), the
+    first and the last point of each, and its streamlines of a point or
+    more (a nibabel ``ArraySequence``).
+    """
+    streamlines = nib.streamlines.load(
+        io.BytesIO(data)).tractogram.to_world().streamlines
+    streamlines = streamlines[np.asarray(streamlines._lengths) > 0]
+    lengths = np.asarray(streamlines._lengths)
+    points = streamlines.get_data()  # the points of one after the other
+    last = np.cumsum(lengths) - 1
+    return np.concatenate([points[last - lengths + 1], points[last]]), \
+        streamlines
+
+
+def shown_tractogram(streamlines) -> dict:
+    """Return the keyword arguments of the viewer drawing the
+    *streamlines* of a tractogram, in MNI mm: at most
+    :data:`~.brain_viewer.MAX_STREAMLINES`, evenly subsampled."""
+    shown = brain_viewer.shown_streamlines(range(len(streamlines)))
+    lines = [np.asarray(streamlines[n], dtype=np.float32) for n in shown]
+    return {"streamlines": brain_viewer.streamlines_state(
+        lines, len(streamlines)), "space": "MNI"}
+
+
+def endpoint_counts(
+    endpoints: np.ndarray, affine: np.ndarray, voxels: np.ndarray,
+    radius: float,
+) -> np.ndarray:
+    """
+    Return, for each of the *voxels* (their indices on the grid of
+    *affine*), the number of *endpoints* (in mm) within *radius* mm of its
+    centre.
+    """
+    from scipy.spatial import cKDTree
+
+    centres = nib.affines.apply_affine(affine, voxels)
+    return cKDTree(endpoints).query_ball_point(
+        centres, radius, return_length=True)
+
+
+def share_in_brain(
+    endpoints: np.ndarray, affine: np.ndarray, voxels: np.ndarray, shape
+) -> float:
+    """Return the share of *endpoints* (mm) in one of the *voxels* of the
+    brain (their indices on the grid of *affine*, of *shape*)."""
+    brain = np.zeros(shape[:3], dtype=bool)
+    brain[tuple(voxels.T)] = True
+    ijk = np.rint(nib.affines.apply_affine(
+        np.linalg.inv(affine), endpoints)).astype(int)
+    inside = ((ijk >= 0) & (ijk < np.array(shape[:3]))).all(axis=1)
+    return float(brain[tuple(ijk[inside].T)].sum()) / max(len(endpoints), 1)
+
+
+def _image_bytes(app, word: str) -> bytes:
+    """Return the bytes of the image *word*: one the page uploaded, or a
+    path (on a server, which reads none of its files, an uploaded one
+    only)."""
+    data = app.uploads.get(word)
+    if data is not None:
+        return data
+    if confined_roots() is not None:
+        raise SaveError(f"No image {word} was uploaded: this server loads "
+                        "the images you upload (Upload data), not its own "
+                        "files.")
+    path = Path(word).expanduser()
+    check_read(path, "image")
+    return path.read_bytes()
+
+
+def _image_values(image, template: nib.Nifti1Image, mask: bool):
+    """Return the values of *image* on the grid of *template*, a *mask*
+    resampled to the nearest voxel to stay one."""
+    if image.shape[:3] != template.shape[:3] or not np.allclose(
+        image.affine, template.affine
+    ):
+        from nibabel.processing import resample_from_to
+
+        image = resample_from_to(image, template, order=0 if mask else 1)
+    return np.nan_to_num(np.asanyarray(image.dataobj, dtype=float))
+
+
+def decoding_query(
+    app, name: str, voxels: str = "brain"
+) -> Tuple[str, List[str]]:
+    """
+    Return the query decoding the image *name* on the engine of *app* (its
+    ``image_decoding_query``), from the probabilities of its voxels,
+    ``NAME_probability(i, j, k, p)``, a voxel chosen among the *voxels*
+    (``brain`` or ``cortex``, its ``image_decoding_voxels``), and the
+    predicates it reads, but those, that the engine lacks; an empty query
+    on an engine without one.
+    """
+    config = engine_registry.get_engine_config(app.settings.engine_name) \
+        if app.settings.engine_name else {}
+    chosen = config.get("image_decoding_voxels", {}).get(voxels, "")
+    query = (config.get("image_decoding_query") or "").replace(
+        "{image}", name
+    ).replace("{voxel}", chosen)
+    rules = [line for line in query.splitlines()
+             if not line.lstrip().startswith("%")]  # its comments
+    heads = {rule.split("(")[0].strip() for rule in rules}
+    read = {
+        word for rule in rules if ":-" in rule
+        for word in re.findall(r"([A-Za-z_]\w*)\s*\(", rule.split(":-")[1])
+    }
+    symbols = app._nl.program_ir.symbol_table
+    missing = sorted(
+        word for word in read - heads - {name, f"{name}_probability"}
+        if Symbol(word) not in symbols and word not in ("sum", "count")
+    )
+    return query, missing
+
+
+def tractogram_index(app, source: str, ident: str = "") -> dict:
+    """
+    Return how the tractogram uploaded as *source*, or the engine's *ident*,
+    is indexed for the rules of the bundles, on an engine of tractography
+    whose atlas is in MNI space (that of an uploaded tractogram):
+    ``indexed``, its id, if it is the tractogram the engine holds, else
+    ``index``, the statements indexing it in place of that one (by the
+    atlas the engine indexed its own by, ``.index_tracts(..., replace=1)``,
+    after ``.load_tractogram`` for an upload not loaded yet, as its file's
+    name, a number added if the engine has a tractogram of that name);
+    both empty on another engine.
+    """
+    from .session import default_relation_name
+
+    none = {"index": "", "indexed": ""}
+    tracts = getattr(app._nl.program_ir, "_tracts", None)
+    if tracts is None or not tracts.atlases:
+        return none
+    atlas, indexed = next(iter(tracts.atlases.items()))
+    space = str(indexed.space)
+    if not space.upper().startswith("MNI"):
+        return none
+    if not ident:  # an upload: the tractogram loaded from it, if any
+        mine = next((upload["loaded"] for upload in app.uploads.listing()
+                     if upload["name"] == source), [])
+        ident = next((i for i in mine if i in tracts.tractograms), "")
+    if ident in tracts.in_store:
+        return {"index": "", "indexed": ident}
+    statement = f'.index_tracts("{{}}", "{atlas}", replace=1)'
+    if ident in tracts.tractograms:  # loaded, indexed before
+        return {"index": statement.format(ident), "indexed": ""}
+    name = default_relation_name(source)
+    ident, number = name, 1
+    while ident in tracts.tractograms:
+        number += 1
+        ident = f"{name}_{number}"
+    return {"index": (
+        f'.load_tractogram("{ident}", "{source}", space="{space}")\n'
+        + statement.format(ident)), "indexed": ""}
+
+
+def image_relation_name(app, source: str, replaced=()) -> str:
+    """
+    Return the name of the relation an uploaded image *source* is loaded
+    as: the file's name (``default_relation_name``), a number added when
+    another relation has it, or its probabilities' name, but when it is
+    one of the relations *replaced*, loaded from the file before.
+    """
+    from .session import default_relation_name
+
+    base = default_relation_name(source)
+    name, number = base, 1
+    symbols = app._nl.program_ir.symbol_table
+    while name not in replaced and any(
+        Symbol(relation) in symbols
+        for relation in (name, f"{name}_probability")
+    ):
+        number += 1
+        name = f"{base}_{number}"
+    return name
+
+
+def _radius(options: dict, tracts: bool) -> float:
+    """Return the distance in mm to the ends of a tractogram's streamlines
+    that its voxels are within: ``--radius``, of a tractogram only, or
+    ``endpoint_radius``."""
+    if "--radius" not in options:
+        return float(IMAGE_DEFAULTS["endpoint_radius"])
+    if not tracts:
+        raise SaveError("--radius is for a tractogram (.trk, .tck): the "
+                        "distance to the ends of its streamlines.")
+    try:
+        radius = float(options["--radius"][0])
+    except ValueError:
+        radius = 0.0
+    if not radius > 0:
+        raise SaveError(f"--radius is a distance in mm, more than 0, not "
+                        f"{options['--radius'][0]}.")
+    return radius
+
+
+@command(
+    ".image", "Load a NIfTI image of activations (a mask, a z-map), or the "
+    "ends of a tractogram's streamlines, as a relation NAME(i, j, k, value), "
+    "show it and tell how to decode it (.help image)", IMAGE_USAGE,
+)
+def cmd_image(app, arg: str) -> None:
+    """Load the NIfTI image, or the tractogram, of *arg* as a relation of
+    the session."""
+    from .session import (
+        _load_failed, _name_problem, default_relation_name, is_tractogram,
+    )
+
+    try:
+        words, options = split_args(
+            arg, {"--name": 1, "--zscore": 0, "--mask": 0, "--cortex": 0,
+                  "--radius": 1},
+            IMAGE_USAGE,
+        )
+        if len(words) != 1:
+            raise SaveError(f"Usage: {IMAGE_USAGE}")
+        source = words[0]
+        name = options.get("--name", [default_relation_name(source)])[0]
+        zscore, as_mask = "--zscore" in options, "--mask" in options
+        if zscore and as_mask:
+            raise SaveError("Give --mask or --zscore, not both: the image "
+                            "is decoded as a mask or from z-scores.")
+        tracts = is_tractogram(source)
+        radius = _radius(options, tracts)
+        if tracts and zscore:
+            raise SaveError(f"{source} is a tractogram: it has no z-scores; "
+                            f"the voxels within {radius:g} mm of the ends of "
+                            "its streamlines are decoded as a mask.")
+        for relation in (name, f"{name}_probability"):
+            problem = _name_problem(app, relation, "--name" in options)
+            if problem:
+                raise SaveError(
+                    problem.replace(".load PATH", ".image PATH --name")
+                )
+        template = engine_template(app._nl)
+        if tracts:
+            endpoints, streamlines = tractogram_endpoints(
+                _image_bytes(app, source))
+            mask = True
+        else:
+            image = read_image(_image_bytes(app, source))
+            mask = is_mask(image)
+            if mask and zscore:
+                raise SaveError(f"{source} is a binary mask: a binary mask "
+                                "has no z-scores (decode it without "
+                                "--zscore).")
+            data = _image_values(image, template, mask)
+    except (SaveError, ConfinedError) as exc:
+        _load_failed(app, str(exc))
+        return
+    except Exception as exc:
+        _load_failed(app, f"Cannot load {arg}: {exc}", exc)
+        return
+    if "brain_mask" in app._nl.symbols:
+        brain = np.array(list(app._nl.symbols["brain_mask"].value), dtype=int)
+    else:
+        brain = np.argwhere(np.asanyarray(template.dataobj) != 0)
+    index = tuple(brain.T)
+    if tracts:
+        values = endpoint_counts(endpoints, template.affine, brain, radius)
+        share = share_in_brain(endpoints, template.affine, brain,
+                               template.shape)
+        if values.any() and share < float(IMAGE_DEFAULTS["endpoint_share"]):
+            app.console.print(
+                f"Only {share:.0%} of the ends of the streamlines of "
+                f"{source} are in the brain: is the tractogram in mm in the "
+                "engine's space (MNI152)?", style="yellow", markup=False,
+            )
+    else:
+        values = data[index]
+    keep = values != 0
+    rows = pd.DataFrame(
+        {"i": brain[keep, 0], "j": brain[keep, 1], "k": brain[keep, 2],
+         "value": values[keep]}
+    )
+    if rows.empty:
+        _load_failed(app, (
+            f"No end of the streamlines of {source} is within {radius:g} mm "
+            "of the brain: is the tractogram in mm in the engine's space "
+            "(MNI152)?") if tracts else
+            f"{source} has no value other than 0 in the brain.")
+        return
+    for relation in (name, f"{name}_probability"):
+        if relation in app.loaded_relations:  # the image's, loaded before
+            del app._nl.program_ir.symbol_table[Symbol(relation)]
+            del app.loaded_relations[relation]
+    app._nl.add_tuple_set(rows, name=name)
+    app.loaded_relations[name] = ["i", "j", "k", "value"]
+    if source in app.uploads:
+        app.uploads.loaded(source, name)
+    app._nl.document_predicate(
+        name, tractogram_description(
+            source, len(streamlines), len(rows), radius
+        ) if tracts else
+        image_description(source, rows["value"].to_numpy(), mask),
+        replace=True,
+    )
+    kind = (f"the voxels within {radius:g} mm of the ends of its "
+            f"{len(streamlines)} streamlines, value the number of ends near "
+            "each"
+            if tracts else "a mask" if mask else "a map of z-scores" if zscore
+            else "a map taken as a mask from "
+            f"{IMAGE_DEFAULTS['threshold']}" if as_mask
+            else "a map of values")
+    app.console.print(
+        f"loaded {name}(i, j, k, value): {len(rows)} voxels from {source}, "
+        f"{kind}", style="green", markup=False,
+    )
+    probable = _load_probabilities(
+        app, name, source, rows, mask or as_mask, zscore,
+        radius if tracts else None,
+    )
+    _tell_decoding(
+        app, name, probable, "cortex" if "--cortex" in options else "brain"
+    )
+    shown = np.zeros(template.shape[:3], dtype=np.float32)
+    shown[index[0][keep], index[1][keep], index[2][keep]] = values[keep]
+    fd, shown_path = tempfile.mkstemp(
+        suffix=".nii.gz", prefix="neurolang_view_"
+    )
+    os.close(fd)
+    write_nifti(nib.Nifti1Image(shown, template.affine), shown_path)
+    threshold = float(IMAGE_DEFAULTS["threshold"])
+    if mask:
+        threshold = float(rows["value"].min())
+    request = parse_view_args("")
+    if (rows["value"] >= threshold).any():
+        request = request._replace(threshold=threshold, threshold_given=True)
+    _view_nifti(app, [(name, Path(shown_path))], request, name,
+                **(shown_tractogram(streamlines) if tracts else {}))
+
+
+def _load_probabilities(
+    app, name, source, rows, mask, zscore, radius=None
+) -> bool:
+    """Load the probabilities that the voxels *rows* of the image *name*
+    are active, ``NAME_probability``, if a *mask* or *zscore*s, or those
+    within *radius* mm of the ends of a tractogram's streamlines; return
+    whether they were."""
+    if not (mask or zscore):
+        return False
+    null = None
+    if radius is not None:  # a tractogram: all of its voxels
+        probabilities = rows[["i", "j", "k"]].assign(p=1.0)
+        how = (f"1 for each voxel within {radius:g} mm of an end of a "
+               "streamline")
+    elif mask:  # a binary mask, or a map from its threshold (--mask)
+        kept = rows if len(rows["value"].unique()) <= 1 else rows[
+            rows["value"] >= float(IMAGE_DEFAULTS["threshold"])]
+        probabilities = kept[["i", "j", "k"]].assign(p=1.0)
+        how = "1 for each voxel of the mask"
+    else:
+        p, null = activation_probability(rows["value"].to_numpy())
+        probabilities = rows[["i", "j", "k"]].assign(p=p)
+        probabilities = probabilities[
+            probabilities["p"] >= float(IMAGE_DEFAULTS["min_probability"])
+        ]
+        how = ("1 - its local false discovery rate, the null of the map "
+               f"N({null[0]:.2f}, {null[1]:.2f})")
+    relation = f"{name}_probability"
+    app._nl.add_tuple_set(probabilities, name=relation)
+    app.loaded_relations[relation] = ["i", "j", "k", "p"]
+    app._nl.document_predicate(
+        relation, probability_description(source, mask, null, radius),
+        replace=True,
+    )
+    app.console.print(
+        f"loaded {relation}(i, j, k, p): {len(probabilities)} voxels, the "
+        f"probability that each is active: {how}", style="green",
+        markup=False,
+    )
+    return True
+
+
+def _tell_decoding(app, name: str, probable: bool, voxels: str) -> None:
+    """Print the query decoding the image *name*, a voxel chosen among the
+    *voxels*, or why the engine cannot, or what the image needs: the
+    *probable*-ities of its voxels."""
+    query, missing = decoding_query(app, name, voxels)
+    if not query:
+        return
+    if missing:
+        app.console.print(
+            "The engine cannot decode the image: it has no "
+            f"{', '.join(missing)} (in the browser, add ?engine=full to the "
+            "address).", style="yellow", markup=False,
+        )
+        return
+    if not probable:
+        app.console.print(
+            "To decode it, its voxels need the probability to be active: "
+            "load it again with --zscore if it is a map of z-scores, or "
+            f"with --mask to take its voxels from "
+            f"{IMAGE_DEFAULTS['threshold']} as a mask.",
+            style="yellow", markup=False,
+        )
+        return
+    app.console.print(f"Decode it with this query:\n{query}", markup=False)

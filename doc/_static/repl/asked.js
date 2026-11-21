@@ -22,14 +22,14 @@ export class AskedHistory {
   }
 
   // Keep the *question* with its *query* (its *language*, whether it is
-  // *valid*, the assistant's *explanation*); not one without a question,
+  // *valid*, the assistant's *explanation*, whether it ran *out_of_steps*); not one without a question,
   // nor one the last repeats.
-  add({ question, query = "", language = "datalog", valid = false, explanation = "" }) {
+  add({ question, query = "", language = "datalog", valid = false, explanation = "", out_of_steps = false }) {
     question = question.trim();
     if (!question) return;
     const last = this.entries.at(-1);
     if (last?.question === question && last?.query === query) return;
-    this.entries.push({ question, query, language, valid: Boolean(valid), explanation: explanation ?? "", at: this.now() });
+    this.entries.push({ question, query, language, valid: Boolean(valid), explanation: explanation ?? "", out_of_steps: Boolean(out_of_steps), at: this.now() });
     if (this.entries.length > this.limit) this.entries.splice(0, this.entries.length - this.limit);
     try {
       this.storage?.setItem(KEY, JSON.stringify(this.entries));

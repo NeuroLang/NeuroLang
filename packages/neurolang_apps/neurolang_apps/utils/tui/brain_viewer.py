@@ -246,23 +246,39 @@ def _background_state(background, shape, affine) -> dict:
 
 def _layers(img) -> list:
     """
-    Return the overlays *img* stands for, as (name, image) pairs.
+    Return the overlays *img* stands for, as (name, image) pairs on one
+    grid.
 
     *img* is an image, an overlay without a name, or a sequence of
-    (name, image) pairs on one grid.
+    (name, image) pairs. Those on several grids, such as the regions of
+    an answer on the grid of their atlas and the streamlines of another
+    on that of the background, are drawn on the finest of them (the first
+    of the finest): the others are resampled to it, each voxel taking the
+    value of the nearest one, so that a mask stays a mask and a count
+    keeps its values.
     """
     if isinstance(img, nib.spatialimages.SpatialImage):
         return [("", img)]
     layers = list(img)
-    first = layers[0][1]
-    for name, other in layers[1:]:
-        if other.shape[:3] != first.shape[:3] or not np.allclose(
-            other.affine, first.affine
-        ):
-            raise ValueError(
-                f"The overlay {name!r} is not on the grid of the first one."
-            )
-    return layers
+    grid = min(
+        (image for _, image in layers),
+        key=lambda image: abs(np.linalg.det(image.affine[:3, :3])),
+    )
+    return [(name, _on_grid(image, grid)) for name, image in layers]
+
+
+def _on_grid(image, grid):
+    """Return *image* on the grid of the image *grid*, by the nearest
+    voxel."""
+    if image.shape[:3] == grid.shape[:3] and np.allclose(
+        image.affine, grid.affine
+    ):
+        return image
+    from nibabel.processing import resample_from_to
+
+    return resample_from_to(
+        image, (grid.shape[:3], grid.affine), order=0, cval=0.0
+    )
 
 
 def _overlay_cmaps(cmap, names) -> list:
@@ -410,6 +426,8 @@ def shown_edges(connectome: dict) -> list:
 
 # The number of streamlines drawn at most, evenly subsampled.
 MAX_STREAMLINES = DEFAULTS["streamlines"]["max_shown"]
+#: The most bundles the streamlines are coloured by, one colour each.
+MAX_BUNDLES = DEFAULTS["streamlines"]["max_bundles"]
 
 
 def shown_streamlines(ids, cap=None) -> list:
@@ -423,10 +441,29 @@ def shown_streamlines(ids, cap=None) -> list:
             .astype(int)]
 
 
+def streamline_ranks(n: int) -> np.ndarray:
+    """
+    Return the ranks, *n* down to 1, of *n* streamlines, as float32, such
+    that the *k* highest are an even sample of them: the order of the ranks
+    is that of the indices with their bits reversed (0, n/2, n/4, 3n/4...).
+    The page shows the streamlines whose rank is at least ``n - k + 1``: *k*
+    streamlines spread over all, not the first *k* of the file.
+    """
+    bits = max(1, (n - 1).bit_length())
+    order = [
+        i for i in (int(format(j, f"0{bits}b")[::-1], 2)
+                    for j in range(1 << bits)) if i < n
+    ]
+    ranks = np.empty(n, dtype=np.float32)
+    ranks[order] = n - np.arange(n)
+    return ranks
+
+
 def trk_bytes(lines) -> bytes:
     """
     Return the TrackVis ``.trk`` file of the streamlines *lines*, (n, 3)
-    arrays of points in millimetres (RAS+).
+    arrays of points in millimetres (RAS+), each with its ``rank``
+    (:func:`streamline_ranks`), which NiiVue reads as its ``dps``.
 
     NiiVue 0.69.0 reads a ``.tck`` without its first streamline (its
     ``readTCK`` misses the offset 0), a ``.trk`` whole.
@@ -434,24 +471,36 @@ def trk_bytes(lines) -> bytes:
     tractogram = nib.streamlines.Tractogram(
         [np.asarray(line, dtype=np.float32) for line in lines],
         affine_to_rasmm=np.eye(4),
+        data_per_streamline={"rank": streamline_ranks(len(lines))[:, None]},
     )
     file = io.BytesIO()
     nib.streamlines.TrkFile(tractogram).save(file)
     return file.getvalue()
 
 
-def streamlines_state(lines, total: int) -> dict:
+def streamlines_state(lines, total: int, bundles=None) -> dict:
     """
     Return the streamlines *lines* for the page to draw, a JSON-able dict.
 
     *lines* are (n, 3) arrays of points in millimetres, those drawn of
     the *total* of the result; they go in the page as a ``.trk`` file
-    (:func:`trk_bytes`), encoded as :func:`encode_array` does.
+    (:func:`trk_bytes`), encoded as :func:`encode_array` does. With
+    *bundles*, a tuple (names, colours, the number of the name of each
+    line), the page can colour each line by its bundle, a colour
+    ``#rrggbb`` per name, rather than by its direction.
     """
-    return {
+    state = {
         "trk": encode_array(np.frombuffer(trk_bytes(lines), np.uint8)),
         "shown": len(lines), "total": int(total),
     }
+    if bundles is not None:
+        names, colours, numbers = bundles
+        state["bundles"] = {
+            "names": [str(name) for name in names],
+            "colours": list(colours),
+            "of": encode_array(np.asarray(numbers, dtype=np.uint16)),
+        }
+    return state
 
 
 def regions_state(regions) -> dict:
@@ -501,7 +550,8 @@ def viewer_html(
     is drawn in the 3D render, which the page then starts with, beside
     the slices, and its strongest edges are listed. *streamlines*, of
     :func:`streamlines_state`, are drawn so too, coloured by their
-    direction, with a control of their visibility and opacity, on
+    direction or, if they have bundles, by their bundle, as a control
+    chooses, with controls of their visibility and number, on
     slices cut in millimetres, as they are drawn. *space* names the
     millimetres of the cursor: ``MNI``, or ``RAS`` over the background of
     a subject. *regions*, a :class:`~.nifti.RegionLayer`, are the regions

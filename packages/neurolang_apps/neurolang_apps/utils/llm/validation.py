@@ -360,6 +360,33 @@ class QueryCrashed(Exception):
     """Raised for a query whose process died of a signal, e.g. SIGSEGV."""
 
 
+class QueryStopped(Exception):
+    """Raised for a query whose process :func:`stop_queries` stopped."""
+
+
+# The processes running queries (see _in_child), and those stopped.
+_RUNNING = set()
+_STOPPED = set()
+_RUNNING_LOCK = threading.Lock()
+
+
+def stop_queries() -> int:
+    """
+    Stop the processes running queries now, as when the call that runs
+    them is cancelled: each query raises :class:`QueryStopped`. Return
+    how many were stopped.
+    """
+    with _RUNNING_LOCK:
+        running = list(_RUNNING)
+        _STOPPED.update(running)
+    for pid in running:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    return len(running)
+
+
 def _memory_mb(pid: int) -> float:
     """
     Return the memory of the process *pid*, in MB: that private to it
@@ -405,6 +432,12 @@ def _in_child(function, timeout, memory_mb):
     """
     if sys.platform == "emscripten" or not hasattr(os, "fork"):
         return _with_timeout(function, timeout)
+    import neurolang_apps
+
+    if not neurolang_apps.BLAS_FORK_SAFE and _accelerate():
+        # numpy loaded before neurolang_apps could keep Accelerate to one
+        # thread: a matrix product would crash the child.
+        return _with_timeout(function, timeout)
     embeddings = sys.modules.get("neurolang_apps.utils.text_embeddings")
     if embeddings is not None:
         # Load the text encoders here: a child process may not (macOS).
@@ -437,6 +470,8 @@ def _in_child(function, timeout, memory_mb):
             stream.write(data)
         os._exit(0)
     os.close(write)
+    with _RUNNING_LOCK:
+        _RUNNING.add(pid)
     received = {}
     reader = threading.Thread(
         target=lambda: received.setdefault(
@@ -459,6 +494,12 @@ def _in_child(function, timeout, memory_mb):
             reader.join()
             break
     _, status = os.waitpid(pid, 0)
+    with _RUNNING_LOCK:
+        _RUNNING.discard(pid)
+        stopped = pid in _STOPPED
+        _STOPPED.discard(pid)
+    if stopped:
+        raise QueryStopped()
     if stop is not None:
         raise stop()
     if not received.get("data"):
@@ -472,24 +513,38 @@ def _in_child(function, timeout, memory_mb):
     return value
 
 
+def _accelerate() -> bool:
+    """Whether numpy's BLAS is Apple's Accelerate, which a forked child
+    cannot run after its parent ran it with several threads."""
+    numpy = sys.modules.get("numpy")
+    try:
+        config = numpy.show_config(mode="dicts")
+        return config["Build Dependencies"]["blas"]["name"] == "accelerate"
+    except Exception:  # an older numpy, or none loaded
+        return False
+
+
 def run_preview(
     nl, text: str, language: str, rows: int = 10, engine_name: str = "",
     timeout: Optional[float] = None, memory_mb: Optional[float] = None,
+    max_cells: Optional[int] = None,
 ) -> Preview:
     """
-    Run the query *text* and return the first *rows* rows of its result.
+    Run the query *text* and return the first *rows* rows of its result,
+    and all of them if they are no more than *max_cells* cells
+    (:data:`MAX_KEPT_CELLS` if None).
 
     The rules it defines are discarded with the scope it runs in. With a
     *timeout* (seconds) or a *memory_mb* limit, the query runs in a child
     process stopped when it exceeds them.
     """
+    def preview():
+        return _preview(nl, text, language, rows, engine_name, max_cells)
+
     if not (timeout or memory_mb):
-        return _preview(nl, text, language, rows, engine_name)
+        return preview()
     try:
-        return _in_child(
-            lambda: _preview(nl, text, language, rows, engine_name),
-            timeout, memory_mb,
-        )
+        return _in_child(preview, timeout, memory_mb)
     except QueryTimeout:
         return Preview(
             False,
@@ -502,6 +557,10 @@ def run_preview(
             "The query was stopped: it used too much memory, e.g. joining "
             "large relations without a shared variable. Restrict it, e.g. "
             "with the class of its entities, before running it again.",
+        )
+    except QueryStopped:
+        return Preview(
+            False, "The query was stopped: the call running it was cancelled."
         )
     except QueryCrashed as exc:
         return Preview(
@@ -525,7 +584,7 @@ def _notes(nl, engine_name, text, language) -> str:
     )
 
 
-def _preview(nl, text, language, rows, engine_name) -> Preview:
+def _preview(nl, text, language, rows, engine_name, max_cells=None) -> Preview:
     """
     Run the query *text* and return its preview (see run_preview), after
     the notes on its constants.
@@ -556,7 +615,9 @@ def _preview(nl, text, language, rows, engine_name) -> Preview:
                 f"{', '.join(map(str, frame.columns))}\n"
                 + frame.head(rows).to_string(index=False)
             )
-    kept = frames if sum(f.size for _, f in frames) <= MAX_KEPT_CELLS else None
+    if max_cells is None:
+        max_cells = MAX_KEPT_CELLS
+    kept = frames if sum(f.size for _, f in frames) <= max_cells else None
     notes = _notes(nl, engine_name, text, language)
     shown = "\n".join(filter(None, [notes, *parts]))
     return Preview(True, shown, total, first, kept)

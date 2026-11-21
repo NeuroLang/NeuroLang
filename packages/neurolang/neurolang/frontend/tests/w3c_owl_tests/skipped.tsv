@@ -1,0 +1,77 @@
+# test	type	reason it is out of the fragment NeuroLang reads
+approved/AllDifferent/Manifest001	PositiveEntailmentTest	premises use owl:distinctMembers
+approved/FunctionalProperty/Manifest001	PositiveEntailmentTest	premises use owl:FunctionalProperty
+approved/FunctionalProperty/Manifest002	PositiveEntailmentTest	premises use owl:FunctionalProperty
+approved/FunctionalProperty/Manifest003	PositiveEntailmentTest	premises use owl:FunctionalProperty
+approved/FunctionalProperty/Manifest004	PositiveEntailmentTest	premises use owl:FunctionalProperty
+approved/I3.2/Manifest001	NotOwlFeatureTest	not an OWL feature test
+approved/I3.2/Manifest002	NotOwlFeatureTest	not an OWL feature test
+approved/I3.2/Manifest003	NotOwlFeatureTest	not an OWL feature test
+approved/I3.4/Manifest001	NotOwlFeatureTest	not an OWL feature test
+approved/I4.1/Manifest001	NotOwlFeatureTest	not an OWL feature test
+approved/I4.6/Manifest001	PositiveEntailmentTest	premises use owl:sameAs
+approved/I4.6/Manifest002	PositiveEntailmentTest	premises use owl:sameIndividualAs
+approved/I5.1/Manifest001	PositiveEntailmentTest	premises use owl:InverseFunctionalProperty
+approved/I5.24/Manifest001	PositiveEntailmentTest	premises use rdf:Property
+approved/I5.24/Manifest004	PositiveEntailmentTest	a class expression as a subclass
+approved/I5.3/Manifest005	ConsistencyTest	NeuroLang does not check consistency
+approved/I5.3/Manifest006	ConsistencyTest	NeuroLang does not check consistency
+approved/I5.3/Manifest007	ConsistencyTest	NeuroLang does not check consistency
+approved/I5.3/Manifest008	ConsistencyTest	NeuroLang does not check consistency
+approved/I5.3/Manifest009	ConsistencyTest	NeuroLang does not check consistency
+approved/I5.5/Manifest001	PositiveEntailmentTest	conclusion types a term as owl:FunctionalProperty (TBox)
+approved/I5.5/Manifest002	PositiveEntailmentTest	conclusion types a term as owl:FunctionalProperty (TBox)
+approved/I5.5/Manifest003	InconsistencyTest	NeuroLang does not check consistency
+approved/I5.5/Manifest004	InconsistencyTest	NeuroLang does not check consistency
+approved/InverseFunctionalProperty/Manifest001	PositiveEntailmentTest	premises use owl:InverseFunctionalProperty
+approved/InverseFunctionalProperty/Manifest002	PositiveEntailmentTest	premises use owl:InverseFunctionalProperty
+approved/InverseFunctionalProperty/Manifest003	PositiveEntailmentTest	premises use owl:InverseFunctionalProperty
+approved/InverseFunctionalProperty/Manifest004	PositiveEntailmentTest	premises use owl:InverseFunctionalProperty
+approved/Nothing/Manifest001	InconsistencyTest	NeuroLang does not check consistency
+approved/Nothing/Manifest002	PositiveEntailmentTest	conclusion uses owl:sameClassAs (TBox)
+approved/cardinality/Manifest001	PositiveEntailmentTest	premises use owl:cardinality
+approved/cardinality/Manifest002	PositiveEntailmentTest	premises use owl:maxCardinality
+approved/cardinality/Manifest003	PositiveEntailmentTest	premises use owl:cardinality
+approved/cardinality/Manifest004	PositiveEntailmentTest	premises use owl:maxCardinality
+approved/cardinality/Manifest005	PositiveEntailmentTest	premises use owl:cardinality
+approved/complementOf/Manifest001	PositiveEntailmentTest	premises use owl:complementOf
+approved/differentFrom/Manifest001	PositiveEntailmentTest	premises use owl:differentFrom
+approved/differentFrom/Manifest002	PositiveEntailmentTest	premises use owl:AllDifferent
+approved/disjointWith/Manifest001	PositiveEntailmentTest	premises use owl:disjointWith
+approved/disjointWith/Manifest002	PositiveEntailmentTest	premises use owl:disjointWith
+approved/distinctMembers/Manifest001	PositiveEntailmentTest	premises use owl:distinctMembers
+approved/imports/Manifest001	ImportEntailmentTest	owl:imports is not read
+approved/imports/Manifest003	ImportEntailmentTest	owl:imports is not read
+approved/imports/Manifest004	ImportsLevelTest	owl:imports is not read
+approved/imports/Manifest005	ImportsLevelTest	owl:imports is not read
+approved/imports/Manifest006	ImportsLevelTest	owl:imports is not read
+approved/imports/Manifest007	ImportsLevelTest	owl:imports is not read
+approved/imports/Manifest008	ImportsLevelTest	owl:imports is not read
+approved/intersectionOf/Manifest001	PositiveEntailmentTest	intersectionOf other than as a superclass
+approved/maxCardinality/Manifest001	InconsistencyTest	NeuroLang does not check consistency
+approved/maxCardinality/Manifest002	InconsistencyTest	NeuroLang does not check consistency
+approved/miscellaneous/Manifest001	ConsistencyTest	NeuroLang does not check consistency
+approved/miscellaneous/Manifest002	ConsistencyTest	NeuroLang does not check consistency
+approved/oneOf/Manifest001	ConsistencyTest	NeuroLang does not check consistency
+approved/oneOf/Manifest002	PositiveEntailmentTest	premises use owl:oneOf
+approved/oneOf/Manifest003	PositiveEntailmentTest	premises use owl:oneOf
+approved/sameClassAs/Manifest001	PositiveEntailmentTest	premises use owl:sameClassAs
+approved/sameClassAs/Manifest002	PositiveEntailmentTest	premises use owl:sameClassAs
+approved/sameClassAs/Manifest003	PositiveEntailmentTest	conclusion uses owl:sameClassAs (TBox)
+approved/sameClassAs/Manifest004	PositiveEntailmentTest	intersectionOf other than as a superclass
+approved/sameClassAs/Manifest005	NegativeEntailmentTest	premises use owl:cardinality
+approved/samePropertyAs/Manifest001	PositiveEntailmentTest	premises use owl:samePropertyAs
+approved/samePropertyAs/Manifest002	PositiveEntailmentTest	premises use owl:samePropertyAs
+approved/samePropertyAs/Manifest003	PositiveEntailmentTest	conclusion uses owl:samePropertyAs (TBox)
+approved/samePropertyAs/Manifest004	PositiveEntailmentTest	premises use owl:FunctionalProperty
+approved/samePropertyAs/Manifest005	PositiveEntailmentTest	premises use owl:FunctionalProperty
+approved/samePropertyAs/Manifest006	PositiveEntailmentTest	premises use owl:samePropertyAs
+approved/unionOf/Manifest001	PositiveEntailmentTest	premises use owl:unionOf
+approved/unionOf/Manifest002	PositiveEntailmentTest	premises use owl:unionOf
+proposed/FunctionalProperty/Manifest005	PositiveEntailmentTest	premises use owl:FunctionalProperty
+proposed/I5.24/Manifest002	PositiveEntailmentTest	premises use rdf:Property
+proposed/I5.24/Manifest003	PositiveEntailmentTest	conclusion is an axiom on classes (TBox)
+proposed/cardinality/Manifest006	PositiveEntailmentTest	intersectionOf other than as a superclass
+proposed/oneOf/Manifest004	PositiveEntailmentTest	premises use rdf:List
+proposed/sameClassAs/Manifest006	PositiveEntailmentTest	conclusion uses owl:unionOf (TBox)
+proposed/sameClassAs/Manifest007	PositiveEntailmentTest	premises use rdfs:Class

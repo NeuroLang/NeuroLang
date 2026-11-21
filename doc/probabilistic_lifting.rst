@@ -170,6 +170,37 @@ facts, for instance, is declined, as :math:`y` occurs in no choice, and
 is lifted by the next solver. Queries with negations or disjunctions are
 declined too.
 
+Once the join is ordered (``RAQueryGOOOptimiser``), the projection is
+pushed through it (``PushSumsThroughJoins``): at each join, each side is
+summed over the columns of its own that the projection drops, before the
+two are joined, rather than the join of all the atoms summed at the end,
+
+.. math::
+
+   \pi_X(L \bowtie R) = \pi_X\bigl(\pi_{(X \cup C(R)) \cap C(L)}(L)
+   \bowtie \pi_{(X \cup C(L)) \cap C(R)}(R)\bigr),
+
+:math:`C(\cdot)` being the columns of a plan (see `Correctness of the
+plans`_). The decoding of an image, a voxel :math:`v` chosen in it, each voxel active with its probability, and a
+study :math:`s` hitting it if it activates the voxel chosen,
+
+.. code-block:: text
+
+   image_hit(s) :- image_voxel(v), image_active(v), activated(v, s)
+   p(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
+
+is so summed over the voxels for each study, a sum of the joined image's
+size, before the join with the terms of the studies, as the join order
+puts the voxels' relations together. The greedy join ordering starts from
+the join of two relations with the fewest rows at most, and adds at each
+step the relation whose join with the joined ones has the fewest rows at
+most: a set all of whose columns are columns of the other side matches
+each of its rows at most once, so that ``image_active`` and then
+``activated`` are joined with ``image_voxel`` before the studies and their
+terms, even when the image has more voxels than there are studies. Started
+from the smallest relation, ``selected_study``, the order joined its terms,
+and then the activations of each study and term, before the image.
+
 The small dichotomy theorem
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1541,6 +1572,56 @@ Conjunctive queries summed on probabilistic choices
    add up, which the projection of the provenance solver computes. The
    hierarchy of the probabilistic atoms is not used.
 
+Sums pushed through joins
+   In the plan above, a projection is computed as the sum of the
+   probabilities of the rows it merges and a join as the product of those
+   of the rows it pairs (``RelationalAlgebraProvenanceCountingSolverMixin``):
+   each row carries a number, and the plan is a sum of products, in the
+   semiring of the reals. For the join :math:`L \bowtie R` of two plans
+   whose columns are :math:`C(L)` and :math:`C(R)`, and the projection on
+   :math:`X`, let :math:`A = C(L) \setminus (X \cup C(R))` and
+   :math:`B = C(R) \setminus (X \cup C(L))` be the columns each side
+   alone has that the projection drops. A row of the result, of values
+   :math:`x` on :math:`X`, merges the pairs of rows agreeing on the shared
+   columns :math:`c`, of every value of :math:`A` on the left and of
+   :math:`B` on the right, so that its number is
+
+   .. math::
+
+      \sum_{c} \sum_{a} \sum_{b} \ell(x, c, a)\, r(x, c, b)
+      = \sum_{c} \Bigl(\sum_{a} \ell(x, c, a)\Bigr)
+                 \Bigl(\sum_{b} r(x, c, b)\Bigr),
+
+   by the distributivity of the product over the sum, :math:`\ell` and
+   :math:`r` being the numbers of the rows of each side (0 for no row):
+   the projection of each side on :math:`X \cup c`, then their join and
+   the projection on :math:`X`, as the rewriting computes. The equality
+   holds in every commutative semiring, so the probabilities are those
+   of the plan before. A side whose projection drops no column is left as
+   it is, and the rewriting recurses into the joins of each side. It
+   applies to the join of the provenance solver only: the
+   ``NaturalJoinInverse`` of the conditional queries divides, and a sum
+   does not distribute over a division. It applies to the plans of every
+   solver built by ``generate_provenance_query_solver``: the lifted plans
+   of the next solver compute a ``Projection`` and a ``NaturalJoin`` the
+   same way (``ExtendedRAPToRAWalker`` extends this solver's walker), and
+   their projections which are not sums, ``IndependentProjection`` and
+   the other ``LiftedPlanProjection``, are other operators, never
+   rewritten. A deterministic relation has the number 1
+   on each of its rows, and a projection dropping its columns sums them
+   as the projection at the top would. The sums of each side are no
+   larger than the rows of that side, and the join of the summed sides no
+   larger than that of the sides, so the rewriting keeps the plan
+   polynomial.
+
+Join order
+   ``RAQueryGOOOptimiser`` only reorders the operands of a chain of
+   natural joins. The product of the semiring being commutative and
+   associative, so is the natural join of provenance sets: every order
+   gives each row the same number, and the bound of the number of rows
+   which picks the order (``_join_size_bound``) only decides the cost of
+   the plan, never its probabilities.
+
 Non-repeating queries
    :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
    applies only if no probabilistic relation, fact or choice, occurs
@@ -2168,6 +2249,242 @@ The tests of the rules of `Negations and comparisons sharing relations`_
 (``packages/nl_core/nl_core/probabilistic/tests/test_lifted_negation.py``) also compare
 their plans with an enumeration of the possible worlds of small
 databases.
+
+Computing the plans as tensor contractions
+------------------------------------------
+
+The provenance plan of a query, its sums pushed through its joins, is
+computed as relational algebra: joins materialised, then grouped and
+summed. When the plan is a sum of products — joins, projections and
+selections of relations annotated with probabilities, and the
+projections and divisions of the lifted plans — the step
+``SolveAsContractions``, a pattern walker, of the provenance solver
+(``packages/nl_core/nl_core/probabilistic/sums_of_products.py``) computes
+it instead as a contraction of sparse tensors, with the same answers. It
+is on by default (``[PROBABILISTIC_SOLVER] contractions`` in
+``config.ini``); a plan it cannot write as a contraction is computed by
+relational algebra, unchanged.
+
+A *tensor* has named axes; its entry at a tuple of values of its axes is
+a non-negative real, 0 off its support. A relation annotated with
+probabilities (a deterministic relation with 1) is the tensor of an axis
+per column whose entry at a tuple is the tuple's probability. The
+expressions of tensors (``nl_core.relational_algebra.linear_algebra.expressions``)
+are NeuroLang expressions:
+
+* :math:`F_R` (``Factor``), the tensor of a relation :math:`R`, of
+  entries 1, and (``WeightedFactor``) of entries the numbers of one of
+  its columns, its probabilities;
+* :math:`T_1 \times \dots \times T_k` (``TensorProduct``), of axes the
+  union of theirs, the product of their entries;
+* :math:`\Sigma_K T` (``Contraction``), of axes :math:`K`, the sum of the
+  entries of :math:`T` that agree on :math:`K`;
+* :math:`\amalg_K T` (``NoisyOrContraction``), of axes :math:`K`,
+  :math:`1 - \prod (1 - p)` over the entries :math:`p` of :math:`T` that
+  agree on :math:`K`;
+* :math:`T_1 \div T_2` (``TensorRatio``), the axes of :math:`T_2` among
+  those of :math:`T_1`, the quotient at the entries of both;
+* :math:`\rho_r T`, :math:`\sigma_{a=c} T`, :math:`\sigma_{a=b} T`
+  (``RenameAxes``, ``SliceAxis``, ``Diagonal``): axes renamed, entries
+  with axis :math:`a` equal to the constant :math:`c`, entries with axes
+  :math:`a` and :math:`b` equal.
+
+Translation
+~~~~~~~~~~~
+
+``ContractionPlan``, a pattern walker, maps a provenance plan :math:`P`
+to a tensor expression :math:`T(P)`, or declines it:
+
+=========================================================  =============================================
+plan                                                       tensor
+=========================================================  =============================================
+deterministic relation :math:`R`                           :math:`F_R`, entries 1
+probabilistic facts or choice :math:`R`, probability       :math:`F_R` on the other columns, entries
+column :math:`c`                                           the column :math:`c`
+provenance set :math:`R`, provenance column :math:`p`      :math:`F_R` on the other columns, entries :math:`p`
+:math:`\sigma_{a=c}(P)`, :math:`\sigma_{a=b}(P)`           :math:`\sigma_{a=c} T(P)`, :math:`\sigma_{a=b} T(P)`
+renaming of columns of :math:`P`                           :math:`\rho T(P)`, unless two columns merge
+:math:`P_1 \bowtie P_2`, :math:`P_1 \times P_2`            :math:`T(P_1) \times T(P_2)`
+:math:`\pi_K(P)`, disjoint projection :math:`\pi_K(P)`     :math:`\Sigma_K T(P)`
+independent projection :math:`\pi_K(P)`                    :math:`\amalg_K T(P)`
+``NaturalJoinInverse`` :math:`(P_1, P_2)`                  :math:`T(P_1) \div T(P_2)`
+any other operation                                        declined
+=========================================================  =============================================
+
+A plan whose translation is a single factor, or has unnamed axes, is left
+to relational algebra.
+
+Normal form
+~~~~~~~~~~~
+
+``normal_form`` (``linear_algebra/rewrites.py``) rewrites :math:`T(P)`,
+by equivalences only, into the form the backend computes: summed axes
+named apart (``RenameSummedAxesApart``: each axis a contraction sums is
+renamed to a name of its own, as the variables bound by a quantifier),
+then renamings, slices and diagonals moved onto the factors and products
+flattened (``PushAxisOperationsToFactors``). A renaming of a contraction
+renames the axes it keeps only; a slice of a contraction on an axis it
+sums is the contraction; a slice or a renaming of a product or a ratio is
+that of each term; a diagonal of a product is the diagonal of the one
+term holding both axes, and if no term holds both the expression has no
+normal form and the plan is left to relational algebra.
+
+Evaluation
+~~~~~~~~~~
+
+``ScipyTensorSolver`` (``linear_algebra/scipy_backend.py``), a pattern
+walker, computes a normal form:
+
+1. It groups the axes: the row axes and the column axes of a relation
+   held by an engine's sparse view are a group each (the three columns
+   of a voxel are one entity), every other axis a group of its own; each
+   group's entities are numbered, by the view's index or by the values of
+   the smallest factor holding the axis. It declines an expression in
+   which an axis summed by a contraction is read outside it, and one of
+   a factor with a missing value in an axis (relational algebra joins
+   missing values with each other), with a tuple of two probabilities
+   (two facts, whose noisy-or it would not compute, or two outcomes of a
+   choice) or with values without an order to number them.
+2. A factor is the view's sparse matrix, or its rows, sliced and tied,
+   their entities encoded; a row whose entity has no number, a value
+   absent from the smallest factor holding the axis, joins no row of
+   that factor and is left out.
+3. The terms of a product are multiplied in order, each axis no later
+   term reads summed out as soon as possible: by scaling when the axes of
+   one are kept axes of the other, by a dense ``einsum`` when the
+   operands and the result are small (``dense_cells``), else by a sparse
+   matrix product of the two laid out as kept-by-shared and shared-by-kept
+   matrices.
+4. A noisy-or contraction is :math:`1 - \exp(\sum \log(1 - p))` of the
+   product of its terms; a ratio scales the numerator by the inverse of
+   the denominator at their common entries.
+5. The non-zero entries are decoded into the rows of a provenance set.
+
+The translator declines a selection or a diagonal of a column which is
+not an axis (a probability) and a naming of two columns alike. Any other
+error of the step is a bug: it is logged, and the plan is computed by
+relational algebra.
+
+Magic sets restrict a stored relation with a rule (see *Restrictions of
+magic sets left to the plans* below), which the plan joins: a relation
+held as a sparse view is read as its matrix, and the join with the magic
+predicate selects its rows in the product, without a restricted copy.
+
+Correctness
+~~~~~~~~~~~
+
+**Proposition.** For a plan :math:`P` that is translated, the rows of
+the provenance set computed from the normal form of :math:`T(P)` are the
+rows of non-zero probability of the provenance set computed by
+relational algebra, with the same probabilities.
+
+*Proof.* By induction on :math:`P`, the tensor of the provenance set of
+:math:`P` computed by relational algebra is the tensor :math:`T(P)`
+denotes.
+
+* A relation annotated with probabilities and its factor have the same
+  entries by definition; a selection keeps the tuples whose column
+  equals a constant or another column, as the slice and the diagonal keep
+  those entries.
+* The provenance solver computes a join as the product of the
+  probabilities of the tuples it pairs, a projection as the sum of the
+  probabilities of the tuples it merges, the independent projection as
+  :math:`1 - \prod(1 - p)` and ``NaturalJoinInverse`` as the quotient
+  (`Operations of the lifted plans`_): these are, entry by entry, the
+  product, contraction, noisy-or contraction and ratio of the tensors of
+  the operands. The translation follows the plan: it neither assumes the
+  events disjoint or independent nor checks it; the lifted plan has
+  established which (`Correctness of the plans`_).
+* Renaming a summed axis apart, and moving a renaming, a slice or a
+  diagonal through a product, a ratio or a contraction, give tensors of
+  the same entries: a contraction binds the axes it sums, so renaming
+  them consistently does not change its value, and a slice or a diagonal
+  on axes that a product or a ratio carries restricts each operand that
+  carries them, the others being constant along those axes.
+* The backend computes the same sums in another order: grouping the
+  axes of an entity is a bijection between the entities and their
+  numbers; summing an axis out of an operand before multiplying is the
+  distributivity of the product over the sum, valid because no later
+  term reads the axis; the sparse product of the two laid-out matrices
+  is, entry by entry, the sum over the shared axes of the products. Rows
+  left out because an entity has no number pair with no tuple of the
+  smallest factor holding the axis, so the natural join excludes them.
+  For the noisy-or, :math:`1 - \prod(1 - p) = 1 - \exp(\sum \log(1 - p))`,
+  an entry :math:`p = 1` giving :math:`\log 0 = -\infty` and a noisy-or
+  of 1, an absent entry (:math:`p = 0`) adding :math:`\log 1 = 0`.
+
+The relational algebra keeps rows of probability 0 that the backend may
+leave out; the provenance solver filters them out of the answers in both
+cases. :math:`\square`
+
+The tests (``packages/neurolang/neurolang/frontend/tests/test_sums_of_products.py``)
+solve random programs — a choice with weights of 0, facts of probability
+0 and 1, deterministic relations with duplicate rows; marginals,
+conditionals, pairs, constants in bodies and heads, repeated variables,
+noisy-or and resampling — with contractions, with relational algebra and
+by summing over every possible world, and compare the three to a relative
+:math:`10^{-12}`; ``linear_algebra/tests/test_tensor_expressions.py``
+tests the rewrites and the backend.
+
+Restrictions of magic sets left to the plans
+--------------------------------------------
+
+Magic sets (``nl_core.datalog.magic_sets``) restrict a predicate to the
+bindings its uses pass to it. Of a predicate defined by a stored relation,
+as ``activated`` of the table of the voxels within reach of each peak,
+the restriction is a rule
+
+.. math::
+
+   p^{a}(\bar x) \leftarrow \mathit{magic\_p}^{a}(\bar x_b) \wedge
+   r(\bar x)
+
+of the variables :math:`\bar x_b` bound by the adornment :math:`a`. A
+bottom-up evaluation computes :math:`p^a` as a new relation, a copy of
+the rows of :math:`r` the magic predicate keeps: 20 million rows of
+``activated`` for the decoding of a mask, at each query, read by the plans
+of the rules using it without the view the engine holds of :math:`r`.
+
+``unfold_restrictions``, the last step of ``magic_rewrite``, substitutes
+the body of such a rule for each use of :math:`p^a` and drops the rule
+when nothing uses it any more. A rule is unfolded when it is the only rule
+of :math:`p^a`, :math:`p^a` is not the goal, its head is of distinct
+variables, its body is :math:`\mathit{magic\_p}^a` and one positive atom
+of a deterministic relation of the extensional database, and
+:math:`p^a` is not used under a negation. The use
+:math:`p^a(\bar t)` becomes
+:math:`\mathit{magic\_p}^a(\bar t_b) \wedge r(\bar t)`, the free
+variables of the rule renamed apart and a constant or a repeated variable
+of :math:`\bar t` an equality (``FlattenQueryInNonRecursiveUCQ``). The
+plan of each rule then joins :math:`r` with the magic predicate as it
+joins any relation: relational algebra as a join, the contractions as a
+product with the matrix of the view of :math:`r`, which selects its rows
+without copying them.
+
+**Proposition.** The program with the restrictions unfolded has the
+answers of the program rewritten by magic sets.
+
+*Proof.* :math:`p^a` is defined by one rule whose body uses neither
+:math:`p^a` nor any predicate defined in terms of it (its atoms are a magic
+predicate, defined from the bodies of the rules using :math:`p^a`, left of
+them, and a stored relation), so in every model of the program
+:math:`p^a(\bar t)` holds exactly when
+:math:`\exists \bar y\, \mathit{magic\_p}^a(\bar t_b) \wedge r(\bar t)`,
+:math:`\bar y` the variables of the body not in the head, none here.
+Replacing a positive atom by a formula equivalent to it in every model
+leaves the minimal model of a stratified program unchanged, and the uses
+under negation, which would change the strata, are not replaced. A
+probabilistic rule using :math:`p^a` joins the same deterministic tuples
+with its probabilistic atoms: the probabilities of its answers are the
+same. :math:`\square`
+
+The tests (``packages/nl_core/nl_core/datalog/tests/test_magic_sets.py``)
+compare the answers of the rewritten programs with those of the programs
+without magic sets: restrictions bound by a relation, by a constant, by
+a repeated variable, used twice; a restriction under negation, of a
+recursive predicate and the goal are kept. Of a probabilistic query, the
+plan reads the view and has the answers of relational algebra
+(``test_sums_of_products.py``).
 
 References
 ----------

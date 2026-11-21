@@ -4,31 +4,136 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NeuroLang REPL: admin</title>
+<meta name="theme-color" content="#0b1220">
+<script>
+  // The theme of the REPL before the first paint: the saved choice, or the system's.
+  (() => {
+    let choice = "system";
+    try { choice = localStorage.getItem("neurolang-repl-theme") || choice; } catch {}
+    const light = choice === "light" || (choice === "system" && matchMedia("(prefers-color-scheme: light)").matches);
+    document.documentElement.dataset.theme = light ? "light" : "dark";
+  })();
+</script>
 <style>
-  /* The admin console of neurolang-repl-serve --users, for the group admin.
+  /* The admin console of neurolang-repl-serve --users, for the group admin: the
+     tokens of the login page, the tables of the activity page.
      What users wrote (names, questions, comments) is shown as text only. */
-  :root { color-scheme: light dark; --line: #8884; --dim: #888; --bad: #cf222e; --ok: #1a7f37; }
-  body { margin: 0 auto; max-width: 70rem; padding: 1rem; font: 14px/1.45 system-ui, sans-serif; }
-  h1 { font-size: 1.3rem; margin: 0 0 .25rem; }
-  h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
-  .note { color: var(--dim); font-size: .85rem; margin: .2rem 0; }
-  .scroll { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-weight: 600; }
+  :root {
+    color-scheme: dark;
+    --ground: #0b1220; --panel: #0f1a2e; --raised: #15223b; --sunken: #0a1322;
+    --border: #22324f; --border-strong: #34476b; --control: #6d83a8; --hover: #1a2944;
+    --text: #e8eef9; --muted: #a9b8d0; --faint: #8392af;
+    --accent: #5aa3f6; --accent-hover: #7db7f8; --on-accent: #06121f; --accent-soft: #15315a;
+    --bad: #ff8f87; --bad-soft: #3a1418; --ok: #4ccf8a;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 12px 32px rgb(0 0 0 / .4);
+    --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --radius: 8px; --radius-lg: 14px;
+  }
+  :root[data-theme=light] {
+    color-scheme: light;
+    --ground: #f3f6fb; --panel: #ffffff; --raised: #ffffff; --sunken: #f6f8fc;
+    --border: #d9e1ee; --border-strong: #b9c6db; --control: #7a8eb0; --hover: #edf2f9;
+    --text: #0f1b33; --muted: #4a5874; --faint: #5d6b84;
+    --accent: #1a63c2; --accent-hover: #15529f; --on-accent: #ffffff; --accent-soft: #e6effb;
+    --bad: #b42318; --bad-soft: #fdecea; --ok: #1d7a4b;
+    --shadow: 0 1px 2px rgb(15 27 51 / .08), 0 12px 32px rgb(15 27 51 / .12);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; min-height: 100vh; padding: 1.5rem 1rem; background: var(--ground); color: var(--text);
+    font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased;
+  }
+  main { margin: 0 auto; }
+  .brand { display: flex; align-items: center; gap: .9rem; margin-bottom: .75rem; }
+  .brand img { width: 3rem; height: auto; flex: none; }
+  .logo-light, :root[data-theme=light] .logo-dark { display: none; }
+  :root[data-theme=light] .logo-light { display: block; }
+  h1 { margin: 0; font-size: 1.45rem; line-height: 1.2; letter-spacing: -.01em; }
+  h2 { margin: 0 0 .5rem; font-size: 1.05rem; }
+  p { margin: .5rem 0; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  nav { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; margin-bottom: 1rem; font-size: .9rem; }
+  .note { margin: .5rem 0 0; font-size: .9rem; color: var(--muted); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  form { display: grid; gap: 1rem; }
+  label { display: grid; gap: .35rem; font-size: .9rem; font-weight: 600; }
+  input:not([type=checkbox]), select {
+    width: 100%; min-height: 2.75rem; padding: .6rem .75rem; font: inherit; font-weight: 400;
+    color: var(--text); background: var(--sunken); border: 1px solid var(--control);
+    border-radius: var(--radius); transition: border-color .15s, box-shadow .15s;
+  }
+  input[type=checkbox], input[type=radio] { width: 1.25rem; height: 1.25rem; margin: 0; accent-color: var(--accent); }
+  label:has(input[type=checkbox]) span { display: inline-flex; align-items: center; gap: .5rem; min-height: 2.75rem; font-weight: 400; }
+  input:hover, select:hover { border-color: var(--muted); }
+  input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
+    outline: 2px solid transparent; box-shadow: 0 0 0 3px var(--panel), 0 0 0 5px var(--accent);
+  }
+  input:focus-visible, select:focus-visible { border-color: var(--accent); }
+  button {
+    display: inline-flex; align-items: center; justify-content: center; gap: .6rem;
+    min-height: 2.75rem; padding: .6rem 1rem; font: inherit; font-weight: 600;
+    color: var(--text); background: var(--raised); border: 1px solid var(--border-strong);
+    border-radius: var(--radius); cursor: pointer; transition: background .15s, border-color .15s;
+  }
+  button:hover { background: var(--hover); border-color: var(--faint); }
+  button.primary { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+  button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  button:disabled, input:disabled, select:disabled { opacity: .6; cursor: not-allowed; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow); padding: 1.5rem;
+  }
+  /* What a request came to: said in words, and by a mark and a bar. */
+  [role=status] { margin: .75rem 0 0; padding: .6rem .75rem; font-size: .9rem; border-radius: var(--radius); background: var(--accent-soft); border-left: 4px solid var(--accent); }
+  [role=status]:empty { margin: 0; padding: 0; border: 0; }
+  [role=status].error { background: var(--bad-soft); border-left-color: var(--bad); }
+  [role=status].ok { border-left-color: var(--ok); }
+  [role=status].error::before { content: "\2715  " / ""; color: var(--bad); font-weight: 700; }
+  [role=status].ok::before { content: "\2713  " / ""; color: var(--ok); font-weight: 700; }
+  @media (max-width: 26rem) { .card { padding: 1.15rem; } }
+  /* A finger needs 44px. */
+  @media (pointer: coarse) {
+    input:not([type=checkbox]), select, button, nav a { min-height: 44px; }
+    nav a { display: inline-flex; align-items: center; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  main { max-width: 70rem; }
+  h2 { margin: 2rem 0 .5rem; }
+  .scroll { overflow-x: auto; position: relative; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; padding: .5rem .75rem .5rem 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font: 600 .75rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
   td.text { max-width: 22rem; white-space: pre-wrap; overflow-wrap: anywhere; }
-  code { font-size: .85em; }
-  form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
-  form + form { margin-top: .75rem; }
-  label { display: grid; gap: .15rem; font-size: .85rem; }
-  input, select, button { font: inherit; padding: .25rem .5rem; }
+  td button, td select { padding: .3rem .75rem; width: auto; }
+  td input:not([type=checkbox]) { padding: .3rem .6rem; }
+  @media (pointer: fine) { td button, td select, td input:not([type=checkbox]) { min-height: 2.25rem; } }
+  code { font-family: var(--mono); font-size: .85em; }
+  main > form {
+    display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; margin-top: 1rem; padding: 1rem;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  }
+  main > form label { flex: 1 1 11rem; }
+  main > form label:has(input[type=checkbox]) { flex: 0 0 auto; }
+  .scroll table { min-width: 36rem; }
+  @media (max-width: 40rem) { main > form label { flex-basis: 100%; } main > form > button { flex: 1 1 8rem; } }
   .own { color: var(--ok); } .none { color: var(--bad); }
+  /* The uploads: the message line, the erase buttons, a row per session. */
   #message { min-height: 1.2rem; } #message.error { color: var(--bad); }
+  button.danger { color: var(--bad); background: transparent; border: 1px solid currentColor; }
+  tr.session-row th { font: 600 .9rem/1.4 var(--sans); text-transform: none; letter-spacing: 0; color: var(--text); padding-top: .6rem; }
+  .actions-line { margin-top: .4rem; text-align: right; }
 </style>
 </head>
 <body>
-<h1>NeuroLang REPL: admin</h1>
-<p><a href="/">The REPL</a> · <a href="/account">Your account</a><span id="activity-link" hidden> · <a href="/admin/activity">Activity</a></span><span id="dashboard-link" hidden> · <a href="/admin/logs/">Raw data and SQL</a></span> · <a href="/logout">Log out</a></p>
+<main>
+<header class="brand">
+    <img class="logo-dark" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1NDAiIGhlaWdodD0iNDYwIiB2aWV3Qm94PSItMjQgLTI0IDU0MCA0NjAiPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcC1iYXJzLWRhcmsiPjxwYXRoIGQ9Ik0xNzguMTUgNDA1LjUzQzE4My4xNCA0MDIuMzQgMTg4LjkzIDM4Ni44NiAxOTguMDAgMzczLjkyQzIwOC41OSAzNDEuOTcgMjEyLjcwIDM1Mi41MiAyMjIuODMgMzQ0LjQwQzIyNy4xMSAzNDAuOTcgMjMyLjk2IDMzNS45MyAyMzUuODQgMzMzLjE5TDI0MS4wNiAzMjguMjFMMjQ1LjQyIDMzMi4wMEMyNjMuNTYgMzQ3Ljc1IDI2OS4yNiAzNDcuMjggMjc4LjQyIDM0OS44OEMyODkuNTcgMzUzLjA0IDMwNS42OCAzNDkuMjQgMzI3LjQwIDM0MC4zM0MzNDkuMTkgMzMxLjM4IDM1Ni42MyAzMjguNTAgMzU5Ljc5IDMwMy41OUwzNjEuMTIgMjkzLjA1TDM2Ny4zOCAyOTIuNTdDMzcwLjgyIDI5Mi4zMCAzNzguNzEgMjkyLjA3IDM4NC45MCAyOTIuMDZDNDAwLjg0IDI5Mi4wMiA0MTguNjggMjkwLjgyIDQyNS40MSAyODkuMzFDNDM3Ljg3IDI4Ni41NCA0NTMuMDEgMjc4Ljc1IDQ2MS45OSAyNzAuNTBDNDc4LjIyIDI1NS42MSA0ODcuNjggMjMwLjQ5IDQ4Ni40OSAyMDUuNDhDNDg1LjU4IDE4Ni4yOCA0ODIuMjkgMTczLjcxIDQ3My42MSAxNTYuMzFDNDY1LjE4IDEzOS40MiA0NTYuOTIgMTI2LjQ3IDQ0NC4yOSAxMTAuMjlDNDI5LjcwIDkxLjYzIDQyMi44NiA4NS4wNCA0MDEuMzUgNjguOTRDMzgyLjI1IDU0LjY0IDM2OC40MSA0Ni44MyAzMzUuMTYgMzEuNTRDMzA2LjU3IDE4LjQwIDMwMC44OSAxNi4zOSAyODQuNTEgMTMuNjZDMjc2LjY3IDEyLjM2IDI2Ni43NSAxMC4yNCAyNjIuNDggOC45N0MyNDkuNTkgNS4xMiAyNDUuMzYgNC40OCAyMjYuNzIgMy41OEMyMTYuODkgMy4xMCAyMDUuMzkgMi4zOCAyMDEuMTggMS45N0MxODAuODcgMC4wMCAxNzQuNTQgMS4xMyAxNDYuNjYgMTEuNjhDMTAzLjg5IDI3Ljg1IDk2LjI4IDMzLjY2IDYzLjEzIDc1LjQxQzQyLjMzIDEwMS42MCAzNS4wNyAxMTMuNzggMTcuMjcgMTUyLjM1QzMuMTUgMTgyLjk0IDAuMzEgMTk0LjQ3IDEuMTIgMjE3LjgyQzEuNTkgMjMxLjEyIDIuNzkgMjM2LjMwIDcuNjYgMjQ2LjA1QzExLjI0IDI1My4yMCAxMi44NiAyNTUuMjYgMjMuMjAgMjY1LjgxQzI4LjY0IDI3MS4zNyAzMi41MyAyNzYuMDUgMzMuNDggMjc4LjE5QzM0LjcyIDI4MC45NyAzNS4xOCAyODQuNzAgMzUuODcgMjk3LjQ5QzM2LjgzIDMxNS4yMiA0MS4wMSAzMjEuNTYgNDUuMTEgMzMxLjEwQzYyLjk4IDM1Ni43OSA3Ni43OCAzNjkuODUgMTAzLjY5IDM3OC44NkMxMTAuMjkgMzgxLjA3IDEyMi41NSAzNzkuMTkgMTMxLjgyIDM5MC4wNUMxNTIuNzMgMzkwLjExIDE0My41NSA0MDMuNzQgMTQ5LjM2IDQwNS44NkMxNjMuOTIgNDA2LjUyIDE3MC4yMSA0MDYuNTIgMTc4LjE1IDQwNS41M0wxNzguMTUgNDA1LjUzIi8+PC9jbGlwUGF0aD48L2RlZnM+PGcgY2xpcC1wYXRoPSJ1cmwoI2NsaXAtYmFycy1kYXJrKSI+PHJlY3QgeD0iMTAzLjA5MzE5MjM3ODYyMzM5IiB5PSI0OSIgd2lkdGg9IjQyIiBoZWlnaHQ9IjI4IiByeD0iMTQuMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNUFBM0Y2IiBzdHJva2Utd2lkdGg9IjUiLz48cmVjdCB4PSIxMDIuMDkzMTkyMzc4NjIzMzkiIHk9IjQ4IiB3aWR0aD0iMzAuMCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiM1QUEzRjYiLz48Y2lyY2xlIGN4PSIxNTkuMDkzMTkyMzc4NjIzMzciIGN5PSI1MC41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48Y2lyY2xlIGN4PSIxNTkuMDkzMTkyMzc4NjIzMzciIGN5PSI3NS41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48Y2lyY2xlIGN4PSIxNjkuMDkzMTkyMzc4NjIzMzciIGN5PSI1MC41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48Y2lyY2xlIGN4PSIxNjkuMDkzMTkyMzc4NjIzMzciIGN5PSI3NS41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48cmVjdCB4PSIxODMuMDkzMTkyMzc4NjIzMzciIHk9IjQ5IiB3aWR0aD0iMTI0LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiNFOEVFRjkiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjE4Mi4wOTMxOTIzNzg2MjMzNyIgeT0iNDgiIHdpZHRoPSI4MS45IiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iI0U4RUVGOSIvPjxyZWN0IHg9IjUyLjMxMTk4MDcwMDk2MTA4IiB5PSIxMTQiIHdpZHRoPSIyMDEuMjQ2MTE3OTc0OTgxMDgiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjNUFBM0Y2Ii8+PGNpcmNsZSBjeD0iMjY5LjU1ODA5ODY3NTk0MjIiIGN5PSIxMTYuNSIgcj0iMy4yIiBmaWxsPSIjRThFRUY5Ii8+PGNpcmNsZSBjeD0iMjY5LjU1ODA5ODY3NTk0MjIiIGN5PSIxNDEuNSIgcj0iMy4yIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iMjc3LjU1ODA5ODY3NTk0MjIiIHk9IjEyNy40IiB3aWR0aD0iMTQiIGhlaWdodD0iMy4yIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iMzAzLjU1ODA5ODY3NTk0MjIiIHk9IjExNCIgd2lkdGg9IjkwLjAiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iNTguODU2Njc4MzE4NDQyODkiIHk9IjE4MSIgd2lkdGg9Ijg4LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiNFOEVFRjkiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjU3Ljg1NjY3ODMxODQ0Mjg5IiB5PSIxODAiIHdpZHRoPSI0NS4wIiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iI0U4RUVGOSIvPjxyZWN0IHg9IjE2Ny42Mzk2NDkzMjk0NDExIiB5PSIxODEiIHdpZHRoPSI4OC4wIiBoZWlnaHQ9IjI4IiByeD0iMTQuMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRThFRUY5IiBzdHJva2Utd2lkdGg9IjUiLz48cmVjdCB4PSIxNjYuNjM5NjQ5MzI5NDQxMSIgeT0iMTgwIiB3aWR0aD0iNzIuMCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiNFOEVFRjkiLz48cmVjdCB4PSIyNzYuNDIyNjIwMzQwNDM5NCIgeT0iMTgxIiB3aWR0aD0iMTI0LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiNFOEVFRjkiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjI3NS40MjI2MjAzNDA0Mzk0IiB5PSIxODAiIHdpZHRoPSIzMC4wIiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iI0U4RUVGOSIvPjxyZWN0IHg9IjQyMS4yMDU1OTEzNTE0Mzc2NSIgeT0iMTgxIiB3aWR0aD0iNDQuNzAwMjU4NzM0ODg2NDYiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiNFOEVFRjkiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjQyMC4yMDU1OTEzNTE0Mzc2NSIgeT0iMTgwIiB3aWR0aD0iMzAuNCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiNFOEVFRjkiLz48cmVjdCB4PSI4NS4xNDIxNDg5MDgyMzMiIHk9IjI0NyIgd2lkdGg9IjE5Ni4wIiBoZWlnaHQ9IjI4IiByeD0iMTQuMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRThFRUY5IiBzdHJva2Utd2lkdGg9IjUiLz48cmVjdCB4PSI4NC4xNDIxNDg5MDgyMzMiIHk9IjI0NiIgd2lkdGg9IjM5LjYiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iMzAxLjkyNTExOTkxOTIzMTI0IiB5PSIyNDciIHdpZHRoPSIxMjQuMCIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZGNkI3MCIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iMzAwLjkyNTExOTkxOTIzMTI0IiB5PSIyNDYiIHdpZHRoPSIxMTAuOSIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiNGRjZCNzAiLz48cmVjdCB4PSI2OS4wNjA3MzExNzg3NjQ5NSIgeT0iMzEyIiB3aWR0aD0iMTIwLjc0NzY3MDc4NDk4ODY0IiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iIzVBQTNGNiIvPjxjaXJjbGUgY3g9IjIwNS44MDg0MDE5NjM3NTM2MiIgY3k9IjMxNC41IiByPSIzLjIiIGZpbGw9IiNFOEVFRjkiLz48Y2lyY2xlIGN4PSIyMDUuODA4NDAxOTYzNzUzNjIiIGN5PSIzMzkuNSIgcj0iMy4yIiBmaWxsPSIjRThFRUY5Ii8+PHJlY3QgeD0iMjEzLjgwODQwMTk2Mzc1MzYyIiB5PSIzMjUuNCIgd2lkdGg9IjE0IiBoZWlnaHQ9IjMuMiIgZmlsbD0iI0U4RUVGOSIvPjxyZWN0IHg9IjIzOS44MDg0MDE5NjM3NTM2MiIgeT0iMzEyIiB3aWR0aD0iNjcuNDMyMzkwNDYwMjU0NTciIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjRThFRUY5Ii8+PC9nPjxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0U4RUVGOSIgc3Ryb2tlLXdpZHRoPSIxMCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj48cGF0aCBkPSJNMTc4LjE1IDQwNS41M0MxODMuMTQgNDAyLjM0IDE4OC45MyAzODYuODYgMTk4LjAwIDM3My45MkMyMDguNTkgMzQxLjk3IDIxMi43MCAzNTIuNTIgMjIyLjgzIDM0NC40MEMyMjcuMTEgMzQwLjk3IDIzMi45NiAzMzUuOTMgMjM1Ljg0IDMzMy4xOUwyNDEuMDYgMzI4LjIxTDI0NS40MiAzMzIuMDBDMjYzLjU2IDM0Ny43NSAyNjkuMjYgMzQ3LjI4IDI3OC40MiAzNDkuODhDMjg5LjU3IDM1My4wNCAzMDUuNjggMzQ5LjI0IDMyNy40MCAzNDAuMzNDMzQ5LjE5IDMzMS4zOCAzNTYuNjMgMzI4LjUwIDM1OS43OSAzMDMuNTlMMzYxLjEyIDI5My4wNUwzNjcuMzggMjkyLjU3QzM3MC44MiAyOTIuMzAgMzc4LjcxIDI5Mi4wNyAzODQuOTAgMjkyLjA2QzQwMC44NCAyOTIuMDIgNDE4LjY4IDI5MC44MiA0MjUuNDEgMjg5LjMxQzQzNy44NyAyODYuNTQgNDUzLjAxIDI3OC43NSA0NjEuOTkgMjcwLjUwQzQ3OC4yMiAyNTUuNjEgNDg3LjY4IDIzMC40OSA0ODYuNDkgMjA1LjQ4QzQ4NS41OCAxODYuMjggNDgyLjI5IDE3My43MSA0NzMuNjEgMTU2LjMxQzQ2NS4xOCAxMzkuNDIgNDU2LjkyIDEyNi40NyA0NDQuMjkgMTEwLjI5QzQyOS43MCA5MS42MyA0MjIuODYgODUuMDQgNDAxLjM1IDY4Ljk0QzM4Mi4yNSA1NC42NCAzNjguNDEgNDYuODMgMzM1LjE2IDMxLjU0QzMwNi41NyAxOC40MCAzMDAuODkgMTYuMzkgMjg0LjUxIDEzLjY2QzI3Ni42NyAxMi4zNiAyNjYuNzUgMTAuMjQgMjYyLjQ4IDguOTdDMjQ5LjU5IDUuMTIgMjQ1LjM2IDQuNDggMjI2LjcyIDMuNThDMjE2Ljg5IDMuMTAgMjA1LjM5IDIuMzggMjAxLjE4IDEuOTdDMTgwLjg3IDAuMDAgMTc0LjU0IDEuMTMgMTQ2LjY2IDExLjY4QzEwMy44OSAyNy44NSA5Ni4yOCAzMy42NiA2My4xMyA3NS40MUM0Mi4zMyAxMDEuNjAgMzUuMDcgMTEzLjc4IDE3LjI3IDE1Mi4zNUMzLjE1IDE4Mi45NCAwLjMxIDE5NC40NyAxLjEyIDIxNy44MkMxLjU5IDIzMS4xMiAyLjc5IDIzNi4zMCA3LjY2IDI0Ni4wNUMxMS4yNCAyNTMuMjAgMTIuODYgMjU1LjI2IDIzLjIwIDI2NS44MUMyOC42NCAyNzEuMzcgMzIuNTMgMjc2LjA1IDMzLjQ4IDI3OC4xOUMzNC43MiAyODAuOTcgMzUuMTggMjg0LjcwIDM1Ljg3IDI5Ny40OUMzNi44MyAzMTUuMjIgNDEuMDEgMzIxLjU2IDQ1LjExIDMzMS4xMEM2Mi45OCAzNTYuNzkgNzYuNzggMzY5Ljg1IDEwMy42OSAzNzguODZDMTEwLjI5IDM4MS4wNyAxMjIuNTUgMzc5LjE5IDEzMS44MiAzOTAuMDVDMTUyLjczIDM5MC4xMSAxNDMuNTUgNDAzLjc0IDE0OS4zNiA0MDUuODZDMTYzLjkyIDQwNi41MiAxNzAuMjEgNDA2LjUyIDE3OC4xNSA0MDUuNTNMMTc4LjE1IDQwNS41MyIvPjwvZz48L3N2Zz4=" alt="">
+    <img class="logo-light" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1NDAiIGhlaWdodD0iNDYwIiB2aWV3Qm94PSItMjQgLTI0IDU0MCA0NjAiPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcC1iYXJzLWxpZ2h0Ij48cGF0aCBkPSJNMTc4LjE1IDQwNS41M0MxODMuMTQgNDAyLjM0IDE4OC45MyAzODYuODYgMTk4LjAwIDM3My45MkMyMDguNTkgMzQxLjk3IDIxMi43MCAzNTIuNTIgMjIyLjgzIDM0NC40MEMyMjcuMTEgMzQwLjk3IDIzMi45NiAzMzUuOTMgMjM1Ljg0IDMzMy4xOUwyNDEuMDYgMzI4LjIxTDI0NS40MiAzMzIuMDBDMjYzLjU2IDM0Ny43NSAyNjkuMjYgMzQ3LjI4IDI3OC40MiAzNDkuODhDMjg5LjU3IDM1My4wNCAzMDUuNjggMzQ5LjI0IDMyNy40MCAzNDAuMzNDMzQ5LjE5IDMzMS4zOCAzNTYuNjMgMzI4LjUwIDM1OS43OSAzMDMuNTlMMzYxLjEyIDI5My4wNUwzNjcuMzggMjkyLjU3QzM3MC44MiAyOTIuMzAgMzc4LjcxIDI5Mi4wNyAzODQuOTAgMjkyLjA2QzQwMC44NCAyOTIuMDIgNDE4LjY4IDI5MC44MiA0MjUuNDEgMjg5LjMxQzQzNy44NyAyODYuNTQgNDUzLjAxIDI3OC43NSA0NjEuOTkgMjcwLjUwQzQ3OC4yMiAyNTUuNjEgNDg3LjY4IDIzMC40OSA0ODYuNDkgMjA1LjQ4QzQ4NS41OCAxODYuMjggNDgyLjI5IDE3My43MSA0NzMuNjEgMTU2LjMxQzQ2NS4xOCAxMzkuNDIgNDU2LjkyIDEyNi40NyA0NDQuMjkgMTEwLjI5QzQyOS43MCA5MS42MyA0MjIuODYgODUuMDQgNDAxLjM1IDY4Ljk0QzM4Mi4yNSA1NC42NCAzNjguNDEgNDYuODMgMzM1LjE2IDMxLjU0QzMwNi41NyAxOC40MCAzMDAuODkgMTYuMzkgMjg0LjUxIDEzLjY2QzI3Ni42NyAxMi4zNiAyNjYuNzUgMTAuMjQgMjYyLjQ4IDguOTdDMjQ5LjU5IDUuMTIgMjQ1LjM2IDQuNDggMjI2LjcyIDMuNThDMjE2Ljg5IDMuMTAgMjA1LjM5IDIuMzggMjAxLjE4IDEuOTdDMTgwLjg3IDAuMDAgMTc0LjU0IDEuMTMgMTQ2LjY2IDExLjY4QzEwMy44OSAyNy44NSA5Ni4yOCAzMy42NiA2My4xMyA3NS40MUM0Mi4zMyAxMDEuNjAgMzUuMDcgMTEzLjc4IDE3LjI3IDE1Mi4zNUMzLjE1IDE4Mi45NCAwLjMxIDE5NC40NyAxLjEyIDIxNy44MkMxLjU5IDIzMS4xMiAyLjc5IDIzNi4zMCA3LjY2IDI0Ni4wNUMxMS4yNCAyNTMuMjAgMTIuODYgMjU1LjI2IDIzLjIwIDI2NS44MUMyOC42NCAyNzEuMzcgMzIuNTMgMjc2LjA1IDMzLjQ4IDI3OC4xOUMzNC43MiAyODAuOTcgMzUuMTggMjg0LjcwIDM1Ljg3IDI5Ny40OUMzNi44MyAzMTUuMjIgNDEuMDEgMzIxLjU2IDQ1LjExIDMzMS4xMEM2Mi45OCAzNTYuNzkgNzYuNzggMzY5Ljg1IDEwMy42OSAzNzguODZDMTEwLjI5IDM4MS4wNyAxMjIuNTUgMzc5LjE5IDEzMS44MiAzOTAuMDVDMTUyLjczIDM5MC4xMSAxNDMuNTUgNDAzLjc0IDE0OS4zNiA0MDUuODZDMTYzLjkyIDQwNi41MiAxNzAuMjEgNDA2LjUyIDE3OC4xNSA0MDUuNTNMMTc4LjE1IDQwNS41MyIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwLWJhcnMtbGlnaHQpIj48cmVjdCB4PSIxMDMuMDkzMTkyMzc4NjIzMzkiIHk9IjQ5IiB3aWR0aD0iNDIiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiMxQTYzQzIiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjEwMi4wOTMxOTIzNzg2MjMzOSIgeT0iNDgiIHdpZHRoPSIzMC4wIiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iIzFBNjNDMiIvPjxjaXJjbGUgY3g9IjE1OS4wOTMxOTIzNzg2MjMzNyIgY3k9IjUwLjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxjaXJjbGUgY3g9IjE1OS4wOTMxOTIzNzg2MjMzNyIgY3k9Ijc1LjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxjaXJjbGUgY3g9IjE2OS4wOTMxOTIzNzg2MjMzNyIgY3k9IjUwLjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxjaXJjbGUgY3g9IjE2OS4wOTMxOTIzNzg2MjMzNyIgY3k9Ijc1LjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxyZWN0IHg9IjE4My4wOTMxOTIzNzg2MjMzNyIgeT0iNDkiIHdpZHRoPSIxMjQuMCIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzBGMUIzMyIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iMTgyLjA5MzE5MjM3ODYyMzM3IiB5PSI0OCIgd2lkdGg9IjgxLjkiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjMEYxQjMzIi8+PHJlY3QgeD0iNTIuMzExOTgwNzAwOTYxMDgiIHk9IjExNCIgd2lkdGg9IjIwMS4yNDYxMTc5NzQ5ODEwOCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiMxQTYzQzIiLz48Y2lyY2xlIGN4PSIyNjkuNTU4MDk4Njc1OTQyMiIgY3k9IjExNi41IiByPSIzLjIiIGZpbGw9IiMwRjFCMzMiLz48Y2lyY2xlIGN4PSIyNjkuNTU4MDk4Njc1OTQyMiIgY3k9IjE0MS41IiByPSIzLjIiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSIyNzcuNTU4MDk4Njc1OTQyMiIgeT0iMTI3LjQiIHdpZHRoPSIxNCIgaGVpZ2h0PSIzLjIiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSIzMDMuNTU4MDk4Njc1OTQyMiIgeT0iMTE0IiB3aWR0aD0iOTAuMCIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSI1OC44NTY2NzgzMTg0NDI4OSIgeT0iMTgxIiB3aWR0aD0iODguMCIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzBGMUIzMyIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iNTcuODU2Njc4MzE4NDQyODkiIHk9IjE4MCIgd2lkdGg9IjQ1LjAiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjMEYxQjMzIi8+PHJlY3QgeD0iMTY3LjYzOTY0OTMyOTQ0MTEiIHk9IjE4MSIgd2lkdGg9Ijg4LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiMwRjFCMzMiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9IjE2Ni42Mzk2NDkzMjk0NDExIiB5PSIxODAiIHdpZHRoPSI3Mi4wIiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iIzBGMUIzMyIvPjxyZWN0IHg9IjI3Ni40MjI2MjAzNDA0Mzk0IiB5PSIxODEiIHdpZHRoPSIxMjQuMCIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzBGMUIzMyIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iMjc1LjQyMjYyMDM0MDQzOTQiIHk9IjE4MCIgd2lkdGg9IjMwLjAiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjMEYxQjMzIi8+PHJlY3QgeD0iNDIxLjIwNTU5MTM1MTQzNzY1IiB5PSIxODEiIHdpZHRoPSI0NC43MDAyNTg3MzQ4ODY0NiIgaGVpZ2h0PSIyOCIgcng9IjE0LjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzBGMUIzMyIgc3Ryb2tlLXdpZHRoPSI1Ii8+PHJlY3QgeD0iNDIwLjIwNTU5MTM1MTQzNzY1IiB5PSIxODAiIHdpZHRoPSIzMC40IiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iIzBGMUIzMyIvPjxyZWN0IHg9Ijg1LjE0MjE0ODkwODIzMyIgeT0iMjQ3IiB3aWR0aD0iMTk2LjAiIGhlaWdodD0iMjgiIHJ4PSIxNC4wIiBmaWxsPSJub25lIiBzdHJva2U9IiMwRjFCMzMiIHN0cm9rZS13aWR0aD0iNSIvPjxyZWN0IHg9Ijg0LjE0MjE0ODkwODIzMyIgeT0iMjQ2IiB3aWR0aD0iMzkuNiIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSIzMDEuOTI1MTE5OTE5MjMxMjQiIHk9IjI0NyIgd2lkdGg9IjEyNC4wIiBoZWlnaHQ9IjI4IiByeD0iMTQuMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRTAzQTNFIiBzdHJva2Utd2lkdGg9IjUiLz48cmVjdCB4PSIzMDAuOTI1MTE5OTE5MjMxMjQiIHk9IjI0NiIgd2lkdGg9IjExMC45IiBoZWlnaHQ9IjMwIiByeD0iMTUuMCIgZmlsbD0iI0UwM0EzRSIvPjxyZWN0IHg9IjY5LjA2MDczMTE3ODc2NDk1IiB5PSIzMTIiIHdpZHRoPSIxMjAuNzQ3NjcwNzg0OTg4NjQiIGhlaWdodD0iMzAiIHJ4PSIxNS4wIiBmaWxsPSIjMUE2M0MyIi8+PGNpcmNsZSBjeD0iMjA1LjgwODQwMTk2Mzc1MzYyIiBjeT0iMzE0LjUiIHI9IjMuMiIgZmlsbD0iIzBGMUIzMyIvPjxjaXJjbGUgY3g9IjIwNS44MDg0MDE5NjM3NTM2MiIgY3k9IjMzOS41IiByPSIzLjIiIGZpbGw9IiMwRjFCMzMiLz48cmVjdCB4PSIyMTMuODA4NDAxOTYzNzUzNjIiIHk9IjMyNS40IiB3aWR0aD0iMTQiIGhlaWdodD0iMy4yIiBmaWxsPSIjMEYxQjMzIi8+PHJlY3QgeD0iMjM5LjgwODQwMTk2Mzc1MzYyIiB5PSIzMTIiIHdpZHRoPSI2Ny40MzIzOTA0NjAyNTQ1NyIgaGVpZ2h0PSIzMCIgcng9IjE1LjAiIGZpbGw9IiMwRjFCMzMiLz48L2c+PGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMEYxQjMzIiBzdHJva2Utd2lkdGg9IjEwIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWNhcD0icm91bmQiPjxwYXRoIGQ9Ik0xNzguMTUgNDA1LjUzQzE4My4xNCA0MDIuMzQgMTg4LjkzIDM4Ni44NiAxOTguMDAgMzczLjkyQzIwOC41OSAzNDEuOTcgMjEyLjcwIDM1Mi41MiAyMjIuODMgMzQ0LjQwQzIyNy4xMSAzNDAuOTcgMjMyLjk2IDMzNS45MyAyMzUuODQgMzMzLjE5TDI0MS4wNiAzMjguMjFMMjQ1LjQyIDMzMi4wMEMyNjMuNTYgMzQ3Ljc1IDI2OS4yNiAzNDcuMjggMjc4LjQyIDM0OS44OEMyODkuNTcgMzUzLjA0IDMwNS42OCAzNDkuMjQgMzI3LjQwIDM0MC4zM0MzNDkuMTkgMzMxLjM4IDM1Ni42MyAzMjguNTAgMzU5Ljc5IDMwMy41OUwzNjEuMTIgMjkzLjA1TDM2Ny4zOCAyOTIuNTdDMzcwLjgyIDI5Mi4zMCAzNzguNzEgMjkyLjA3IDM4NC45MCAyOTIuMDZDNDAwLjg0IDI5Mi4wMiA0MTguNjggMjkwLjgyIDQyNS40MSAyODkuMzFDNDM3Ljg3IDI4Ni41NCA0NTMuMDEgMjc4Ljc1IDQ2MS45OSAyNzAuNTBDNDc4LjIyIDI1NS42MSA0ODcuNjggMjMwLjQ5IDQ4Ni40OSAyMDUuNDhDNDg1LjU4IDE4Ni4yOCA0ODIuMjkgMTczLjcxIDQ3My42MSAxNTYuMzFDNDY1LjE4IDEzOS40MiA0NTYuOTIgMTI2LjQ3IDQ0NC4yOSAxMTAuMjlDNDI5LjcwIDkxLjYzIDQyMi44NiA4NS4wNCA0MDEuMzUgNjguOTRDMzgyLjI1IDU0LjY0IDM2OC40MSA0Ni44MyAzMzUuMTYgMzEuNTRDMzA2LjU3IDE4LjQwIDMwMC44OSAxNi4zOSAyODQuNTEgMTMuNjZDMjc2LjY3IDEyLjM2IDI2Ni43NSAxMC4yNCAyNjIuNDggOC45N0MyNDkuNTkgNS4xMiAyNDUuMzYgNC40OCAyMjYuNzIgMy41OEMyMTYuODkgMy4xMCAyMDUuMzkgMi4zOCAyMDEuMTggMS45N0MxODAuODcgMC4wMCAxNzQuNTQgMS4xMyAxNDYuNjYgMTEuNjhDMTAzLjg5IDI3Ljg1IDk2LjI4IDMzLjY2IDYzLjEzIDc1LjQxQzQyLjMzIDEwMS42MCAzNS4wNyAxMTMuNzggMTcuMjcgMTUyLjM1QzMuMTUgMTgyLjk0IDAuMzEgMTk0LjQ3IDEuMTIgMjE3LjgyQzEuNTkgMjMxLjEyIDIuNzkgMjM2LjMwIDcuNjYgMjQ2LjA1QzExLjI0IDI1My4yMCAxMi44NiAyNTUuMjYgMjMuMjAgMjY1LjgxQzI4LjY0IDI3MS4zNyAzMi41MyAyNzYuMDUgMzMuNDggMjc4LjE5QzM0LjcyIDI4MC45NyAzNS4xOCAyODQuNzAgMzUuODcgMjk3LjQ5QzM2LjgzIDMxNS4yMiA0MS4wMSAzMjEuNTYgNDUuMTEgMzMxLjEwQzYyLjk4IDM1Ni43OSA3Ni43OCAzNjkuODUgMTAzLjY5IDM3OC44NkMxMTAuMjkgMzgxLjA3IDEyMi41NSAzNzkuMTkgMTMxLjgyIDM5MC4wNUMxNTIuNzMgMzkwLjExIDE0My41NSA0MDMuNzQgMTQ5LjM2IDQwNS44NkMxNjMuOTIgNDA2LjUyIDE3MC4yMSA0MDYuNTIgMTc4LjE1IDQwNS41M0wxNzguMTUgNDA1LjUzIi8+PC9nPjwvc3ZnPg==" alt="">
+    <h1>NeuroLang REPL: admin</h1>
+</header>
+<nav aria-label="Elsewhere"><a href="/">The REPL</a><a href="/account">Your account</a><span id="activity-link" hidden><a href="/admin/activity">Activity</a></span><span id="dashboard-link" hidden><a href="/admin/logs/">Raw data and SQL</a></span><a href="/logout">Log out</a></nav>
 <p class="note">Signed in as <strong id="me"></strong>. A change of a user's or a group's assistant, key or groups reaches the open pages of the users it changes at once; keys are never shown.</p>
 <p id="message" role="status"></p>
 
@@ -36,14 +141,14 @@
 <h2>Account requests</h2>
 <p class="note">Those who signed in with ORCID and are no user. Approving one adds them, named by their ORCID iD, to the groups given; they sign in with ORCID.</p>
 <div class="scroll"><table>
-  <thead><tr><th>ORCID iD</th><th>Name</th><th>Asked</th><th>Message</th><th>Groups</th><th></th></tr></thead>
+  <thead><tr><th scope="col">ORCID iD</th><th scope="col">Name</th><th scope="col">Asked</th><th scope="col">Message</th><th scope="col">Groups</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
   <tbody id="requests"></tbody>
 </table></div>
 </section>
 
 <h2>Users</h2>
 <div class="scroll"><table>
-  <thead><tr><th>User</th><th>Groups</th><th>AI assistant</th><th>Variables</th><th>Own key</th><th></th></tr></thead>
+  <thead><tr><th scope="col">User</th><th scope="col">Groups</th><th scope="col">AI assistant</th><th scope="col">Variables</th><th scope="col">Own key</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
   <tbody id="users"></tbody>
 </table></div>
 
@@ -56,7 +161,7 @@
   <label>Their own key in the page <select name="own_key">
     <option value="">unchanged</option><option value="inherit">as their groups say</option>
     <option value="yes">allowed</option><option value="no">not allowed</option></select></label>
-  <button name="create" value="1">Add</button>
+  <button class="primary" name="create" value="1">Add</button>
   <button>Change</button>
 </form>
 <form id="user-llm">
@@ -66,14 +171,14 @@
   <label>Address <input name="base_url" placeholder="custom: https://…/v1"></label>
   <label>Key <input name="key" type="password" autocomplete="off" placeholder="unchanged"></label>
   <label><span><input name="drop" type="checkbox"> remove</span></label>
-  <button>Set their assistant</button>
+  <button class="primary">Set their assistant</button>
 </form>
 <p class="note" id="orcid-note" hidden>A user named by an ORCID iD (0000-0002-1825-0097) signs in with ORCID, and needs no password. Merged into a user of a name of their own (<em>merge into…</em> in the list above), that user signs in with the iD too; <em>Separate ORCID</em> makes it a user of its own again.</p>
 <p class="note">A user's assistant: the key their page gives (if allowed), else their own (set here or on their account page), else their groups', else the server's, else none: they give theirs in the page.</p>
 
 <h2>Groups</h2>
 <div class="scroll"><table>
-  <thead><tr><th>Group</th><th>Members</th><th>AI assistant</th><th>Variables</th><th>Own key</th></tr></thead>
+  <thead><tr><th scope="col">Group</th><th scope="col">Members</th><th scope="col">AI assistant</th><th scope="col">Variables</th><th scope="col">Own key</th></tr></thead>
   <tbody id="groups"></tbody>
 </table></div>
 <form id="group">
@@ -86,32 +191,58 @@
   <label><span><input name="drop" type="checkbox"> remove the assistant</span></label>
   <label>Its users' own key <select name="own_key">
     <option value="">unchanged</option><option value="yes">allowed</option><option value="no">not allowed</option></select></label>
-  <button>Set the group</button>
+  <button class="primary">Set the group</button>
 </form>
 <p class="note">The users of a group have its assistant unless they have their own; of several groups, the first by name gives it. A group may forbid its users their own key (a user's own setting wins).</p>
+
+<section id="engines-box" hidden>
+<h2>Engines</h2>
+<form id="engines-form">
+<div class="scroll"><table>
+  <thead><tr><th scope="col">Engine</th><th scope="col">Offered</th><th scope="col">Default</th></tr></thead>
+  <tbody id="engines"></tbody>
+</table></div>
+<p><button type="submit">Save</button></p>
+</form>
+<p class="note" id="engines-note"></p>
+</section>
 
 <h2>Sessions</h2>
 <p class="note" id="builder-note"></p>
 <div class="scroll"><table>
-  <thead><tr><th>User</th><th>Tab</th><th>Engine</th><th>Unused for</th><th>State</th><th>CPU</th><th>Memory</th><th></th></tr></thead>
+  <thead><tr><th scope="col">User</th><th scope="col">Tab</th><th scope="col">Engine</th><th scope="col">Unused for</th><th scope="col">State</th><th scope="col">CPU</th><th scope="col">Memory</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
   <tbody id="sessions"></tbody>
 </table></div>
 <p class="note">Memory is that of a session's own (MB, its most in parentheses), beyond what it shares with the engines' builder; CPU, the seconds of its process. Linux only.</p>
 
+<h2>Uploads</h2>
+<p class="note" id="uploads-note"></p>
+<div class="scroll"><table>
+  <thead><tr><th scope="col">User</th><th scope="col">Tab</th><th scope="col">Session</th><th scope="col">File</th><th scope="col">Size</th><th scope="col">Uploaded</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+  <tbody id="uploads"></tbody>
+</table></div>
+<p class="note">The files the pages uploaded (Upload data: tables, images), a folder per session in --uploads-dir, which the server removes when the session ends (stopped, or unused for --idle-minutes). Erasing a file of a running session: its page uploads it again after a Stop, or .load says it is not there.</p>
+<section id="update-box" hidden>
+<h2>Server</h2>
+<p><button type="button" id="update">Update and restart</button></p>
+<p class="note">Asks whether the upstream of the server's checkout (origin/master) moved; if it did, brings the checkout there, its environment to the lock, and restarts the server: the sessions end, and the server prepares its engines again (a few minutes).</p>
+</section>
+
 <h2>Usage by user</h2>
 <p class="note" id="usage-note"></p>
 <div class="scroll"><table>
-  <thead><tr><th>User</th><th>Inputs</th><th>Failed</th><th>Time</th><th>CPU</th><th>Most memory</th><th>Tokens (in / out)</th><th>Last</th><th></th></tr></thead>
+  <thead><tr><th scope="col">User</th><th scope="col">Inputs</th><th scope="col">Failed</th><th scope="col">Time</th><th scope="col">CPU</th><th scope="col">Most memory</th><th scope="col">Tokens (in / out)</th><th scope="col">Last</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
   <tbody id="usage"></tbody>
 </table></div>
 
 <h2>Feedback</h2>
 <p class="note" id="feedback-note"></p>
 <div class="scroll"><table>
-  <thead><tr><th>When</th><th>User</th><th>Groups</th><th>Engine</th><th>Question</th><th>Query</th><th>Ratings</th></tr></thead>
+  <thead><tr><th scope="col">When</th><th scope="col">User</th><th scope="col">Groups</th><th scope="col">Engine</th><th scope="col">Question</th><th scope="col">Query</th><th scope="col">Ratings</th></tr></thead>
   <tbody id="feedback"></tbody>
 </table></div>
 
+</main>
 <script>
 const $ = (id) => document.getElementById(id);
 
@@ -223,6 +354,64 @@ function actions(user, named) {
 function minutes(seconds) {
   return seconds < 120 ? `${seconds} s` : `${Math.round(seconds / 60)} min`;
 }
+function ago(seconds) {
+  return seconds < 7200 ? `${minutes(seconds)} ago` : `${Math.round(seconds / 3600)} h ago`;
+}
+function bytes(size) {
+  if (size == null) return "-";
+  if (size < 1024) return `${size} B`;
+  if (size < 1 << 20) return `${(size / 1024).toFixed(1)} KB`;
+  return size < 1 << 30 ? `${(size / (1 << 20)).toFixed(1)} MB` : `${(size / (1 << 30)).toFixed(1)} GB`;
+}
+
+// The files the sessions' pages uploaded (--uploads-dir), and erasing them.
+function showUploads(uploads) {
+  if (!uploads) {
+    $("uploads-note").textContent = "The sessions keep what their pages upload in their memory: the server has no --uploads-dir (or no --users --local).";
+    return $("uploads").replaceChildren();
+  }
+  const files = uploads.folders.reduce((n, f) => n + f.files.length, 0);
+  const erase = (body, question, done) => () => confirm(question)
+    && change("/admin/api/erase-uploads", body, done);
+  const danger = (text, action) => Object.assign(button(text, action), { className: "danger" });
+  const note = document.createElement("span");
+  note.textContent = `${uploads.directory}: ${bytes(uploads.size)} in ${files} files of ${uploads.folders.length} sessions, ${bytes(uploads.free)} free on its disk. `
+    + `A file takes at most ${bytes(uploads.most_file)}, the files of a session ${bytes(uploads.most_all)}.`;
+  const all = document.createElement("div");
+  all.className = "actions-line";
+  if (files) {
+    all.append(danger("Erase all", erase({}, `Erase all ${files} uploaded files of ${uploads.folders.length} sessions (${bytes(uploads.size)})?`,
+      "Erased every uploaded file.")));
+  }
+  $("uploads-note").replaceChildren(note, all);
+  const rows = [];
+  for (const folder of uploads.folders) {
+    const user = folder.user ?? "(session ended)";
+    const tab = (folder.tab ?? "").slice(0, 8);
+    // The session, then its files.
+    const header = document.createElement("tr");
+    header.className = "session-row";
+    const title = Object.assign(document.createElement("th"), { scope: "rowgroup" });
+    title.colSpan = 4;
+    title.textContent = `${user}${tab ? `, tab ${tab}` : ""}, session ${folder.start}: ${folder.files.length} file${folder.files.length === 1 ? "" : "s"}`;
+    const size = Object.assign(document.createElement("th"), { textContent: bytes(folder.size) });
+    const actions = document.createElement("th");
+    if (folder.files.length > 1) {
+      actions.append(danger("Erase all its files", erase({ start: folder.start },
+        `Erase the ${folder.files.length} files (${bytes(folder.size)}) of ${user}, session ${folder.start}?`,
+        `Erased the files of ${user}, session ${folder.start}.`)));
+    }
+    header.append(title, size, Object.assign(document.createElement("th")), actions);
+    rows.push(header);
+    for (const file of folder.files) {
+      rows.push(row(["", "", "", file.name, bytes(file.size), ago(file.age),
+        danger("Erase", erase({ start: folder.start, name: file.name },
+          `Erase ${file.name} (${bytes(file.size)}) of ${user}, session ${folder.start}? Their page uploads it again only after a Stop.`,
+          `Erased ${file.name} of ${user}.`))]));
+    }
+  }
+  $("uploads").replaceChildren(...(rows.length ? rows : [row(["No uploads."])]));
+}
 
 async function show() {
   const state = await call("/admin/api/state");
@@ -266,13 +455,17 @@ async function show() {
       s.cpu == null ? "-" : `${s.cpu} s`, s.memory == null ? "-" : `${s.memory} MB` + (s.peak ? ` (${s.peak})` : ""),
       button("End", () => change("/admin/api/end-session", { name: s.user, tab: s.tab }, `The session of ${s.user} is ended.`)),
     ])) : [row(["No sessions."])]));
+  showUploads(state.uploads);
+  showEngines(state.engines);
   $("activity-link").hidden = !state.activity;
+  $("update-box").hidden = !state.update;
+  sessionCount = sessions ? sessions.length : 0;
   $("dashboard-link").hidden = !state.dashboard;
   const builder = state.builder;
   const limits = state.limits;
   $("builder-note").textContent = [
     limits ? `At most ${limits.sessions} sessions, ${limits.running} queries running at once` + (limits.query_seconds ? `, each for ${minutes(limits.query_seconds)} at most.` : ".") : "",
-    builder ? `The engines' builder, whose memory the sessions share: ${builder.rss} MB, ${builder.cpu} s of CPU.` : "",
+    builder ? `The engines' builders, whose memory the sessions share: ${builder.rss} MB, ${builder.cpu} s of CPU.` : "",
   ].join(" ");
   await showUsage(state.activity);
   if (!state.feedback) {
@@ -291,6 +484,31 @@ async function show() {
     answer.ratings.map((r) => r.verdict + (r.comment ? `: ${r.comment}` : "")).join("\n"),
   ])));
 }
+
+// The engines the page offers (--engine), and the one it starts with.
+function showEngines(choice) {
+  $("engines-box").hidden = !choice;
+  if (!choice) return;
+  $("engines").replaceChildren(...choice.engines.map((engine) => {
+    const on = Object.assign(document.createElement("input"), { type: "checkbox", name: "on", value: engine.name, checked: engine.on });
+    const start = Object.assign(document.createElement("input"), { type: "radio", name: "default", value: engine.name, checked: engine.name === choice.default });
+    on.setAttribute("aria-label", `Offer ${engine.label}`);
+    start.setAttribute("aria-label", `Start with ${engine.label}`);
+    const name = document.createElement("span");
+    name.append(engine.label, " ", Object.assign(document.createElement("code"), { textContent: engine.name }));
+    return row([name, on, start]);
+  }));
+  $("engines-note").textContent = "The engines the server prepared (--engine), those its page offers and the one it starts with (--default-engine), "
+    + "for the pages opened from now on; the sessions running keep theirs. "
+    + (choice.saved ? `The choice is kept in ${choice.saved}, and holds over the configuration's at the next start.` : "The choice ends with the server.");
+}
+
+$("engines-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = new FormData(event.target);
+  const on = form.getAll("on");
+  change("/admin/api/engines", { on, default: form.get("default") }, `The page offers ${on.join(", ")}, starting with ${form.get("default")}.`);
+});
 
 // What each user ran (--activity-db), and their log.
 async function showUsage(logged) {
@@ -348,6 +566,37 @@ $("group").addEventListener("submit", (event) => {
   if (own) body.own_key = own === "yes";
   change("/admin/api/group", body, `The group ${name} is changed.`)
     .then(() => { event.target.key.value = ""; });
+});
+
+// Update and restart, if master moved; then wait for the server to be back.
+let sessionCount = 0;
+$("update").addEventListener("click", async () => {
+  const node = $("update");
+  node.disabled = true;
+  try {
+    say("Asking whether master moved…");
+    const check = await call("/admin/api/update");
+    if (!check.new.length) return say(`${check.upstream} has not moved: the server runs ${check.head}.`);
+    if (check.changed) return say("The checkout has changes of its own: update it by hand.", true);
+    const commits = check.new.slice(0, 15).join("\n") + (check.new.length > 15 ? "\n…" : "");
+    if (!confirm(`${check.upstream} has ${check.new.length} new commit(s):\n\n${commits}\n\n`
+      + `Update and restart? The ${sessionCount} session(s) end.`)) return say("");
+    say("Updating: the checkout, then the environment…");
+    const done = await call("/admin/api/update", {});
+    if (!done.restarting) return say(`${done.upstream} has not moved: the server runs ${done.head}.`);
+    const asked = Date.now();
+    say(`Updated to ${done.new[0]}. The server restarts and prepares its engines; this page reloads once it is back.`);
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const health = await fetch("/health", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+      // the new server: it started after the update was asked
+      if (health?.ok && health.uptime_seconds * 1000 < Date.now() - asked) return location.reload();
+    }
+  } catch (error) {
+    say(error.message, true);
+  } finally {
+    node.disabled = false;
+  }
 });
 
 show().catch((error) => say(error.message, true));

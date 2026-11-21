@@ -144,6 +144,15 @@ def projecting_rules(constraints):
     )
 
 
+def _repeated_functors(q):
+    """The predicates of two atoms or more of ``q``."""
+    seen, repeated = set(), set()
+    for f in getattr(q.antecedent, "formulas", (q.antecedent,)):
+        functor = getattr(f, "functor", None)
+        (repeated if functor in seen else seen).add(functor)
+    return repeated
+
+
 def _chased_only(sigma):
     """Whether the body of ``sigma`` has two atoms of its head's predicate,
     as ``p(x, y) ∧ p(y, z) → p(x, z)``: a rewriting with it never ends."""
@@ -162,12 +171,43 @@ class OntologyRewriter:
     rewrite only atoms with a variable not in the rule's head, the only
     ones that can stand for a value an existential introduces.
     Transitivity is left to the chase.
+
+    With ``holds``, the predicates with facts or rules, a rewriting with
+    an atom that is never rewritten and has no values is left out, with
+    all the rewritings it would give (see :meth:`_dead`).
     """
 
-    def __init__(self, query, union_of_constraints, chased=False):
+    def __init__(
+        self, query, union_of_constraints, chased=False, holds=None
+    ):
         self.query = query
         self.union_of_constraints = union_of_constraints
         self.chased = chased
+        self.holds = holds
+        self._null_positions_cache = {}
+        self._backward_cache = {}
+        self._sigma_cache = {}
+        self._kills_cache = {}
+        self._occurrences_cache = {}
+
+    def _sigma(self, sigma):
+        """What a rewriting step needs of ``sigma``, which is the same at
+        every step: its existential variables, its body's atoms, and
+        whether its head's arguments are distinct variables."""
+        key = id(sigma)
+        if key not in self._sigma_cache:
+            body = extract_logic_atoms(sigma.antecedent)
+            args = sigma.consequent.args
+            self._sigma_cache[key] = (
+                _existential_variables(sigma),
+                tuple(body) if all(
+                    isinstance(atom, FunctionApplication) for atom in body
+                ) else None,
+                all(isinstance(arg, Symbol) for arg in args)
+                and len(set(args)) == len(args),
+                sigma,
+            )
+        return self._sigma_cache[key]
 
     def Xrewrite(self):
         """Algorithm based on the one proposed in
@@ -191,20 +231,214 @@ class OntologyRewriter:
                 selected_sigmas = self._get_related_sigmas(
                     q0, self.union_of_constraints
                 )
+                repeated = _repeated_functors(q0)
                 for sigma in selected_sigmas:
                     list_q0 = self.rewriting_step(q0, sigma, rename_count)
                     for new_q0 in list_q0:
-                        if self._is_new_rewriting(new_q0, Q_rew, Q_explored):
+                        if (
+                            self._is_new_rewriting(new_q0, Q_rew, Q_explored)
+                            and not self._dead(new_q0)
+                        ):
                             Q_rew.add((new_q0, "r", "u"))
+                    if sigma.consequent.functor not in repeated:
+                        # a factorization needs two atoms of sigma's head
+                        continue
                     list_q0 = self.factorization_step(q0, sigma)
                     for new_q0 in list_q0:
-                        if self._is_new_factorization(new_q0, Q_rew, Q_explored):
+                        if (
+                            self._is_new_factorization(
+                                new_q0, Q_rew, Q_explored
+                            )
+                            and not self._dead(new_q0)
+                        ):
                             Q_rew.add((new_q0, "f", "u"))
 
                 Q_rew.remove(q)
                 Q_explored.add(q[0])
 
         return Q_explored
+
+    def _dead(self, q):
+        """
+        Whether no rewriting of ``q`` can be evaluated.  An atom ``P(…)``
+        whose predicate has no facts or rules, derived only by constraints
+        with an existential in position ``i``, is rewritten only once its
+        term ``t`` in position ``i`` is a variable that occurs nowhere
+        else.  A constant or a variable of the head stays one in every
+        rewriting, as does an occurrence of ``t`` in a negated atom, which
+        is not rewritten.  Rewriting an atom keeps ``t``, at the positions
+        of the constraint's variable, unless ``t`` is in its existential
+        position, which is blocked while ``t`` is shared.  Hence ``t``
+        leaves the other atoms only into an atom ``P(…)`` with ``t`` in
+        position ``i``, factorised with this one: if an occurrence of ``t``
+        cannot reach it, the atom over ``P``, which has no values, is in
+        every rewriting of ``q``.
+        """
+        formulas = getattr(q.antecedent, "formulas", (q.antecedent,))
+        return self._dead_atoms(
+            [(f.functor, f.args) for f in formulas if hasattr(f, "functor")],
+            [f for f in formulas if not hasattr(f, "functor")],
+            q.consequent._symbols,
+        )
+
+    def _dead_atoms(self, atoms, others, distinguished):
+        """:meth:`_dead` of the query of ``atoms``, ``(functor, args)``
+        pairs, the formulas ``others`` that are not atoms, and the
+        variables of its head, ``distinguished``."""
+        if self.holds is None:
+            return False
+        for k, (functor, args) in enumerate(atoms):
+            for i in self._null_positions(functor):
+                term = args[i]
+                if (
+                    isinstance(term, Constant)
+                    or term in distinguished
+                    or any(term in f._symbols for f in others)
+                ):
+                    return True
+                if any(
+                    (functor, i) not in self._backward(other, j)
+                    for m, (other, other_args) in enumerate(atoms)
+                    for j, arg in enumerate(other_args)
+                    if arg == term and (m != k or j != i)
+                ):
+                    return True
+        return False
+
+    def _kills(self, sigma):
+        """The ``(j, B, i)`` of ``sigma``: its head's variable in position
+        ``j`` is, in its body, in position ``i`` of an atom over ``B``,
+        a position with no values (:meth:`_null_positions`).  None when
+        its head is not of distinct variables."""
+        key = id(sigma)
+        if key not in self._kills_cache:
+            _, body, plain_head, _ = self._sigma(sigma)
+            self._kills_cache[key] = None if body is None or not plain_head \
+                else tuple(
+                    (j, atom.functor, i)
+                    for j, v in enumerate(sigma.consequent.args)
+                    for atom in body
+                    for i in self._null_positions(atom.functor)
+                    if atom.args[i] == v
+                )
+        return self._kills_cache[key]
+
+    def _surely_dead(self, q, S, sigma):
+        """
+        Whether rewriting the atom ``S`` of ``q`` with ``sigma`` gives a
+        query :meth:`_dead` drops, told from what is precomputed of
+        ``sigma`` (:meth:`_kills`): the term of ``S`` that its body puts
+        in a position with no values is a constant, a variable of the
+        head or of a negated formula, or occurs in another atom of ``q``
+        from which no rewriting moves it there.  A sufficient condition:
+        :meth:`_builds_dead` tests the others in full.
+        """
+        kills = self._kills(sigma) if self.holds is not None else None
+        if not kills:
+            return False
+        occurrences, blocked = self._occurrences(q)
+        for j, functor, i in kills:
+            term = S.args[j]
+            if isinstance(term, Constant) or term in blocked:
+                return True
+            if any(
+                (functor, i) not in self._backward(other, k)
+                for atom, other, k in occurrences.get(term, ())
+                if atom is not S and atom != S
+            ):
+                return True
+        return False
+
+    def _occurrences(self, q):
+        """Where each term of ``q`` occurs, ``(atom, functor, position)``
+        triples, and the variables of its head and of its negated
+        formulas, computed once for each query explored."""
+        key = id(q)
+        cached = self._occurrences_cache.get(key)
+        if cached is None or cached[0] is not q:
+            occurrences, blocked = {}, set(q.consequent._symbols)
+            for f in getattr(q.antecedent, "formulas", (q.antecedent,)):
+                if hasattr(f, "functor"):
+                    for k, arg in enumerate(f.args):
+                        occurrences.setdefault(arg, []).append(
+                            (f, f.functor, k)
+                        )
+                else:
+                    blocked |= f._symbols
+            cached = self._occurrences_cache[key] = (
+                q, occurrences, blocked
+            )
+        return cached[1], cached[2]
+
+    def _builds_dead(self, q, S, sigma):
+        """
+        Whether rewriting the atom ``S`` of ``q`` with ``sigma`` gives a
+        query that :meth:`_dead` drops, told before building it: the head
+        of ``sigma``, of distinct variables, maps them to the terms of
+        ``S``, and its other variables get names no query has, as
+        renaming makes them distinct.
+        Other heads, which bind the terms of ``q``, are built and tested.
+        """
+        _, body, plain_head, _ = self._sigma(sigma)
+        if self.holds is None or body is None or not plain_head:
+            return False
+        terms = dict(zip(sigma.consequent.args, S.args))
+        formulas = getattr(q.antecedent, "formulas", (q.antecedent,))
+        atoms = [
+            (f.functor, f.args) for f in formulas
+            if hasattr(f, "functor") and f != S
+        ] + [
+            (atom.functor, tuple(
+                terms.get(arg, Symbol("\0" + arg.name))
+                if isinstance(arg, Symbol) else arg
+                for arg in atom.args
+            ))
+            for atom in body
+        ]
+        others = [f for f in formulas if not hasattr(f, "functor")]
+        return self._dead_atoms(atoms, others, q.consequent._symbols)
+
+    def _null_positions(self, functor):
+        """The positions of the existential of every constraint deriving
+        ``functor``, none if one has none or ``functor`` has values."""
+        if functor not in self._null_positions_cache:
+            positions = set()
+            sigmas = self.union_of_constraints.get(functor, ())
+            if sigmas and functor not in self.holds:
+                positions = set.intersection(*(
+                    {
+                        i for v in _existential_variables(sigma)
+                        for i in self._get_position_existential(
+                            sigma.consequent, v
+                        )
+                    }
+                    for sigma in sigmas
+                ))
+            self._null_positions_cache[functor] = positions
+        return self._null_positions_cache[functor]
+
+    def _backward(self, functor, position):
+        """The predicates and positions a term in ``position`` of an atom
+        over ``functor`` can be moved to by rewriting steps that keep it."""
+        key = (functor, position)
+        if key not in self._backward_cache:
+            reach, todo = {key}, [key]
+            while todo:
+                head, j = todo.pop()
+                for sigma in self.union_of_constraints.get(head, ()):
+                    v = sigma.consequent.args[j]
+                    if (
+                        not isinstance(v, Symbol)
+                        or v in _existential_variables(sigma)
+                    ):
+                        continue
+                    for body in extract_logic_atoms(sigma.antecedent):
+                        for k, arg in enumerate(body.args):
+                            if arg == v and (body.functor, k) not in reach:
+                                reach.add((body.functor, k))
+                                todo.append((body.functor, k))
+            self._backward_cache[key] = reach
+        return self._backward_cache[key]
 
     def _get_related_sigmas(self, q0, sigma_free_vars):
         new_sigmas = []
@@ -221,6 +455,11 @@ class OntologyRewriter:
         return new_sigmas
 
     def rewriting_step(self, q0, sigma, rename_count):
+        if all(
+            self._surely_dead(q0, S, sigma)
+            for S in self._get_term(q0.antecedent, sigma.consequent)
+        ):
+            return []
         S_applicable = self._get_applicable(sigma, q0)
         list_q0 = []
         # The renamed variables of sigma must not be those of q0.
@@ -232,6 +471,8 @@ class OntologyRewriter:
             rename_count += 1
         for S in S_applicable:
             rename_count += 1
+            if self._builds_dead(q0, S, sigma):
+                continue
             sigma_i = self._rename(sigma, rename_count)
             qS = most_general_unifier(sigma_i.consequent, S)
             if qS:
@@ -246,6 +487,13 @@ class OntologyRewriter:
     def factorization_step(self, q0, sigma):
         """Unify the atoms of ``q0`` that ``sigma`` factorizes, in all of
         ``q0``, and keep one copy of each atom."""
+        functor = sigma.consequent.functor
+        if len({
+            f for f in getattr(q0.antecedent, "formulas", (q0.antecedent,))
+            if getattr(f, "functor", None) == functor
+        }) < 2:
+            # one atom unifies only with itself: q0, never a new query
+            return []
         S = self._get_factorizable(sigma, q0.antecedent)
         unified = self._full_unification(S) if len(S) > 1 else None
         if unified is None:
@@ -278,9 +526,7 @@ class OntologyRewriter:
 
     def _get_factorizable(self, sigma, q):
         factorizable = []
-        efvw = ExtractFreeVariablesRightImplicationWalker()
-        free_vars = efvw.walk(sigma)
-        for fv in free_vars:
+        for fv in self._sigma(sigma)[0]:
             pos = self._get_position_existential(sigma.consequent, fv)
             S = self._get_term(q, sigma.consequent)
             if (
@@ -334,7 +580,7 @@ class OntologyRewriter:
 
     def _get_applicable(self, sigma, q):
         S = self._get_term(q.antecedent, sigma.consequent)
-        if self.chased and not _existential_variables(sigma):
+        if self.chased and not self._sigma(sigma)[0]:
             if _chased_only(sigma):
                 return []
             S = [
@@ -376,9 +622,7 @@ class OntologyRewriter:
         return all(most_general_unifier(term, sigma) for term in S)
 
     def _not_in_existential(self, q, S, sigma):
-        efvw = ExtractFreeVariablesRightImplicationWalker()
-        free_vars = efvw.walk(sigma)
-        for fv in free_vars:
+        for fv in self._sigma(sigma)[0]:
             existential_position = self._get_position_existential(sigma.consequent, fv)
             if self._position_shared_or_constant(q, S, existential_position):
                 return False

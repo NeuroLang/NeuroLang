@@ -2,9 +2,13 @@
 ``neurolang/datalog/tests/test_ontologies_parser.py``."""
 
 import io
+import re
+
+import pytest
 from typing import Callable
 from nl_expr.logic import Implication
 
+from nl_expr.exceptions import NeuroLangException
 from nl_expr.expressions import Constant, Symbol
 from ...frontend import NeurolangPDL
 
@@ -500,6 +504,12 @@ def test_query_a_property_the_ontology_only_constrains():
     # b is distinguished by the head's term: the constraint does not apply.
     res = nl.execute_datalog_program("ans(count(b)) :- headOf(a, b)")
     assert set(res) == set()
+    # the same projection written with exists, in the query's own rule
+    res = nl.execute_datalog_program("ans(a) :- exists(b; headOf(a, b))")
+    assert set(res) == {('Juan',)}
+    res = nl.execute_datalog_program(
+        "ans(a) :- Dean(a), exists(b; headOf(a, b))")
+    assert set(res) == {('Juan',)}
 
 
 DEAN_DEPT_UNIT = """
@@ -970,6 +980,21 @@ def test_inverse_and_symmetric_properties_on_an_unnamed_value():
     }
 
 
+def test_dead_rewritings_with_property_axioms_keep_a_shared_unnamed_value():
+    """A shared variable reaches the existential position of an atom through
+    an inverse, a sub-property or a range, so the rewritings that join on
+    the unnamed value are not dropped as dead."""
+    nl = _deans(":headedBy owl:inverseOf :headOf .\n"
+                ":headOf rdfs:subPropertyOf :worksFor .\n"
+                ":worksFor rdfs:range :Org .")
+    assert _answers(nl, "ans(x) :- headedBy(y, x), Org(y)") == {
+        ('Ana',), ('Juan',), ('Physics',)
+    }
+    assert _answers(nl, "ans(x) :- worksFor(x, y), headedBy(y, z)") == {
+        ('Ana',), ('Juan',), ('Physics',)
+    }
+
+
 def test_transitive_property_is_chased():
     """Transitivity is a Datalog rule of the chase, never a rewriting
     step, which would not end. It is not applied through unnamed values:
@@ -986,3 +1011,207 @@ def test_transitive_property_is_chased():
     assert _answers(nl, "ans(x) :- headOf(x, x)") == {
         ('Ana',), ('Physics',), ('Lab',)
     }
+
+
+CONTRAST_MEASURES = """
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix c: <http://www.cognitiveatlas.org/ontology/cogat.owl#> .
+c:K a owl:Class ; rdfs:subClassOf [
+    a owl:Restriction ; owl:onProperty c:measures ; owl:someValuesFrom c:WM
+] .
+c:WM a owl:Class ; rdfs:subClassOf c:CC .
+c:CC a owl:Class .
+"""
+
+
+def _contrast_measures():
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(CONTRAST_MEASURES), format="turtle", individuals=True,
+        names="prefixed",
+    )
+    nl.add_tuple_set([("s1",)], name="two_back")
+    return nl
+
+
+def test_constraints_apply_to_the_instances_a_rule_derives():
+    """``c:K(s) :- two_back(s)`` makes ``s1`` a ``c:K``, which measures
+    some ``c:WM``, a ``c:CC``: the rule is solved with the query, in the
+    same program or an earlier one."""
+    queries = {
+        "ans(s) :- c:measures(s, c)": {("s1",)},
+        "ans(s) :- c:measures(s, c), c:CC(c)": {("s1",)},
+        "ans(s, c) :- c:measures(s, c), c:CC(c)": set(),
+    }
+    nl = _contrast_measures()
+    for query, expected in queries.items():
+        with nl.scope:
+            assert set(nl.execute_datalog_program(
+                "c:K(s) :- two_back(s)\n" + query
+            )) == expected, query
+    nl = _contrast_measures()
+    nl.execute_datalog_program("mid(s) :- two_back(s)\nc:K(s) :- mid(s)")
+    for query, expected in queries.items():
+        assert set(nl.execute_datalog_program(query)) == expected, query
+    assert nl.execute_datalog_program("ans() :- c:measures('s1', c)")
+    assert not nl.execute_datalog_program("ans() :- c:measures('s2', c)")
+
+
+def test_full_constraints_apply_to_the_instances_a_rule_derives():
+    nl = _contrast_measures()
+    nl.add_tuple_set([("w",)], name="f")
+    assert set(nl.execute_datalog_program(
+        "c:WM(x) :- f(x)\nans(x) :- c:CC(x)"
+    )) == {("w",)}
+
+
+def test_a_class_named_by_its_iri():
+    """Without a prefix for their namespace, the classes and properties
+    are named by their IRI, written ``<iri>`` as the functor of an atom;
+    ``prefixes`` names them with a prefix."""
+    cogat = "http://www.cognitiveatlas.org/ontology/cogat.owl#"
+    ttl = re.sub(
+        r"\bc:(\w+)", f"<{cogat}\\1>",
+        CONTRAST_MEASURES.replace(f"@prefix c: <{cogat}> .", ""),
+    )
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(ttl), format="turtle", individuals=True,
+        names="prefixed",
+    )
+    nl.add_tuple_set([("s1",)], name="two_back")
+    assert set(nl.execute_datalog_program(
+        f"<{cogat}K>(s) :- two_back(s)\n"
+        f"ans(s) :- <{cogat}measures>(s, c), <{cogat}CC>(c)"
+    )) == {("s1",)}
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(ttl), format="turtle", individuals=True,
+        names="prefixed", prefixes={"cogat": cogat},
+    )
+    nl.add_tuple_set([("s1",)], name="two_back")
+    assert set(nl.execute_datalog_program(
+        "cogat:K(s) :- two_back(s)\n"
+        "ans(s) :- cogat:measures(s, c), cogat:CC(c)"
+    )) == {("s1",)}
+
+
+CONTRAST_OF_A_TASK = """
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix c: <http://www.cognitiveatlas.org/ontology/cogat.owl#> .
+c:Cond a owl:Class ; rdfs:subClassOf [
+    a owl:Restriction ; owl:onProperty c:part_of ; owl:someValuesFrom c:T
+] .
+c:T a owl:Class ; rdfs:subClassOf [
+    a owl:Restriction ; owl:onProperty c:has_contrast ;
+    owl:someValuesFrom c:K
+] .
+c:K a owl:Class ; rdfs:subClassOf [
+    a owl:Restriction ; owl:onProperty c:measures ; owl:someValuesFrom c:WM
+] .
+c:WM a owl:Class ; rdfs:subClassOf c:CC .
+c:CC a owl:Class .
+"""
+
+
+def test_a_chain_of_existentials_to_what_a_task_measures():
+    """The Cognitive Atlas's condition, part of a task, which has a
+    contrast that measures a concept: the condition itself measures
+    nothing (an N-back condition is not its contrast)."""
+    for program in ("", "c:Cond(s) :- d(s)\n"):
+        nl = NeurolangPDL()
+        nl.load_ontology(
+            io.StringIO(CONTRAST_OF_A_TASK), format="turtle",
+            individuals=True, names="prefixed",
+        )
+        nl.add_tuple_set([("s1",)], name="d" if program else "c:Cond")
+        assert set(nl.execute_datalog_program(
+            program + "ans(s) :- c:part_of(s, t), c:has_contrast(t, k), "
+            "c:measures(k, c), c:CC(c)"
+        )) == {("s1",)}
+        assert not set(nl.execute_datalog_program(
+            program + "ans(s) :- c:measures(s, c)"
+        ))
+
+
+DEANS_WITH_LABELS = """
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix : <http://ex.org/> .
+:Dean a owl:Class ; rdfs:label "dean" ; rdfs:subClassOf :Professor , [
+    a owl:Restriction ; owl:onProperty :headOf ; owl:someValuesFrom :Unit ] .
+:Professor a owl:Class ; rdfs:label "professor" .
+:Unit a owl:Class ; rdfs:label "unit" .
+:Juan a :Dean .
+"""
+TYPED_BY_LABEL = "rdf:type(p, c) :- staff(p, n), rdfs:label(c, n)\n"
+
+
+def _labelled_deans():
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(DEANS_WITH_LABELS), format="turtle", individuals=True,
+        names="prefixed", prefixes={"ex": "http://ex.org/"},
+    )
+    nl.add_tuple_set([("Ana", "dean"), ("Luis", "professor")], name="staff")
+    return nl
+
+
+def _rows(nl, program):
+    with nl.scope:
+        return set(nl.execute_datalog_program(program))
+
+
+def test_rdf_type_rules_make_instances_of_the_classes():
+    """``rdf:type(x, C)`` makes ``x`` an instance of ``C``, as RDF says,
+    for the types a rule states as for those of the file: the subclass
+    and the existential axioms apply to both."""
+    nl = _labelled_deans()
+    juan = "http://ex.org/Juan"
+    assert _rows(nl, "ans(x) :- ex:Dean(x)") == {(juan,)}
+    assert _rows(nl, TYPED_BY_LABEL + "ans(x) :- ex:Dean(x)") == {
+        (juan,), ("Ana",)}
+    assert _rows(nl, TYPED_BY_LABEL + "ans(x) :- ex:Professor(x)") == {
+        (juan,), ("Ana",), ("Luis",)}
+    assert _rows(
+        nl, TYPED_BY_LABEL + "ans(x) :- exists(y; ex:headOf(x, y))"
+    ) == {(juan,), ("Ana",)}
+    # the program's rules are those of its query: the file's types stay
+    assert _rows(nl, "ans(x) :- ex:Dean(x)") == {(juan,)}
+
+
+def test_rdf_type_in_a_question_names_the_class_by_its_label():
+    """``rdf:type(y, k)``, ``k`` fixed by its label, applies to the unnamed
+    unit a dean heads; a label of no class gives no answer."""
+    nl = _labelled_deans()
+    heads = "ans(x) :- exists(y, k; ex:headOf(x, y), rdf:type(y, k), "
+    assert _rows(nl, TYPED_BY_LABEL + heads + "rdfs:label(k, 'unit'))") == {
+        ("http://ex.org/Juan",), ("Ana",)}
+    assert _rows(nl, heads + "rdfs:label(k, 'nothing'))") == set()
+
+
+def test_rdf_type_from_a_predicate_the_ontology_constrains_is_refused():
+    nl = _labelled_deans()
+    with pytest.raises(NeuroLangException, match="ontology constrains"):
+        _rows(nl, "rdf:type(x, <http://ex.org/Unit>) :- ex:Dean(x)\n"
+                  "ans(x) :- ex:Unit(x)")
+
+
+def test_a_type_stated_between_two_queries_is_seen():
+    nl = _labelled_deans()
+    assert _rows(nl, "ans(x) :- ex:Dean(x)") == {("http://ex.org/Juan",)}
+    nl.execute_datalog_program(TYPED_BY_LABEL)
+    assert _rows(nl, "ans(x) :- ex:Dean(x)") == {
+        ("http://ex.org/Juan",), ("Ana",)}
+
+
+def test_rdf_type_in_a_rule_of_the_program_names_the_class():
+    """A rule of the program, not only the query's, finds the class of
+    ``rdf:type(y, k)`` by its label, as a condition of the query does."""
+    nl = _labelled_deans()
+    assert _rows(nl, TYPED_BY_LABEL + (
+        "heads_a_unit(x) :- exists(y, k; ex:headOf(x, y), rdf:type(y, k), "
+        "rdfs:label(k, 'unit'))\nans(x) :- heads_a_unit(x)"
+    )) == {("http://ex.org/Juan",), ("Ana",)}

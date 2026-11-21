@@ -1,7 +1,7 @@
 import logging
 import operator
-from collections import defaultdict
-from functools import lru_cache
+from collections import ChainMap
+from functools import wraps
 from typing import AbstractSet, Callable
 
 
@@ -34,6 +34,34 @@ LOG = logging.getLogger(__name__)
 
 invert = Constant(operator.invert)
 eq = Constant(operator.eq)
+
+
+def _cached_in_chase(method, maxsize=1024):
+    """
+    Cache *method* in the chase it is called on, as ``lru_cache`` would,
+    keeping at most *maxsize* results.
+
+    ``lru_cache`` on a method is a cache of the class, whose keys hold the
+    chase: it kept every chase that ran alive, with its program and the
+    relations of its query (a forked REPL session kept 0.6 GB more after
+    each query decoding an image on neurosynth). A key with the chase only
+    ever matched that chase, so a cache of its own finds the same.
+    """
+    attribute = f"_cache_{method.__name__}"
+
+    @wraps(method)
+    def cached(self, *args, **kwargs):
+        cache = self.__dict__.setdefault(attribute, {})
+        key = (args, tuple(sorted(kwargs.items())))
+        try:
+            return cache[key]
+        except KeyError:
+            if len(cache) >= maxsize:
+                cache.clear()
+            value = cache[key] = method(self, *args, **kwargs)
+            return value
+
+    return cached
 
 
 class ChaseRelationalAlgebraPlusCeriMixin:
@@ -153,6 +181,16 @@ class NamedRelationalAlgebraOptimiser(
     pass
 
 
+class _RelationsOrEmpty(ChainMap):
+    """The relations of its mappings, the first holding them first, and
+    an empty relation for a symbol of none."""
+
+    def __missing__(self, symbol):
+        return Constant[AbstractSet](
+            WrappedRelationalAlgebraSet(), verify_type=False
+        )
+
+
 class ChaseNamedRelationalAlgebraMixin:
     """
     Conjunctive query solving using the algorithm 5.4.8 from Abiteboul et al
@@ -199,7 +237,7 @@ class ChaseNamedRelationalAlgebraMixin:
                 "wrong number of arguments."
             )
 
-    @lru_cache(1024)
+    @_cached_in_chase
     def rewrite_constants_in_consequent(self, rule):
         new_equalities = []
         new_args = tuple()
@@ -215,7 +253,7 @@ class ChaseNamedRelationalAlgebraMixin:
             )
         return rule
 
-    @lru_cache(1024)
+    @_cached_in_chase
     def rewrite_antecedent_equalities(self, rule):
         if not isinstance(rule.antecedent, Conjunction):
             return rule
@@ -265,7 +303,8 @@ class ChaseNamedRelationalAlgebraMixin:
     def eliminate_already_computed(self, consequent, instance, substitutions):
         substitutions_columns = set(substitutions.columns)
         if (
-            substitutions_columns.isdisjoint(consequent.args)
+            substitutions.is_empty()
+            or substitutions_columns.isdisjoint(consequent.args)
             or instance[consequent.functor].value.is_empty()
         ):
             return substitutions
@@ -312,14 +351,11 @@ class ChaseNamedRelationalAlgebraMixin:
         Relations are taken from ``instance`` merged with
         ``restriction_instance``, except for the positive predicates
         found in ``restriction_instance``, which are bound to it alone.
+        Those of ``instance`` are looked up when the plan reads them, not
+        copied: copying them all, at every step of the chase, cost a
+        quarter of an empty step.
         """
-        symbol_table = defaultdict(
-            lambda: Constant[AbstractSet](
-                WrappedRelationalAlgebraSet(),
-                verify_type=False
-            )
-        )
-        symbol_table.update(instance)
+        symbol_table = _RelationsOrEmpty({}, instance)
         positive = {
             predicate.functor for predicate in predicates
             if isinstance(predicate, FunctionApplication)
@@ -330,12 +366,16 @@ class ChaseNamedRelationalAlgebraMixin:
         # cost as much as the relation; the other predicates of the rule
         # (negated ones) are bound to both so that set-difference (RA
         # difference) computes correctly. A predicate the rule does not use
-        # is left as it is: merging it would cost as much as the relation,
-        # at every step of the chase, for nothing.
-        for k, v in restriction_instance.items():
+        # is left as it is, not even looked up: merging it would cost as
+        # much as the relation, at every step of the chase, for nothing.
+        for k in positive | used:
+            try:
+                v = restriction_instance[k]
+            except KeyError:  # not a relation, or none of its tuples
+                continue
             if k in positive or k not in symbol_table:
                 symbol_table[k] = v
-            elif k in used:
+            else:
                 symbol_table[k] = Constant[v.type](
                     symbol_table[k].value | v.value,
                     auto_infer_type=False, verify_type=False,
@@ -408,7 +448,7 @@ class ChaseNamedRelationalAlgebraMixin:
 
         return substitutions
 
-    @lru_cache(1024)
+    @_cached_in_chase
     def translate_conjunction_to_named_ra(self, conjunction, columns=None):
         if not hasattr(self, "_builtins"):
             self._builtins = self.datalog_program.builtins()

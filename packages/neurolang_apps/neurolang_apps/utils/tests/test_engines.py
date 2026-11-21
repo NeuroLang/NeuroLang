@@ -272,6 +272,39 @@ def test_ontologies_load_local_files_with_options(tmp_path):
     assert set(animals) == {("Rex", "3")}
 
 
+def test_ontologies_declare_prefixes(tmp_path):
+    """``prefixes`` names the classes of a namespace the file declares no
+    prefix for."""
+    from neurolang_apps.utils import engine_registry
+
+    (tmp_path / "vocab.ttl").write_text(
+        "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+        "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
+        "<http://example.org/Dog> a owl:Class ;\n"
+        "    rdfs:subClassOf <http://example.org/Animal> .\n"
+        "<http://example.org/Animal> a owl:Class .\n"
+        "<http://example.org/rex> a <http://example.org/Dog> ;\n"
+        '    <http://example.org/name> "Rex" .\n'
+    )
+    config = tmp_path / "engines.yaml"
+    config.write_text(
+        "engines:\n"
+        "  pets:\n"
+        "    ontologies:\n"
+        "      - url: vocab.ttl\n"
+        "        individuals: true\n"
+        "        names: prefixed\n"
+        "        prefixes:\n"
+        "          ex: http://example.org/\n"
+    )
+    nl = engine_registry.build_engine(
+        "pets", tmp_path / "cache", yaml_path=config
+    )
+    assert set(nl.execute_datalog_program(
+        "ans(n) :- ex:Animal(x), ex:name(x, n)"
+    )) == {("Rex",)}
+
+
 def test_sparql_builtins(tmp_path):
     """The SPARQL-like builtins apply to strings and numbers."""
     from neurolang_apps.utils import engine_registry
@@ -302,6 +335,56 @@ def test_sparql_builtins(tmp_path):
         "regex(c, '(?i)^RU'), strstarts(c, 'R')"
     )
     assert set(matched) == {("a",)}
+
+
+def test_t_pvalue_builtin(tmp_path):
+    """t_pvalue(t, df) is the two-sided p-value of Student's t, as scipy's
+    Student test gives it, in a rule."""
+    import numpy as np
+    from scipy import stats
+
+    from neurolang_apps.utils import engine_registry
+
+    config = tmp_path / "engines.yaml"
+    config.write_text("engines:\n  stats:\n    builtins: [t_pvalue]\n")
+    nl = engine_registry.build_engine(
+        "stats", tmp_path / "cache", yaml_path=config
+    )
+    a, b = [0.3, 0.5, 0.4, 0.6], [0.1, 0.2, 0.0, 0.15, 0.25]
+    student = stats.ttest_ind(a, b)
+    nl.add_tuple_set([(student.statistic, len(a) + len(b) - 2)], name="test")
+    (p,), = nl.execute_datalog_program(
+        "ans(p) :- test(t, df), (p == t_pvalue(t, df))")
+    assert np.isclose(p, student.pvalue)
+    assert engine_registry._builtin_t_pvalue(-2.0, 10) == \
+        engine_registry._builtin_t_pvalue(2.0, 10)
+
+
+def test_fdr_threshold_aggregation(tmp_path):
+    """fdr_threshold(p, alpha), in the head of a rule, is the cut-off of
+    Benjamini and Hochberg: the tests under it are those whose q-values
+    are at most alpha."""
+    import numpy as np
+
+    from neurolang_apps.utils import engine_registry
+
+    config = tmp_path / "engines.yaml"
+    config.write_text("engines:\n  stats:\n    builtins: [fdr_threshold]\n")
+    nl = engine_registry.build_engine(
+        "stats", tmp_path / "cache", yaml_path=config
+    )
+    p = [0.001, 0.008, 0.039, 0.041, 0.042, 0.06, 0.074, 0.205, 0.212, 0.216]
+    nl.add_tuple_set([(f"test{i}", v) for i, v in enumerate(p)],
+                     name="p_value")
+    significant = nl.execute_datalog_program(
+        "cutoff(fdr_threshold(p, 0.05)) :- p_value(x, p)\n"
+        "ans(x) :- p_value(x, p), cutoff(c), (p <= c)")
+    m = len(p)
+    q = np.minimum.accumulate(
+        (np.array(p) * m / np.arange(1, m + 1))[::-1])[::-1]
+    assert {x for x, in significant} == {
+        f"test{i}" for i in range(m) if q[i] <= 0.05}
+    assert engine_registry._builtin_fdr_threshold([0.5, 0.9], 0.05) == 0.0
 
 
 class TestNeurosynthEngineVocabulary:
@@ -389,6 +472,7 @@ class TestNeurosynthEngineVocabulary:
             "neurosynth"
         )
 
+    @pytest.mark.squall
     def test_weighted_mention_reads_in_squall(self):
         """Check a SQUALL sentence on ``weighted_mention`` gets its rows."""
         from neurolang.frontend import NeurolangPDL
@@ -474,7 +558,8 @@ def _fake_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
         for argument in signatures[name]:
             atlas = sorts.get(argument.sort, {}).get("atlas")
             if atlas:
-                row.append(_FAKE_ATLASES[atlas])
+                first = atlas if isinstance(atlas, str) else atlas[0]
+                row.append(_FAKE_ATLASES[first])
             else:
                 row.append({"int": 1, "float": 0.5}.get(argument.type, "L"))
         nl.add_tuple_set(pd.DataFrame([row]), name=name)
@@ -507,9 +592,27 @@ def small_neurosynth():
     return _build_small_neurosynth()
 
 
-def _build_small_neurosynth(free_text=True):
+# The sparse views of the coordinate meta-analysis engines, those of the
+# comment of ``engines.yaml``.
+COORDINATE_VIEWS = {
+    "activated": ["voxel", "study"],
+    "schaefer_activated": ["label", "study"],
+    "schaefer400_activated": ["schaefer400_label", "study"],
+    "destrieux_activated": ["destrieux_label", "study"],
+    "tian_activated": ["tian_label", "study"],
+}
+
+
+@pytest.fixture(scope="module")
+def small_neurosynth_views():
+    """Build the neurosynth engine on tiny mock data, with the sparse
+    views of :data:`COORDINATE_VIEWS`."""
+    return _build_small_neurosynth(sparse_views=COORDINATE_VIEWS)
+
+
+def _build_small_neurosynth(free_text=True, sparse_views=None):
     """Build the neurosynth engine on tiny data, with the free-text rules
-    of its configuration or without."""
+    of its configuration or without, and the *sparse_views*, if any."""
     import nibabel as nib
 
     from neurolang_apps.utils import engine_registry
@@ -543,12 +646,15 @@ def _build_small_neurosynth(free_text=True):
             patch.object(engine_registry, "_phase_relations",
                          _fake_relations), \
             patch(f"{init}.fetch_pubmed_abstracts", _fake_abstracts):
-        if free_text:
+        if free_text and not sparse_views:
             return engine_registry.build_engine("neurosynth", DATA_DIR)
         config = engine_registry.get_engine_config
 
         def get_config(name, yaml_path=None):
-            return _without_free_text_rules(config(name, yaml_path))
+            cfg = config(name, yaml_path)
+            if not free_text:
+                cfg = _without_free_text_rules(cfg)
+            return {**cfg, "sparse_views": sparse_views or {}}
 
         with patch.object(engine_registry, "get_engine_config", get_config):
             return engine_registry.build_engine("neurosynth", DATA_DIR)
@@ -663,7 +769,7 @@ class TestNeurosynthDeclarations:
             "neurosynth"
         ) == {
             "selected_study", "selected_voxel", "schaefer_covered",
-            "destrieux_covered", "tian_covered",
+            "schaefer400_covered", "destrieux_covered", "tian_covered",
         }
 
 
@@ -1333,3 +1439,165 @@ def test_the_kernel_radius_is_written_in_the_atlases_and_the_guidance():
         } == {radius}
         assert f"<= {radius})" in cfg["assistant_guidance"]
         assert "{kernel_radius_mm}" not in str(cfg)
+
+
+class TestSparseViews:
+    """Check the engine builds the sparse views it declares."""
+
+    def test_activated_is_a_voxel_by_study_view(
+        self, small_neurosynth_views
+    ):
+        """Check the view of ``activated`` holds its tuples, its voxels
+        and studies numbered by the view's entity indices, and is indexed
+        by its studies (``sparse_view_indexes``)."""
+        nl = small_neurosynth_views
+        view = nl.sparse_views["activated"]
+        with nl.scope as e:
+            rows = nl.query(
+                (e.i, e.j, e.k, e.s), nl.symbols.activated(e.i, e.j, e.k, e.s)
+            ).as_pandas_dataframe()
+        assert view.matrix.shape == (
+            len(view.row_index), len(view.column_index)
+        )
+        assert view.matrix.nnz == len(rows) > 0
+        tuples = view.to_frame()
+        expected = {tuple(row) for row in rows.itertuples(index=False)}
+        assert {
+            tuple(row) for row in tuples[list(view.rows) + list(
+                view.columns
+            )].itertuples(index=False)
+        } == expected
+        studies = np.arange(len(view.column_index))
+        np.testing.assert_array_equal(
+            view.by_columns.matrix(studies).toarray(),
+            view.weighted().T.toarray(),
+        )
+
+    def test_the_atlases_share_the_studies_of_activated(
+        self, small_neurosynth_views
+    ):
+        """Check the region x study views of the atlases number the
+        studies as ``activated`` does, and hold their relation's tuples."""
+        from nl_expr.expressions import Symbol
+
+        small_neurosynth = small_neurosynth_views
+        views = small_neurosynth.sparse_views
+        for name in (
+            "schaefer_activated", "schaefer400_activated",
+            "destrieux_activated", "tian_activated",
+        ):
+            view = views[name]
+            assert view.column_index is views["activated"].column_index
+            rows = small_neurosynth.program_ir.symbol_table[
+                Symbol(name)
+            ].value.as_pandas_dataframe()
+            assert view.matrix.nnz == len(rows) > 0
+            assert {
+                tuple(row) for row in view.to_frame().itertuples(index=False)
+            } == {tuple(row) for row in rows.itertuples(index=False)}
+
+    @staticmethod
+    def _engine(tmp_path, views, body="p(x, y, w) :- q(x, y, w)"):
+        from neurolang_apps.utils import engine_registry
+
+        (tmp_path / "q.csv").write_text("x,y,w\nu,1,.5\nv,2,.25\nu,2,0\n")
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n"
+            "    sorts:\n"
+            "      a: {columns: [x], type: str}\n"
+            "      b: {columns: [y], type: int}\n"
+            "      w: {columns: [w], type: float}\n"
+            "    predicates:\n"
+            "      p: {arguments: [a, b, w]}\n"
+            "    relations: {q: q.csv}\n"
+            f"    datalog_init: '{body}'\n"
+            f"    sparse_views: {views}\n"
+        )
+        return engine_registry.build_engine("e", tmp_path, yaml_path=path)
+
+    def test_a_view_with_a_value(self, tmp_path):
+        """Check a third sort is the value of the entries, of a rule
+        renaming a stored relation."""
+        nl = self._engine(tmp_path, "{p: [b, a, w]}")
+        view = nl.sparse_views["p"]
+        np.testing.assert_array_equal(
+            view.matrix.toarray(), [[0.5, 0], [0, 0.25]]
+        )
+        assert view.matrix.nnz == 3  # the explicit zero of ('u', 2)
+
+    def test_the_engines_declare_the_views_contractions_read(
+        self, small_neurosynth
+    ):
+        """Check the coordinate-based engines build the voxel x study view
+        of ``activated``, which the probabilistic solver reads when it
+        computes sums of products as contractions; the views of atlases
+        the engine did not load are left out."""
+        views = small_neurosynth.sparse_views
+        assert "activated" in views
+        assert set(views) <= {
+            "activated", "schaefer_activated", "schaefer400_activated",
+            "destrieux_activated", "tian_activated",
+        }
+
+    def test_no_view_of_a_predicate_the_engine_lacks(self, tmp_path):
+        """Check the view of a predicate the engine does not define (left
+        out of a lightweight engine, of an atlas not loaded) is not built,
+        and the others are."""
+        nl = self._engine(tmp_path, "{p: [b, a, w], absent: [a, b]}")
+        assert set(nl.sparse_views) == {"p"}
+
+    def test_views_are_kept_and_read_mapped(self, tmp_path):
+        """Check the views of a build are kept with its tables and read
+        back, memory-mapped, by the next build, with the same entries."""
+        first = self._engine(tmp_path, "{p: [b, a, w]}").sparse_views["p"]
+        kept = [
+            p for p in (tmp_path / "derived_tables").glob("sparse_views-*")
+            if p.is_dir()
+        ]
+        assert len(kept) == 1
+        again = self._engine(tmp_path, "{p: [b, a, w]}").sparse_views["p"]
+        assert (again.matrix != first.matrix).nnz == 0
+        np.testing.assert_array_equal(
+            again.weighted().toarray(), [[0.5, 0], [0, 0.25]]
+        )
+        assert not again.weighted().data.flags.writeable  # mapped
+        assert again.row_index.decode([0, 1])[0].tolist() == [1, 2]
+        assert again.column_index.decode([0, 1])[0].tolist() == ["u", "v"]
+
+    def test_no_views_without_contractions(self, tmp_path):
+        """Check no view is built when the probabilistic solver does not
+        compute contractions, the only reader of the views."""
+        from nl_expr.config import config
+
+        previous = config.get("PROBABILISTIC_SOLVER", "contractions")
+        config.set("PROBABILISTIC_SOLVER", "contractions", "False")
+        try:
+            nl = self._engine(tmp_path, "{p: [b, a, w]}")
+        finally:
+            config.set("PROBABILISTIC_SOLVER", "contractions", previous)
+        assert nl.sparse_views == {}
+
+    def test_no_views_declared(self, tmp_path):
+        """Check an engine without ``sparse_views`` has none."""
+        from neurolang_apps.utils import engine_registry
+
+        path = tmp_path / "engines.yaml"
+        path.write_text("engines:\n  e:\n    description: bare\n")
+        nl = engine_registry.build_engine("e", tmp_path, yaml_path=path)
+        assert nl.sparse_views == {}
+
+    @pytest.mark.parametrize("views, body, match", [
+        ("{p: [a]}", "p(x, y, w) :- q(x, y, w)", "rows, of its columns"),
+        ("{p: [a, c]}", "p(x, y, w) :- q(x, y, w)", "sort 'c'"),
+        ("{p: [a, b]}", "p(x, y, w) :- q(x, y, w)", "spans each column"),
+        ("{p: [a, w]}", "p(x, y, w) :- q(x, y, w) & (w > 0)",
+         "not a stored relation"),
+    ])
+    def test_a_bad_declaration_is_a_clear_error(
+        self, tmp_path, views, body, match
+    ):
+        """Check a view of too few sorts, of a sort the predicate lacks,
+        leaving out a column or of a derived relation is refused."""
+        with pytest.raises(ValueError, match=match):
+            self._engine(tmp_path, views, body)

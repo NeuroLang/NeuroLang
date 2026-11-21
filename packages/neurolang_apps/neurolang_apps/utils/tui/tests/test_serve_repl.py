@@ -2,6 +2,7 @@
 
 import base64
 import importlib.util
+import hashlib
 import json
 import os
 import re
@@ -139,6 +140,37 @@ def test_the_local_engines_are_prepared_before_serving(serve, capsys):
     assert "neurostore could not be prepared" in out
     assert serve.parse_args(["--local"]).prepare
     assert not serve.parse_args(["--local", "--no-prepare"]).prepare
+
+
+def test_the_engines_are_prepared_while_a_session_waits_for_its_own(serve):
+    """Preparation prepares in a thread, in order: wait returns once an
+    engine is, at once for one it does not prepare; ready is told each;
+    close stops the build."""
+    import threading
+
+    release = threading.Event()
+    told, stopped = [], []
+
+    def run(name):
+        if name == "neurostore":
+            release.wait(30)
+        return name != "broken"
+
+    run.stop = lambda: stopped.append(1)
+    preparation = serve.Preparation(
+        Path("data"), ["neurosynth", "neurostore", "broken"], run=run,
+        ready=told.append,
+    ).start()
+    assert preparation.wait("neurosynth", 30)
+    assert not preparation.wait("neurostore", 0.1)  # still building
+    assert preparation.wait("somewhere", 0)  # not one it prepares
+    release.set()
+    assert preparation.wait("neurostore", 30)
+    assert preparation.wait("broken", 30)  # failed: its sessions try
+    preparation.thread.join(30)
+    assert told == ["neurosynth", "neurostore", "broken"]
+    preparation.close()
+    assert stopped == [1]
 
 
 def test_the_bundle_is_built_with_the_engines_asked_for(
@@ -406,14 +438,20 @@ def _post(port, action, body):
 def test_the_local_site_has_the_page_answered_by_this_machine(
     serve, tmp_path
 ):
-    page = serve.prepare_local_site(tmp_path, ["neurosynth"])
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"]).page
     bundle = json.loads((page.parent / "bundle.json").read_text())
     assert bundle == {
         "backend": "local", "default": "neurosynth",
-        "engines": {"neurosynth": {"label": "Neurosynth"}},
+        "engines": {"neurosynth": {
+            "label": "Neurosynth", "acknowledgements":
+            serve.bundle_script().acknowledgements("neurosynth")}},
     }
+    # the page's credits (credits.html) read them
+    assert any("Neurosynth: Yarkoni" in text for text in
+               bundle["engines"]["neurosynth"]["acknowledgements"])
     assert (page.parent / "local_worker.js").is_file()
-    page = serve.prepare_local_site(tmp_path, ["neurosynth", "neurosynth_iit"])
+    page = serve.prepare_local_site(
+        tmp_path, ["neurosynth", "neurosynth_iit"]).page
     bundle = json.loads((page.parent / "bundle.json").read_text())
     assert bundle["default"] == getattr(
         serve.bundle_script(), "DEFAULT_ENGINE", "neurosynth"
@@ -481,6 +519,12 @@ def test_the_local_server_answers_the_worker(serve, tmp_path, monkeypatch):
                 upload(name, data, kind)
             with error.value:
                 assert error.value.code == code, name
+        # The size the server is given (--max-upload-mb) is the one kept.
+        backend.uploads = {"most_file": 2}
+        with pytest.raises(urllib.error.HTTPError) as error:
+            upload("w.csv", b"abc")
+        with error.value:
+            assert error.value.code == 413
         events.close()
     finally:
         server.shutdown()
@@ -674,7 +718,7 @@ def test_the_systemd_unit_runs_the_command(serve, tmp_path):
     assert f"WorkingDirectory={tmp_path}\n" in unit
     assert "WantedBy=default.target" in unit
     # Restarted after a failure, not as fast as systemd stops restarting.
-    assert "Restart=on-failure\nRestartSec=5\n" in unit
+    assert "Restart=on-failure\nRestartSec=5\nOOMPolicy=continue\n" in unit
 
 
 def test_the_systemd_unit_runs_any_path_as_it_is(serve, tmp_path, monkeypatch):
@@ -887,7 +931,7 @@ def test_every_request_needs_the_password(serve, tmp_path, password):
 def test_the_main_page_leads_to_the_repl_unless_the_site_has_one(
     serve, tmp_path
 ):
-    page = serve.prepare_local_site(tmp_path, ["neurosynth"])
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"]).page
     serve.write_index(tmp_path, page)
     assert 'url=_static/repl/index.html"' in (
         tmp_path / "index.html").read_text()
@@ -1211,6 +1255,10 @@ class _FakeSessions:
 
     def __init__(self):
         self.asked = []
+        self.prebuilds, self.built = True, []
+
+    def prebuild(self, engines):
+        self.built.append(list(engines))
 
     def session(self, user, tab):
         self.asked.append((user, tab))
@@ -1351,6 +1399,37 @@ def test_the_console_is_the_admins(console):
     assert "password" not in json.dumps(state)
 
 
+def test_the_console_shows_and_erases_the_uploads(serve, tmp_path):
+    """The uploads of the sessions (--uploads-dir) in the admin console:
+    the state lists them, and an admin erases them."""
+    (tmp_path / "bundle.json").write_text("{}")
+    sessions = _FakeSessions()
+    sessions.info = lambda: []
+    sessions.uploads_info = lambda: {"directory": "/up", "folders": []}
+    erased = []
+    sessions.erase_uploads = lambda start=None, name=None: (
+        erased.append((start, name)) or 2)
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        state = _json_of(port, "/admin/api/state", "ann", "ann-pw")
+        assert state["uploads"] == {"directory": "/up", "folders": []}
+        body = {"start": "4", "name": "a.csv"}
+        assert _status(port, "/admin/api/erase-uploads",
+                       _basic("bob-pw", "bob"), "POST", body) == 403
+        assert _json_of(port, "/admin/api/erase-uploads", "ann", "ann-pw",
+                        body) == {"erased": 2}
+        _json_of(port, "/admin/api/erase-uploads", "ann", "ann-pw", {})
+        assert erased == [("4", "a.csv"), (None, None)]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_another_sites_post_is_refused(console):
     port, _ = console
     form = {**_basic("ann-pw", "ann"), "Content-Type": "text/plain"}
@@ -1390,6 +1469,155 @@ def test_the_users_keep_an_admin(serve, tmp_path):
     users.change("bob", groups=["admin"])
     users.remove("ann")
     assert users.is_admin("bob") and not users.check("ann", b"a")
+
+
+def _commit(repo, name):
+    (repo / name).write_text(name)
+    for command in (["add", name], ["commit", "-qm", name]):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t",
+                        *command], cwd=repo, check=True)
+
+
+@pytest.fixture
+def checkout(serve, tmp_path, monkeypatch):
+    """A checkout on master, of an origin, the server's. Of the update, the
+    syncs of uv and the checks of the server's start do not run: *steps*
+    tells them, and whether the checkout had the commit two; the step in
+    *fail* fails once the checkout has it."""
+    origin, clone = tmp_path / "origin", tmp_path / "clone"
+    subprocess.run(["git", "init", "-q", origin], check=True)
+    subprocess.run(["git", "symbolic-ref", "HEAD", "refs/heads/master"],
+                   cwd=origin, check=True)
+    _commit(origin, "one")
+    subprocess.run(["git", "clone", "-q", origin, clone], check=True)
+    monkeypatch.setattr(serve, "CHECKOUT", clone)
+    monkeypatch.setattr(serve.shutil, "which", lambda name: "/bin/" + name)
+    monkeypatch.setattr(serve, "installed_extras", lambda: ["apps", "llm"])
+    state = SimpleNamespace(origin=origin, clone=clone, steps=[],
+                            commands=[], fail=None)
+    run = serve._run
+
+    def _run(command, env=None, label=None):
+        if command[0] not in ("/bin/uv", sys.executable):
+            return run(command, env, label)
+        step = "sync" if command[0] == "/bin/uv" else "start"
+        two = (clone / "two").exists()
+        state.steps.append((step, two))
+        state.commands.append(command)
+        if step == state.fail and two:
+            raise ValueError(f"{step} failed")
+        return ""
+
+    monkeypatch.setattr(serve, "_run", _run)
+    return state
+
+
+def test_the_update_brings_the_checkout_to_master_if_it_moved(
+    serve, checkout
+):
+    assert serve.update_check()["new"] == []
+    assert serve.update()["new"] == [] and checkout.steps == []
+    _commit(checkout.origin, "two")
+    check = serve.update_check()
+    assert check["upstream"] == "origin/master"
+    assert [c.split(" ", 1)[1] for c in check["new"]] == ["two"]
+    assert check["head"].endswith(" one") and not check["changed"]
+    assert serve.update()["new"] == check["new"]
+    assert (checkout.clone / "two").is_file()
+    assert checkout.steps == [("sync", True), ("start", True)]
+    assert checkout.commands[0] == ["/bin/uv", "sync", "--frozen",
+                                    "--inexact", "--extra=apps",
+                                    "--extra=llm"]
+    assert serve.STARTS in checkout.commands[1]
+    assert serve.update_check()["new"] == []
+
+
+@pytest.mark.parametrize("step", ["sync", "start"])
+def test_a_failed_update_brings_the_checkout_back(serve, checkout, step):
+    _commit(checkout.origin, "two")
+    checkout.fail = step
+    with pytest.raises(ValueError, match=f"{step} failed(.|\\n)*back at"):
+        serve.update()
+    assert not (checkout.clone / "two").exists()
+    assert checkout.steps[-1] == ("sync", False)  # the environment back
+    assert len(serve.update_check()["new"]) == 1  # asked again: it moved
+
+
+def test_one_update_runs_at_a_time(serve, checkout):
+    with serve.UPDATING:
+        with pytest.raises(ValueError, match="An update is running"):
+            serve.update()
+    assert serve.update()["new"] == []
+
+
+def test_the_update_keeps_the_checkouts_own_changes(serve, checkout):
+    _commit(checkout.origin, "two")
+    (checkout.clone / "one").write_text("changed")
+    assert serve.update_check()["changed"]
+    with pytest.raises(ValueError, match="changes of its own"):
+        serve.update()
+    assert not (checkout.clone / "two").exists() and checkout.steps == []
+
+
+def test_the_extras_installed_are_those_whose_packages_are(
+    serve, monkeypatch
+):
+    from importlib import metadata
+
+    requires = {
+        "ws": ['app; extra == "apps"', 'app[big]; extra == "big"',
+               'tool; extra == "dev"'],
+        "app": ['small', 'torch>=2; extra == "big"'],
+        "small": [],
+    }
+
+    def _requires(name):
+        if name not in requires:
+            raise metadata.PackageNotFoundError(name)
+        return requires[name]
+
+    provided = SimpleNamespace(get_all=lambda key: ["apps", "big", "dev"])
+    monkeypatch.setattr(metadata, "requires", _requires)
+    monkeypatch.setattr(metadata, "metadata", lambda name: provided)
+    assert serve.installed_extras("ws") == ["apps"]
+    requires["torch"] = []
+    assert serve.installed_extras("ws") == ["apps", "big"]
+
+
+def test_the_console_updates_and_restarts_if_master_moved(
+    serve, tmp_path, monkeypatch
+):
+    (tmp_path / "bundle.json").write_text("{}")
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    new = []
+    check = {"head": "a1 one", "upstream": "origin/master", "new": new,
+             "changed": False}
+    monkeypatch.setattr(serve, "update_check", lambda: check)
+    monkeypatch.setattr(serve, "update", lambda: check)
+    executed = []
+    monkeypatch.setattr(serve.os, "execv",
+                        lambda *args: executed.append(args))
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, users=users)
+    serving = threading.Thread(target=serve.serve, args=(server,),
+                               daemon=True)
+    serving.start()
+    port = server.server_address[1]
+    try:
+        assert _status(port, "/admin/api/update", _basic("bob-pw", "bob"),
+                       "POST", {}) == 403
+        assert _json_of(port, "/admin/api/update", "ann", "ann-pw") == check
+        answer = _json_of(port, "/admin/api/update", "ann", "ann-pw", {})
+        assert not answer["restarting"] and serving.is_alive()
+        new.append("b2 two")
+        answer = _json_of(port, "/admin/api/update", "ann", "ann-pw", {})
+        assert answer["restarting"] and answer["new"] == ["b2 two"]
+        serving.join(10)
+        assert not serving.is_alive() and server.restarting
+        assert executed == [(sys.executable,
+                             [sys.executable, *sys.orig_argv[1:]])]
+    finally:
+        server.server_close()
 
 
 def test_an_edit_by_hand_is_read_again(serve, tmp_path):
@@ -1490,10 +1718,96 @@ def test_a_user_changes_their_own_password(console):
 
 
 def test_the_local_site_links_the_account_page_of_its_users(serve, tmp_path):
-    page = serve.prepare_local_site(tmp_path, ["neurosynth"], users=True)
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"],
+                                    users=True).page
     assert json.loads((page.parent / "bundle.json").read_text())["users"]
-    page = serve.prepare_local_site(tmp_path, ["neurosynth"])
+    page = serve.prepare_local_site(tmp_path, ["neurosynth"]).page
     assert "users" not in json.loads((page.parent / "bundle.json").read_text())
+
+
+def test_the_admin_console_chooses_the_engines_of_the_page(serve, tmp_path):
+    """The engines the page offers, and the one it starts with, are those
+    of the configuration unless the admin console chose others, which a
+    restart keeps (next to the users file); no session starts on another."""
+    users = _users(serve, tmp_path, ann=("ann-pw", ["admin"]),
+                   bob=("bob-pw", ["lab"]))
+    saved = serve.engines_path(users.path)
+    engines = serve.prepare_local_site(
+        tmp_path, ["neurosynth", "neurostore"], True, "neurostore", saved)
+    bundle = engines.page.parent / "bundle.json"
+    assert json.loads(bundle.read_text())["default"] == "neurostore"
+    sessions = _FakeSessions()
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users, engines=engines)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    change = "/admin/api/engines"
+    try:
+        state = _json_of(port, "/admin/api/state", "ann", "ann-pw")
+        assert state["engines"] == {
+            "engines": [
+                {"name": "neurosynth", "label": "Neurosynth", "on": True},
+                {"name": "neurostore", "label": "NeuroStore", "on": True}],
+            "default": "neurostore", "saved": str(saved)}
+        body = {"on": ["neurosynth"], "default": "neurosynth"}
+        assert _status(port, change, _basic("bob-pw", "bob"), "POST",
+                       body) == 403
+        for wrong in ({"on": [], "default": "neurosynth"},
+                      {"on": ["neurosynth"], "default": "neurostore"},
+                      {"on": ["nowhere"], "default": "nowhere"}):
+            assert _status(port, change, _basic("ann-pw", "ann"), "POST",
+                           wrong) == 400
+        assert engines.to_build() == ["neurostore", "neurosynth"]
+        assert _json_of(port, change, "ann", "ann-pw", body) == {"ok": True}
+        # the engines turned on are built, those turned off are not
+        assert sessions.built == [["neurosynth"]]
+        page = json.loads(bundle.read_text())
+        assert (list(page["engines"]), page["default"]) == (
+            ["neurosynth"], "neurosynth")
+        start = "/api/start?session=t1"
+        assert _status(port, start, _basic("bob-pw", "bob"), "POST",
+                       {"engine": "neurostore"}) == 403
+        assert _status(port, start, _basic("bob-pw", "bob"), "POST",
+                       {"engine": "neurosynth"}) == 200
+    finally:
+        server.shutdown()
+        server.server_close()
+    # a restart keeps the console's choice over the configuration's, and
+    # offers an engine the console did not know
+    engines = serve.prepare_local_site(
+        tmp_path, ["neurosynth", "neurostore", "neurosynth_iit"], True,
+        "neurostore", saved)
+    assert (engines.on(), engines.default) == (
+        ["neurosynth", "neurosynth_iit"], "neurosynth")
+    # an engine no longer prepared: the configuration's default holds
+    engines = serve.prepare_local_site(tmp_path, ["neurostore"], True,
+                                       "neurostore", saved)
+    assert (engines.on(), engines.default) == (["neurostore"], "neurostore")
+    assert not engines.overrides
+    # a file the console did not write is not its choice
+    for text in ("[]", '{"off": 3}', "nonsense"):
+        saved.write_text(text)
+        engines = serve.prepare_local_site(
+            tmp_path, ["neurosynth", "neurostore"], True, "neurostore", saved)
+        assert (engines.on(), engines.default, engines.overrides) == (
+            ["neurosynth", "neurostore"], "neurostore", False)
+
+
+def test_the_default_engine_of_the_configuration(serve, tmp_path):
+    config = tmp_path / "server.yaml"
+    config.write_text("local: true\nengines: [neurosynth, neurostore]\n"
+                      "default_engine: neurostore\n")
+    args = serve.parse_args(["--config", str(config)])
+    assert args.default_engine == "neurostore"
+    command = serve.service_command(serve.parse_args(
+        ["--local", "--default-engine", "neurostore", "--python",
+         sys.executable, "--daemon", "install"]))
+    assert command[command.index("--default-engine") + 1] == "neurostore"
+    for wrong in (["--default-engine", "neurostore"],  # not --local
+                  ["--local", "--engine", "neurosynth",
+                   "--default-engine", "neurostore"]):
+        with pytest.raises(SystemExit):
+            serve.parse_args(wrong)
 
 
 def test_without_users_there_is_no_account_page(serve, tmp_path):
@@ -2243,7 +2557,7 @@ def _json_at(port, method, path, headers=None, body=None):
 def test_a_user_signs_in_with_orcid(orcid_server):
     port, users = orcid_server
     assert _json_at(port, "GET", "/login/options")[1] == {
-        "guests": False, "orcid": True}
+        "guests": False, "orcid": True, "mcp": False}
     status, headers = _http(port, "GET", "/login/orcid?next=/admin")
     location = headers["Location"]
     assert location.startswith("https://orcid.example/authorize?")
@@ -2938,6 +3252,10 @@ def test_the_defaults_of_the_options_are_those_of_their_file(serve):
     assert f"({defaults['idle_minutes']}, above 0)" in server
     assert f"({defaults['query_minutes']}; 0, never)" in server
     assert f"guests at once ({defaults['max_guest_sessions']})" in server
+    assert "``--session-memory-mb MB``" in server
+    assert f"in DIR (``{defaults['uploads_dir']}``)" in server
+    assert f"at most MB megabytes ({defaults['max_upload_mb']})" in server
+    assert f"together at most MB ({defaults['max_uploads_mb']})" in server
     contributing = " ".join((docs / "contributing.rst").read_text().split())
     assert f"``--max-sessions`` ({defaults['max_sessions']}," in contributing
     assert f"``--idle-minutes`` ({defaults['idle_minutes']}," in contributing
@@ -3004,3 +3322,124 @@ def test_without_an_activity_log_the_page_says_how(serve, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+class _FakeMcpSession:
+    """The session of an MCP client: it records how it starts and what it
+    is asked."""
+
+    def __init__(self):
+        self.pid = self.engine = None
+        self.starts, self.requests = [], []
+
+    def start(self, engine, text=False):
+        self.pid, self.engine = 1, engine
+        self.starts.append((engine, text))
+
+    def mcp(self, **request):
+        self.requests.append(request)
+        return 200, [("content-type", "application/json"),
+                     ("mcp-session-id", "x")], b'{"jsonrpc": "2.0"}'
+
+
+class _McpSessions(_FakeSessions):
+    def __init__(self):
+        super().__init__()
+        self.mcp_session = _FakeMcpSession()
+
+    def session(self, user, tab):
+        self.asked.append((user, tab))
+        return self.mcp_session if tab == "mcp" else _FakeBackend()
+
+
+@pytest.fixture
+def mcp_server(serve, tmp_path):
+    (tmp_path / "bundle.json").write_text("{}")
+    sessions = _McpSessions()
+    users = _users(serve, tmp_path, ann=("annannann", []),
+                   bob=("bobbobbob", []))
+    results = tmp_path / "results"
+    server = serve.make_server(tmp_path, "127.0.0.1", 0, sessions,
+                               users=users, mcp_results=results)
+    with _serving(server) as port:
+        yield port, users, sessions, results
+
+
+def _mcp_post(port, headers):
+    return _http(port, "POST", "/mcp", headers,
+                 {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+
+
+def test_an_mcp_client_needs_its_users_token(mcp_server, serve, tmp_path):
+    port, users, sessions, _ = mcp_server
+    status, headers = _mcp_post(port, {})
+    assert status == 401 and headers["WWW-Authenticate"].startswith("Bearer")
+    assert _mcp_post(port, _basic("annannann", "ann"))[0] == 401
+    assert _mcp_post(port, {"Authorization": "Bearer nope"})[0] == 401
+    token = users.new_mcp_token("ann")
+    assert token not in (tmp_path / "users.yaml").read_text()
+    status, headers = _mcp_post(port, {"Authorization": f"Bearer {token}"})
+    assert status == 200 and headers["mcp-session-id"] == "x"
+    assert sessions.asked == [("ann", serve.MCP_TAB)]
+    [request] = sessions.mcp_session.requests
+    assert "authorization" not in {k.lower() for k in request["headers"]}
+    mine = hashlib.sha256(b"ann").hexdigest()[:16]
+    assert request["base_url"].endswith(f"/mcp/files/{mine}/")
+    assert request["results_dir"].endswith(mine)
+    assert sessions.mcp_session.starts == [("", True)]  # text, once
+    # kept in the users file: a new server knows it; a new token revokes it
+    assert serve.Users(tmp_path / "users.yaml").mcp_user(token) == "ann"
+    users.new_mcp_token("ann")
+    assert _mcp_post(port, {"Authorization": f"Bearer {token}"})[0] == 401
+
+
+def test_the_account_page_gives_and_revokes_the_token(mcp_server):
+    port, users, _, _ = mcp_server
+    status, _ = _http(port, "POST", "/account/api/mcp-token",
+                      _basic("annannann", "ann"), {})
+    assert status == 200 and users.has_mcp_token("ann")
+    _http(port, "POST", "/account/api/mcp-token",
+          _basic("annannann", "ann"), {"revoke": True})
+    assert not users.has_mcp_token("ann")
+
+
+def test_the_files_of_mcp_answers_are_for_the_users_logged_in(mcp_server):
+    port, _, _, results = mcp_server
+    folder = results / ("20261117-120000-" + "ab" * 16) / "a1"
+    folder.mkdir(parents=True)
+    (folder / "view.html").write_text("<html></html>")
+    (folder / "rows.csv").write_text("a\n1\n")
+    (results.parent / "secret.txt").write_text("no")
+    base = f"/mcp/files/{folder.parent.name}/a1"
+    login = _basic("bobbobbob", "bob")
+    assert _http(port, "GET", f"{base}/view.html")[0] == 401
+    status, headers = _http(port, "GET", f"{base}/view.html", login)
+    assert status == 200
+    assert headers["Content-Security-Policy"] == "sandbox allow-scripts"
+    assert headers["X-Content-Type-Options"] == "nosniff"
+    status, headers = _http(port, "GET", f"{base}/rows.csv", login)
+    assert headers["Content-Disposition"].startswith("attachment")
+    assert _http(port, "GET", "/mcp/files/../secret.txt", login)[0] == 404
+    assert _http(port, "GET", "/mcp/files/%2e%2e/secret.txt", login)[0] \
+        == 404
+
+
+def test_the_login_page_tells_of_mcp(mcp_server):
+    port = mcp_server[0]
+    import http.client
+
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    connection.request("GET", "/login/options")
+    assert json.loads(connection.getresponse().read())["mcp"] is True
+
+
+def test_mcp_needs_users_and_local(serve, tmp_path, monkeypatch):
+    with pytest.raises(SystemExit):
+        serve.parse_args(["--mcp"])
+    monkeypatch.chdir(tmp_path)
+    command = serve.service_command(serve.parse_args([
+        "--local", "--users", "users.yaml", "--mcp", "--daemon", "install",
+    ]))
+    assert "--mcp" in command
+    assert dict(zip(command, command[1:]))["--mcp-results-dir"].endswith(
+        "repl-mcp")

@@ -12,6 +12,14 @@ plot:
   dense_points: 500     # more points than these: smaller and see-through
   line_dots: 60         # a line marks its points when it has at most these
 
+network:                # an answer of pairs of the same sort, an edge a row
+  max_nodes: 700        # the nodes drawn at most, those of the strongest edges
+  labels: 40            # of more nodes, only the most linked are named
+  tree_nodes: 60        # a hierarchy of at most these is drawn as a tree at first
+  max_edges: 1000       # the edges drawn at most, the strongest
+  edges_per_node: 2     # the strongest edges shown at first, per node
+  layout_steps: 300     # the steps of the force layout
+
 layout:                 # long rules in the box, a line per atom of the body
   head_share: 0.45      # a head longer than this share of the line...
   short_indent: 4       # ...indents the body by this, not up to the head
@@ -27,3 +35,7 @@ guide:
 
 editor:
   max_height_px: 384    # beyond, the code box scrolls
+
+undo:                   # the history of the question and query boxes
+  pause_ms: 1000        # typing paused longer than this starts a new step
+  steps: 200            # the steps kept

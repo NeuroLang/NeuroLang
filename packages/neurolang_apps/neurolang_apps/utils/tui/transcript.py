@@ -38,7 +38,7 @@ _ANSI = re.compile(
 
 # Commands that change the session, replayed with --inputs; those of
 # _SETTERS only when they set something (with an argument).
-_STATE_COMMANDS = (".mode", ".load", ".drop", ".clear")
+_STATE_COMMANDS = (".mode", ".load", ".image", ".drop", ".clear")
 _SETTERS = (".sort", ".format", ".ra", ".rewritten", ".head")
 
 

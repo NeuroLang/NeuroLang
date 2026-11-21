@@ -289,6 +289,12 @@ class _Builder:
         rows = _size(value)
         if rows is not None:
             lines.append(f"{rows:,} rows")
+        uniform = _uniform(value) if kind == "choice" else None
+        if uniform is not None:  # said here once, not by each probability
+            lines.append(
+                "chooses one of its rows, each with probability "
+                f"1/{uniform:,}"
+            )
         return Node(
             name, name, kind, "\n".join(filter(None, lines)),
             columns=_names(self.columns.get(name, ())),
@@ -473,14 +479,9 @@ class _Builder:
             len(sources) == 1 and choices
         ) else None
         if uniform is not None:
-            notes.append(
-                f"{choices[0]} chooses one of its {uniform:,} rows, each "
-                f"with probability 1/{uniform:,}"
-            )
-            among = ", among those where C holds" if conditional else ""
-            notes.append(
-                f"so p is the share of those choices where {holds}{among}"
-            )
+            # What the choice is is said once, on its node.
+            if not conditional:
+                notes[0] = "p = P(A), the share of the choices where A holds"
         elif sources:
             over = (
                 ", over those where C holds" if conditional else ""
@@ -703,6 +704,7 @@ _GAP_Y = 22
 _LANE = 24  # the height an edge takes crossing a column
 _MARGIN = 20
 _LOOP = 36  # the room above the nodes for the loop of a recursive rule
+_BAND = 34  # the width of the band of an ontology's node, with its glyph
 
 
 def _is_card(node: Node) -> bool:
@@ -727,14 +729,20 @@ def _subtitle(node: Node) -> str:
         (line for line in node.detail.splitlines() if line.endswith(" rows")),
         "",
     )
+    each = next((
+        line.rsplit("/", 1)[1] for line in node.detail.splitlines()
+        if line.startswith("chooses one of its rows")
+    ), "")
+    if rows and each:  # a choice of rows as likely: 1/3 each
+        rows = f"{rows}, 1/{each} each"
     name = KINDS[node.kind][0].lower()
     return f"{name} · {rows}" if rows else name
 
 
 def _height(node: Node, histogram: bool) -> float:
     if not _is_card(node):
-        # Room for the rim of a cylinder, around the node of an ontology.
-        extra = {"data": 8, "ontology": 12}.get(node.kind, 0)
+        # Room for the rim of a cylinder.
+        extra = {"data": 8}.get(node.kind, 0)
         return (_RELATION if node.columns else _RELATION - 14) + extra
     notes = len(_note_lines(node)) * _NOTE + (8 if node.notes else 0)
     return _TOP + len(node.rows) * _ROW + notes + 10 + (
@@ -749,9 +757,8 @@ def _width(node: Node) -> float:
     texts += [len(line) * _SANS for line in _note_lines(node)]
     if node.probabilities:  # room for the histogram and its caption
         texts.append(270)
-    if node.kind == "ontology":  # the text inside an ellipse
-        return max(texts) * 1.35 + 30
-    return max(texts) + 28
+    # An ontology's node has a band at its left, which holds its glyph.
+    return max(texts) + 28 + (_BAND if node.kind == "ontology" else 0)
 
 
 class _Layout(NamedTuple):
@@ -873,6 +880,21 @@ def _out_y(node: Node, box: tuple) -> float:
     return box[1] + 14 if _is_card(node) else box[1] + box[3] / 2
 
 
+def _kg_glyph(cx: float, cy: float) -> str:
+    """Return the SVG of the glyph of a knowledge graph, three linked dots,
+    centred on *cx*, *cy*."""
+    dots = ((cx, cy - 8), (cx - 8, cy + 6), (cx + 8, cy + 6))
+    links = "".join(
+        f'<line class="kg-link" x1="{dots[i][0]}" y1="{dots[i][1]}" '
+        f'x2="{dots[j][0]}" y2="{dots[j][1]}"/>'
+        for i, j in ((0, 1), (1, 2), (2, 0))
+    )
+    return links + "".join(
+        f'<circle class="kg-neighbour" cx="{dx}" cy="{dy}" r="3.4"/>'
+        for dx, dy in dots
+    )
+
+
 def _shape(kind: str, box: tuple) -> str:
     """Return the SVG of the outline of a node of *kind*."""
     x, y, w, h = box
@@ -884,23 +906,16 @@ def _shape(kind: str, box: tuple) -> str:
             f'<path class="rim" d="M{x},{y + e} a{w / 2},{e} 0 0 1 {w},0 '
             f'a{w / 2},{e} 0 0 1 {-w},0"/>'
         )
-    if kind == "ontology":  # a node of a knowledge graph, linked to others
-        cx, cy = x + w / 2, y + h / 2
-        neighbours = (
-            (x + 8, y + 5), (x + w - 8, y + 7), (x + w - 12, y + h - 4),
-            (x + 14, y + h - 5),
-        )
-        links = "".join(
-            f'<line class="kg-link" x1="{cx}" y1="{cy}" x2="{nx}" '
-            f'y2="{ny}"/>' for nx, ny in neighbours
-        )
-        dots = "".join(
-            f'<circle class="kg-neighbour" cx="{nx}" cy="{ny}" r="4"/>'
-            for nx, ny in neighbours
+    if kind == "ontology":  # a card, with the glyph of a knowledge graph
+        r = 10
+        band = (
+            f"M{x + _BAND},{y} H{x + r} a{r},{r} 0 0 0 {-r},{r} "
+            f"V{y + h - r} a{r},{r} 0 0 0 {r},{r} H{x + _BAND} z"
         )
         return (
-            f'{links}<ellipse class="shape" cx="{cx}" cy="{cy}" '
-            f'rx="{w / 2 - 1}" ry="{h / 2 - 7}"/>{dots}'
+            f'<rect class="shape" x="{x}" y="{y}" width="{w}" '
+            f'height="{h}" rx="{r}"/><path class="kg-band" d="{band}"/>'
+            + _kg_glyph(x + _BAND / 2, y + h / 2)
         )
     if kind == "probability":  # corners cut
         s = 10
@@ -995,8 +1010,9 @@ def _relation_svg(node: Node, box: tuple) -> str:
     # A cylinder's text is below its rim, 12 high, and above its base, 6.
     above, below = (12, 6) if node.kind == "data" else (0, 0)
     top = y + above + (h - above - below - 15 * len(lines)) / 2 + 13
+    band = _BAND if node.kind == "ontology" else 0
     return "".join(
-        f'<text class="{cls}" x="{x + w / 2}" y="{top + 15 * i}">'
+        f'<text class="{cls}" x="{x + band + (w - band) / 2}" y="{top + 15 * i}">'
         f"{html.escape(text)}</text>"
         for i, (cls, text) in enumerate(lines)
     )
@@ -1126,12 +1142,49 @@ def _legend(graph: QueryGraph) -> str:
     return "<ul>" + "".join(items) + "</ul>"
 
 
+# The short names of the flows, for the chips of the legend.
+_FLOW_NAMES = {
+    "rows": "Rows", "uncertain": "Uncertain rows",
+    "probabilities": "Probabilities",
+}
+
+
+def _chips(graph: QueryGraph) -> str:
+    """Return the HTML of the short legend: a chip for each kind of node
+    and edge the graph has, with what it is in its tooltip; the long form
+    is :func:`_legend`."""
+    shown = {node.kind for node in graph.nodes}
+    items = [
+        f'<li title="{html.escape(meaning)}"><span class="swatch {kind}">'
+        f"</span>{name}</li>"
+        for kind, (name, meaning) in KINDS.items() if kind in shown
+    ]
+    flows = {edge.flow for edge in graph.edges}
+    items += [
+        f'<li title="{html.escape(meaning)}"><span class="line {flow}">'
+        f"</span>{_FLOW_NAMES[flow]}</li>"
+        for flow, meaning in FLOWS.items() if flow in flows
+    ]
+    kinds = {edge.kind for edge in graph.edges}
+    if "given" in kinds:
+        items.append(
+            '<li title="in the condition after // (C)"><span class="line '
+            'given"></span>Condition (//)</li>'
+        )
+    if "negated" in kinds:
+        items.append(
+            '<li title="used negated (~): the rows it does not have">'
+            '<span class="line negated"></span>Negated (~)</li>'
+        )
+    return '<ul class="chips" aria-label="Legend">' + "".join(items) + "</ul>"
+
+
 # The dark colours that differ from the light ones, which are the default:
 # those of the theme the REPL sends the page (see frame_hooks.js), else the
 # system's.
 _DARK = (
     "color-scheme: dark; --bg: #0d1117; --text: #e6edf3; --muted: #9198a1; "
-    "--edge: #6e7681; --data: #172554; --onto: #042f2e; --rand: #431407; --rule: #082f49; "
+    "--edge: #6e7681; --data: #172554; --onto: #042f2e; --onto-b: #2dd4bf;  --rand: #431407; --rule: #082f49; "
     "--prob: #2e1065; --ans: #052e16; --neg: #f87171;"
 )
 
@@ -1148,9 +1201,21 @@ body { margin: 0; padding: .75rem 1rem; background: var(--bg);
   color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
 h1 { font-size: 1rem; margin: 0 0 .25rem; }
 p { margin: 0 0 .5rem; color: var(--muted); max-width: 60rem; }
-.graph { overflow: auto; }
+.lead { margin: 0 0 .25rem; }
+.how { margin: 0 0 .5rem; max-width: 60rem; }
+.how > summary { cursor: pointer; width: fit-content; color: var(--muted); }
+.how[open] > summary { margin-bottom: .4rem; }
+.graph { overflow: auto; max-height: 34rem; overscroll-behavior: contain;
+  cursor: grab; border: 1px solid var(--edge); border-radius: 6px; }
+.graph.panning { cursor: grabbing; user-select: none; }
+.graph:focus-visible { outline: 2px solid var(--prob-b); outline-offset: 2px; }
 .graph.fit svg { max-width: 100%; height: auto; }
-.zoom-bar { display: flex; gap: .3rem; margin: 0 0 .5rem; }
+.zoom-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem;
+  margin: 0 0 .5rem; }
+.zoom[aria-pressed=true] { border-color: var(--prob-b); font-weight: 600; }
+.hint { color: var(--muted); font-size: 12px; margin-left: .4rem; }
+.hint[hidden] { display: none; }
+.hint .touch { display: none; }
 .zoom { padding: .2rem .65rem; min-width: 2rem;
   border: 1px solid var(--edge); border-radius: 6px;
   background: var(--bg); color: var(--text);
@@ -1159,8 +1224,9 @@ svg { display: block; }
 .shape, .rim { stroke-width: 1.5; }
 .data .shape, .data .rim { fill: var(--data); stroke: var(--data-b); }
 .ontology .shape { fill: var(--onto); stroke: var(--onto-b); }
+.kg-band { fill: var(--onto-b); fill-opacity: .2; }
 .kg-link { stroke: var(--onto-b); stroke-width: 1.5; }
-.kg-neighbour { fill: var(--onto); stroke: var(--onto-b); stroke-width: 1.5; }
+.kg-neighbour { fill: var(--onto-b); }
 .choice .shape, .facts .shape { fill: var(--rand); stroke: var(--rand-b); }
 .facts .shape { stroke-dasharray: 5 3; }
 .rule .shape { fill: var(--rule); stroke: var(--rule-b); }
@@ -1200,9 +1266,9 @@ ul { list-style: none; padding: 0; margin: .5rem 0; display: grid;
   margin-right: .4rem; vertical-align: middle; border: 1.5px solid; }
 .swatch.data { background: var(--data); border-color: var(--data-b);
   border-radius: 40%/25%; }
-.swatch.ontology { background: var(--onto); border-color: var(--onto-b);
-  border-radius: 50%; margin-left: .3rem;
-  box-shadow: -7px -5px 0 -3px var(--onto-b), 8px 5px 0 -3px var(--onto-b); }
+.swatch.ontology { border-color: var(--onto-b); border-radius: 4px;
+  background: linear-gradient(90deg, rgb(15 118 110 / .3) 0 35%,
+    var(--onto) 35%); }
 .swatch.choice, .swatch.facts, .swatch.probabilistic {
   background: var(--rand); border-color: var(--rand-b); }
 .swatch.facts, .swatch.probabilistic { border-style: dashed; }
@@ -1223,40 +1289,100 @@ ul { list-style: none; padding: 0; margin: .5rem 0; display: grid;
   monospace; margin: .5rem 0 0; padding: .5rem; border-radius: 6px;
   border: 1px solid var(--edge); }
 #detail:empty { display: none; }
+.chips { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin: .5rem 0;
+  font-size: 12px; }
+.chips li { display: inline-flex; align-items: center; }
+/* A finger needs 44px. */
+@media (pointer: coarse) {
+  .hint .mouse { display: none; } .hint .touch { display: inline; }
+  .zoom { min-height: 44px; min-width: 44px; }
+  .how > summary { padding: 12px 0; }
+}
 """.replace("__DARK__", _DARK)
 
 # Clicking a node shows its details and what it depends on, fading the
 # rest; clicking elsewhere shows everything again.
 _SCRIPT = """
-// The graph fits the page at first, its whole seen at once; then it zooms,
-// with the buttons or Ctrl (or Cmd) and the wheel, sized in pixels, so that
-// every browser keeps its proportions.
+// The graph is first seen at a size its text can be read at: fitted to the
+// page when that shows it at 90% of its size or more, else at its size, to
+// pan. Then it zooms, with the buttons, + and -, or Ctrl (or Cmd) and the
+// wheel, around the point under the pointer; and it pans by dragging the
+// mouse, with a finger, or with the arrow keys, its box being focusable.
 const graphBox = document.querySelector(".graph");
 const drawing = graphBox.querySelector("svg");
 const [, , naturalW, naturalH] = drawing.getAttribute("viewBox")
   .split(" ").map(Number);
+const hint = document.getElementById("hint");
+const fitButton = document.getElementById("zoom-fit");
+const actualButton = document.getElementById("zoom");
 let scale = null; // null: fitted to the page
 const fitted = () => Math.min(1, graphBox.clientWidth / naturalW);
-function zoomTo(next) {
+function zoomTo(next, fx = graphBox.clientWidth / 2,
+  fy = graphBox.clientHeight / 2) {
+  const before = scale ?? fitted();
+  const x = (graphBox.scrollLeft + fx) / before;
+  const y = (graphBox.scrollTop + fy) / before;
   scale = next === null ? null : Math.min(4, Math.max(0.1, next));
   const shown = scale ?? fitted();
   graphBox.classList.toggle("fit", scale === null);
   drawing.style.width = `${naturalW * shown}px`;
   drawing.style.height = `${naturalH * shown}px`;
+  graphBox.scrollLeft = x * shown - fx;
+  graphBox.scrollTop = y * shown - fy;
+  fitButton.setAttribute("aria-pressed", scale === null);
+  actualButton.setAttribute("aria-pressed", scale === 1);
+  hint.hidden = graphBox.scrollWidth <= graphBox.clientWidth + 1
+    && graphBox.scrollHeight <= graphBox.clientHeight + 1;
 }
 const by = (factor) => () => zoomTo((scale ?? fitted()) * factor);
 document.getElementById("zoom-in").addEventListener("click", by(1.25));
 document.getElementById("zoom-out").addEventListener("click", by(1 / 1.25));
-document.getElementById("zoom-fit")
-  .addEventListener("click", () => zoomTo(null));
-document.getElementById("zoom").addEventListener("click", () => zoomTo(1));
+fitButton.addEventListener("click", () => zoomTo(null));
+actualButton.addEventListener("click", () => zoomTo(1));
+const inBox = (event) => {
+  const rim = graphBox.getBoundingClientRect();
+  return [event.clientX - rim.left - graphBox.clientLeft,
+    event.clientY - rim.top - graphBox.clientTop];
+};
 graphBox.addEventListener("wheel", (event) => {
   if (!event.ctrlKey && !event.metaKey) return;
   event.preventDefault();
-  zoomTo((scale ?? fitted()) * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
+  zoomTo((scale ?? fitted()) * (event.deltaY < 0 ? 1.1 : 1 / 1.1),
+    ...inBox(event));
 }, { passive: false });
-new ResizeObserver(() => { if (scale === null) zoomTo(null); })
-  .observe(graphBox);
+graphBox.addEventListener("keydown", (event) => {
+  if (event.target !== graphBox) return;
+  if (event.key === "+" || event.key === "=") by(1.25)();
+  else if (event.key === "-") by(1 / 1.25)();
+  else if (event.key === "0") zoomTo(null);
+});
+let drag = null;
+graphBox.addEventListener("pointerdown", (event) => {
+  if (event.pointerType !== "mouse" || event.button !== 0) return;
+  drag = { x: event.clientX, y: event.clientY, left: graphBox.scrollLeft,
+    top: graphBox.scrollTop, moved: false };
+});
+graphBox.addEventListener("pointermove", (event) => {
+  if (!drag) return;
+  const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+  if (!drag.moved) {
+    drag.moved = true;
+    graphBox.setPointerCapture(event.pointerId);
+    graphBox.classList.add("panning");
+  }
+  graphBox.scrollLeft = drag.left - dx;
+  graphBox.scrollTop = drag.top - dy;
+});
+for (const type of ["pointerup", "pointercancel"]) {
+  graphBox.addEventListener(type, () => {
+    drag = null;
+    graphBox.classList.remove("panning");
+  });
+}
+new ResizeObserver(() => zoomTo(scale)).observe(graphBox);
+// From its left, where the data are, and the middle of its height.
+zoomTo(fitted() >= 0.9 ? null : 1, 0, graphBox.clientHeight / 2);
 const nodes = JSON.parse(document.getElementById("nodes").textContent);
 const svg = document.querySelector("svg");
 const detail = document.getElementById("detail");
@@ -1339,13 +1465,16 @@ def graph_page(graph: QueryGraph, title: str, frame=None) -> str:
         "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
         f"<title>{html.escape(title)}</title><style>{_STYLE}</style>"
         f"</head><body><h1>{html.escape(title)}</h1>"
+        '<p class="lead">Data on the left, the answer on the right. Click a '
+        "node to see what it depends on.</p>"
+        '<details class="how"><summary>How to read this</summary>'
         "<p>Read from left to right: the data on the left go through the "
         "rules to the answer on the right. A rule lists the atoms of its "
         "body, where the relations they use arrive, and below them how it "
         "combines them. The colour of an edge tells what goes through it: "
         "rows that hold for sure, rows that hold for some random choices "
         "only, or probabilities. Click a node to see its rules and what "
-        "it depends on.</p>"
+        f"it depends on.</p>{_legend(graph)}</details>"
         '<div class="zoom-bar" role="group" aria-label="Zoom">'
         '<button id="zoom-out" class="zoom" type="button" '
         'aria-label="Zoom out">−</button>'
@@ -1353,22 +1482,27 @@ def graph_page(graph: QueryGraph, title: str, frame=None) -> str:
         '<button id="zoom-in" class="zoom" type="button" '
         'aria-label="Zoom in">+</button>'
         '<button id="zoom" class="zoom" type="button">Actual size</button>'
+        '<span id="hint" class="hint" hidden><span class="mouse">Drag to '
+        'pan</span><span class="touch">Swipe to pan</span></span>'
         "</div>"
-        f'<div class="graph fit"><svg xmlns="http://www.w3.org/2000/svg" '
+        '<div class="graph fit" tabindex="0" role="region" '
+        'aria-label="Graph of the query: scroll or drag to pan, + and - '
+        f'to zoom"><svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width:.0f}" height="{height:.0f}" '
         f'viewBox="0 0 {width:.0f} {height:.0f}" role="img" '
         f'aria-label="{html.escape(title)}"><defs>{markers}</defs>{body}'
         "</svg></div>"
-        f'<pre id="detail"></pre>{_legend(graph)}'
+        f'<pre id="detail"></pre>{_chips(graph)}'
         f'<script type="application/json" id="nodes">{data}</script>'
         f"<script>{frame_hooks()}</script><script>{_SCRIPT}</script>"
         "</body></html>"
     )
 
 
-def last_query_page(app) -> str:
-    """Return the page of the graph of the last query of *app*, with the
-    distribution of the probabilities of its result when it has one."""
+def last_query_page(app, title: str = "The last query") -> str:
+    """Return the page, entitled *title*, of the graph of the last query of
+    *app*, with the distribution of the probabilities of its result when it
+    has one."""
     program, squall = app.last_query
     engine = app.settings.engine_name
     graph = query_graph(
@@ -1379,7 +1513,7 @@ def last_query_page(app) -> str:
     frame = results[0].frame if len(results) == 1 and (
         app.results_query is app.last_query
     ) else None
-    return graph_page(graph, "The last query", frame)
+    return graph_page(graph, title, frame)
 
 
 @command(

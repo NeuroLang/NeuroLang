@@ -150,3 +150,37 @@ def test_free_variable_wrapping():
 
     assert fvb.type is float
     assert x.type is int
+
+
+def test_symbols_by_type_kept_until_a_table_changes(monkeypatch):
+    """The symbols of a type are compared to the types of the table once,
+    until the table or a scope enclosing it changes; each call gets its
+    own dict."""
+    from .. import typed_symbol_table
+
+    comparisons = []
+    leq = typed_symbol_table.is_leq_informative
+    monkeypatch.setattr(
+        typed_symbol_table, "is_leq_informative",
+        lambda a, b: comparisons.append(1) or leq(a, b),
+    )
+    outer = expressions.TypedSymbolTable()
+    outer[S_('a')] = C_[int](1)
+    inner = outer.create_scope()
+    inner[S_('b')] = C_[int](2)
+    inner[S_('c')] = C_[str]('x')
+
+    first = inner.symbols_by_type(int)
+    assert set(first) == {S_('a'), S_('b')}
+    comparisons.clear()
+    second = inner.symbols_by_type(int)
+    assert second is first and not comparisons
+    with pytest.raises(TypeError):  # read-only: shared by the callers
+        second[S_('z')] = C_[int](0)
+
+    inner[S_('d')] = C_[int](3)
+    assert set(inner.symbols_by_type(int)) == {S_('a'), S_('b'), S_('d')}
+    outer[S_('e')] = C_[int](4)  # an enclosing scope changes
+    assert S_('e') in inner.symbols_by_type(int)
+    del inner[S_('b')]
+    assert S_('b') not in inner.symbols_by_type(int)

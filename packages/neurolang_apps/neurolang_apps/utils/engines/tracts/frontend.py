@@ -63,12 +63,16 @@ class _State:
     def __init__(self):
         self.data_dir = None  # where the atlases of Yeh are downloaded
         self.store = RelationStore()
-        self.atlases: Dict[str, Atlas] = {}  # those in the store
+        # those indexed by (in the store, but those replace=1 removed)
+        self.atlases: Dict[str, Atlas] = {}
         self.term_mappings: Dict[str, Any] = {}  # theirs, as given
         self.extents: Dict[str, str] = {}  # theirs, of label_extent
         self.tractograms: Dict[str, Tractogram] = {}
         self.in_store = set()  # the tractograms in the store
         self.length_threshold: Dict[str, float] = {}
+        # The bytes of a file a page uploaded, by its name, for the id it
+        # is loaded as, or None (the REPL of the apps gives its uploads).
+        self.read_upload = None
 
 
 def _value(expression):
@@ -104,6 +108,8 @@ class TractsCommandsMixin(PatternWalker):
     ``.load_tractogram(id, path, space=..., drop_short=0)``
         A ``.trk``, ``.tck`` or ``.vtk``, taken to RAS+ mm; with
         ``drop_short=1``, its streamlines of one point are in no relation.
+        ``path`` is the name of a file a page uploaded, if it is one of
+        those of the state's ``read_upload`` (the REPL of the apps).
     ``.load_tractogram(id, kind="hcp842", bundle=None, space="MNI152",
     data_dir=None, url=None, md5=None, drop_short=1)``
         The whole brain or a bundle (``bundle="UF_L"``) of an atlas of
@@ -113,7 +119,7 @@ class TractsCommandsMixin(PatternWalker):
         (:func:`.fetch.fetch_tractogram`).
     ``.index_tracts(tractogram, atlas, crossing_threshold=2.0,
     length_threshold=0.0, emit_background=0, cache=None,
-    allow_space_mismatch=0, term_mapping=None, extent=None)``
+    allow_space_mismatch=0, term_mapping=None, extent=None, replace=0)``
         Index the tractogram by the atlas, one of the engine
         (``.load_atlas``, ``add_atlas_set``, the ``atlases:`` of an engine
         of the apps: its ``atlases``): ``streamline_label`` and
@@ -129,7 +135,10 @@ class TractsCommandsMixin(PatternWalker):
         indexing by the atlas, ``"edge"`` if not given: ``"edge"`` (the
         voxel edges, DESIGN.md 6.1.1) or ``"centre"`` (the voxel centres,
         as tract_querier's boxes, for the directional terms to reproduce
-        its own).
+        its own). With ``replace=1``, the tractogram is the only one: those
+        indexed before are removed from the relations, with a warning that
+        names them, and so are the atlases that indexed only them; they
+        stay loaded, to be indexed again by ``.index_tracts`` alone.
 
     The matches are exact: a command that is not one of these is left to the
     ones after it in the solver, which refuse it.
@@ -179,6 +188,18 @@ class TractsCommandsMixin(PatternWalker):
         if ident in self._tracts.tractograms:
             raise InvalidCommandExpression(
                 f"tractogram {ident!r} was already loaded")
+        uploaded = None
+        if names.get("path") and self._tracts.read_upload is not None:
+            uploaded = self._tracts.read_upload(names["path"], ident)
+        if uploaded is not None:  # a file the page uploaded, by its name
+            try:
+                self._tracts.tractograms[ident] = Tractogram.from_bytes(
+                    ident, uploaded, options["space"],
+                    bool(options["drop_short"]))
+            except (OSError, ValueError, NotImplementedError) as e:
+                raise InvalidCommandExpression(
+                    f"cannot load the tractogram {ident!r}: {e}") from e
+            return
         # the file, the address and the directory a statement gives (see
         # neurolang.confine)
         for given in (names.get("path"), options.get("url"),
@@ -211,7 +232,7 @@ class TractsCommandsMixin(PatternWalker):
             {"crossing_threshold": 2.0, "length_threshold": 0.0,
              "emit_background": 0, "cache": None,
              "allow_space_mismatch": 0, "term_mapping": None,
-             "extent": None},
+             "extent": None, "replace": 0},
         )
         try:  # the files a statement gives (see neurolang.confine)
             if options["cache"]:
@@ -281,7 +302,10 @@ class TractsCommandsMixin(PatternWalker):
             raise InvalidCommandExpression(f"{e} (space)") from e
         except ValueError as e:
             raise InvalidCommandExpression(str(e)) from e
-        if atlas_name not in state.atlases:
+        if atlas_name not in state.store.atlases:
+            # its options, if indexed before (and removed by replace=1)
+            mapping = state.term_mappings.get(atlas_name, mapping)
+            extent = state.extents.get(atlas_name, extent)
             try:
                 state.store.add_atlas(
                     atlas, atlas_term_mapping(atlas, mapping),
@@ -294,6 +318,8 @@ class TractsCommandsMixin(PatternWalker):
             state.atlases[atlas_name] = atlas
             state.term_mappings[atlas_name] = mapping
             state.extents[atlas_name] = extent or "edge"
+        if options["replace"]:
+            self._remove_tractograms_but(ident, atlas_name)
         if ident not in state.in_store:
             state.store.add_tractogram(tractogram, params)
             state.in_store.add(ident)
@@ -305,6 +331,30 @@ class TractsCommandsMixin(PatternWalker):
                 allow_space_mismatch=allow,
             )
         self._publish_tracts()
+
+    def _remove_tractograms_but(self, ident, atlas_name):
+        """Remove the tractograms indexed but *ident* from the relations,
+        with a warning that names them; they stay loaded. The atlases but
+        *atlas_name* that index none of those left are removed from the
+        relations too, the boxes of a term (``term_box_*``) being over
+        every atlas of the relations; they stay in the state, with their
+        options, to be indexed by again."""
+        state = self._tracts
+        removed = sorted(state.in_store - {ident})
+        for other in removed:
+            state.store.remove_tractogram(other)
+            state.in_store.discard(other)
+            state.length_threshold.pop(other, None)
+        indexing = {a for a, _ in state.store._indexed} | {atlas_name}
+        for atlas in state.store.atlases - indexing:
+            state.store.remove_atlas(atlas)
+        if removed:
+            warnings.warn(
+                f"tractogram {ident!r} replaces "
+                f"{', '.join(map(repr, removed))}: one tractogram is "
+                "indexed at a time, the rules of the bundles select its "
+                "streamlines"
+            )
 
     def _publish_tracts(self):
         """Give the program the relations built so far (what ``load_csv``

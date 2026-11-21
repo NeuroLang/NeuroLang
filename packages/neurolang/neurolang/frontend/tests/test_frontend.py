@@ -256,6 +256,7 @@ def _squall_voxel_engine(engine_class=frontend.NeurolangDL):
     return neurolang
 
 
+@pytest.mark.squall
 def test_squall_noun_with_fewer_arguments_than_columns():
     """
     A SQUALL noun naming a 3-column relation without ``in 3D`` is an error.
@@ -283,6 +284,7 @@ def test_squall_noun_with_fewer_arguments_than_columns():
     assert set(result) == {(1, 2, 3)}
 
 
+@pytest.mark.squall
 def test_squall_wrong_arity_states_only_the_counts():
     """
     A predicate used with more arguments than its columns, or a verb used
@@ -307,6 +309,7 @@ def test_squall_wrong_arity_states_only_the_counts():
     }
 
 
+@pytest.mark.squall
 def test_predicate_arity_error_suggests_tuple_subject_for_extra_objects():
     """
     A predicate used with more arguments than its columns, as a verb with
@@ -326,6 +329,7 @@ def test_predicate_arity_error_suggests_tuple_subject_for_extra_objects():
     assert "several objects" in info.value.suggestion
 
 
+@pytest.mark.squall
 def test_squall_defined_relation_with_wrong_arity():
     """
     A relation defined with several columns and used as a unary noun is
@@ -354,6 +358,7 @@ def test_squall_defined_relation_with_wrong_arity():
     }
 
 
+@pytest.mark.squall
 def test_squall_obtain_as_defines_the_whole_relation():
     """
     ``obtain every Voxel as Voxels`` defines ``voxels`` with every column
@@ -366,6 +371,7 @@ def test_squall_obtain_as_defines_the_whole_relation():
     assert set(result) == {(1, 2, 3), (4, 5, 6)}
 
 
+@pytest.mark.squall
 def test_squall_probabilistic_predicate_arity_excludes_probability():
     """
     The probability column of probabilistic facts and choices is not an
@@ -819,7 +825,7 @@ def test_neurolang_dl_datalog_code_statement_autocompletion():
     """
     )
     expected = {'Signs': {'values': {'@', '∃', '('}}, 'Numbers': {'values': set()}, 'Text': {'values': set()},
-                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC', 'exists'}}, 'Boleans': {'values': {'False', '⊤', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
+                'Operators': {'values': {'~', '¬'}}, 'Cmd_identifier': {'values': set()}, 'Functions': {'values': {'lambda'}}, 'Identifier_regexp': {'values': set()}, 'Reserved words': {'values': {'AGGREGATE', 'EXISTS', 'MARG', 'RESAMPLE', 'PROB', 'SUCC', 'exists'}}, 'Boleans': {'values': {'False', '⊤', '⊥', 'True'}}, 'Expression symbols': {'values': set()}, 'Python string': {'values': set()}, 'Strings': {'values': {'<identifier_regexp>', '<cmd_identifier>', '<iri>'}}, 'commands': {'values': set()}, 'functions': {'values': set()}, 'base symbols': {'values': set()}, 'query symbols': {'values': set()}}
     assert res == expected
 
 
@@ -1825,3 +1831,16 @@ def test_region_contains_constant_point(frontend_class):
     )
 
     assert set(res.to_unnamed()) == {("A",)}
+
+
+def test_a_string_constant_ending_in_a_backslash_stays_a_string():
+    """A string compared in a selection is a literal of the expression the
+    backend evaluates: its backslashes are escaped, else ``'z\\'`` would
+    escape its closing quote and the rest of the expression be code."""
+    nl = frontend.NeurolangDL()
+    nl.add_tuple_set([("a\\",), ("q",)], name="r")
+    nl.execute_datalog_program("q(x) :- r(x) & (x != 'z\\')\n"
+                               "p(x) :- r(x) & (x != 'a\\')")
+    solution = nl.solve_all()
+    assert set(solution["q"].as_pandas_dataframe()["x"]) == {"a\\", "q"}
+    assert set(solution["p"].as_pandas_dataframe()["x"]) == {"q"}
