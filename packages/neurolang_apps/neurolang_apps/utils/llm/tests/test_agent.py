@@ -873,6 +873,36 @@ def test_the_engines_with_tractography_have_longer_time_limits():
     assert "assistant_timeout_guidance" not in engine_config("neurosynth")
 
 
+def test_the_docs_quote_the_time_limits():
+    from pathlib import Path
+
+    from ..agent import engine_config
+    from ..config import DEFAULTS
+
+    doc = Path(__file__).parents[6] / "doc"
+    if not doc.exists():  # not a checkout
+        return
+    query, check = (
+        f"{DEFAULTS['assistant'][name]:g}"
+        for name in ("query_timeout", "check_timeout")
+    )
+    tracts = engine_config("tracts")
+    tract_query, tract_check = (
+        f"{tracts[name]:g}"
+        for name in ("assistant_query_timeout", "assistant_check_timeout")
+    )
+    assistant = " ".join((doc / "query_assistant.rst").read_text().split())
+    assert f"{query} s for a run, {check} s for a check" in assistant
+    assert f"give {tract_query} s for a run and {tract_check} s" in assistant
+    assert f"({tract_query} s for a run on the engines" in assistant
+    engines = " ".join((doc / "engine_configuration.rst").read_text().split())
+    assert f"the defaults ({query} and {check} s" in engines
+    assert f"gives {tract_query} and {tract_check} s" in engines
+    changelog = " ".join((doc / "changelog.rst").read_text().split())
+    assert f"the defaults ({query} and {check} s)" in changelog
+    assert f"give {tract_query} and {tract_check} s" in changelog
+
+
 # The program of Fig. 2b of the paper for one bundle: the left uncinate's
 # pairs of Schaefer parcels, then the lift of their co-activation in the
 # studies mentioning language.
@@ -904,10 +934,11 @@ def test_a_bundle_program_runs_within_the_limits_of_neurosynth_iit():
     from ..agent import engine_config
     from ..config import AssistantConfig, for_engine
 
+    data = Path.home() / "neurolang_data"
+    if not (data / "neurosynth_iit").exists():  # not downloaded here
+        pytest.skip(f"no neurosynth_iit data in {data}")
     try:
-        nl = engine_registry.build_engine(
-            "neurosynth_iit", Path.home() / "neurolang_data", 2.0
-        )
+        nl = engine_registry.build_engine("neurosynth_iit", data, 2.0)
     except Exception as e:  # no data, offline
         pytest.skip(f"cannot build neurosynth_iit: {e!r}")
     config = for_engine(AssistantConfig(), engine_config("neurosynth_iit"))
