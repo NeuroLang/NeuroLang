@@ -476,9 +476,12 @@ class UnboundVariablesError(ForbiddenExpressionError):
     variables : tuple of str
         Names of the unbound variables.
     occurrences : tuple of str
-        The formulas of the body where the unbound variables appear.
+        The formulas of the body where the unbound variables appear;
+        empty for variables of the head that do not occur in the body,
+        as ``streamline`` in ``ans(streamline) :- uf(x, 'left')``.
     example : str, optional
-        A predicate that would bind the variables in the body.
+        A predicate that would bind the variables in the body; for
+        variables of the head only, the variables of the body.
     query : bool
         Whether the body is the body of a query.
 
@@ -521,6 +524,13 @@ class UnboundVariablesError(ForbiddenExpressionError):
         else:
             where = "the query" if self.query else "a rule body"
         plural = len(self.variables) > 1
+        if not self.occurrences:
+            return (
+                f"In {where}: the variable{'s' if plural else ''} "
+                f"{self._names()} of the head "
+                f"{'do' if plural else 'does'} not occur in the body; "
+                "every variable of the head must appear in the body"
+            )
         return (
             f"In {where}: the variable{'s' if plural else ''} "
             f"{self._names()} {'appear' if plural else 'appears'} only in "
@@ -531,6 +541,12 @@ class UnboundVariablesError(ForbiddenExpressionError):
         )
 
     def _suggestion(self):
+        if not self.occurrences:
+            body = f" ({self.example})" if self.example else ""
+            return (
+                f"Use in the head the variables of the body{body}, or add "
+                f"a predicate over {self._names()} to the body."
+            )
         tip = f"Add a predicate over {self._names()} to the rule body"
         if self.example:
             return f"{tip}, such as {self.example}."

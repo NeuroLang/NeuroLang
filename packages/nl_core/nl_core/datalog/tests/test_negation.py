@@ -296,3 +296,12 @@ def test_a_rule_cannot_define_a_function_of_the_engine():
         match="`gt` is a function of the engine",
     ):
         Datalog().walk(Implication(S_('gt')(x), S_('R')(x) & ~S_('T')(x)))
+
+
+def test_head_variable_missing_from_body_named():
+    dl = Datalog()
+    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        dl.walk(Implication(P(x, y), Q(x) & ~Q(x)))
+    assert exc_info.value.rule == 'P'
+    assert exc_info.value.variables == ('y',)

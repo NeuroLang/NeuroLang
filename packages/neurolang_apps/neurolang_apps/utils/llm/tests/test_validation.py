@@ -43,6 +43,12 @@ def test_valid_queries(nl, query, language):
     ("ans(s) :- mentions(s)", "datalog",
      "mentions has 2 columns, not 1"),
     ("obtain every Mentions (?s).", "squall", "mentions has 2 columns"),
+    # a head variable missing from the body, over a rule (the dry run
+    # once passed it, and the run failed with a KeyError) or a relation
+    ("p(s) :- mentions(s, 'pain')\nans(study) :- p(s)", "datalog",
+     "the variable study of the head does not occur in the body"),
+    ("ans(study) :- mentions(s, 'pain')", "datalog",
+     "Use in the head the variables of the body (s)"),
 ])
 def test_invalid_queries(nl, query, language, message):
     result = check_query(nl, query, language)

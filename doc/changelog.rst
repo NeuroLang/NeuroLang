@@ -404,6 +404,16 @@ Unreleased
   alone, which rarely has a cycle of its own: ``uf(x, "left")`` takes 7 s
   and 0.4 GB, against 12.5 s and 0.65 GB before #1391; ``af`` 14 s
   against 50 s; ``slf_i`` 0.2 GB against 0.5 GB on master.
+- A query whose head has a variable missing from its body, as
+  ``ans(streamline) :- uf(x, "left")`` or ``ans(study) :- both(s)``,
+  raises ``UnboundVariablesError`` naming the variables and those of the
+  body (*Use in the head the variables of the body (x)*). On a predicate
+  defined by rules of ``NeurolangPDL``, it ran without the check and
+  failed with an internal ``KeyError`` of pandas, and the assistant's
+  ``check_query``, a dry run, found it valid; elsewhere it raised *All
+  variables on the consequent need to be on the antecedent*, which named
+  neither the rule nor the variables, as a rule of the program still
+  did.
 
 - AI assistant: an answer given when the ReAct agent ran out of steps,
   the last query that gave rows, says so: its summary reads *Out of steps:
