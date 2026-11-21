@@ -131,9 +131,12 @@ def _restricted(rule, restriction):
 class OneOf:
     """
     Whether its arguments are one of the tuples *rows*: a built-in of a
-    rule's body, as an equality, rather than a relation of the tuples,
-    which the ontology rewriter does not keep in a rule. Its arguments
-    may be columns (``columnwise``): one ``isin`` for all the rows.
+    rule's body, a selection as an equality is, pushed down by the
+    optimiser, rather than a join with a relation of the tuples. Its
+    arguments may be columns (``columnwise``): one ``isin`` for all the
+    rows. Its ``repr`` lists every tuple, so that rules restricted to
+    different tuples print differently (a printed rule is a cache key of
+    the ontology's rewriting).
     """
 
     columnwise = True
