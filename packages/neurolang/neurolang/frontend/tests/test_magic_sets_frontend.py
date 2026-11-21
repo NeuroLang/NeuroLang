@@ -736,3 +736,48 @@ def test_frontend_keeps_the_rewrite_a_similarity_needs(monkeypatch):
     }
     expected = len(similar & {0, 1, 3}) / len(similar)
     assert res.as_pandas_dataframe().p.tolist() == pytest.approx([expected])
+
+
+@pytest.mark.parametrize("close", [
+    "close(s) :- similar_study('a text', s), selected_study(s)\n",
+    "close(s) :- definition('x', q), similar_study(q, s), "
+    "selected_study(s)\n",
+    "text(q) :- definition('x', q)\n"
+    "close(s) :- text(q), similar_study(q, s), selected_study(s)\n",
+])
+def test_frontend_binds_a_similarity_with_a_large_relation(close):
+    """
+    With a stored relation of more than ``[MAGIC_SETS] seed_rows`` tuples,
+    the rewrite is first tried with the bindings of the constants and the
+    heads alone; the query text of ``similar_study`` is still bound,
+    whether it is a constant, read from a stored relation or from a rule
+    (``text``), which binds as the argument ``similar_study`` needs.
+    """
+    nl = NeurolangPDL()
+    studies = range(6)
+    nl.add_tuple_set([(s,) for s in studies], name="study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in studies], name="selected_study"
+    )
+    nl.add_tuple_set([(0, "a"), (1, "a"), (3, "a"), (4, "b")], name="act")
+    nl.add_tuple_set([("x", "a text")], name="definition")
+    nl.add_tuple_set([(s, float(s)) for s in range(200)], name="val")
+    nl.add_tuple_set([("k", -1.0), ("m", 10.0)], name="box")
+    nl.add_symbol(_rank_similarity, name="similarity")
+    nl.execute_datalog_program(
+        "sim(q, s, v) :- study(s) & (v == similarity(q, s))\n"
+        "cutoff(q, percentile(v, 50)) :- sim(q, s, v)\n"
+        "similar_study(q, s) :- sim(q, s, v) & cutoff(q, c) & (v >= c)\n"
+        "above(s, b) :- val(s, v), box(b, w), (v > w)"
+    )
+    res = nl.execute_datalog_program(
+        close + "both(s) :- act(s, 'a'), close(s), above(s, 'k')\n"
+        "ans(p) :- PROB[both(s) // close(s)] = p"
+    )
+    similarities = [_rank_similarity("a text", s) for s in studies]
+    similar = {
+        s for s, v in zip(studies, similarities)
+        if v >= np.percentile(similarities, 50)
+    }
+    expected = len(similar & {0, 1, 3}) / len(similar)
+    assert res.as_pandas_dataframe().p.tolist() == pytest.approx([expected])
