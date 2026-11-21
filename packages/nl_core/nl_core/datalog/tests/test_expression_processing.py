@@ -845,11 +845,13 @@ def test_dependency_matrix_sees_the_constraints_added():
     """
     The predicates of the constraints, kept between the dependency
     matrices of a program, are those of its constraints at each call:
-    one added since is known, in its head or only in its body.
+    one added since is known, in its head or only in its body, as is the
+    head of an existential rule added in place.
     """
-    Q, R, P, W, Z = (S_(n) for n in "QRPWZ")  # noqa: N806
+    Q, R, P, W, Z, V = (S_(n) for n in "QRPWZV")  # noqa: N806
     x = S_('x')
     datalog = DatalogWithConstraints()
+    datalog.add_existential_rules({})
     datalog.walk(DT.walk(B_([Fact(Q(C_(0))), Imp_(R(x), Q(x))])))
     datalog.walk(RightImplication(Q(x), P(x)))
     assert dependency_matrix(datalog)[0] == (R,)
@@ -863,3 +865,9 @@ def test_dependency_matrix_sees_the_constraints_added():
     idb_symbols, matrix = dependency_matrix(datalog)
     assert idb_symbols == (R,)
     assert matrix.sum() == 0
+
+    datalog.walk(DT.walk(B_([Imp_(R(x), V(x))])))
+    with raises(SymbolNotFoundError):
+        dependency_matrix(datalog)
+    datalog.existential_rules[V(x)] = []
+    assert dependency_matrix(datalog)[0] == (R,)

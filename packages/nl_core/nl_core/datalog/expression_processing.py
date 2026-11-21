@@ -551,9 +551,7 @@ def dependency_matrix(datalog, rules=None, instance=None):
     if hasattr(datalog, "constraints"):
         constraints = _constraint_predicates(datalog)
         constraint_symbols = constraints.heads
-        existential_symbols = set(
-            rule.functor for rule in datalog.existential_rules.keys()
-        )
+        existential_symbols = constraints.existential
     else:
         constraints = None
         constraint_symbols = set()
@@ -591,14 +589,18 @@ def dependency_matrix(datalog, rules=None, instance=None):
 class _ConstraintPredicates:
     """
     The predicates of the heads and, read on demand, of the bodies of the
-    constraints *constraints* (a :class:`Union`).
+    constraints *constraints* (a :class:`Union`), and those of the
+    existential rules *existential_rules*.
     """
 
-    def __init__(self, constraints):
+    def __init__(self, constraints, existential_rules):
         self.constraints = constraints
+        self.existential_rules = existential_rules
+        self.existential_count = len(existential_rules)
         self.heads = set(
             formula.consequent.functor for formula in constraints.formulas
         )
+        self.existential = set(rule.functor for rule in existential_rules)
 
     @functools.cached_property
     def bodies(self):
@@ -616,18 +618,25 @@ class _ConstraintPredicates:
 
 def _constraint_predicates(datalog):
     """
-    Return the :class:`_ConstraintPredicates` of the constraints of
-    *datalog*, kept until they change: the chase asks for a dependency
-    matrix at each stratum and for each chase it tries, and the
-    constraints are the same. Adding a constraint puts a new
-    :class:`Union` in the symbol table, which the cache compares by
-    identity.
+    Return the :class:`_ConstraintPredicates` of the constraints and the
+    existential rules of *datalog*, kept until they change: the chase asks
+    for a dependency matrix at each stratum and for each chase it tries,
+    and they are the same. Adding a constraint puts a new :class:`Union`
+    in the symbol table, compared by identity; the existential rules are
+    a dictionary, which the ontology parser extends in place, compared by
+    identity and size.
     """
     constraints = datalog.constraints()
+    existential_rules = datalog.existential_rules
     cached = getattr(datalog, "_constraint_predicates", None)
-    if cached is None or cached.constraints is not constraints:
+    if (
+        cached is None
+        or cached.constraints is not constraints
+        or cached.existential_rules is not existential_rules
+        or cached.existential_count != len(existential_rules)
+    ):
         cached = datalog._constraint_predicates = _ConstraintPredicates(
-            constraints
+            constraints, existential_rules
         )
     return cached
 
