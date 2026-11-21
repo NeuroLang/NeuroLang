@@ -368,13 +368,13 @@ Unreleased
   unrewritten, which computes ``endpoint_anterior_of`` and
   ``posterior_of`` whole: the product of 600 k endpoints, or 300 k
   streamlines, by 285 term boxes. ``ans(x) :- uf(x, "left")`` went past
-  12 GB on ``neurosynth_disconnectome7t``. A program with a rule joining
-  literals that share no variable, one of a stored relation of more than
-  ``[MAGIC_SETS] seed_rows`` tuples, is now first rewritten with the
-  bindings of the constants, the heads and the needed arguments alone,
-  which rarely has a cycle of its own: ``uf(x, "left")`` takes 7 s and
-  0.4 GB, against 12.5 s and 0.65 GB before #1391; ``af`` 15 s against
-  50 s.
+  12 GB on ``neurosynth_disconnectome7t``; ``slf_i`` and ``cst`` fit,
+  but lost their magic sets too. A program reading a stored relation of
+  more than ``[MAGIC_SETS] seed_rows`` tuples is now first rewritten with
+  the bindings of the constants, the heads and the needed arguments
+  alone, which rarely has a cycle of its own: ``uf(x, "left")`` takes 7 s
+  and 0.4 GB, against 12.5 s and 0.65 GB before #1391; ``af`` 14 s
+  against 50 s; ``slf_i`` 0.2 GB against 0.5 GB on master.
 
 - AI assistant: an answer given when the ReAct agent ran out of steps,
   the last query that gave rows, says so: its summary reads *Out of steps:

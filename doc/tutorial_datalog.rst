@@ -650,13 +650,14 @@ completes in about 20 seconds.
     (the WMQL tract bundles have them), the query is solved unrewritten,
     unless it has a predicate bound only through its head, such as
     ``similar_study``, which needs the rewrite. Before either, a program
-    with a rule joining literals that share no variable, one of a large
-    stored relation, as ``endpoint_coord(x, e, 1, v) & term_box_hi(t, h,
-    1, b) & (v > b)`` of the tract vocabulary, is rewritten with the
-    bindings of the constants, of the heads and of the arguments a
-    predicate needs bound alone, the other literals of a body binding
-    nothing, which rarely adds a cycle: that rule, computed whole, is
-    the product of its relations.
+    reading a stored relation of more than ``[MAGIC_SETS] seed_rows``
+    tuples is rewritten with the bindings of the constants, of the heads
+    and of the arguments a predicate needs bound alone, the other
+    literals of a body binding nothing, which rarely adds a cycle:
+    unrewritten, its rules would read all of that relation, such as
+    ``endpoint_anterior_of(x, e, t, h) :- endpoint_coord(x, e, 1, v) &
+    term_box_hi(t, h, 1, b) & (v > b)`` of the tract vocabulary, the
+    product of 600 k endpoints by 285 term boxes.
 
 
 Part 9: The Complete Program

@@ -745,13 +745,13 @@ def magic_rewrite(
     # rewrite kept: unrewritten, the program has no answer (the relation of
     # similarities to a query text can be the magic predicate of its own
     # percentile). Without such predicates, the program is solved
-    # unrewritten. Before either, when a rule of it joins literals sharing
-    # no variable, one of a large stored relation, as
-    # ``endpoint_coord(x, e, 1, v), term_box_hi(t, h, 1, b), v > b``,
-    # whose product is 600 k endpoints by 285 terms in a tractogram, the
-    # program is rewritten with the bindings of the constants, the heads
-    # and the needed arguments alone, which rarely has a cycle of its own
-    # (see LeftToRightSIPS): computed whole, that rule would not fit.
+    # unrewritten. Before either, when the program reads a large stored
+    # relation, it is rewritten with the bindings of the constants, the
+    # heads and the needed arguments alone, which rarely has a cycle of
+    # its own (see LeftToRightSIPS): computed whole, its rules would read
+    # all of that relation, as ``endpoint_anterior_of(x, e, t, h) :-
+    # endpoint_coord(x, e, 1, v), term_box_hi(t, h, 1, b), v > b`` of a
+    # tractogram, 600 k endpoints by 285 term boxes.
     rules = datalog.intensional_database().get(query.functor)
     reachable = reachable_code(getattr(rules, "formulas", ()), datalog)
     recursive = set().union(*recursive_components(reachable.formulas))
@@ -785,7 +785,8 @@ def magic_rewrite(
             bind_from_body
             and isinstance(failure, NewRecursionInMagicSetsRewriteError)
             and any(
-                _joins_a_product(rule, datalog) for rule in reachable.formulas
+                _reads_a_large_relation(rule, datalog)
+                for rule in reachable.formulas
             )
         ):
             unbound, bind_from_body = set(), False
@@ -1151,25 +1152,15 @@ def connected_literals(predicate, literals):
     return [literal for i, literal in enumerate(literals) if i in connected]
 
 
-def _joins_a_product(rule, datalog):
-    """Whether the body of *rule* has positive literals of predicates
-    sharing no variable, directly or through other literals (a literal
-    without variables is a condition, not a factor of a product), one of
-    a stored relation of more than ``[MAGIC_SETS] seed_rows`` tuples."""
-    atoms = [
-        atom for atom, negated in _literals(rule.antecedent)
-        if not negated and isinstance(atom, FunctionApplication)
-        and isinstance(atom.functor, Symbol) and _symbols_of(atom)
-    ]
-    if len(connected_literals(atoms[0], atoms) if atoms else ()) == len(
-        atoms
-    ):
-        return False
+def _reads_a_large_relation(rule, datalog):
+    """Whether the body of *rule* reads a stored relation of more than
+    ``[MAGIC_SETS] seed_rows`` tuples."""
     edb = datalog.extensional_database()
     rows = config.getint("MAGIC_SETS", "seed_rows", fallback=100)
     return any(
-        atom.functor in edb and len(edb[atom.functor].value) > rows
-        for atom in atoms
+        isinstance(atom, FunctionApplication) and atom.functor in edb
+        and len(edb[atom.functor].value) > rows
+        for atom, _ in _literals(rule.antecedent)
     )
 
 

@@ -1319,12 +1319,12 @@ def test_magic_rewrite_stops_at_the_second_cycle_of_its_own(monkeypatch):
     assert len(calls[1]) == 1 and calls[1] <= {Agg, Agg2}
 
 
-def test_magic_rewrite_binds_from_constants_a_product_in_a_cycle_of_its_own():
+def test_magic_rewrite_binds_from_constants_a_large_relation_in_a_cycle():
     """
     As in the bundles of tracts (``uf``), the program of shared call sites
     reads ``Above``, the product of ``EV``, a stored relation of more
     than ``[MAGIC_SETS] seed_rows`` tuples, and ``Box`` restricted by a
-    comparison: computed whole, it is all the pairs of their rows. The
+    comparison: unrewritten, it is all the pairs of their rows. The
     rewrite with the bindings of the literals has a cycle of its own; the
     one with the bindings of the constants and the head alone has none,
     binds ``Above`` to its box ``a``, and gives the program's answer.

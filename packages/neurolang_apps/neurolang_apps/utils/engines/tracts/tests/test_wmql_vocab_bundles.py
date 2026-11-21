@@ -78,7 +78,8 @@ def test_a_bundle_with_endpoint_boxes_is_solved_bound(files, monkeypatch):
     """``uf`` reads ``endpoint_anterior_of``, the product of the endpoints
     and the boxes of the terms: whole, 600 k endpoints by 285 terms on the
     Disconnectome tractogram, beyond 12 GB. Its rewrite with the bindings
-    of the literals has a cycle of its own; the query is still rewritten,
+    of the literals has a cycle of its own; the query is still rewritten
+    (it reads the large stored relations of the tractogram),
     with ``endpoint_anterior_of`` bound to the term ``amygdala``, not
     solved unrewritten."""
     from nl_core.datalog import magic_sets
@@ -107,6 +108,9 @@ def test_a_bundle_with_endpoint_boxes_is_solved_bound(files, monkeypatch):
     assert anterior and all(
         "^ffbb" in head.functor.name for head in anterior
     )
+    with nl.scope:
+        nl.execute_datalog_program('ans(x) :- slf_i(x, "left")')
+    assert rewrites[-1] is not None  # traverses alone, as since #1391
     with nl.scope:
         uncinate = nl.execute_datalog_program('ans(x) :- uncinate(x, "left")')
     assert set(uf.as_pandas_dataframe().x) == set(
