@@ -72,13 +72,16 @@ class _Tensor:
     """
 
     def __init__(
-        self, groups, codes=None, values=None, matrix=None, by_columns=None
+        self, groups, codes=None, values=None, matrix=None, by_columns=None,
+        sums=None,
     ):
         self.groups = tuple(groups)
         self.matrix = matrix
         # the matrix (an engine's view, as it is) by its column entities,
-        # a ColumnIndex; a tensor computed from it has none
+        # a ColumnIndex, and the sums of its entries by row and by column
+        # entity (SparseView.sums); a tensor computed from it has neither
         self.by_columns = by_columns
+        self.sums = sums
         self._codes, self._values = codes, values
 
     def _entries(self):
@@ -147,6 +150,7 @@ class _Evaluation:
                 (self.group_of[rows[0]], self.group_of[columns[0]]),
                 matrix=view.weighted(),
                 by_columns=getattr(view, "by_columns", None),
+                sums=getattr(view, "kept_sums", None),
             )
         frame = self.frames[id(factor)]
         groups = self.groups(factor.axes)
@@ -276,7 +280,16 @@ class _Evaluation:
             return None
         codes, values = vector.codes[0], vector.values
         rows = held.matrix
-        if held.groups[0] == group and rows.format == "csr" and _few(
+        if (
+            held.sums is not None and len(codes) == self.size(group)
+            and np.all(values == values[0])
+        ):
+            # the same number for every entity of the group: the view's
+            # sums over it, kept with it, rather than the view read
+            out = values[0] * held.sums[
+                "columns" if held.groups[0] == group else "rows"
+            ]
+        elif held.groups[0] == group and rows.format == "csr" and _few(
             np.diff(rows.indptr)[codes].sum(), rows.nnz
         ):
             # a few rows (the voxels of an image) read alone, not the

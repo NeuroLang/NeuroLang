@@ -631,10 +631,13 @@ class EmbeddingIndex:
         self.cache_path = None if cache_path is None else Path(cache_path)
         self._matrix = None
         self._positions = None
+        self._id_index = None
         # Per-index caches, which live and die with the index: the
         # similarities to the 16 most recent queries, and the embeddings
         # of the 4096 most recent query texts (3 kB each), so that a rule
         # over many texts, whose rows come in any order, embeds each once.
+        # The embeddings of query texts are also kept on disk, next to
+        # the documents' (see :meth:`_query_vector`).
         self.similarities = lru_cache(maxsize=16)(self._similarities)
         self.query_vector = lru_cache(maxsize=4096)(self._query_vector)
 
@@ -704,7 +707,35 @@ class EmbeddingIndex:
         os.replace(tmp, self.cache_path)
 
     def _query_vector(self, query):
-        return _normalise(self.encoder.encode_query(query)[None])[0]
+        """
+        The normalised embedding of the text *query*, kept, when the index
+        has a ``cache_path``, as a file of the directory ``<cache_path
+        stem>.queries`` named by the encoder and the text: a process
+        reads it rather than embedding the text again (0.4 s a text with
+        the numpy encoder: the 21 definitions of the concepts under
+        'memory', 8 s of a query of tracts in each new process). A file
+        that cannot be read or written only means the text is embedded.
+        """
+        path = None
+        if self.cache_path is not None:
+            name = hashlib.sha256(
+                f"{self.encoder.cache_key}\0{query}".encode()
+            ).hexdigest()[:32]
+            path = self.cache_path.with_suffix(".queries") / f"{name}.npy"
+            try:
+                return np.load(path)
+            except (OSError, ValueError):
+                pass
+        vector = _normalise(self.encoder.encode_query(query)[None])[0]
+        if path is not None:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = path.with_name(f"{path.stem}.{os.getpid()}.tmp.npy")
+                np.save(tmp, vector, allow_pickle=False)
+                os.replace(tmp, path)
+            except OSError:
+                pass
+        return vector
 
     def scores(self, query):
         """Cosine similarity of each document, in ``ids`` order, to a query."""
@@ -719,6 +750,27 @@ class EmbeddingIndex:
         if i is None:
             return float("nan")
         return float(self.matrix[i] @ self.query_vector(query))
+
+    def similarity_of_columns(self, queries, docs):
+        """
+        The cosine similarities of the documents *docs* to the query texts
+        *queries*, two arrays of a value a row (``nan`` where the document
+        is not in the index), as :meth:`similarity` gives them one by one:
+        for each distinct text, one product of its documents' embeddings
+        by its own.
+        """
+        import pandas as pd
+
+        if self._id_index is None:
+            self._id_index = pd.Index(self.ids)
+        positions = self._id_index.get_indexer(np.asarray(docs))
+        out = np.full(len(positions), np.nan)
+        codes, texts = pd.factorize(np.asarray(queries, dtype=object))
+        for code, text in enumerate(texts):
+            _check_query(text)
+            rows = (codes == code) & (positions >= 0)
+            out[rows] = self.matrix[positions[rows]] @ self.query_vector(text)
+        return out
 
     def _similarities(self, query):
         # Read-only mapping from document id to similarity, so that the
@@ -772,17 +824,32 @@ def make_similarity_function(index, id_type=None):
         id_type = type(index.ids[0]) if index.ids else str
 
     def query_similarity(query, doc):
-        if not isinstance(query, str):
-            raise TypeError(
-                f"query_similarity(query, doc) takes the query text first: "
-                f"got {query!r} as the query"
+        if np.ndim(query) or np.ndim(doc):
+            return index.similarity_of_columns(
+                np.broadcast_to(np.asarray(query, dtype=object),
+                                np.shape(doc) or np.shape(query)),
+                np.broadcast_to(doc, np.shape(doc) or np.shape(query)),
             )
+        _check_query(query)
         return index.similarity(query, doc)
 
     query_similarity.__annotations__ = {
         "query": str, "doc": id_type, "return": float
     }
+    # Its arguments may be the columns of a relation: computed on them
+    # at once, a dot product of the documents for each distinct text,
+    # not a call a row (300 000 for the definitions of the concepts
+    # under 'memory' and the studies of neurosynth).
+    query_similarity.columnwise = True
     return query_similarity
+
+
+def _check_query(query):
+    if not isinstance(query, str):
+        raise TypeError(
+            f"query_similarity(query, doc) takes the query text first: "
+            f"got {query!r} as the query"
+        )
 
 
 def make_cutoff_function(index, gate=0.75, percentile=95, top=20):
@@ -803,8 +870,15 @@ def make_cutoff_function(index, gate=0.75, percentile=95, top=20):
 
     # A plain function, as NeuroLang types it from its annotations.
     def query_similarity_cutoff(query: str) -> float:
+        if np.ndim(query):
+            import pandas as pd
+
+            codes, texts = pd.factorize(np.asarray(query, dtype=object))
+            return np.array([cutoff(text) for text in texts])[codes]
         return cutoff(query)
 
+    # Its argument may be a column: each distinct text is read once.
+    query_similarity_cutoff.columnwise = True
     return query_similarity_cutoff
 
 

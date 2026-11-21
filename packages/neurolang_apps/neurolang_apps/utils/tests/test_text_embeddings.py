@@ -348,6 +348,41 @@ def test_similarity_function():
     assert index.encoder.query_calls == 1
 
 
+def test_similarity_function_of_columns(index):
+    """Given columns, the similarities are those given one row at a time,
+    nan for a document not in the index; the cutoff of a column, that of
+    each text."""
+    query_similarity = te.make_similarity_function(index)
+    queries = np.array(["visual word reading", "motor hand"] * 3, dtype=object)
+    docs = np.array([1, 2, 3, 4, 5, 2])
+    columns = query_similarity(queries, docs)
+    rows = [query_similarity(q, int(d)) for q, d in zip(queries, docs)]
+    np.testing.assert_allclose(columns, rows, rtol=1e-6)
+    assert np.isnan(columns[4])
+    assert index.encoder.query_calls == 2
+    cutoff = te.make_cutoff_function(index, gate=0)
+    np.testing.assert_array_equal(
+        cutoff(queries), [cutoff(str(q)) for q in queries]
+    )
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_similarity_computed_on_columns(frontend, index, monkeypatch):
+    """A rule computes the similarities of its rows at once, not with a
+    call a row."""
+    monkeypatch.setattr(
+        index, "similarity",
+        lambda *args: pytest.fail("similarity called for one row"),
+    )
+    nl = _engine(frontend, index)
+    res = nl.execute_datalog_program(
+        "ans(s, sim) :- study(s) & "
+        "(sim == query_similarity('visual word reading', s))"
+    )
+    scores = index.scores("visual word reading")
+    assert dict(res) == pytest.approx(dict(zip(index.ids, scores)))
+
+
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
 def test_similarity_function_with_constant_query(frontend, index):
     nl = _engine(frontend, index)
@@ -470,6 +505,30 @@ def test_similarity_function_encodes_each_query_once(index):
     assert index.encoder.query_calls == 40
 
 
+def test_query_embeddings_kept_on_disk(tmp_path):
+    """A query text embedded by one index is read, not embedded again, by
+    another of the same cache (another process); not by one of another
+    encoder; nor without a cache."""
+    def index(encoder, cache="idx.npz"):
+        return te.EmbeddingIndex(
+            [1, 2, 3, 4], load_documents, encoder,
+            None if cache is None else tmp_path / cache,
+        )
+
+    first = index(FakeEncoder())
+    expected = first.scores("reading words")
+    again = index(FakeEncoder())
+    np.testing.assert_allclose(again.scores("reading words"), expected)
+    assert again.encoder.query_calls == 0
+    other = FakeEncoder()
+    other.cache_key = "another-encoder"
+    index(other).query_vector("reading words")
+    assert other.query_calls == 1
+    uncached = index(FakeEncoder(), cache=None)
+    uncached.query_vector("reading words")
+    assert uncached.encoder.query_calls == 1
+
+
 def test_similarity_function_is_lazy(tmp_path):
     def fail(keys):
         raise AssertionError("texts loaded too early")
@@ -507,6 +566,9 @@ class CountingScores:
 
     def similarity(self, query, doc):
         return float(self.scores(query)[doc])
+
+    def similarity_of_columns(self, queries, docs):
+        return np.array([self.similarity(q, d) for q, d in zip(queries, docs)])
 
 
 def _similar_study_engine(index, gate):
