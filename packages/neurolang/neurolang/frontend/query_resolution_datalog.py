@@ -546,17 +546,18 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.program_ir.symbol_table = self.symbol_table.enclosing_scope
 
     @staticmethod
-    def _restricted_rules(rules, goals, readers=()):
+    def _restricted_rules(rules, goals, readers=(), kept=()):
         """
         Return the Union of *rules* of the *goals*, the predicates read
         with constants alone computed for them (see
         :func:`~nl_core.datalog.constant_restriction.restrict_to_constants_used`):
         the vocabulary of tract queries that magic sets leave unbound.
-        *readers* are other rules reading them, not restricted.
+        *readers* are other rules reading them, not restricted; the
+        predicates *kept*, as those of the goals, are not restricted.
         """
         return logic.Union(restrict_to_constants_used(
             rules.formulas, readers,
-            kept=(goal.consequent.functor for goal in goals),
+            kept=(*kept, *(goal.consequent.functor for goal in goals)),
             max_copies=config.getint("MAGIC_SETS", "constant_copies"),
         ))
 

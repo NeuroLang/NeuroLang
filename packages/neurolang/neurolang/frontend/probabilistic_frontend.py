@@ -1227,10 +1227,24 @@ class NeurolangPDL(QueryBuilderDatalog):
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         postprob_idb = idbs.get("post_probabilistic", Union(tuple()))
         if query is not None:
+            readers, kept = prob_idb.formulas + postprob_idb.formulas, ()
+            if "__constraints__" in self.symbol_table:
+                # the ontology's constraints rewrite the deterministic
+                # rules, and its connector's rules are added to them
+                # (_solve_deterministic_stratum): neither is restricted
+                kept = self.program_ir.constraints()._symbols
+                if hasattr(self, "connector_symbol"):
+                    readers += tuple(
+                        rule for rule in get_list_of_intensional_rules(
+                            self.program_ir
+                        )
+                        if self.connector_symbol.expression
+                        in rule.antecedent._symbols
+                    )
             det_idb = self._restricted_rules(
                 det_idb,
                 query if isinstance(query, (list, tuple)) else (query,),
-                prob_idb.formulas + postprob_idb.formulas,
+                readers, kept,
             )
         if stratum_solver is None:
             stratum_solver = self._stratum_solver(show_ra_options(show_ra))
