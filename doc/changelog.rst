@@ -210,6 +210,15 @@ Unreleased
 
 **Performance:**
 
+- ``uses(s) :- ri_task(t), skos:definition(t, d), similar_study(d, s)``
+  computes ``similar_study`` for the definitions of ``ri_task`` alone, as
+  fast as with ``skos:definition`` in a rule of its own: magic sets put
+  ``skos:definition``, which binds ``d``, ahead of ``ri_task``, and the
+  similarity was computed for every definition of the ontology (more
+  than 300 s on the engine neurosynth). The rules sharing the variables
+  of such a stored relation now bind before it, and the literals needing
+  them after it.
+
 - A choice over a few rows of an engine's view (the voxels of an image) by
   the view reads those rows alone, and a vector over a few of its columns
   reads them through the view's index by column entities, rather than the

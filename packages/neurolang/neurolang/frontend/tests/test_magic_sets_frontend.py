@@ -473,7 +473,7 @@ def _lower(text: str) -> str:
     return text.lower()
 
 
-def _similar_study_engine(frontend=NeurolangPDL):
+def _similar_study_engine(frontend=NeurolangPDL, similarity=None):
     """
     The ``similar_study`` of the engine neurosynth, its similarity a stub:
     its text ``q`` is bound only through its head, by the rules using it.
@@ -489,7 +489,9 @@ def _similar_study_engine(frontend=NeurolangPDL):
     nl.add_tuple_set(
         [(0, "a"), (1, "a"), (3, "a"), (4, "b")], name="act"
     )
-    nl.add_symbol(_rank_similarity, name="query_similarity")
+    nl.add_symbol(
+        similarity or _rank_similarity, name="query_similarity"
+    )
     nl.add_symbol(lambda q: .5, name="query_similarity_cutoff")
     nl.add_symbol(_lower, name="lcase")
     nl.execute_datalog_program(
@@ -529,6 +531,46 @@ def test_frontend_similar_study_bound_from_its_rule_body(frontend, program):
         program + "\nans(count(s)) :- uses(s)"
     )
     assert res.as_pandas_dataframe().values.tolist() == [[4]]
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+@pytest.mark.parametrize("body", [
+    "task(t), definition(t, d), similar_study(d, s)",
+    "definition(t, d), task(t), similar_study(d, s)",
+    "similar_study(d, s), definition(t, d), task(t)",
+    # the constant binds first, and restricts task
+    "task(t), term(t, 'stroop task'), definition(t, d), "
+    "similar_study(d, s)",
+])
+def test_frontend_similar_study_bound_after_the_rule_restricting_it(
+    frontend, body
+):
+    """
+    ``definition(t, d)`` binds the text of ``similar_study`` after
+    ``task(t)``, a rule without a constant, restricts ``t``: the
+    similarity is computed for the stroop task's text alone, not for
+    every definition (``similar_study`` was seeded with every text of
+    ``definition``, put first).
+    """
+    texts = set()
+
+    def query_similarity(text: str, study: int) -> float:
+        texts.add(text)
+        return _rank_similarity(text, study)
+
+    nl = _similar_study_engine(frontend, query_similarity)
+    nl.add_tuple_set(
+        [("t1", "a text"), ("t2", "another text")] +
+        [(f"u{i}", f"unrelated text {i}") for i in range(20)],
+        name="definition",
+    )
+    res = nl.execute_datalog_program(
+        "task(t) :- term(t, 'stroop task')\n"
+        f"uses(s) :- {body}\n"
+        "ans(count(s)) :- uses(s)"
+    )
+    assert res.as_pandas_dataframe().values.tolist() == [[4]]
+    assert texts == {"a text"}
 
 
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
