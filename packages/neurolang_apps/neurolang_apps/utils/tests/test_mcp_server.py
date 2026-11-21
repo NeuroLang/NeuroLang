@@ -527,7 +527,8 @@ class TestLimits:
 
         calls = []
 
-        def stopped(nl, text, language, rows, engine, timeout, memory, cells):
+        def stopped(nl, text, language, rows, engine, timeout, memory, cells,
+                    hint):
             calls.append((text, timeout, memory, cells))
             return Preview(False, "The query ran for more than 7 s and was "
                            "stopped: restrict it.")
@@ -544,6 +545,35 @@ class TestLimits:
         ]
         text = session.repl("older(n) :- person(n, a), (a > 4)\n.predicates")
         assert "older" in text and len(calls) == 1  # no query: no preview
+
+    def test_the_time_limits_are_the_engine_s_unless_given(
+        self, tmp_path, monkeypatch
+    ):
+        from neurolang_apps.utils import mcp_server
+
+        engine = {"assistant_query_timeout": 300,
+                  "assistant_check_timeout": 180,
+                  "assistant_timeout_guidance": "One bundle."}
+        monkeypatch.setattr(mcp_server, "engine_config", lambda name: engine)
+        calls = []
+
+        def stopped(nl, text, language, rows, engine, timeout, memory, cells,
+                    hint):
+            calls.append((timeout, hint))
+            return mcp_server.validation.Preview(False, "stopped")
+
+        monkeypatch.setattr(mcp_server, "run_preview", stopped)
+        session = McpSession("tracts", _engine, results_dir=tmp_path)
+        assert (session.config.query_timeout,
+                session.config.check_timeout) == (300, 180)
+        session.repl("ans(n) :- person(n, a)")
+        assert calls == [(300, "One bundle.")]
+        given = McpSession(
+            "tracts", _engine, results_dir=tmp_path,
+            config=AssistantConfig(query_timeout=7),
+        )
+        assert (given.config.query_timeout,
+                given.config.check_timeout) == (7, 180)
 
     def test_a_repl_query_is_shown_not_run_again(self, session):
         text = session.repl("ans(n) :- person(n, a), (a > 4)")

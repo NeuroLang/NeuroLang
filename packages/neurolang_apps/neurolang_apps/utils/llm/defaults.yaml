@@ -2,6 +2,9 @@
 # the settings a configuration file does not give. They are read by
 # config.py, the one place they are written; llm.example.yaml and
 # doc/query_assistant.rst quote them, which the tests check.
+# query_timeout and check_timeout are the defaults of the engines that
+# give none (assistant_query_timeout... in engines.yaml): a value of the
+# configuration file wins over the engine's.
 
 # Each provider of the file.
 provider:
@@ -20,6 +23,7 @@ assistant:
   timeout: 60.0           # seconds per LLM request
   preview_rows: 10        # rows of a result shown to the model
   query_timeout: 30.0     # seconds a query the agent runs may take
+  check_timeout: 120.0    # seconds the dry run checking a query may take
   query_memory_mb: 4096.0 # memory a query the agent runs may take
   verify_rounds: 1        # ReAct: final answers its check may reject
   comment_rules: true     # one more request: a comment line on each rule

@@ -208,6 +208,15 @@ may specify the following keys, all of them optional:
   many"), activation as a peak within ``kernel_radius_mm`` of a point in MNI
   millimetres, the Destrieux atlas for the classical anatomy of the
   cortex and the Schaefer and Tian atlases for the functional anatomy
+- ``assistant_query_timeout`` and ``assistant_check_timeout`` — the
+  seconds a query the LLM query assistant runs, and the dry run checking
+  it, may take on the engine, unless the ``query_timeout`` and
+  ``check_timeout`` of ``llm.yaml`` set them; without them, the defaults
+  (30 and 120 s, see :doc:`query_assistant`).  ``tracts``, and so every
+  engine with tractography, gives 300 and 300 s
+- ``assistant_timeout_guidance`` — the advice following the message of a
+  query, or of its check, the assistant stopped at its time limit: on
+  ``tracts``, to query one bundle at a time, bound first
 - ``examples`` — example queries, as lists under ``datalog`` and
   ``squall``; the interactive REPL suggests the first one of its language
   at startup and lists them all in ``.help`` (by default it suggests
@@ -615,7 +624,8 @@ built-in engines keep there
 
 - ``<engine>/examples.yaml``: the queries the REPL shows (``examples``)
   and the questions of the query assistant (``assistant_examples``);
-- ``<engine>/guidance.yaml``: the ``assistant_guidance``.
+- ``<engine>/guidance.yaml``: the ``assistant_guidance`` (and the
+  ``assistant_timeout_guidance``).
 
 ``structural_connectivity/`` and ``functional_connectivity/`` hold those
 of the structural and of the resting-state functional connectivity, which

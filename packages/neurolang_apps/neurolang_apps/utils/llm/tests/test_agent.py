@@ -733,3 +733,224 @@ def test_the_refinement_leaves_out_what_is_not_known(nl):
     assert "# Previous question" not in message
     assert "# What happened when it ran" not in message
     assert f"# Previous Datalog query\n{PAIN_DATALOG}" in message
+
+
+def test_a_refusal_is_asked_again_once(nl):
+    from ..providers import LLMRefusal
+
+    class Refusing(ScriptedClient):
+        def complete(self, messages, tools=None, temperature=0.0):
+            reply = super().complete(messages, tools, temperature)
+            if reply.text == "refused":
+                raise LLMRefusal("fake: the model's safeguards declined")
+            return reply
+
+    final = (
+        'Action: final_answer\nAction Input: {"query": "%s"}' % PAIN_DATALOG
+    )
+    react = ReactAgent(
+        nl, provider(), assistant_config(), "datalog",
+        client=Refusing(["refused", final]),
+    )
+    result = react.run("Which studies mention pain?")
+    assert result.valid and result.query == PAIN_DATALOG
+    assert result.calls == 2
+    twice = ReactAgent(
+        nl, provider(), assistant_config(), "datalog",
+        client=Refusing(["refused", "refused"]),
+    )
+    with pytest.raises(LLMRefusal):
+        twice.run("Which studies mention pain?")
+
+
+def _stub_engine(monkeypatch, config):
+    """Register the engine ``stub`` of configuration *config*."""
+    from neurolang_apps.utils import engine_registry
+
+    monkeypatch.setattr(
+        engine_registry, "list_engine_names", lambda: ["stub"]
+    )
+    monkeypatch.setattr(
+        engine_registry, "get_engine_config", lambda *a: dict(config)
+    )
+
+
+STUB_TRACTS = {
+    "assistant_query_timeout": 300, "assistant_check_timeout": 180,
+    "assistant_timeout_guidance": "Restrict it to one   bundle.\n",
+}
+
+
+def test_the_agent_takes_the_time_limits_of_its_engine(nl, monkeypatch):
+    _stub_engine(monkeypatch, STUB_TRACTS)
+    react = ReactAgent(
+        nl, provider(), assistant_config(), "datalog", engine_name="stub",
+        client=ScriptedClient([]),
+    )
+    assert (react.config.query_timeout, react.config.check_timeout) == (
+        300, 180
+    )
+    given = ReactAgent(
+        nl, provider(), assistant_config(query_timeout=30), "datalog",
+        engine_name="stub", client=ScriptedClient([]),
+    )
+    assert (given.config.query_timeout, given.config.check_timeout) == (
+        30, 180
+    )
+
+
+def _slow(monkeypatch, dry_run):
+    """Make the dry runs of the queries, if *dry_run*, or else their runs,
+    hang."""
+    import time
+
+    from .. import validation
+
+    execute = validation._execute
+
+    def slow(nl, text, language, **options):
+        while options["dry_run"] == dry_run:
+            time.sleep(0.01)
+        return execute(nl, text, language, **options)
+
+    monkeypatch.setattr(validation, "_execute", slow)
+
+
+@pytest.mark.parametrize("tool", ["check_query", "run_query", "final_answer"])
+def test_a_check_too_slow_is_stopped_with_the_engine_s_hint(
+    nl, monkeypatch, tool
+):
+    _slow(monkeypatch, dry_run=True)
+    toolbox = Toolbox(
+        EngineContext(nl), "datalog", query_timeout=30, check_timeout=0.3,
+        timeout_hint=STUB_TRACTS["assistant_timeout_guidance"],
+    )
+    observation, final = toolbox.call(tool, {"query": PAIN_DATALOG})
+    assert final is None
+    assert "Checking the query" in observation
+    assert "more than 0 s and was stopped" in observation
+    assert "stopped: the program is too large" in observation
+    assert "joins.\nRestrict it to one bundle." in observation
+
+
+def test_a_query_too_slow_is_stopped_with_the_engine_s_hint(nl, monkeypatch):
+    _slow(monkeypatch, dry_run=False)
+    _stub_engine(monkeypatch, {**STUB_TRACTS, "assistant_query_timeout": 0.3})
+    steps = []
+    run = 'Action: run_query\nAction Input: {"query": "%s"}' % PAIN_DATALOG
+    react = ReactAgent(
+        nl, provider(), assistant_config(max_steps=1), "datalog",
+        engine_name="stub", client=ScriptedClient([run]),
+        on_step=steps.append,
+    )
+    react.run("Which studies mention pain?")
+    assert steps[0].observation == (
+        "The query ran for more than 0 s and was stopped: restrict it with "
+        "constants or joins before running it again.\n"
+        "Restrict it to one bundle."
+    )
+
+
+def test_the_engines_with_tractography_have_longer_time_limits():
+    from neurolang_apps.utils import engine_registry
+
+    from ..agent import engine_config
+    from ..config import AssistantConfig, for_engine
+
+    tracts = [
+        name for name in engine_registry.list_engine_names()
+        if "tracts" in name or "iit" in name or "disconnectome7t" in name
+    ]
+    assert {"neurosynth_iit", "neurostore_iit", "neurosynth_tracts",
+            "neurosynth_disconnectome7t", "tracts"} <= set(tracts)
+    for name in tracts:
+        config = for_engine(AssistantConfig(), engine_config(name))
+        assert (config.query_timeout, config.check_timeout) == (300, 300)
+        assert "one bundle" in engine_config(name)[
+            "assistant_timeout_guidance"]
+    plain = for_engine(AssistantConfig(), engine_config("neurosynth"))
+    assert plain.query_timeout < 300
+    assert "assistant_timeout_guidance" not in engine_config("neurosynth")
+
+
+def test_the_docs_quote_the_time_limits():
+    from pathlib import Path
+
+    from ..agent import engine_config
+    from ..config import DEFAULTS
+
+    doc = Path(__file__).parents[6] / "doc"
+    if not doc.exists():  # not a checkout
+        return
+    query, check = (
+        f"{DEFAULTS['assistant'][name]:g}"
+        for name in ("query_timeout", "check_timeout")
+    )
+    tracts = engine_config("tracts")
+    tract_query, tract_check = (
+        f"{tracts[name]:g}"
+        for name in ("assistant_query_timeout", "assistant_check_timeout")
+    )
+    assistant = " ".join((doc / "query_assistant.rst").read_text().split())
+    assert f"{query} s for a run, {check} s for a check" in assistant
+    assert f"give {tract_query} s for a run and {tract_check} s" in assistant
+    assert f"({tract_query} s for a run on the engines" in assistant
+    engines = " ".join((doc / "engine_configuration.rst").read_text().split())
+    assert f"the defaults ({query} and {check} s" in engines
+    assert f"gives {tract_query} and {tract_check} s" in engines
+    changelog = " ".join((doc / "changelog.rst").read_text().split())
+    assert f"the defaults ({query} and {check} s)" in changelog
+    assert f"give {tract_query} and {tract_check} s" in changelog
+
+
+# The program of Fig. 2b of the paper for one bundle: the left uncinate's
+# pairs of Schaefer parcels, then the lift of their co-activation in the
+# studies mentioning language.
+ONE_BUNDLE_2B = """bundle(x) :- uf(x, "left")
+end_near(x, e, n) :- bundle(x), endpoint_point(x, e, ex, ey, ez), \
+schaefer_points(mx, my, mz, n), (EUCLIDEAN(ex, ey, ez, mx, my, mz) <= 3)
+joined(m, n) :- end_near(x, 0, m), end_near(x, 1, n), (m != n)
+coactive(s) :- joined(m, n), schaefer_activated(m, s), \
+schaefer_activated(n, s)
+language(s) :- mentions(s, 'language')
+active(s) :- coactive(s), selected_study(s)
+lang(s) :- language(s), selected_study(s)
+p1(PROB) :- active(s) // lang(s)
+p0(PROB) :- active(s)
+ans(p, q, r) :- p1(p), p0(q), (r == log(p / q))
+"""
+
+
+@pytest.mark.slow
+def test_a_bundle_program_runs_within_the_limits_of_neurosynth_iit():
+    """On the data of ~/neurolang_data (4 GB of memory): the final
+    answer of a single-bundle program of Fig. 2b is checked and run within
+    the time limits of the engine."""
+    import time
+    from pathlib import Path
+
+    from neurolang_apps.utils import engine_registry
+
+    from ..agent import engine_config
+    from ..config import AssistantConfig, for_engine
+
+    data = Path.home() / "neurolang_data"
+    if not (data / "neurosynth_iit").exists():  # not downloaded here
+        pytest.skip(f"no neurosynth_iit data in {data}")
+    try:
+        nl = engine_registry.build_engine("neurosynth_iit", data, 2.0)
+    except Exception as e:  # no data, offline
+        pytest.skip(f"cannot build neurosynth_iit: {e!r}")
+    config = for_engine(AssistantConfig(), engine_config("neurosynth_iit"))
+    toolbox = Toolbox(
+        EngineContext(nl, "neurosynth_iit"), "datalog", 10,
+        config.query_timeout, config.query_memory_mb,
+        check_timeout=config.check_timeout,
+    )
+    start = time.monotonic()
+    observation, final = toolbox.call(
+        "final_answer", {"query": ONE_BUNDLE_2B}
+    )
+    seconds = time.monotonic() - start
+    assert final is not None, observation
+    assert seconds < config.check_timeout + config.query_timeout

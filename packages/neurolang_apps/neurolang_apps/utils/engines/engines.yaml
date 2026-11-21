@@ -1300,6 +1300,20 @@ engines:
     # of the ids x and the hooks of .view, over what the commands load;
     # .index_tracts finds the atlases of the engine, loaded after it
     python_init: "neurolang_apps.utils.engines.tracts.frontend"
+    # The time limits of the query assistant on the engines with
+    # tractography, in seconds, over its defaults (30 and 120 s, llm/
+    # defaults.yaml), which a value of llm.yaml wins over (see
+    # doc/query_assistant.rst). Measured on neurosynth_iit at 2 mm
+    # (experiments of Fig. 2b): a query joining a bundle to the parcels it
+    # ends in takes 14-23 s with one bundle bound first, 39-192 s over 8 to
+    # 13 bundles (260 s on a loaded machine), 46-124 s for the whole
+    # program of Fig. 2b; 300 s lets all of these run, and was the limit
+    # with which the assistant answered. The dry run of check_query
+    # rewrites the 40-rule program of Fig. 2b in 76-133 s, and in 150 to
+    # more than 180 s on a loaded machine; a check precedes each run and
+    # final answer, so 300 s too.
+    assistant_query_timeout: 300
+    assistant_check_timeout: 300
     acknowledgements:
       - >-
         The bundles (bundles/*.dl), tract_querier's queries: Wassermann D,

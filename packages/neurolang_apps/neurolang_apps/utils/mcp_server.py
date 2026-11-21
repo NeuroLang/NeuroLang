@@ -49,9 +49,11 @@ from neurolang_apps.utils.llm import (
     AgentResult, AssistantConfig, Previous, ProviderConfig, make_agent,
     prompts,
 )
-from neurolang_apps.utils.llm.agent import Toolbox
+from neurolang_apps.utils.llm.agent import Toolbox, engine_config
 from neurolang_apps.utils.llm.comments import commented_query, split_rules
-from neurolang_apps.utils.llm.config import _assistant, config_path
+from neurolang_apps.utils.llm.config import (
+    _assistant, config_path, for_engine,
+)
 from neurolang_apps.utils.llm.examples import load_examples, select_examples
 from neurolang_apps.utils.llm import validation
 from neurolang_apps.utils.llm.validation import run_preview
@@ -229,10 +231,14 @@ class McpSession:
         if *lazy*, at the first tool call, then run the *initial_program*
         in the session of the REPL on it; or serve the session *repl*, as
         given. The assistant's settings *config*, such as the time and
-        memory a query may take, are the defaults if None.
+        memory a query may take, are the defaults if None; the time limits
+        they leave None are the engine's (see :func:`~.llm.config.for_engine`).
         """
         self.engine = engine
-        self.config = config or AssistantConfig()
+        self.engine_config = engine_config(engine)
+        self.config = for_engine(
+            config or AssistantConfig(), self.engine_config
+        )
         self.store = ResultStore(results_dir, keep_days, token_bytes)
         self.answers: dict = {}
         self._question = ""
@@ -301,6 +307,10 @@ class McpSession:
             **_without_left_out(app),
         )
 
+    def _timeout_hint(self) -> str:
+        """The engine's advice on a query stopped at its time limit."""
+        return self.engine_config.get("assistant_timeout_guidance", "")
+
     def _tools(self, repl) -> Toolbox:
         """The assistant's tools of the question, or new ones if none was
         asked."""
@@ -309,6 +319,7 @@ class McpSession:
             self._toolbox = Toolbox(
                 self._agent(repl).context, LANGUAGE, config.preview_rows,
                 config.query_timeout, config.query_memory_mb, MAX_CELLS,
+                config.check_timeout, self._timeout_hint(),
             )
         return self._toolbox
 
@@ -517,7 +528,7 @@ class McpSession:
         config = self.config
         preview = run_preview(
             app._nl, part, LANGUAGE, 0, self.engine, config.query_timeout,
-            config.query_memory_mb, MAX_CELLS,
+            config.query_memory_mb, MAX_CELLS, self._timeout_hint(),
         )
         if not preview.ok or (
             preview.frames is None and preview.frame is not None

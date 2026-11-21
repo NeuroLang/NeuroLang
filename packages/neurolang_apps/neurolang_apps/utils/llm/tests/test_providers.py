@@ -7,6 +7,7 @@ import pytest
 from ..config import ProviderConfig
 from ..providers import (
     LLMError,
+    LLMRefusal,
     ToolCall,
     make_client,
     render_conversation,
@@ -352,6 +353,30 @@ def test_command_client_errors():
     ))
     with pytest.raises(LLMError, match="command not found"):
         missing.complete(CONVERSATION[:2])
+
+
+@pytest.mark.parametrize("api, body", [
+    ("anthropic", {"content": [], "stop_reason": "refusal",
+                   "stop_details": {"type": "refusal", "category": None}}),
+    ("openai", {"choices": [{"finish_reason": "content_filter",
+                             "message": {"content": None}}]}),
+    ("openai", {"choices": [{"finish_reason": "stop", "message": {
+        "content": None, "refusal": "I cannot help with that."}}]}),
+])
+def test_refusals_of_the_providers(monkeypatch, api, body):
+    chat = client(api, lambda request: httpx.Response(200, json=body),
+                  monkeypatch)
+    with pytest.raises(LLMRefusal, match="declined"):
+        chat.complete(CONVERSATION)
+
+
+def test_command_client_refusal():
+    refusing = make_client(command_provider(
+        "import sys; print(\"API Error: Sonnet 5.5's safeguards flagged this "
+        "message (https://www.anthropic.com/legal/aup).\"); sys.exit(1)"
+    ))
+    with pytest.raises(LLMRefusal, match="safeguards flagged"):
+        refusing.complete(CONVERSATION[:2])
 
 
 def test_command_client_retries_os_errors(monkeypatch):
