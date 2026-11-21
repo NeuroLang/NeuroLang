@@ -24,7 +24,7 @@ Unreleased
   (``assistant_check_timeout``, new: the dry run of ``check_query``, which
   had none), which a ``query_timeout`` or ``check_timeout`` of ``llm.yaml``
   wins over, the defaults (30 and 120 s) coming last. The engines with
-  tractography give 300 and 180 s, as a program over a bundle takes tens of
+  tractography give 300 and 300 s, as a program over a bundle takes tens of
   seconds to minutes; after a timeout, their guidance asks for one bundle
   at a time, bound first (``assistant_timeout_guidance``). The ``/mcp`` of
   the REPL server and ``neurolang-query --mcp`` take them too. A refusal of

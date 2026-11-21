@@ -168,7 +168,7 @@ this order:
 
 The engines with tractography (``tracts`` and those extending it,
 ``neurosynth_iit``, ``neurostore_iit``, ``neurosynth_disconnectome7t``...)
-give 300 s for a run and 180 s for a check: each white-matter bundle is a
+give 300 s for a run and 300 s for a check: each white-matter bundle is a
 query over all the streamlines, and a program joining a bundle to the
 parcels it ends in takes from 15 s, for one bundle bound first, to more
 than 3 minutes, over a dozen bundles. Their guidance asks, after a

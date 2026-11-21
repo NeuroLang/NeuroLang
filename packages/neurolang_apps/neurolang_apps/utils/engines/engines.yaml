@@ -1309,10 +1309,11 @@ engines:
     # 13 bundles (260 s on a loaded machine), 46-124 s for the whole
     # program of Fig. 2b; 300 s lets all of these run, and was the limit
     # with which the assistant answered. The dry run of check_query
-    # rewrites a 40-rule program in 76-133 s; 180 s lets it pass, as a
-    # check precedes each run and final answer.
+    # rewrites the 40-rule program of Fig. 2b in 76-133 s, and in 150 to
+    # more than 180 s on a loaded machine; a check precedes each run and
+    # final answer, so 300 s too.
     assistant_query_timeout: 300
-    assistant_check_timeout: 180
+    assistant_check_timeout: 300
     acknowledgements:
       - >-
         The bundles (bundles/*.dl), tract_querier's queries: Wassermann D,

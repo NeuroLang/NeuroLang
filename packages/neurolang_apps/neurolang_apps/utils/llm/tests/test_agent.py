@@ -865,7 +865,7 @@ def test_the_engines_with_tractography_have_longer_time_limits():
             "neurosynth_disconnectome7t", "tracts"} <= set(tracts)
     for name in tracts:
         config = for_engine(AssistantConfig(), engine_config(name))
-        assert (config.query_timeout, config.check_timeout) == (300, 180)
+        assert (config.query_timeout, config.check_timeout) == (300, 300)
         assert "one bundle" in engine_config(name)[
             "assistant_timeout_guidance"]
     plain = for_engine(AssistantConfig(), engine_config("neurosynth"))

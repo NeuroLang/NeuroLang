@@ -213,7 +213,7 @@ may specify the following keys, all of them optional:
   it, may take on the engine, unless the ``query_timeout`` and
   ``check_timeout`` of ``llm.yaml`` set them; without them, the defaults
   (30 and 120 s, see :doc:`query_assistant`).  ``tracts``, and so every
-  engine with tractography, gives 300 and 180 s
+  engine with tractography, gives 300 and 300 s
 - ``assistant_timeout_guidance`` — the advice following the message of a
   query, or of its check, the assistant stopped at its time limit: on
   ``tracts``, to query one bundle at a time, bound first
