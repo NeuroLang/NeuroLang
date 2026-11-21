@@ -412,6 +412,10 @@ Unreleased
   between two calls, and equal relations hashed apart. It is now that of
   their values, whatever the order of the rows, in the pandas and polars
   backends; caches and sets of rules holding relations find them again.
+  The rewritings of a program are cached by its rules, not their printed
+  form, which shows a relation of more than 60 rows in part: two rules
+  reading relations differing in their middle rows got the same rewriting,
+  and the second query the first one's answers.
 
 - AI assistant: an answer given when the ReAct agent ran out of steps,
   the last query that gave rows, says so: its summary reads *Out of steps:
