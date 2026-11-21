@@ -538,6 +538,42 @@ def test_probabilistic_query():
             nl.solve_all()
 
 
+@pytest.mark.parametrize("conditioned", [False, True])
+def test_a_query_on_the_result_of_another_is_unsupported(conditioned):
+    """
+    ``p_top`` is the probability of ``active`` restricted to the regions
+    whose probability ``p_l`` is above a threshold: a probabilistic query
+    depending on another, which is unsupported, conditioned or not. Bound
+    by the constant of ``definition``, the query is rewritten with magic
+    sets, whose numerator and denominator of a conditioned query once
+    became one predicate of two signatures, an internal error.
+    """
+    nl = NeurolangPDL()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in range(6)], name="selected_study"
+    )
+    nl.add_tuple_set(
+        [("a", 0), ("a", 1), ("b", 1), ("b", 2), ("c", 3)], name="act"
+    )
+    nl.add_tuple_set([("x", "d")], name="defs")
+    nl.add_tuple_set([("d", 0), ("d", 1), ("d", 2)], name="tomset")
+    given = " // tom(s)" if conditioned else ""
+    with pytest.raises(
+        UnsupportedProgramError, match="result of another"
+    ) as error:
+        nl.execute_datalog_program(
+            "definition(t, q) :- defs(t, q)\n"
+            "tom(s) :- definition('x', q), tomset(q, s), selected_study(s)\n"
+            "active(l, s) :- act(l, s), selected_study(s)\n"
+            f"p_l(l, p) :- PROB[active(l, s){given}] = p\n"
+            "top(l) :- p_l(l, p), (p > 0.25)\n"
+            "top_active(l, s) :- active(l, s), top(l)\n"
+            f"p_top(l, p) :- PROB[top_active(l, s){given}] = p\n"
+            "ans(l, p) :- p_top(l, p)"
+        )
+    assert "p > 0.25" in error.value.suggestion
+
+
 def test_marg_query():
     nl = NeurolangPDL()
     nl.add_probabilistic_choice_from_tuples(

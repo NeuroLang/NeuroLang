@@ -381,6 +381,17 @@ Unreleased
   no final answer after N steps*, as a warning on the web page and in
   yellow in the terminal, where it read as a final answer.
 
+- A conditional probabilistic query reading the result of another, as
+  ``p_top(l, p) :- PROB[top_active(l, s) // tom(s)] = p`` with ``top(l)``
+  a threshold on ``p_l(l, p) :- PROB[active(l, s) // tom(s)] = p``,
+  raises ``UnsupportedProgramError``, as the unconditional one does,
+  instead of the internal error *...\_noprob is already in the IDB with
+  different signature*: rewritten with magic sets, the numerator and the
+  denominator of a conditional query were given one predicate of two
+  arities. The error says what is unsupported, and its suggestion how to
+  rewrite the program: filter on a probability after the probabilistic
+  queries, or store the first answer as a relation.
+
 - A predicate whose rule binds a variable only through its head, as
   ``q`` in ``similar_study(q, s)`` of the engine neurosynth, gets the
   values of a stored relation of the rules using it:
