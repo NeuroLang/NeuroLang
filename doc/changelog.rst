@@ -272,6 +272,16 @@ Unreleased
   ``extreme_capsule`` 19.4 s, now 4.3 s, and Fig. 2b's program without
   its bootstrap 19.4 s, now 14.8 s, with the same answers.
 
+- An engine's sparse view keeps, with it, the sums of its entries for each
+  row and each column entity (``SparseView.sums``, kept with the build's
+  tables). A product of the view by the same number for every entity of
+  one sort, summed over it, is that number times the kept sums: the view
+  is not read. ``lift('pain')`` on neurostore, whose probability of
+  activation over a uniform choice of all 64 295 studies read the 1
+  billion entries of ``activated`` (57 s from disk), took 66 to 68 s in
+  a new process, now 7.5 to 8.2 s; the lifts agree to a relative
+  7.7e-14. A build reads each relation's frame once.
+
 - A choice over a few rows of an engine's view (the voxels of an image) by
   the view reads those rows alone, and a vector over a few of its columns
   reads them through the view's index by column entities, rather than the

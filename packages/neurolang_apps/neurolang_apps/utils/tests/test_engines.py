@@ -1548,20 +1548,24 @@ class TestSparseViews:
         assert set(nl.sparse_views) == {"p"}
 
     def test_views_are_kept_and_read_mapped(self, tmp_path):
-        """Check the views of a build are kept with its tables and read
-        back, memory-mapped, by the next build, with the same entries."""
+        """Check the views of a build, and the sums of their entries by
+        row and by column entity, are kept with its tables and read back,
+        memory-mapped, by the next build, with the same entries."""
         first = self._engine(tmp_path, "{p: [b, a, w]}").sparse_views["p"]
         kept = [
             p for p in (tmp_path / "derived_tables").glob("sparse_views-*")
             if p.is_dir()
         ]
-        assert len(kept) == 1
+        assert len(kept) == 2  # the views, the sums of p's
         again = self._engine(tmp_path, "{p: [b, a, w]}").sparse_views["p"]
         assert (again.matrix != first.matrix).nnz == 0
         np.testing.assert_array_equal(
             again.weighted().toarray(), [[0.5, 0], [0, 0.25]]
         )
         assert not again.weighted().data.flags.writeable  # mapped
+        for sort, sums in (("rows", [0.5, 0.25]), ("columns", [0.5, 0.25])):
+            np.testing.assert_array_equal(again.kept_sums[sort], sums)
+            assert not again.kept_sums[sort].flags.writeable
         assert again.row_index.decode([0, 1])[0].tolist() == [1, 2]
         assert again.column_index.decode([0, 1])[0].tolist() == ["u", "v"]
 
