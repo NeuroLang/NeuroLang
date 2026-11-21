@@ -1,4 +1,5 @@
 import io
+from typing import AbstractSet, Tuple
 
 from nl_expr import expression_walker as ew
 from nl_expr.expression_walker import ReplaceExpressionWalker
@@ -15,6 +16,7 @@ from ..aggregation import DatalogWithAggregationMixin
 from ..expressions import TranslateToLogic
 from ..ontologies_parser import OntologyParser, RightImplication
 from ..expression_processing import extract_logic_atoms
+from ..wrapped_collections import WrappedRelationalAlgebraSet
 from ..ontologies_rewriter import (
     OntologyRewriter,
     chase_rules,
@@ -686,3 +688,29 @@ def test_a_step_surely_dead_is_not_tested_for_applicability(monkeypatch):
     unchecked, more = rewrite()
     assert checked == unchecked
     assert fewer < more
+
+
+def test_rewriting_a_rule_with_a_constant_relation():
+    """A rule reading a constant relation of strings is rewritten: its
+    hash, that of the relation, is the same at each call."""
+    hasCollaborator, project, p = S_("hasCollaborator"), S_("project"), S_("p")
+    a, b, x, y, z = S_("a"), S_("b"), S_("x"), S_("y"), S_("z")
+    terms = C_[AbstractSet[Tuple[str]]](
+        WrappedRelationalAlgebraSet(
+            (f"term{i}" * 2,) for i in range(20)
+        ),
+        verify_type=False,
+    )
+    sigma = RI_(project(x, y), hasCollaborator(z, y, x))
+    q = I_(p(b), Conjunction((hasCollaborator(a, y, b), terms(y))))
+
+    rewrite = OntologyRewriter(
+        DatalogTranslator().walk(EB_((q,))), _categorize_constraints([sigma])
+    ).Xrewrite()
+
+    assert len(rewrite) == 2
+    assert any(
+        terms(y) in r.antecedent.formulas
+        and project(b, y) in r.antecedent.formulas
+        for r in rewrite
+    )

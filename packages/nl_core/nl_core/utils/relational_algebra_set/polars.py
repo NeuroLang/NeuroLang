@@ -789,11 +789,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if eager is None:
             return hash((tuple(), None))
         c = _strip_sentinel(eager)
-        if c is None:
+        if c is None or len(c) == 0:
             return hash((tuple(), None))
-        col_key = tuple(c.columns)
-        data_bytes = c.to_numpy().tobytes()
-        return hash((col_key, data_bytes))
+        # Of the values, whatever the order of the rows, as __eq__: the
+        # bytes of an array of strings are the addresses of objects.
+        return hash((tuple(c.columns), c.hash_rows().sum()))
 
 
 class NamedRelationalAlgebraFrozenSet(

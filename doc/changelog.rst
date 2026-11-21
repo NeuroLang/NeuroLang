@@ -341,6 +341,15 @@ Unreleased
 
 **Bug fixes:**
 
+- A rule reading a constant relation of strings, as
+  ``C(term)`` with ``C`` a ``Constant[AbstractSet]``, failed in the
+  rewriting of an ontology's constraints with a ``KeyError``: the hash of
+  a relation of the pandas backend was that of the addresses of its
+  strings, new objects at each read of a pyarrow column, and so changed
+  between two calls, and equal relations hashed apart. It is now that of
+  their values, whatever the order of the rows, in the pandas and polars
+  backends; caches and sets of rules holding relations find them again.
+
 - AI assistant: an answer given when the ReAct agent ran out of steps,
   the last query that gave rows, says so: its summary reads *Out of steps:
   no final answer after N steps*, as a warning on the web page and in
