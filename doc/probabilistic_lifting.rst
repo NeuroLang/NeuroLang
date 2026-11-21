@@ -689,6 +689,41 @@ Comparisons with a constant
    separator variable :math:`x`. A comparison :math:`c\ \theta\ y` is
    first written :math:`y\ \theta'\ c`.
 
+Constants a deterministic atom excludes
+   Before shattering, a conjunction gets :math:`v \neq c` when a variable
+   :math:`v` is at a position of a tuple-independent atom where an atom of
+   the same relation in the query has the constant :math:`c`, and a
+   positive deterministic atom :math:`D(\ldots, v, \ldots)` of the
+   conjunction has :math:`v` at a position of :math:`D` where no tuple of
+   :math:`D` has :math:`c`
+   (:class:`~neurolang.probabilistic.dalvi_suciu_lift.ExcludedConstants`).
+   *Proof.* :math:`D` is deterministic, the same relation in every
+   possible world, and no tuple of it has :math:`c` at that position: in
+   every world, an assignment satisfying the conjunction maps
+   :math:`D(\ldots, v, \ldots)` to a tuple of :math:`D`, hence
+   :math:`v \neq c`. The conjunction implies the comparison, so that
+   :math:`\phi \equiv \phi \land v \neq c` in every world, and the
+   probabilities are the same. Shattering then moves the comparison into
+   :math:`v`'s atoms (`Comparisons with a constant`_): an atom that could
+   be the tuple of the constant's atom only through :math:`v = c` is
+   replaced by the atom of the other tuples alone. In
+
+   .. math::
+
+      \exists t\, (S(0, t) \land T(t) \land S(t, l)),
+
+   with :math:`T` a deterministic relation without :math:`0` (the regions
+   of the thalamus, wired to the hippocampus and from them to a region
+   :math:`l`), :math:`t \neq 0` makes :math:`S(t, l)` an atom of
+   :math:`S_{\neq 0}`: the self-join on :math:`S` is gone, and the query
+   is lifted by the separator :math:`t` (12.9 s by weighted model counting
+   on neurosynth, 1.3 s lifted). With :math:`0` in :math:`T`, nothing is
+   added and the query is declined, as before. The values of :math:`D`'s
+   column are read at planning time, as those of a `Separator determined
+   by a functional dependency`_ are. Not covered: the Boolean query,
+   :math:`\exists l` being pushed onto :math:`S(t, l)` alone, the
+   comparison is not moved into it.
+
 
 Planning non-repeating queries
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

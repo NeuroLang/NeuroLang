@@ -1064,3 +1064,53 @@ def test_negated_choice_of_several_columns(solvers, query, expected):
         )
     }
     assert result == pytest.approx(expected)
+
+
+
+@pytest.mark.parametrize("seed", range(4))
+@pytest.mark.parametrize("thalamus, lifted", [
+    ([1, 2, 3], True),    # without the constant: lifted
+    ([0, 1, 2], False),   # with it: a self-join, declined
+])
+def test_self_join_through_a_constant_a_deterministic_atom_excludes(
+    seed, thalamus, lifted
+):
+    """
+    ``q(l) :- S(0, t), T(t), S(t, l)`` (via_thalamus): with 0 in no tuple
+    of the deterministic T, the conjunction implies t ≠ 0, which shatters
+    S(t, l) into the tuples without 0: no self-join, lifted, with the
+    probabilities of model counting. With 0 in T, it is declined.
+    """
+    import itertools
+    import random
+
+    from .. import NeurolangPDL
+    from .. import probabilistic_frontend as pf
+
+    wmc = dict(
+        probabilistic_solvers=(pf.wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(pf.wmc_solve_marg_query,),
+    )
+
+    def solve(solvers):
+        rng = random.Random(seed)
+        nl = NeurolangPDL(**solvers)
+        nl.add_probabilistic_facts_from_tuples(
+            [(round(rng.uniform(.1, .9), 2),) + t
+             for t in itertools.product(range(5), repeat=2)
+             if rng.random() < .7],
+            name="S",
+        )
+        nl.add_tuple_set([(t,) for t in thalamus], name="T")
+        nl.execute_datalog_program("q(l, PROB) :- S(0, t), T(t), S(t, l)")
+        return dict(nl.solve_all()["q"].as_pandas_dataframe().values)
+
+    expected = solve(wmc)
+    if not lifted:
+        with pytest.raises(dalvi_suciu_lift.NonLiftableException):
+            solve(LIFTED_ONLY)
+        return
+    result = solve(LIFTED_ONLY)
+    assert result.keys() == expected.keys()
+    for key, value in expected.items():
+        assert result[key] == pytest.approx(value)

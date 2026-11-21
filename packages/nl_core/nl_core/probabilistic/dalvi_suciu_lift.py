@@ -385,9 +385,9 @@ def _prepare_and_optimise_query(
         deterministic_relations or {}, unified_query.antecedent,
         symbol_table, lambda s, _: DeterministicFactSet(s)
     )
+    ucq = convert_rule_to_ucq(unified_query)
     shattered_query_body = shatter_constants(
-        convert_rule_to_ucq(unified_query),
-        symbol_table
+        ExcludedConstants(ucq, symbol_table).walk(ucq), symbol_table
     )
     shattered_query_body = partially_rank_query(
         shattered_query_body, symbol_table
@@ -2653,7 +2653,80 @@ def _determined_variables(variables, clauses, symbol_table):
     return variables
 
 
-def _functions_of(atom, variables, symbol_table):
+class ExcludedConstants(ExpressionWalker):
+    """
+    In a conjunction, ``v ≠ c`` for a variable ``v`` at a position of a
+    probabilistic atom where an atom of the same relation in *query* has
+    the constant ``c``, when a positive deterministic atom of the
+    conjunction has ``v`` at a position of its relation where no tuple
+    has ``c``. The conjunction implies it: shattering on ``c`` then puts
+    ``v``'s atom in the tuples without ``c`` alone, where the self-join
+    through ``c`` was (``S(0, t) ∧ T(t) ∧ S(t, l)``, ``T`` without 0:
+    regions of the thalamus wired to the hippocampus and on).
+    """
+
+    def __init__(self, query, symbol_table):
+        self.symbol_table = symbol_table
+        self.constants = {}
+        for _, atom in expression_iterator(query):
+            if isinstance(atom, FunctionApplication) and (
+                is_atom_a_probabilistic_fact_relation(atom, symbol_table)
+            ):
+                for i, arg in enumerate(atom.args):
+                    if isinstance(arg, Constant):
+                        self.constants.setdefault(
+                            (atom.functor, i), set()
+                        ).add(arg)
+        self._columns = {}
+
+    @add_match(FunctionApplication)
+    def atom(self, atom):
+        """Atoms and comparisons are left as they are."""
+        return atom
+
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        if not self.constants:
+            return conjunction
+        formulas = tuple(self.walk(f) for f in conjunction.formulas)
+        deterministic = [
+            f for f in formulas
+            if isinstance(f, FunctionApplication)
+            and is_atom_a_deterministic_relation(f, self.symbol_table)
+        ]
+        excluded = {}
+        for atom in formulas:
+            if not isinstance(atom, FunctionApplication):
+                continue
+            for i, arg in enumerate(atom.args):
+                for constant in self.constants.get((atom.functor, i), ()):
+                    if isinstance(arg, Symbol) and any(
+                        self._absent(d, j, constant)
+                        for d in deterministic
+                        for j, other in enumerate(d.args) if other == arg
+                    ):
+                        excluded.setdefault(NE(arg, constant), None)
+        excluded = tuple(e for e in excluded if e not in formulas)
+        if not excluded and formulas == conjunction.formulas:
+            # the walker walks again what it is given anew
+            return conjunction
+        return Conjunction(formulas + excluded)
+
+    def _absent(self, atom, position, constant):
+        """Whether no tuple of *atom*'s relation has *constant* at
+        *position*."""
+        key = (atom.functor, position)
+        if key not in self._columns:
+            relation = _deterministic_relation(atom, self.symbol_table)
+            self._columns[key] = None if relation.is_empty() else set(
+                relation.as_pandas_dataframe().iloc[:, position].unique()
+            )
+        values = self._columns[key]
+        return values is not None and constant.value not in values
+
+
+def _deterministic_relation(atom, symbol_table):
+    """The tuples of the deterministic *atom*'s relation."""
     relation = GetProbabilisticSetAtom(symbol_table).walk(
         atom.functor
     ).relation
@@ -2664,7 +2737,11 @@ def _functions_of(atom, variables, symbol_table):
                 symbol_table[relation]
             )
         relation = symbol_table[relation]
-    relation = relation.value
+    return relation.value
+
+
+def _functions_of(atom, variables, symbol_table):
+    relation = _deterministic_relation(atom, symbol_table)
     if relation.is_empty():
         # Its columns may be unknown, and its atom is false.
         return set()
