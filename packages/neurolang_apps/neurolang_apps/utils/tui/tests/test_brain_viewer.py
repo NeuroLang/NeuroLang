@@ -482,7 +482,7 @@ class TestLayers:
         """The masks of the answers of a program with several, value 1
         each, are drawn in the top colours of their colormaps: those of
         the masks, single hues in turn, not those whose top is alike
-        (plasma and viridis both end in yellow)."""
+        (plasma and viridis both end in cyan)."""
         mask = np.zeros((4, 4, 4), dtype=np.float32)
         mask[1, 1, 1] = 1.0
         state = _state(brain_viewer.viewer_html(
@@ -873,6 +873,16 @@ class TestStreamlines:
         assert 'id="streamline-number"' in html
         assert 'id="streamline-opacity"' not in html
         assert state["space"] == "MNI"
+        assert "bundles" not in streamlines
+
+    def test_the_page_holds_the_bundles(self):
+        state = brain_viewer.streamlines_state(
+            _LINES, 7, (["left", "right"], ["#1f77b4", "#aec7e8"], [1, 0, 1])
+        )
+        bundles = state["bundles"]
+        assert bundles["names"] == ["left", "right"]
+        assert bundles["colours"] == ["#1f77b4", "#aec7e8"]
+        assert _decode(bundles["of"], np.uint16).tolist() == [1, 0, 1]
 
 
 _STREAMLINES_CHECK = _CHECK_HELPERS + """
@@ -904,10 +914,86 @@ brainViewer.ready.then(function () {
   set('streamline-number', '1000');
   out.again = {drawn: mesh.indexCount, label: label.textContent};
   out.opacity = mesh.opacity;
+  out.colourControl = !document.getElementById('streamline-colour-control').hidden;
   report(out);
 }).catch(function (e) { report({failed: String(e)}); });
 </script>
 """
+
+_BUNDLES_CHECK = _CHECK_HELPERS + """
+<script>
+brainViewer.ready.then(function () {
+  var nv = brainViewer.nv, mesh = nv.meshes[0];
+  var legend = document.getElementById('bundle-legend');
+  // the number of pixels near magenta and near cyan, the colours of the
+  // bundles (NiiVue dithers each streamline a little)
+  function near(p) {
+    var magenta = 0, cyan = 0;
+    for (var i = 0; i < p.length; i += 4) {
+      if (p[i] > 200 && p[i + 1] < 60 && p[i + 2] > 200) magenta++;
+      if (p[i] < 60 && p[i + 1] > 200 && p[i + 2] > 200) cyan++;
+    }
+    return {magenta: magenta, cyan: cyan};
+  }
+  function colours() {
+    return Array.from(legend.querySelectorAll('.swatch'))
+      .map(function (s) { return s.style.background; });
+  }
+  var out = {
+    control: !document.getElementById('streamline-colour-control').hidden,
+    choice: document.getElementById('streamline-colour').value,
+    legend: Array.from(legend.children).map(function (li) {
+      return li.textContent; }),
+    colours: colours(), legendShown: !legend.hidden,
+    groups: mesh.groups.map(function (g) { return Array.from(g.vals); }),
+    byBundle: mesh.fiberGroupColormap !== null
+  };
+  out.drawnColours = near(pixels());
+  set('streamline-colour', 'direction', 'change');
+  out.direction = {
+    byBundle: mesh.fiberGroupColormap !== null, legendShown: !legend.hidden,
+    colours: near(pixels()), drawn: mesh.indexCount
+  };
+  set('streamline-colour', 'bundle', 'change');
+  out.back = near(pixels());
+  // the number still follows the ranks, whatever the colours
+  set('streamline-number', '0');
+  out.one = mesh.indexCount;
+  report(out);
+}).catch(function (e) { report({failed: String(e)}); });
+</script>
+"""
+
+
+@pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
+def test_the_bundles_in_a_headless_browser(tmp_path):
+    """Check the streamlines of bundles are in the colours of their
+    bundles, which a legend names, or by direction, as "Colour by"
+    chooses, and the number of them drawn still follows their ranks."""
+    html = brain_viewer.viewer_html(
+        _image(np.ones((4, 4, 4), dtype=np.float32)), None,
+        title="bundles", threshold=0, cmap=None, symmetric=False,
+        streamlines=brain_viewer.streamlines_state(
+            _LINES, 7, (["a", "b"], ["#ff00ff", "#00ffff"], [0, 1, 0])
+        ), space="RAS",
+    )
+    result = _run_in_chrome(tmp_path, html, _BUNDLES_CHECK)
+    assert result["errors"] == [] and "failed" not in result, result
+    assert result["control"] and result["choice"] == "bundle"
+    assert result["legend"] == ["a (2)", "b (1)"] and result["legendShown"]
+    assert result["colours"] == ["rgb(255, 0, 255)", "rgb(0, 255, 255)"]
+    assert result["groups"] == [[0, 2], [1]] and result["byBundle"]
+    # pixels of the colours of the bundles, which no direction of these
+    # streamlines gives, and again when back to bundles
+    by_bundle, by_direction = result["drawnColours"], result["direction"]
+    for colour in ("magenta", "cyan"):
+        assert by_bundle[colour] > 0
+        assert by_direction["colours"][colour] == 0
+    assert by_direction["byBundle"] is False
+    assert by_direction["legendShown"] is False
+    assert by_direction["drawn"] == 11
+    assert result["back"] == pytest.approx(by_bundle, rel=0.2)
+    assert result["one"] == 4
 
 
 @pytest.mark.skipif(_chrome() is None, reason="no headless Chrome")
@@ -943,6 +1029,7 @@ def test_the_streamlines_in_a_headless_browser(tmp_path):
     }
     assert result["again"] == result["all"]
     assert result["opacity"] == 1
+    assert result["colourControl"] is False
 
 
 _REGIONS_CHECK = _CHECK_HELPERS + """
@@ -1199,10 +1286,15 @@ def test_the_defaults_of_the_viewer_are_those_of_its_file():
     assert brain_viewer.MAX_EDGES == network["max_edges"]
     assert brain_viewer.MAX_STREAMLINES == defaults["streamlines"][
         "max_shown"]
+    assert brain_viewer.MAX_BUNDLES == defaults["streamlines"][
+        "max_bundles"]
     assert nifti.VIEW_THRESHOLD == defaults["view_threshold"]
     help_text = " ".join(nifti.VIEW_HELP.split())
     assert f"default: {defaults['view_threshold']}" in help_text
     assert f"default: {defaults['colormap']}" in help_text
+    streamlines = defaults["streamlines"]
+    assert f"{streamlines['max_shown']} at most are drawn" in help_text
+    assert f"of {streamlines['max_bundles']} values at most" in help_text
     img = nib.Nifti1Image(np.ones((2, 2, 2), np.float32), np.eye(4))
     state = _state(brain_viewer.viewer_html(
         img, None, title="t", threshold=0, cmap=None, symmetric=False,
