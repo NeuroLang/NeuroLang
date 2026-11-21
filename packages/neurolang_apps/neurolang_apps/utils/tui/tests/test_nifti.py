@@ -1165,6 +1165,15 @@ class TestViewThresholdedQuery:
         ) == {"": set()}
 
 
+def _decode_array(text):
+    """Return the uint16 values of an array the page decodes."""
+    import base64
+    import zlib
+
+    return np.frombuffer(
+        zlib.decompress(base64.b64decode(text)), np.uint16).tolist()
+
+
 class TestViewStreamlines:
     """Check .view draws a result of streamline ids as streamlines."""
 
@@ -1288,6 +1297,39 @@ class TestViewStreamlines:
         assert kwargs["streamlines"]["shown"] == 2
         assert kwargs["streamlines"]["total"] == 3
         assert "2 of 3 shown, evenly subsampled to 2 at most" in out
+
+    def test_a_column_beside_the_ids_names_their_bundles(
+        self, tracts, view_calls
+    ):
+        kwargs, out = self._view(
+            tracts, "ans(x, side) :- uncinate(x, side)", view_calls
+        )
+        bundles = kwargs["streamlines"]["bundles"]
+        assert bundles["names"] == ["left", "right"]
+        # tab20's dark blue and dark orange, not blue and light blue
+        assert bundles["colours"] == ["#1f77b4", "#ff7f0e"]
+        assert _decode_array(bundles["of"]) == [0, 0, 1]
+        assert "coloured by the 2 bundles of the column 'side'" in out
+
+    def test_ids_alone_have_no_bundles(self, tracts, view_calls):
+        kwargs, out = self._view(tracts, "ans(s) :- tract(s)", view_calls)
+        assert "bundles" not in kwargs["streamlines"]
+        assert "coloured by" not in out
+
+    def test_a_streamline_of_two_bundles_is_of_the_first(self, tracts):
+        frame = pd.DataFrame({"x": [1, 1, 2], "b": ["UF", "AF", "UF"]})
+        names, colours, of = nifti.streamline_bundles(frame, "x", [1, 2])
+        assert names == ["AF", "UF"] and of == [0, 1]
+        assert len(colours) == 2
+
+    def test_too_many_or_several_columns_are_no_bundles(self, monkeypatch):
+        frame = pd.DataFrame({"x": [1, 2, 3], "b": ["a", "b", "c"]})
+        assert nifti.streamline_bundles(frame, "x", [1, 2, 3]) is not None
+        monkeypatch.setattr(nifti.brain_viewer, "MAX_BUNDLES", 2)
+        assert nifti.streamline_bundles(frame, "x", [1, 2, 3]) is None
+        frame["c"] = frame["b"]
+        monkeypatch.setattr(nifti.brain_viewer, "MAX_BUNDLES", 20)
+        assert nifti.streamline_bundles(frame, "x", [1, 2, 3]) is None
 
     def test_the_engine_background(self, tracts, monkeypatch):
         calls = []

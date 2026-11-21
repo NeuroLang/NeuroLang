@@ -51,6 +51,7 @@ network:
 
 streamlines:
   max_shown: 20000        # drawn at most, evenly subsampled
+  max_bundles: 20         # a column naming at most these colours them by it
 
 # What the script of the page takes (the data of the page carries it).
 page:

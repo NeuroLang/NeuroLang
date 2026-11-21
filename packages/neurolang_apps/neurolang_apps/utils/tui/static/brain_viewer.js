@@ -443,10 +443,11 @@
   }
 
   // The streamlines, a .trk file NiiVue reads as a mesh of fibres,
-  // coloured by the direction of each segment, and the controls of their
-  // visibility and number. The file ranks them (their dps, from n down to
-  // 1) so that the k highest are an even sample: NiiVue hides those under
-  // a threshold, so the page draws k of them with n - k + 1.
+  // coloured by the direction of each segment or by their bundle
+  // (bundleColours), and the controls of their visibility and number.
+  // The file ranks them (their dps, from n down to 1) so that the k
+  // highest are an even sample: NiiVue hides those under a threshold, so
+  // the page draws k of them with n - k + 1.
   async function loadStreamlines(nv, streamlines) {
     var mesh = await niivue.NVMesh.loadFromUrl({
       url: 'streamlines.trk', buffer: await inflate(streamlines.trk),
@@ -456,6 +457,10 @@
     nv.setMeshProperty(mesh.id, 'fiberColor', 'Local');
     viewer.streamlines = mesh;
     $('streamlines').style.display = '';
+    if (streamlines.bundles) {
+      bundleColours(nv, mesh, streamlines.bundles,
+        new Uint16Array(await inflate(streamlines.bundles.of)));
+    }
     var slider = $('streamline-number');
     function drawFirst(count) {
       nv.setMeshProperty(mesh.id, 'dpsThreshold', streamlines.shown - count + 1);
@@ -477,6 +482,39 @@
     slider.addEventListener('input', function (e) {
       drawFirst(countAt(parseFloat(e.target.value)));
     });
+  }
+
+  // The bundles of the streamlines, which the result names: the n-th
+  // streamline is of the bundle of number of[n]. NiiVue colours each
+  // group of fibres of the mesh in the colour of its number in the
+  // colormap fiberGroupColormap, and by direction when it is null; the
+  // control "Colour by" chooses, and a legend names the colours.
+  function bundleColours(nv, mesh, bundles, of) {
+    var groups = bundles.names.map(function () { return {vals: []}; });
+    of.forEach(function (b, n) { groups[b].vals.push(n); });
+    mesh.groups = groups;
+    var map = {R: [], G: [], B: [], I: []}, legend = $('bundle-legend');
+    legend.replaceChildren();
+    bundles.colours.forEach(function (hex, b) {
+      map.R.push(parseInt(hex.substr(1, 2), 16));
+      map.G.push(parseInt(hex.substr(3, 2), 16));
+      map.B.push(parseInt(hex.substr(5, 2), 16));
+      map.I.push(b);
+      var item = document.createElement('li'), swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = hex;
+      item.append(swatch, bundles.names[b] + ' (' + groups[b].vals.length + ')');
+      legend.appendChild(item);
+    });
+    var select = $('streamline-colour');
+    function apply() {
+      var byBundle = select.value === 'bundle';
+      legend.hidden = !byBundle;
+      nv.setMeshProperty(mesh.id, 'fiberGroupColormap', byBundle ? map : null);
+    }
+    $('streamline-colour-control').hidden = false;
+    select.addEventListener('change', apply);
+    apply();
   }
 
   /* ---------------------------------------------------------------
