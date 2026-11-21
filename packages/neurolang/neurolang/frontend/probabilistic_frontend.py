@@ -858,6 +858,17 @@ class NeurolangPDL(QueryBuilderDatalog):
                 return None
             return self._solve(query), query.consequent.functor
 
+    @staticmethod
+    def _check_query_head(head, predicate) -> None:
+        """
+        See :meth:`QueryBuilderDatalog._check_query_head`; a conditional
+        body, a Condition of front-end expressions, is checked as the
+        rule body '//' builds of it.
+        """
+        if isinstance(predicate, Condition):
+            predicate = predicate.conditioned // predicate.conditioning
+        QueryBuilderDatalog._check_query_head(head, predicate)
+
     def _execute_probabilistic_head_query(self, head, predicate, **options):
         """
         Answer a query whose head has a probability, as ``ans(x, PROB(x))``.

@@ -81,6 +81,40 @@ def check_range_restriction(rule, symbol_table=None, query=False):
         raise error
 
 
+def unbound_head_variables_error(rule, query=False):
+    """
+    Return the error naming the variables of the head of *rule* that do
+    not occur in its body, as ``streamline`` in ``ans(streamline) :-
+    uf(x, 'left')``, or None if there are none.
+
+    Parameters
+    ----------
+    rule : Implication
+        The rule, or the query if *query*.
+    query : bool
+        Whether *rule* is a query, for the message.
+
+    Returns
+    -------
+    UnboundVariablesError or None
+        The error, without occurrences, with the variables of the body as
+        its example.
+    """
+    body = extract_logic_free_variables(rule.antecedent)
+    unbound = [
+        v for v in extract_logic_free_variables(rule.consequent)
+        if v not in body
+    ]
+    if not unbound:
+        return None
+    render = _renderer()
+    return UnboundVariablesError(
+        None if query else rule.consequent.functor.name,
+        tuple(map(render, unbound)), (),
+        ", ".join(map(render, body)) or None, query,
+    )
+
+
 def unbound_variables_error(
     body, symbol_table=None, rule=None, query=False, exempt=()
 ):

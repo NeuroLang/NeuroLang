@@ -7,7 +7,10 @@ as well as Region and Neurosynth capabilities
 import warnings
 from collections import defaultdict
 from nl_core.datalog.magic_sets import magic_rewrite
-from nl_core.datalog.range_restriction import check_range_restriction
+from nl_core.datalog.range_restriction import (
+    check_range_restriction,
+    unbound_head_variables_error,
+)
 from nl_expr.exceptions import (
     ForbiddenDisjunctionError,
     NeuroLangException,
@@ -490,6 +493,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             for q in queries
         ]
         heads_and_bodies = [(q.head.arguments, q.body) for q in queries]
+        for head, body in heads_and_bodies:
+            self._check_query_head(head, body)
         if show_ra:
             # the plans are those of each query, solved apart
             answers = []
@@ -1142,6 +1147,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 head = (head,)
         else:
             raise ValueError("query takes 1 or 2 arguments")
+        self._check_query_head(head, predicate)
 
         solution_set, functor_orig = self._execute_query(
             head, predicate, show_rewritten=show_rewritten, dry_run=dry_run,
@@ -1156,6 +1162,25 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             return not (dry_run or show_ra) and len(solution_set) > 0
         else:
             return solution_set
+
+    @staticmethod
+    def _check_query_head(head, predicate) -> None:
+        """
+        Raise an :class:`~nl_expr.exceptions.UnboundVariablesError` if a
+        variable of the query's *head* does not occur in its *predicate*,
+        as ``streamline`` in ``ans(streamline) :- uf(x, 'left')``. A
+        *predicate* that is not a front-end expression, as the condition
+        of a conditional query, is left to the declaration of its rule.
+        """
+        if not isinstance(predicate, fe.Expression):
+            return
+        arguments = head.arguments if isinstance(head, fe.Operation) else head
+        error = unbound_head_variables_error(logic.Implication(
+            ir.Symbol.fresh()(*(a.expression for a in arguments)),
+            predicate.expression,
+        ), query=True)
+        if error is not None:
+            raise error
 
     def _declare_query(
         self, head: fe.Expression, predicate: fe.Expression
