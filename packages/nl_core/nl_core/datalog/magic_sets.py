@@ -731,7 +731,9 @@ def magic_rewrite(
                     unbinds_left -= 1
                     unbound.add(predicate)
                     continue
-                failure = NewRecursionInMagicSetsRewriteError(str(error))
+                failure = error
+                if checked is not None:  # not the needed bindings' rewrite
+                    failure = NewRecursionInMagicSetsRewriteError(str(error))
             else:
                 failure = error
         except NewRecursionInMagicSetsRewriteError as error:
