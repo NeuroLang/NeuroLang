@@ -210,6 +210,25 @@ Unreleased
 
 **Performance:**
 
+- The magic-sets rewrite of a query over a large program (the tracts of
+  an engine) took most of its time: the relations of the extensional
+  database were built again for each literal checked (15 000 times), and
+  rules were ordered definitions first by reading every body on each pass.
+  A symbol table now keeps the symbols of each type it was asked for until
+  it or a scope enclosing it changes (``symbols_by_type``, so
+  ``extensional_database`` and ``builtins``), and each body is read once. The Fig. 2b query of the bundles co-activated by
+  language studies on neurosynth_iit took 240 to 267 s, now 118 to 120 s,
+  with the same answer.
+  
+- The semi-naive chase no longer evaluates again a rule with several atoms
+  of its stratum's predicates when none of them has new tuples: the rules
+  of tract queries rewritten with magic sets, 90 % of whose evaluations
+  found nothing. A chase step looks up in the instance the relations its
+  plan reads, rather than copying them all, and drops the tuples already
+  derived only when it found some. The chase of the Fig. 2b query of the
+  bundles co-activated by language studies (neurosynth_iit) took 46 s in
+  1 334 steps, now 30 s in 952.
+
 - Magic sets no longer make a non-recursive program recursive. All the
   call sites of a predicate with the same bound arguments share one
   adorned and one magic predicate, which can close a cycle of predicates

@@ -1,6 +1,6 @@
 import logging
 import operator
-from collections import defaultdict
+from collections import ChainMap
 from functools import wraps
 from typing import AbstractSet, Callable
 
@@ -181,6 +181,16 @@ class NamedRelationalAlgebraOptimiser(
     pass
 
 
+class _RelationsOrEmpty(ChainMap):
+    """The relations of its mappings, the first holding them first, and
+    an empty relation for a symbol of none."""
+
+    def __missing__(self, symbol):
+        return Constant[AbstractSet](
+            WrappedRelationalAlgebraSet(), verify_type=False
+        )
+
+
 class ChaseNamedRelationalAlgebraMixin:
     """
     Conjunctive query solving using the algorithm 5.4.8 from Abiteboul et al
@@ -293,7 +303,8 @@ class ChaseNamedRelationalAlgebraMixin:
     def eliminate_already_computed(self, consequent, instance, substitutions):
         substitutions_columns = set(substitutions.columns)
         if (
-            substitutions_columns.isdisjoint(consequent.args)
+            substitutions.is_empty()
+            or substitutions_columns.isdisjoint(consequent.args)
             or instance[consequent.functor].value.is_empty()
         ):
             return substitutions
@@ -340,14 +351,11 @@ class ChaseNamedRelationalAlgebraMixin:
         Relations are taken from ``instance`` merged with
         ``restriction_instance``, except for the positive predicates
         found in ``restriction_instance``, which are bound to it alone.
+        Those of ``instance`` are looked up when the plan reads them, not
+        copied: copying them all, at every step of the chase, cost a
+        quarter of an empty step.
         """
-        symbol_table = defaultdict(
-            lambda: Constant[AbstractSet](
-                WrappedRelationalAlgebraSet(),
-                verify_type=False
-            )
-        )
-        symbol_table.update(instance)
+        symbol_table = _RelationsOrEmpty({}, instance)
         positive = {
             predicate.functor for predicate in predicates
             if isinstance(predicate, FunctionApplication)
@@ -358,12 +366,16 @@ class ChaseNamedRelationalAlgebraMixin:
         # cost as much as the relation; the other predicates of the rule
         # (negated ones) are bound to both so that set-difference (RA
         # difference) computes correctly. A predicate the rule does not use
-        # is left as it is: merging it would cost as much as the relation,
-        # at every step of the chase, for nothing.
-        for k, v in restriction_instance.items():
+        # is left as it is, not even looked up: merging it would cost as
+        # much as the relation, at every step of the chase, for nothing.
+        for k in positive | used:
+            try:
+                v = restriction_instance[k]
+            except KeyError:  # not a relation, or none of its tuples
+                continue
             if k in positive or k not in symbol_table:
                 symbol_table[k] = v
-            elif k in used:
+            else:
                 symbol_table[k] = Constant[v.type](
                     symbol_table[k].value | v.value,
                     auto_infer_type=False, verify_type=False,
