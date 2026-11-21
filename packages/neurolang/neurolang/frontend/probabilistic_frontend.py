@@ -1376,9 +1376,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         return ir.Constant[AbstractSet](query_solution)
 
     @instance_lru_cache(
-        key_fn=lambda det_idb, holds: (
-            frozenset(str(r) for r in det_idb.formulas), holds
-        ),
+        key_fn=lambda det_idb, holds: (frozenset(det_idb.formulas), holds),
         maxsize=32,
     )
     def _rewrite_det_idb(self, det_idb, holds):

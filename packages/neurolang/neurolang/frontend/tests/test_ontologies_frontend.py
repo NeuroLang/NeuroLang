@@ -1259,3 +1259,39 @@ def test_a_rule_reading_a_constant_relation_is_rewritten():
         e.p[e.a, e.PROB[e.a]] = e.r[e.a, e.t] // e.selected[e.t]
         res = nl.query((e.a, e.q), e.p[e.a, e.q])
     assert set(res) == {("ann", 1.0)}
+
+
+def test_rules_reading_two_constant_relations_are_rewritten_apart():
+    """Two rules differing in the middle rows of a constant relation, the
+    same in its printed form, are two rewritings: the second query does
+    not get the first one's."""
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <owl:Class rdf:ID="Dean">
+            <rdfs:subClassOf rdf:resource="#Person" />
+        </owl:Class>
+    </rdf:RDF>'''
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+    nl.add_tuple_set([(f"p{i}", f"t{i}") for i in range(100)], name="label")
+    nl.add_tuple_set([(f"p{i}",) for i in range(100)], name="Person")
+    label, person, r = Symbol("label"), Symbol("Person"), Symbol("r")
+    a, t = Symbol("a"), Symbol("t")
+    for left_out in ("p50", "p51"):
+        terms = Constant[AbstractSet[Tuple[str]]](
+            WrappedRelationalAlgebraSet([
+                (f"t{i}",) for i in range(100) if f"p{i}" != left_out
+            ]),
+            verify_type=False,
+        )
+        with nl.scope:
+            nl.program_ir.walk(Implication(
+                r(a, t), Conjunction((label(a, t), person(a), terms(t)))
+            ))
+            with nl.scope as e:
+                e.ans[e.a] = e.r[e.a, e.t]
+                res = {x for x, in nl.query((e.a,), e.ans[e.a])}
+        assert left_out not in res and len(res) == 99
