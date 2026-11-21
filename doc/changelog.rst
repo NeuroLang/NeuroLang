@@ -230,6 +230,15 @@ Unreleased
   nothing, the rewrite is not tried again unseeded, which only binds
   less (7 attempts again for each of 3 answers).
 
+- The semi-naive chase no longer evaluates again a rule with several atoms
+  of its stratum's predicates when none of them has new tuples: the rules
+  of tract queries rewritten with magic sets, 90 % of whose evaluations
+  found nothing. A chase step looks up in the instance the relations its
+  plan reads, rather than copying them all, and drops the tuples already
+  derived only when it found some. The chase of the Fig. 2b query of the
+  bundles co-activated by language studies (neurosynth_iit) took 46 s in
+  1 334 steps, now 30 s in 952.
+
 - A choice over a few rows of an engine's view (the voxels of an image) by
   the view reads those rows alone, and a vector over a few of its columns
   reads them through the view's index by column entities, rather than the

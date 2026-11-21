@@ -1183,7 +1183,6 @@ def test_a_predicate_bound_through_its_head_is_bound_by_a_stored_relation():
     assert solution[goal].value == {(C_("a1"),), (C_("b1"),)}
 
 
-
 def test_rules_ordered_definitions_first():
     """
     A rule comes after the rules defining the predicates of its body,
