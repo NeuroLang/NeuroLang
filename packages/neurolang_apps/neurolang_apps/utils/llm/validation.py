@@ -591,6 +591,8 @@ def _preview(nl, text, language, rows, engine_name, max_cells=None) -> Preview:
     """
     try:
         result = _execute(nl, text.strip(), language, dry_run=False)
+    except QueryTimeout:  # raised into the thread running it: see run_preview
+        raise
     except Exception as exc:
         return Preview(False, error_message(nl, exc, text, language))
     if result is None:
