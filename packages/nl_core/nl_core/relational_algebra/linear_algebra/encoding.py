@@ -446,6 +446,22 @@ class SparseView:
         view._weighted = {np.dtype(np.float64): matrix(arrays["weighted"])}
         return view
 
+    def sums(self) -> dict:
+        """
+        Return the sums of the :meth:`weighted` matrix's entries for each
+        row entity (``"rows"``) and for each column entity
+        (``"columns"``): a product of the view by the same number for
+        every entity of one of its sorts is that number times the sums
+        over that sort, without reading the view (a probability over all
+        the studies of ``activated``: 57 s cold for its 1 billion
+        entries).
+        """
+        matrix = self.weighted()
+        return {
+            "rows": np.asarray(matrix.sum(axis=1)).ravel(),
+            "columns": np.asarray(matrix.sum(axis=0)).ravel(),
+        }
+
     def weighted(self, dtype=np.float64):
         """
         Return the matrix with its entries as numbers of *dtype*: 1 for
@@ -802,9 +818,14 @@ def build_sparse_views(
     for declaration in declarations.values():
         for axis in declaration[:2]:
             sorts.setdefault(axis.sort, len(sorts))
-    frames = [
-        relation.as_pandas_dataframe() for relation, _ in stored.values()
-    ]
+    # read once: a keeper names what it keeps from the frames' contents,
+    # remembered by frame (a frame read again is hashed again: 8 s for
+    # neurostore's activated)
+    frame_of = {
+        name: relation.as_pandas_dataframe()
+        for name, (relation, _) in stored.items()
+    }
+    frames = list(frame_of.values())
     if keep is None or any(frame is None for frame in frames):
         indices, views = _built_views(stored, declarations)
     else:
@@ -851,9 +872,15 @@ def build_sparse_views(
             lambda view=view: view,
         )
         views[name].weighted()  # the matrix products take, made once
+    for name, view in views.items():
+        frame = frame_of[name]
+        view.kept_sums = view.sums() if keep is None or frame is None else (
+            keep([frame], repr(("sums", name, tuple(declarations[name]),
+                                tuple(stored[name][1]))), view.sums)
+        )
     for name in indexed:
         view = views[name]
-        frame = stored[name][0].as_pandas_dataframe()
+        frame = frame_of[name]
         if keep is None or frame is None:
             view.by_columns = ColumnIndex.of(view)
         else:

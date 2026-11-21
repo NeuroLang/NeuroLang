@@ -330,6 +330,64 @@ def test_relations_the_translator_declines(
         assert result[key] == pytest.approx(value, rel=1e-12)
 
 
+@pytest.mark.parametrize("uniform", [True, False])
+def test_a_view_by_one_number_for_every_entity_is_its_sums(
+    uniform, contractions, monkeypatch
+):
+    """
+    A view times the same number for every entity of a sort, summed
+    over it (the probability of a voxel's activation over a uniform
+    choice of all the studies), is that number times the sums of the
+    view kept with it: the view is not read (57 s cold for the 1 billion
+    entries of neurostore's activated). By another choice, the view is
+    multiplied by its vector. The answers are those of relational
+    algebra.
+    """
+    from scipy import sparse
+
+    from nl_core.relational_algebra.linear_algebra import (
+        Axis,
+        ViewDeclaration,
+        build_sparse_views,
+    )
+
+    rng = np.random.default_rng(0)
+    voxels = list(itertools.product(range(3), range(2), range(2)))
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [v + (s,) for v in voxels for s in range(5) if rng.random() < .5],
+        name="activated",
+    )
+    weights = [.2] * 5 if uniform else [.1, .2, .3, .15, .25]
+    nl.add_probabilistic_choice_from_tuples(
+        list(zip(weights, range(5))), name="sel"
+    )
+    nl.sparse_views = build_sparse_views(
+        nl.program_ir.symbol_table,
+        {"activated": ViewDeclaration(
+            Axis("voxel", (0, 1, 2)), Axis("study", (3,))
+        )},
+    )
+    read = []
+    matmul = sparse._compressed._cs_matrix._matmul_vector
+    monkeypatch.setattr(
+        sparse._compressed._cs_matrix, "_matmul_vector",
+        lambda self, other: read.append(self.nnz) or matmul(self, other),
+    )
+    program = (
+        "q(i, j, k, p) :- PROB[activated(i, j, k, s) & sel(s)] = p\n"
+        "ans(i, j, k, p) :- q(i, j, k, p)"
+    )
+    contracted = _solve(nl, program)
+    assert contractions
+    view_nnz = nl.sparse_views["activated"].matrix.nnz
+    assert (view_nnz in read) != uniform
+    relational = _solve(nl, program, contract=False)
+    assert set(contracted) == set(relational)
+    for key, value in relational.items():
+        assert contracted[key] == pytest.approx(value, rel=1e-12)
+
+
 @pytest.mark.parametrize("indexed", [False, True])
 @pytest.mark.parametrize("few_rows", [True, False])
 @pytest.mark.parametrize("body, head", [
