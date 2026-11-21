@@ -217,6 +217,16 @@ Unreleased
 
 **Performance:**
 
+- Lifted inference: a conjunction implies ``v != c`` when a positive
+  deterministic atom of it has ``v`` where none of its tuples has the
+  constant ``c`` of an atom of a probabilistic relation at ``v``'s
+  position; the comparison is added before shattering
+  (``ExcludedConstants``), which then removes the self-join through
+  ``c``. ``via_thalamus(l) :- wired('aHIP lh', t), thalamus(t), wired(t,
+  l)`` on neurosynth, declined to weighted model counting (12.9 s), is
+  lifted (1.4 s), with the same answer. See doc/probabilistic_lifting.rst,
+  "Constants a deterministic atom excludes".
+
 - ``uses(s) :- ri_task(t), skos:definition(t, d), similar_study(d, s)``
   computes ``similar_study`` for the definitions of ``ri_task`` alone, as
   fast as with ``skos:definition`` in a rule of its own: magic sets put
