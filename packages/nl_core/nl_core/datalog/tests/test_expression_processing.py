@@ -21,6 +21,10 @@ from nl_expr.logic import (
     Union,
 )
 from .. import DatalogProgram, Fact
+from ..constraints_representation import (
+    DatalogConstraintsMixin,
+    RightImplication,
+)
 from ..expression_processing import (
     TranslateToDatalogSemantics,
     is_conjunctive_expression,
@@ -795,10 +799,8 @@ def _program_with_constraints(rules, constraints):
     datalog = Datalog()
     datalog.walk(DT.walk(B_(rules)))
 
-    def all_constraints():
-        return SimpleNamespace(formulas=tuple(constraints))
-
-    datalog.constraints = all_constraints
+    all_constraints = SimpleNamespace(formulas=tuple(constraints))
+    datalog.constraints = lambda: all_constraints
     datalog.existential_rules = {}
     return datalog
 
@@ -826,8 +828,38 @@ def test_dependency_matrix_reads_the_constraints_only_when_needed():
     idb_symbols, _ = dependency_matrix(datalog)
     assert idb_symbols == (R, S)
     assert reads == [P(x)]
+    dependency_matrix(datalog)
+    assert reads == [P(x)]
 
     with raises(SymbolNotFoundError):
         dependency_matrix(_program_with_constraints(
             rules + [Imp_(S(x), S_('W')(x))], [constraint]
         ))
+
+
+class DatalogWithConstraints(DatalogConstraintsMixin, Datalog):
+    pass
+
+
+def test_dependency_matrix_sees_the_constraints_added():
+    """
+    The predicates of the constraints, kept between the dependency
+    matrices of a program, are those of its constraints at each call:
+    one added since is known, in its head or only in its body.
+    """
+    Q, R, P, W, Z = (S_(n) for n in "QRPWZ")  # noqa: N806
+    x = S_('x')
+    datalog = DatalogWithConstraints()
+    datalog.walk(DT.walk(B_([Fact(Q(C_(0))), Imp_(R(x), Q(x))])))
+    datalog.walk(RightImplication(Q(x), P(x)))
+    assert dependency_matrix(datalog)[0] == (R,)
+
+    datalog.walk(DT.walk(B_([Imp_(R(x), W(x)), Imp_(R(x), Z(x))])))
+    with raises(SymbolNotFoundError):
+        dependency_matrix(datalog)
+
+    datalog.walk(RightImplication(Q(x), W(x)))
+    datalog.walk(RightImplication(Z(x), P(x)))
+    idb_symbols, matrix = dependency_matrix(datalog)
+    assert idb_symbols == (R,)
+    assert matrix.sum() == 0

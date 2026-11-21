@@ -549,14 +549,13 @@ def dependency_matrix(datalog, rules=None, instance=None):
     if instance is not None:
         previous_symbols = instance.as_map().keys()
     if hasattr(datalog, "constraints"):
-        constraint_symbols = set(
-            formula.consequent.functor
-            for formula in datalog.constraints().formulas
-        )
+        constraints = _constraint_predicates(datalog)
+        constraint_symbols = constraints.heads
         existential_symbols = set(
             rule.functor for rule in datalog.existential_rules.keys()
         )
     else:
+        constraints = None
         constraint_symbols = set()
         existential_symbols = set()
 
@@ -581,32 +580,56 @@ def dependency_matrix(datalog, rules=None, instance=None):
             elif (
                 isinstance(functor, Symbol)
                 and functor not in previous_symbols
-                and (
-                    functor not in datalog.symbol_table
-                    or functor in datalog.intensional_database()
-                )
-                and functor not in _constraint_signature(datalog)
+                and (functor not in datalog.symbol_table or functor in idb)
+                and (constraints is None or functor not in constraints.bodies)
             ):
                 raise SymbolNotFoundError(f"Symbol not found {functor.name}")
 
     return idb_symbols, dependency_matrix
 
 
-def _constraint_signature(datalog):
+class _ConstraintPredicates:
     """
-    Return the predicates of the bodies of the constraints of *datalog*:
-    one only there is an empty relation, not a symbol not found. It is
-    asked only of a predicate found nowhere else, as reading every
-    constraint (the 10,399 axioms of the Cognitive Atlas) takes ~0.5 s,
-    and the chase asks for a dependency matrix at each stratum.
+    The predicates of the heads and, read on demand, of the bodies of the
+    constraints *constraints* (a :class:`Union`).
     """
-    if not hasattr(datalog, "constraints"):
-        return set()
-    return set(
-        atom.functor
-        for formula in datalog.constraints().formulas
-        for atom in extract_logic_atoms(formula.antecedent)
-    )
+
+    def __init__(self, constraints):
+        self.constraints = constraints
+        self.heads = set(
+            formula.consequent.functor for formula in constraints.formulas
+        )
+
+    @functools.cached_property
+    def bodies(self):
+        """
+        One only there is an empty relation, not a symbol not found: read
+        only for a predicate found nowhere else, as reading every
+        constraint (the 10,399 axioms of the Cognitive Atlas) takes ~0.5 s.
+        """
+        return set(
+            atom.functor
+            for formula in self.constraints.formulas
+            for atom in extract_logic_atoms(formula.antecedent)
+        )
+
+
+def _constraint_predicates(datalog):
+    """
+    Return the :class:`_ConstraintPredicates` of the constraints of
+    *datalog*, kept until they change: the chase asks for a dependency
+    matrix at each stratum and for each chase it tries, and the
+    constraints are the same. Adding a constraint puts a new
+    :class:`Union` in the symbol table, which the cache compares by
+    identity.
+    """
+    constraints = datalog.constraints()
+    cached = getattr(datalog, "_constraint_predicates", None)
+    if cached is None or cached.constraints is not constraints:
+        cached = datalog._constraint_predicates = _ConstraintPredicates(
+            constraints
+        )
+    return cached
 
 
 def program_has_loops(program_representation):
