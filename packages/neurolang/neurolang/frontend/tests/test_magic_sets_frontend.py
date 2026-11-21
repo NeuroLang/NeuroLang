@@ -783,19 +783,18 @@ def test_frontend_binds_a_similarity_with_a_large_relation(close):
     assert res.as_pandas_dataframe().p.tolist() == pytest.approx([expected])
 
 
-@pytest.mark.parametrize("copies", ["64", "0"])
+@pytest.mark.parametrize("restricted", [True, False])
 def test_frontend_predicate_read_with_constants_computed_for_them(
-    copies, monkeypatch
+    restricted, monkeypatch
 ):
     """
     ``before`` is read with the regions 'b' and, negated, 'c' only: it is
     computed for them (as endpoint_anterior_of of the tract queries), not
-    for every region, with the same answers as when it is not
-    (``[MAGIC_SETS] constant_copies`` 0). The query is not rewritten
-    with magic sets, as those of the tract queries are not.
+    for every region, with the same answers as when it is not. The query
+    is not rewritten with magic sets, as those of the tract queries are
+    not.
     """
     from nl_core.datalog.exceptions import NoConstantPredicateFoundError
-    from nl_expr.config import config
     from nl_expr.expressions import Symbol
 
     def refused(*args, **kwargs):
@@ -803,7 +802,11 @@ def test_frontend_predicate_read_with_constants_computed_for_them(
 
     for module in (probabilistic_frontend, query_resolution_datalog):
         monkeypatch.setattr(module, "magic_rewrite", refused)
-    monkeypatch.setitem(config["MAGIC_SETS"], "constant_copies", copies)
+    if not restricted:
+        monkeypatch.setattr(
+            query_resolution_datalog, "restrict_to_constants_used",
+            lambda rules, *args, **kwargs: tuple(rules),
+        )
     nl = NeurolangPDL()
     solved = {}
     build = nl.chase_class.build_chase_solution
@@ -824,4 +827,4 @@ def test_frontend_predicate_read_with_constants_computed_for_them(
     )
     assert set(res) == {(2,)}
     regions = {r for _, r in solved[Symbol("before")].value.unwrap()}
-    assert regions == (set("bc") if copies != "0" else set("abcde"))
+    assert regions == (set("bc") if restricted else set("abcde"))

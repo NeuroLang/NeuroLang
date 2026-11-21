@@ -8,7 +8,6 @@ import warnings
 from collections import defaultdict
 from nl_core.datalog.constant_restriction import restrict_to_constants_used
 from nl_core.datalog.magic_sets import magic_rewrite
-from nl_expr.config import config
 from nl_core.datalog.range_restriction import check_range_restriction
 from nl_expr.exceptions import (
     ForbiddenDisjunctionError,
@@ -558,7 +557,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return logic.Union(restrict_to_constants_used(
             rules.formulas, readers,
             kept=(*kept, *(goal.consequent.functor for goal in goals)),
-            max_copies=config.getint("MAGIC_SETS", "constant_copies"),
         ))
 
     @staticmethod

@@ -4,11 +4,12 @@ Restricting the rules of a predicate to the constants it is read with.
 When every literal of a predicate ``p`` in a program has a constant at an
 argument, as ``endpoint_anterior_of(x, e, 'amygdala', h)``, the tuples of
 ``p`` with another value there are read by no rule: ``p`` can be computed
-for those constants only. Each rule of ``p`` is replaced by a copy for
-each tuple of constants it is read with, whose body equates the
-variables of its head there with the constants: a selection of the
-rule's plan, pushed to the relations it reads
-(``term_box_hi(term, h, 1, b)`` with ``term == 'amygdala'``).
+for those constants only. Each rule of ``p`` gets, in its body, the
+variables of its head there equated with the constants, if they are one
+tuple, or a relation of the tuples of constants it is read with: a
+selection, or a join with a few tuples, of the rule's plan, pushed to
+the relations it reads (``term_box_hi(term, h, 1, b)`` with ``term ==
+'amygdala'``).
 
 This is the restriction magic sets make of a predicate bound by
 constants alone, without magic predicates: it needs no sideways passing
@@ -18,16 +19,17 @@ queries' predicates unbound for that reason, 5.7 million tuples of
 ``endpoint_anterior_of`` computed for 2 terms).
 """
 
-from itertools import chain
+from typing import AbstractSet, Tuple
 
 from nl_expr import expression_walker as ew
 from nl_expr.expressions import Constant, FunctionApplication, Symbol
 
 from .expression_processing import EQ
 from .expressions import Conjunction, Implication
+from .wrapped_collections import WrappedRelationalAlgebraSet
 
 
-def restrict_to_constants_used(rules, readers=(), kept=(), max_copies=64):
+def restrict_to_constants_used(rules, readers=(), kept=()):
     """
     Return *rules*, those of a predicate always read with constants at
     some of its arguments restricted to them.
@@ -42,24 +44,19 @@ def restrict_to_constants_used(rules, readers=(), kept=(), max_copies=64):
     kept : iterable of Symbol
         Predicates not restricted: those answering a query, read outside
         the program.
-    max_copies : int
-        A predicate whose rules would have more copies than this is not
-        restricted.
 
     Returns
     -------
     tuple of Implication
     """
     rules, readers, kept = tuple(rules), tuple(readers), set(kept)
-    restriction = _restriction(rules, readers, kept, max_copies)
+    restriction = _restriction(rules, readers, kept)
     if not restriction:
         return rules
-    return tuple(chain.from_iterable(
-        _restricted(rule, restriction) for rule in rules
-    ))
+    return tuple(_restricted(rule, restriction) for rule in rules)
 
 
-def _restriction(rules, readers, kept, max_copies):
+def _restriction(rules, readers, kept):
     """The positions and the tuples of constants each predicate of
     *rules* is restricted to, by predicate."""
     heads = {}
@@ -91,11 +88,7 @@ def _restriction(rules, readers, kept, max_copies):
         positions = tuple(
             i for i in range(len(read[0]))
             if all(isinstance(args[i], Constant) for args in read)
-            and all(
-                isinstance(args[i], (Symbol, Constant))
-                for args in heads[functor]
-            )
-            and any(isinstance(args[i], Symbol) for args in heads[functor])
+            and all(isinstance(args[i], Symbol) for args in heads[functor])
         )
         if not positions:
             continue
@@ -105,34 +98,33 @@ def _restriction(rules, readers, kept, max_copies):
             )
             for args in read
         }
-        if len(constants) * len(heads[functor]) <= max_copies:
-            restriction[functor] = positions, tuple(constants.values())
+        restriction[functor] = positions, tuple(constants.values())
     return restriction
 
 
 def _restricted(rule, restriction):
-    """The copies of *rule* for the constants its predicate is restricted
-    to, or *rule* if it is not."""
+    """*rule*, restricted to the constants its predicate is read with."""
     head = rule.consequent
     if head.functor not in restriction:
-        return (rule,)
+        return rule
     positions, constants = restriction[head.functor]
+    variables = tuple(head.args[i] for i in positions)
+    if len(constants) == 1:
+        restricting = tuple(
+            EQ(variable, value)
+            for variable, value in zip(variables, constants[0])
+        )
+    else:
+        row = Tuple[tuple(value.type for value in constants[0])]
+        restricting = (Constant[AbstractSet[row]](
+            WrappedRelationalAlgebraSet(
+                tuple(value.value for value in values)
+                for values in constants
+            ),
+            verify_type=False,
+        )(*variables),)
     body = (
         rule.antecedent.formulas if isinstance(rule.antecedent, Conjunction)
         else (rule.antecedent,)
     )
-    copies = []
-    for values in constants:
-        equalities = {}
-        for i, value in zip(positions, values):
-            arg = head.args[i]
-            if isinstance(arg, Constant):
-                if arg.value != value.value:
-                    break
-            elif equalities.setdefault(arg, value).value != value.value:
-                break  # one variable at two positions, two constants
-        else:
-            copies.append(Implication(head, Conjunction(body + tuple(
-                EQ(variable, value) for variable, value in equalities.items()
-            ))))
-    return tuple(copies)
+    return Implication(head, Conjunction(body + restricting))
