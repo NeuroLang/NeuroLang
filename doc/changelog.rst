@@ -226,9 +226,10 @@ Unreleased
   in one reading of their bodies, not one comparison of thousands of
   symbols a pass; ``symbols_by_type`` returns the read-only mapping it
   keeps rather than a copy, and ``extensional_database`` filters it once
-  while it is kept, not once a literal checked (15 000 times); and when the seeded rewrite binds
-  nothing, the rewrite is not tried again unseeded, which only binds
-  less (7 attempts again for each of 3 answers).
+  while it is kept, not once a literal checked (15 000 times). When the
+  seeded rewrite finds no constant to bind, it is not tried again
+  unseeded, which only binds less (on master before this change, 7 more
+  attempts for each of the 3 answers).
 
 - The semi-naive chase no longer evaluates again a rule with several atoms
   of its stratum's predicates when none of them has new tuples: the rules

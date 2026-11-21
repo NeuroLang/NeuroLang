@@ -59,3 +59,16 @@ class NoConstantPredicateFoundError(InvalidMagicSetError):
     code with a constant as an argument.
     """
     pass
+
+
+class NewRecursionInMagicSetsRewriteError(InvalidMagicSetError):
+    """
+    The program of the Magic Sets rewrite has a cycle of predicates none
+    of which is recursive in the program that was rewritten. Every call
+    site of a predicate with one adornment shares its adorned and magic
+    predicates: ``p^bb`` gets the bindings of a rule that uses it through
+    ``magic_p^bb``, whose rule reads them from atoms which may be bound by
+    ``p^bb``'s own. Evaluating a non-recursive program in one recursive
+    stratum costs more than the bindings save, so the program is solved
+    unrewritten.
+    """
