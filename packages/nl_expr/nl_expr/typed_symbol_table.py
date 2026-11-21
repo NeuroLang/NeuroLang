@@ -15,6 +15,10 @@ class TypedSymbolTable(collections.abc.MutableMapping):
         self._symbols_by_type = collections.defaultdict(dict)
         self.enclosing_scope = enclosing_scope
         self.readonly = readonly
+        # changed with each assignment or deletion: the symbols of a type,
+        # kept until the table or a scope enclosing it changes
+        self._version = 0
+        self._by_type_cache = {}
 
     def __len__(self):
         return len(self._symbols)
@@ -31,6 +35,7 @@ class TypedSymbolTable(collections.abc.MutableMapping):
     def __setitem__(self, key, value):
         if self.readonly:
             raise NeuroLangException("This symbol table is readonly")
+        self._version += 1
         if isinstance(value, expressions.Expression):
             self._symbols[key] = value
             if value.type not in self._symbols_by_type:
@@ -42,6 +47,7 @@ class TypedSymbolTable(collections.abc.MutableMapping):
             raise ValueError("Wrong assignment %s" % str(value))
 
     def __delitem__(self, key):
+        self._version += 1
         value = self._symbols[key]
         del self._symbols_by_type[value.type][key]
         del self._symbols[key]
@@ -67,7 +73,33 @@ class TypedSymbolTable(collections.abc.MutableMapping):
             ret = ret | self.enclosing_scope.types()
         return ret
 
+    def _versions(self):
+        """The versions of the table and of the scopes enclosing it."""
+        scope, versions = self, []
+        while scope is not None:
+            versions.append((id(scope), scope._version))
+            scope = scope.enclosing_scope
+        return tuple(versions)
+
     def symbols_by_type(self, type_, include_subtypes=True):
+        """
+        Return a new dict of the symbols of type *type_* (or of a type
+        more informative, if *include_subtypes*), of the table and the
+        scopes enclosing it. Comparing every type of the table is computed
+        once until the table or one of those scopes changes: a magic-sets
+        rewrite asks for the relations of the extensional database
+        thousands of times (15 000 for a query of tracts, half of it).
+        """
+        key = (type_, include_subtypes)
+        versions = self._versions()
+        cached = self._by_type_cache.get(key)
+        if cached is None or cached[0] != versions:
+            cached = self._by_type_cache[key] = (
+                versions, self._symbols_by_type_now(type_, include_subtypes)
+            )
+        return dict(cached[1])
+
+    def _symbols_by_type_now(self, type_, include_subtypes):
         ret = dict()
         if self.enclosing_scope is not None:
             ret.update(self.enclosing_scope.symbols_by_type(type_))
