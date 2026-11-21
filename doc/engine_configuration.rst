@@ -180,7 +180,7 @@ may specify the following keys, all of them optional:
   and the values of a view that has some (the entries of a view without
   values are 1 and not stored).  A product of the view with an operand
   of a few of its column entities, whose entries are at most
-  ``INDEX_SHARE`` (a tenth) of the view's, reads their entries alone
+  ``[PROBABILISTIC_SOLVER] index_share`` (a tenth) of the view's, reads their entries alone
   rather than the whole view: ``activated`` (``[activated]`` in the
   engines of ``coordinate_meta_analysis``) by the studies of a term.
   Kept with the build's tables apart from the views, memory-mapped and

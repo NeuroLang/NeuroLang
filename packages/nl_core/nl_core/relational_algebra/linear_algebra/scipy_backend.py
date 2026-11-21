@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
+from nl_expr.config import config
 from nl_expr.expression_walker import PatternWalker, add_match
 
 from .encoding import EntityIndex, views_of_columns
@@ -273,12 +274,33 @@ class _Evaluation:
         other = held.groups[1 - held.groups.index(group)]
         if other not in keep:
             return None
-        dense = np.zeros(self.size(group))
-        dense[vector.codes[0]] = vector.values
-        matrix = held.matrix if held.groups[1] == group else held.matrix.T
-        out = matrix @ dense
+        codes, values = vector.codes[0], vector.values
+        rows = held.matrix
+        if held.groups[0] == group and rows.format == "csr" and _few(
+            np.diff(rows.indptr)[codes].sum(), rows.nnz
+        ):
+            # a few rows (the voxels of an image) read alone, not the
+            # whole view by its transpose: 10 voxels of activated, 1.7 s
+            # warm and 55 s cold for its 1 billion entries
+            out = values @ rows[codes]
+        elif held.groups[1] == group and held.by_columns is not None:
+            order = np.argsort(codes)
+            if _selective(held.by_columns, codes[order]):
+                out = values[order] @ held.by_columns.matrix(codes[order])
+            else:
+                out = rows @ self._dense(group, codes, values)
+        else:
+            dense = self._dense(group, codes, values)
+            out = (rows if held.groups[1] == group else rows.T) @ dense
         codes = np.flatnonzero(out)
         return _Tensor((other,), [codes], out[codes])
+
+    def _dense(self, group, codes, values):
+        """The dense vector of the entities of *group*, *values* at
+        *codes*."""
+        dense = np.zeros(self.size(group))
+        dense[codes] = values
+        return dense
 
     def contract(self, left, right, keep):
         """Return the product of *left* and *right* summed over their
@@ -467,11 +489,6 @@ class ScipyTensorSolver(PatternWalker):
         raise NotApplicable(f"{expression} is not in normal form")
 
 
-#: The most cells of the dense matrices of a product of an engine's view
-#: by an operand of a few rows (or columns): that operand and the product.
-FEW_CELLS = 2 ** 25
-
-
 def _product(left, right, held):
     """
     Return the product of the sparse matrices *left* and *right*, of
@@ -489,23 +506,26 @@ def _product(left, right, held):
     """
     if held == (False, True) and left.shape[0] * max(
         left.shape[1], right.shape[1]
-    ) <= FEW_CELLS:
+    ) <= config.getint("PROBABILISTIC_SOLVER", "few_cells"):
         return (right.T @ left.T.toarray()).T
     small, big = (left, right) if left.nnz <= right.nnz else (right, left)
     small = small.asformat(big.format)
     return small @ big if left.nnz <= right.nnz else big @ small
 
 
-#: The largest share of the entries of a view that a product reads
-#: through its index by column entities (:class:`~.encoding.ColumnIndex`)
-#: rather than as the view.
-INDEX_SHARE = .1
+def _few(entries, nnz):
+    """Whether *entries* of a view of *nnz* are few enough to be read alone
+    (``[PROBABILISTIC_SOLVER] index_share`` of them at most)."""
+    return entries <= config.getfloat(
+        "PROBABILISTIC_SOLVER", "index_share"
+    ) * nnz
 
 
 def _selective(index, columns):
     """Whether the entries of the column entities *columns* of a view are
-    few enough to be read through its *index*."""
-    return index.entries(columns) <= INDEX_SHARE * index.nnz
+    few enough to be read through its *index*
+    (:class:`~.encoding.ColumnIndex`)."""
+    return _few(index.entries(columns), index.nnz)
 
 
 def _csr(values, rows, columns, shape):
