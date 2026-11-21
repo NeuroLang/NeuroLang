@@ -174,7 +174,9 @@ BLAS, Apple's Accelerate, crashes a forked child once the parent ran it
 with several threads: ``neurolang_apps`` keeps it to one thread when
 imported before numpy (``VECLIB_MAXIMUM_THREADS=1``), and otherwise, as
 in a script or a notebook importing numpy first, the child keeps it to
-its own thread (``BLASSetThreading``, macOS 15 and later). Before macOS
+its own thread (``BLASSetThreading``, macOS 15 and later; the setting is
+that of the thread, which runs the query, and a matrix product in a thread
+the query would start crashes the child). Before macOS
 15, in that case, and where the system cannot fork (Windows, a parent
 too large to copy), the query runs in a thread of the session's process
 with the time limit only, which stops it only when it runs Python code

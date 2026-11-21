@@ -436,7 +436,8 @@ def _in_child(function, timeout, memory_mb):
     own thread (``BLASSetThreading``, macOS 15 and later). Before macOS
     15, where numpy loaded before ``neurolang_apps`` could keep
     Accelerate to one thread (``VECLIB_MAXIMUM_THREADS``), *function*
-    runs in a thread.
+    runs in a thread. The setting is the thread's: a thread *function*
+    starts in the child would still crash it on a matrix product.
     """
     if sys.platform == "emscripten" or not hasattr(os, "fork"):
         return _with_timeout(function, timeout)
@@ -534,18 +535,25 @@ def _accelerate_threading():
     """
     Return Accelerate's ``BLASSetThreading``, with which the thread
     calling it runs BLAS and LAPACK alone, or None where Accelerate does
-    not have it (before macOS 15).
+    not have it (before macOS 15) or refuses the setting, as tried in
+    the calling thread, whose setting is restored.
     """
     try:
         accelerate = ctypes.CDLL(
             "/System/Library/Frameworks/Accelerate.framework/Accelerate"
         )
-        function = accelerate.BLASSetThreading
+        function, current = (
+            accelerate.BLASSetThreading, accelerate.BLASGetThreading
+        )
     except (OSError, AttributeError):
         return None
     function.argtypes = [ctypes.c_uint]
     function.restype = ctypes.c_int
-    return function
+    current.restype = ctypes.c_uint
+    before = current()
+    supported = function(_BLAS_THREADING_SINGLE_THREADED) == 0
+    function(before)
+    return function if supported else None
 
 
 def _accelerate() -> bool:
