@@ -220,6 +220,15 @@ Unreleased
   language studies on neurosynth_iit took 240 to 267 s, now 118 to 120 s,
   with the same answer.
   
+- The magic-sets rewrite of the Fig. 2b query (neurosynth_iit) took 18.5 s
+  of its 70 s, now 6.5 s, the rewritten programs of the three engines'
+  questions and examples unchanged. Rules are ordered definitions first
+  in one reading of their bodies, not one comparison of thousands of
+  symbols a pass; the relations of the extensional database are read
+  once a rewrite, not once a literal; and when the seeded rewrite binds
+  nothing, the rewrite is not tried again unseeded, which only binds
+  less (7 attempts again for each of 3 answers).
+
 - A choice over a few rows of an engine's view (the voxels of an image) by
   the view reads those rows alone, and a vector over a few of its columns
   reads them through the view's index by column entities, rather than the

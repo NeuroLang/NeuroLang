@@ -31,6 +31,7 @@ from ..magic_sets import (
     check_stratified,
     magic_rewrite,
     needed_positions,
+    order_rules_definitions_first,
 )
 from ..negation import DatalogProgramNegationMixin
 
@@ -1181,3 +1182,24 @@ def test_a_predicate_bound_through_its_head_is_bound_by_a_stored_relation():
     solution = Chase(dl, rules=mr).build_chase_solution()
     assert solution[goal].value == {(C_("a1"),), (C_("b1"),)}
 
+
+
+def test_rules_ordered_definitions_first():
+    """
+    A rule comes after the rules defining the predicates of its body,
+    taken in passes in the order of the rules; a predicate defined by no
+    rule, as ``r``, waits on nothing. When the rules left all wait, as
+    those of ``s`` and ``t`` on each other, the first is taken.
+    """
+    p, q, s, t, r = S_("p"), S_("q"), S_("s"), S_("t"), S_("r")
+    x, y = S_("x"), S_("y")
+    rules = [
+        Imp_(p(x), Cnj_((q(x), s(x)))),
+        Imp_(q(x), r(x)),
+        Imp_(s(x), Cnj_((t(x, y), q(y)))),
+        Imp_(t(x, y), Cnj_((r(x), s(y)))),
+        Imp_(q(x), Cnj_((r(x), r(y)))),
+        Imp_(s(x), r(x)),
+    ]
+    ordered = order_rules_definitions_first(rules)
+    assert [rules.index(rule) for rule in ordered] == [1, 4, 5, 0, 2, 3]

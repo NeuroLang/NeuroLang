@@ -36,7 +36,9 @@ from nl_core.datalog.constraints_representation import (
     RightImplication,
     iter_implications,
 )
-from nl_core.datalog.exceptions import InvalidMagicSetError
+from nl_core.datalog.exceptions import (
+    InvalidMagicSetError, NoConstantPredicateFoundError
+)
 from nl_expr.exceptions import SymbolNotFoundError
 from nl_core.datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
@@ -1060,6 +1062,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         """
         try:
             return self._magic_rewrite_query_seeded(query, True)
+        except NoConstantPredicateFoundError:
+            # not seeding only binds less: nothing would be bound either,
+            # be it from the start or once the predicates whose binding
+            # would not be stratified are left unbound (7 attempts again
+            # for each of 3 answers of a query of tracts, 8 s)
+            raise
         except (
             InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError
         ):
