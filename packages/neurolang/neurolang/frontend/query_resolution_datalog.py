@@ -37,7 +37,9 @@ from nl_expr import expressions as ir
 from nl_expr import logic
 from nl_core.datalog.chase import Chase
 from nl_core.datalog.constraints_representation import RightImplication
-from nl_core.datalog.exceptions import InvalidMagicSetError
+from nl_core.datalog.exceptions import (
+    InvalidMagicSetError, NewRecursionInMagicSetsRewriteError
+)
 from nl_core.datalog.expression_processing import (
     remove_conjunction_duplicates,
     stratify,
@@ -1350,6 +1352,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             goal, mr = magic_rewrite(
                 query_expression.consequent, self.program_ir
             )
+        except NewRecursionInMagicSetsRewriteError:
+            raise  # binding fewer predicates does not undo it
         except InvalidMagicSetError:
             goal, mr = magic_rewrite(
                 query_expression.consequent, self.program_ir,

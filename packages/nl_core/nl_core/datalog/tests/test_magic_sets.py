@@ -21,9 +21,11 @@ from ..exceptions import (
     BoundAggregationApplicationError,
     InvalidMagicSetError,
     NegationInMagicSetsRewriteError,
+    NewRecursionInMagicSetsRewriteError,
     NoConstantPredicateFoundError,
     UnstratifiedMagicSetsRewriteError,
 )
+from .. import magic_sets
 from ..magic_sets import (
     AdornedSymbol,
     LeftToRightSIPS,
@@ -1180,3 +1182,113 @@ def test_a_predicate_bound_through_its_head_is_bound_by_a_stored_relation():
     dl.walk(mr)
     solution = Chase(dl, rules=mr).build_chase_solution()
     assert solution[goal].value == {(C_("a1"),), (C_("b1"),)}
+
+
+def _shared_call_sites_program():
+    """
+    A tract-like program, not recursive: ``A`` reads ``P`` then ``Q``,
+    ``B`` reads ``Q`` then ``P``. Bound, ``P`` and ``Q`` each have one
+    adorned and one magic predicate for both call sites: ``magic_Q^b``
+    reads ``P^bf``, which reads ``magic_P^bf``, which reads ``Q^b``, which
+    reads ``magic_Q^b``.
+    """
+    P, Q, A, B, R = (S_(n) for n in "PQABR")  # noqa: N806
+    EP, EQ = S_("EP"), S_("EQ")  # noqa: N806
+    dl = Datalog()
+    dl.walk(Eb_([
+        Imp_(P(x, y), EP(x, y)),
+        Imp_(Q(x), EQ(x)),
+        Imp_(A(x), P(x, y) & Q(y)),
+        Imp_(B(x), Q(x) & P(x, y)),
+        Imp_(R(x), A(x) & B(x)),
+        Imp_(q(x), R(x) & EQ(x)),
+    ]))
+    dl.walk(Eb_([
+        F_(EP(a, a)), F_(EP(a, b)), F_(EP(b, c)), F_(EQ(a)), F_(EQ(b)),
+    ]))
+    return dl
+
+
+def test_magic_rewrite_does_not_put_non_recursive_predicates_in_a_cycle():
+    """
+    The rewrite of the program of shared call sites would be one
+    recursive stratum, rule by rule until nothing changes: it is not done,
+    and the program is solved unrewritten.
+    """
+    for seed_from_edb in (True, False):
+        dl = _shared_call_sites_program()
+        with raises(NewRecursionInMagicSetsRewriteError) as error:
+            magic_rewrite(S_("R")(a), dl, seed_from_edb=seed_from_edb)
+        assert "P, Q" in str(error.value)
+    solution = Chase(_shared_call_sites_program()).build_chase_solution()
+    assert solution[q].value == {(a,)}
+
+
+@pytest.mark.parametrize("helper", [False, True])
+def test_magic_rewrite_keeps_the_recursion_of_the_program(helper):
+    """
+    The cycles of the rewrite of a transitive closure are its recursion:
+    it is rewritten, though the magic predicate of the non-recursive
+    ``par2`` is in the cycle of ``magic_anc^bf``.
+    """
+    par2 = S_("par2")
+    edge = par2 if helper else par
+    code = [
+        Imp_(q(x), anc(a, x)),
+        Imp_(anc(x, y), edge(x, y)),
+        Imp_(anc(x, y), edge(x, z) & anc(z, y)),
+    ]
+    if helper:
+        code.append(Imp_(par2(x, y), par(x, y)))
+    edb = Eb_([F_(par(a, b)), F_(par(b, c)), F_(par(d, a))])
+    dl = Datalog()
+    dl.walk(Eb_(code))
+    dl.walk(edb)
+    goal, mr = magic_rewrite(q(x), dl)
+    assert any(
+        rule.consequent.functor.name.startswith("magic_anc^bf")
+        for rule in mr.formulas
+    )
+    dl = Datalog()
+    dl.walk(mr)
+    dl.walk(edb)
+    solution = Chase(dl).build_chase_solution()
+    assert solution[goal].value == {(b,), (c,)}
+
+
+def test_magic_rewrite_stops_at_the_second_cycle_of_its_own(monkeypatch):
+    """
+    Each aggregation of ``Agg`` and ``Agg2``, bound, is in a cycle of the
+    rewrite's own, not the program's: the rewrite leaves the first one
+    reported unbound, and gives up at the second rather than leaving
+    unbound one predicate after the other, each a whole rewrite; seeding
+    from the stored relations or not does not change that.
+    """
+    t, s, v, w = S_("t"), S_("s"), S_("v"), S_("w")
+    A, B, R = S_("A"), S_("B"), S_("R")  # noqa: N806
+    Agg, Agg2 = S_("Agg"), S_("Agg2")  # noqa: N806
+    S0, S1, E, Sel = S_("S0"), S_("S1"), S_("E"), S_("Sel")  # noqa: N806
+    dl = Datalog()
+    dl.walk(Eb_([
+        Imp_(q(s), R(a, s)),
+        Imp_(R(t, s), A(t, s) & B(t, s)),
+        Imp_(A(t, s), S0(t, s) & Agg(t, v) & Agg2(t, v)),
+        Imp_(B(t, s), S1(t, s) & Agg(t, v) & Agg2(t, v)),
+        Imp_(Agg(t, AGG_COUNT(w)), E(t, w) & Sel(t, w)),
+        Imp_(Agg2(t, AGG_COUNT(w)), E(t, w)),
+    ]))
+    dl.walk(Eb_([
+        F_(S0(a, b)), F_(S0(a, c)), F_(S1(a, c)), F_(E(a, b)), F_(Sel(a, b)),
+    ]))
+    calls = []
+    rewrite = magic_sets._magic_rewrite
+
+    def counted(*args):
+        calls.append(set(args[3]))
+        return rewrite(*args)
+
+    monkeypatch.setattr(magic_sets, "_magic_rewrite", counted)
+    with raises(NewRecursionInMagicSetsRewriteError):
+        magic_rewrite(q(x), dl)
+    assert len(calls) == 2
+    assert len(calls[1]) == 1 and calls[1] <= {Agg, Agg2}
