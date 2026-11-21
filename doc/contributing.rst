@@ -88,6 +88,41 @@ with coverage:
 
 The test suite should pass fully before you submit a pull request.
 
+Budgets of the query plans
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A change to the rewrites or the solvers can keep every answer right and
+still make a query far more expensive: #1391 made ``uf(x, "left")`` take
+more than 12 GB where it took 0.6 GB. ``test_plan_cost.py``
+(``packages/neurolang_apps/neurolang_apps/utils/tests``) catches such
+changes. It runs representative queries on the engine
+``neurosynth_disconnectome7t``, built on synthetic data: forward
+inference, decoding by Bayes factor, co-activation, a ``similar_study``
+bound by a rule, negation with aggregation, resampling and the bundles
+``uf``, ``ilf``, ``af``, ``ec``, ``slf_i`` and ``cst``. For each query it
+counts:
+
+- ``max_rows``, the rows of the largest relation the solvers compute,
+  intermediate ones included;
+- ``magic_rows``, the rows of the magic predicates;
+- ``similarity_calls``, the calls to ``query_similarity``.
+
+These counts do not depend on the speed or the load of the machine. A
+query fails when one of them is more than ``factor`` times its baseline
+in ``plan_cost.yaml``, next to the test, plus ``slack`` rows. When a
+change makes a query cost more on purpose, rewrite the baselines:
+
+.. code-block:: bash
+
+   NEUROLANG_UPDATE_PLAN_COST=1 uv run pytest \
+       packages/neurolang_apps/neurolang_apps/utils/tests/test_plan_cost.py
+
+Then commit ``plan_cost.yaml``. The pull request shows the change of its
+baselines, for the reviewers to accept or refuse. The rewrite keeps the
+baselines of the cases marked ``xfail``, known regressions whose
+baselines are set by hand. Run it without ``-n`` (pytest-xdist): each
+test rewrites the file.
+
 
 Building the Documentation
 --------------------------

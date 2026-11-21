@@ -240,6 +240,20 @@ Unreleased
   l)`` on neurosynth, declined to weighted model counting (12.9 s), is
   lifted (1.4 s), with the same answer. See doc/probabilistic_lifting.rst,
   "Constants a deterministic atom excludes".
+- Budgets of the query plans (``test_plan_cost.py``, :doc:`contributing`):
+  the tests run representative queries (forward inference, Bayes factors,
+  co-activation, ``similar_study``, negation with aggregation, resampling,
+  tract_querier's bundles) on ``neurosynth_disconnectome7t`` built on
+  synthetic data. They fail when the largest relation computed, the rows
+  of the magic predicates or the calls to ``query_similarity`` are more
+  than twice their baseline in ``plan_cost.yaml``. The test catches both
+  of the latest regressions: #1379 (``similar_study`` bound by every
+  definition: 8.6 times the rows, 17 times the calls) and #1391 (the
+  bundles solved without magic sets: 32 to 50 times the rows of ``uf``,
+  ``ilf``, ``af`` and ``ec``). Those four are marked ``xfail`` until the
+  fix of #1391 is merged.
+  ``NEUROLANG_UPDATE_PLAN_COST=1`` rewrites the baselines.
+
 - ``similar_study`` and the other rules of ``query_similarity``: the
   embeddings of query texts are kept on disk, next to the documents', so
   that a new process reads them rather than embedding the texts again
