@@ -608,12 +608,15 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         ))
 
     def __hash__(self):
-        if self._container is None:
+        """A hash of the values, as :meth:`__eq__`: the bytes of an array
+        of strings are the addresses of objects, new ones at each read of
+        a pyarrow column. The sum of the rows' hashes is the same whatever
+        their order."""
+        if self._container is None or self.is_empty():
             return hash((tuple(), None))
         self._drop_duplicates_if_needed()
-        v = self._container.values
-        v.flags.writeable = False
-        return hash((tuple(self._container.columns), v.data.tobytes()))
+        rows = pd.util.hash_pandas_object(self._container, index=False)
+        return hash((tuple(self._container.columns), int(rows.sum())))
 
 
 class NamedRelationalAlgebraFrozenSet(
