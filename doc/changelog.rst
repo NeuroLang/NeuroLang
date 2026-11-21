@@ -362,6 +362,11 @@ Unreleased
 
 **Bug fixes:**
 
+- AI assistant: an answer given when the ReAct agent ran out of steps,
+  the last query that gave rows, says so: its summary reads *Out of steps:
+  no final answer after N steps*, as a warning on the web page and in
+  yellow in the terminal, where it read as a final answer.
+
 - A conditional probabilistic query reading the result of another, as
   ``p_top(l, p) :- PROB[top_active(l, s) // tom(s)] = p`` with ``top(l)``
   a threshold on ``p_l(l, p) :- PROB[active(l, s) // tom(s)] = p``,
@@ -372,11 +377,6 @@ Unreleased
   arities. The error says what is unsupported, and its suggestion how to
   rewrite the program: filter on a probability after the probabilistic
   queries, or store the first answer as a relation.
-
-- AI assistant: an answer given when the ReAct agent ran out of steps,
-  the last query that gave rows, says so: its summary reads *Out of steps:
-  no final answer after N steps*, as a warning on the web page and in
-  yellow in the terminal, where it read as a final answer.
 
 - A predicate whose rule binds a variable only through its head, as
   ``q`` in ``similar_study(q, s)`` of the engine neurosynth, gets the
