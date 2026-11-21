@@ -427,16 +427,18 @@ def test_build_sparse_views_kept_are_mapped(tmp_path):
         if parameters not in kept:
             computed.append(parameters)
             arrays = compute()
+            directory = tmp_path / str(len(kept))  # one per call, as files
+            directory.mkdir()
             for number, array in enumerate(arrays.values()):
-                np.save(tmp_path / f"{number}.npy", array)
+                np.save(directory / f"{number}.npy", array)
             kept[parameters] = {
-                name: np.load(tmp_path / f"{number}.npy", mmap_mode="r")
+                name: np.load(directory / f"{number}.npy", mmap_mode="r")
                 for number, name in enumerate(arrays)
             }
         return kept[parameters]
 
     built = build_sparse_views(*_declared_views(_activated(), tfidf()))
-    for _ in range(2):
+    for build in range(2):
         views = build_sparse_views(
             *_declared_views(_activated(), tfidf()), keep=keep
         )
@@ -455,6 +457,10 @@ def test_build_sparse_views_kept_are_mapped(tmp_path):
                 )
             assert (view.matrix != reference.matrix).nnz == 0
             assert (view.weighted() != reference.weighted()).nnz == 0
+            for sort in ("rows", "columns"):
+                np.testing.assert_array_equal(
+                    view.kept_sums[sort], reference.sums()[sort]
+                )
             mapped = [a for arrays in kept.values() for a in arrays.values()]
             for array in (
                 view.weighted().data, view.matrix.data, view.matrix.indices,
@@ -462,7 +468,10 @@ def test_build_sparse_views_kept_are_mapped(tmp_path):
             ):
                 assert any(np.shares_memory(array, m) for m in mapped)
         assert views["activated"].column_index is views["tfidf"].row_index
-    assert len(computed) == 1
+        if build == 0:
+            built_once = len(computed)
+    # the views, then the sums of each, each computed once
+    assert built_once == len(computed) == 1 + len(views)
 
 
 def test_a_view_indexed_by_its_columns(tmp_path):
