@@ -512,6 +512,7 @@ def test_marg_query_unbound_variable():
     ('ans[a](study) :- uf(s, "left")\nans[b](x) :- uf(x, "left")',
      ("study",), "s"),
     ('ans(streamline) :- t(x, "left")', ("streamline",), "x"),
+    ('ans(u, PROB) :- (uf(s, h) & c(s)) // c(s)', ("u",), "s, h"),
 ])
 @pytest.mark.parametrize("dry_run", [False, True])
 def test_query_head_variable_missing_from_body(
@@ -522,6 +523,7 @@ def test_query_head_variable_missing_from_body(
     nl = NeurolangPDL()
     nl.add_tuple_set([(1, "left"), (2, "right")], name="t")
     nl.add_tuple_set([(1, 2000), (2, 2001)], name="year")
+    nl.add_probabilistic_choice_from_tuples([(.5, 1), (.5, 2)], name="c")
     nl.execute_datalog_program("uf(x, h) :- t(x, h)")
     with pytest.raises(UnboundVariablesError) as exc_info:
         nl.execute_datalog_program(program, dry_run=dry_run)
