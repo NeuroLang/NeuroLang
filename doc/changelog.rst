@@ -826,11 +826,14 @@ v0.1a23 (2026-11-15)
 
 **Performance:**
 
-* The chase reads the bodies of the constraints of an ontology (the 10,399
-  axioms of the Cognitive Atlas) only for a predicate found nowhere else,
-  not at every stratum of every query: about 1 s less per query on the
-  engines with the Cognitive Atlas (decoding an image on neurosynth at 2 mm:
-  7.1 s to 6.0 s).
+* The dependency matrix the chase asks for at each stratum, and for each
+  chase it tries, reads the bodies of the constraints of an ontology (the
+  10,399 axioms of the Cognitive Atlas) only for a predicate found nowhere
+  else, and keeps the predicates of the constraints and of the existential
+  rules on the program until they change, rather than collecting them at
+  every call: under the profiler, ``lift('pain')`` on neurostore spends
+  0.3 s in its 11 dependency matrices instead of 3.1 s, and the queries
+  on neurosynth 0.3 s instead of 2.3 to 3.4 s.
 
 * Assistant: the two requests that check an answer (its translation back
   into English and the judgement of it) start with the same message, the
