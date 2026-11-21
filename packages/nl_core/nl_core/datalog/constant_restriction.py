@@ -6,10 +6,10 @@ argument, as ``endpoint_anterior_of(x, e, 'amygdala', h)``, the tuples of
 ``p`` with another value there are read by no rule: ``p`` can be computed
 for those constants only. Each rule of ``p`` gets, in its body, the
 variables of its head there equated with the constants, if they are one
-tuple, or a relation of the tuples of constants it is read with: a
-selection, or a join with a few tuples, of the rule's plan, pushed to
-the relations it reads (``term_box_hi(term, h, 1, b)`` with ``term ==
-'amygdala'``).
+tuple, or a test that they are one of the tuples of constants it is read
+with (:class:`OneOf`, computed on whole columns): a selection of the
+rule's plan, pushed to the relations it reads
+(``term_box_hi(term, h, 1, b)`` with ``term == 'amygdala'``).
 
 This is the restriction magic sets make of a predicate bound by
 constants alone, without magic predicates: it needs no sideways passing
@@ -19,14 +19,16 @@ queries' predicates unbound for that reason, 5.7 million tuples of
 ``endpoint_anterior_of`` computed for 2 terms).
 """
 
-from typing import AbstractSet, Tuple
+from typing import Callable
+
+import numpy as np
+import pandas as pd
 
 from nl_expr import expression_walker as ew
 from nl_expr.expressions import Constant, FunctionApplication, Symbol
 
 from .expression_processing import EQ
 from .expressions import Conjunction, Implication
-from .wrapped_collections import WrappedRelationalAlgebraSet
 
 
 def restrict_to_constants_used(rules, readers=(), kept=()):
@@ -115,16 +117,46 @@ def _restricted(rule, restriction):
             for variable, value in zip(variables, constants[0])
         )
     else:
-        row = Tuple[tuple(value.type for value in constants[0])]
-        restricting = (Constant[AbstractSet[row]](
-            WrappedRelationalAlgebraSet(
-                tuple(value.value for value in values)
-                for values in constants
-            ),
-            verify_type=False,
-        )(*variables),)
+        types = [value.type for value in constants[0]]
+        restricting = (Constant[Callable[types, bool]](OneOf(
+            tuple(value.value for value in values) for values in constants
+        ))(*variables),)
     body = (
         rule.antecedent.formulas if isinstance(rule.antecedent, Conjunction)
         else (rule.antecedent,)
     )
     return Implication(head, Conjunction(body + restricting))
+
+
+class OneOf:
+    """
+    Whether its arguments are one of the tuples *rows*: a built-in of a
+    rule's body, as an equality, rather than a relation of the tuples,
+    which the ontology rewriter does not keep in a rule. Its arguments
+    may be columns (``columnwise``): one ``isin`` for all the rows.
+    """
+
+    columnwise = True
+
+    def __init__(self, rows):
+        self.rows = frozenset(rows)
+
+    def __call__(self, *values):
+        if not any(np.ndim(value) for value in values):
+            return values in self.rows
+        if len(values) == 1:
+            return pd.Series(values[0]).isin(
+                [row[0] for row in self.rows]
+            ).to_numpy()
+        return pd.MultiIndex.from_arrays(
+            [np.asarray(value) for value in values]
+        ).isin(list(self.rows))
+
+    def __eq__(self, other):
+        return isinstance(other, OneOf) and self.rows == other.rows
+
+    def __hash__(self):
+        return hash(self.rows)
+
+    def __repr__(self):
+        return f"one of {sorted(self.rows)}"

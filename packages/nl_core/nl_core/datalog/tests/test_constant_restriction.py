@@ -1,3 +1,4 @@
+import numpy as np
 from nl_expr.expressions import Constant, Symbol
 from nl_expr.logic import Negation
 
@@ -27,18 +28,22 @@ def test_a_predicate_read_with_one_constant_is_computed_for_it():
 
 
 def test_a_predicate_read_with_constants_is_computed_for_them():
-    """p is read with 'a' and, negated, 'b': its rule joins a relation of
-    those two values."""
+    """p is read with 'a' and, negated, 'b': its rule tests t is one of
+    them."""
     rules = (
         Implication(p(x, t), Conjunction((e(x, t), f(t)))),
         Implication(q(x), Conjunction((p(x, C_("a")), Negation(p(x, C_("b")))))),
     )
     restricted, reader = restrict_to_constants_used(rules, kept=(q,))
     assert reader is rules[1]
-    *body, values = restricted.antecedent.formulas
+    *body, one_of = restricted.antecedent.formulas
     assert tuple(body) == rules[0].antecedent.formulas
-    assert values.args == (t,)
-    assert set(values.functor.value) == {("a",), ("b",)}
+    assert one_of.args == (t,)
+    assert one_of.functor.value.rows == {("a",), ("b",)}
+    assert one_of.functor.value("a") and not one_of.functor.value("c")
+    assert list(one_of.functor.value(np.array(["a", "c", "b"]))) == [
+        True, False, True
+    ]
 
 
 def test_predicates_not_restricted():
