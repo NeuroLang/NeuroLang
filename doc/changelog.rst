@@ -217,6 +217,17 @@ Unreleased
 
 **Performance:**
 
+- ``similar_study`` and the other rules of ``query_similarity``: the
+  embeddings of query texts are kept on disk, next to the documents', so
+  that a new process reads them rather than embedding the texts again
+  (0.4 s a text with the numpy encoder), and ``query_similarity`` and
+  ``query_similarity_cutoff`` are computed on whole columns (marked
+  ``columnwise``): one product of the documents' embeddings for each
+  distinct text, not a Python call a row. The bank's uncinate query of
+  neurosynth_iit, which compares the 21 definitions of the concepts under
+  'memory' with the studies (301 791 rows), took 19.7 to 20.3 s in a new
+  process, now 12.1 to 12.2 s.
+
 - ``uses(s) :- ri_task(t), skos:definition(t, d), similar_study(d, s)``
   computes ``similar_study`` for the definitions of ``ri_task`` alone, as
   fast as with ``skos:definition`` in a rule of its own: magic sets put
