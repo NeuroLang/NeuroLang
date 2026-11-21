@@ -627,3 +627,86 @@ def test_frontend_similar_study_bound_through_probabilities(program):
         {"a text": 4 / 6 if "p_similar" in program else 1 / 4,
          "another text": 4 / 6 if "p_similar" in program else 1 / 4}
     )
+
+
+def _rewrite_outcomes(monkeypatch):
+    """The exception class name, or None, of each rewrite attempt."""
+    from nl_core.datalog import magic_sets
+    outcomes = []
+    rewrite = magic_sets._magic_rewrite
+
+    def recorded(*args):
+        try:
+            result = rewrite(*args)
+        except Exception as error:
+            outcomes.append(type(error).__name__)
+            raise
+        outcomes.append(None)
+        return result
+
+    monkeypatch.setattr(magic_sets, "_magic_rewrite", recorded)
+    return outcomes
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_solves_unrewritten_a_recursion_of_the_rewrite(
+    frontend, monkeypatch
+):
+    """
+    ``a`` reads ``p`` then ``q``, ``b`` ``q`` then ``p``: bound, they share
+    adorned and magic predicates which depend on each other, a recursion
+    the program does not have. The query is solved unrewritten, after one
+    rewrite: not again without seeding from the stored relations.
+    """
+    nl = frontend()
+    nl.add_tuple_set([(0, 0), (0, 1), (1, 2)], name="ep")
+    nl.add_tuple_set([(0,), (1,)], name="eq")
+    nl.execute_datalog_program(
+        "p(x, y) :- ep(x, y)\n"
+        "q(x) :- eq(x)\n"
+        "a(x) :- p(x, y), q(y)\n"
+        "b(x) :- q(x), p(x, y)\n"
+        "c(x) :- a(x), b(x)"
+    )
+    outcomes = _rewrite_outcomes(monkeypatch)
+    res = nl.execute_datalog_program("ans(y) :- c(0), ep(0, y)")
+    assert outcomes == ["NewRecursionInMagicSetsRewriteError"]
+    assert set(res.as_pandas_dataframe().iloc[:, 0]) == {0, 1}
+
+
+def test_frontend_keeps_the_rewrite_a_similarity_needs(monkeypatch):
+    """
+    The similarity of a query text to a study is a relation over the
+    texts the rules using it bind (``q`` of ``sim`` is bound only through
+    the head), and the magic predicate of its percentile depends on it:
+    the rewrite has a recursion the program does not have. Unrewritten,
+    the program has no answer: the rewrite binding only ``sim`` and
+    ``cutoff`` is kept, recursion and all.
+    """
+    nl = NeurolangPDL()
+    studies = range(6)
+    nl.add_tuple_set([(s,) for s in studies], name="study")
+    nl.add_uniform_probabilistic_choice_over_set(
+        [(s,) for s in studies], name="selected_study"
+    )
+    nl.add_tuple_set([(0, "a"), (1, "a"), (3, "a"), (4, "b")], name="act")
+    nl.add_symbol(_rank_similarity, name="similarity")
+    nl.execute_datalog_program(
+        "sim(q, s, v) :- study(s) & (v == similarity(q, s))\n"
+        "cutoff(q, percentile(v, 50)) :- sim(q, s, v)\n"
+        "similar_study(q, s) :- sim(q, s, v) & cutoff(q, c) & (v >= c)"
+    )
+    outcomes = _rewrite_outcomes(monkeypatch)
+    res = nl.execute_datalog_program(
+        "close(s) :- similar_study('a text', s), selected_study(s)\n"
+        "both(s) :- act(s, 'a'), close(s)\n"
+        "ans(p) :- PROB[both(s) // close(s)] = p"
+    )
+    assert outcomes == ["NewRecursionInMagicSetsRewriteError", None]
+    similarities = [_rank_similarity("a text", s) for s in studies]
+    similar = {
+        s for s, v in zip(studies, similarities)
+        if v >= np.percentile(similarities, 50)
+    }
+    expected = len(similar & {0, 1, 3}) / len(similar)
+    assert res.as_pandas_dataframe().p.tolist() == pytest.approx([expected])

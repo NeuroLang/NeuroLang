@@ -27,6 +27,7 @@ from .exceptions import (
     BoundAggregationApplicationError,
     NegationInMagicSetsRewriteError,
     NonConjunctiveAntecedentInMagicSetsError,
+    NewRecursionInMagicSetsRewriteError,
     NoConstantPredicateFoundError,
     UnstratifiedMagicSetsRewriteError,
 )
@@ -49,6 +50,7 @@ from .expression_processing import (
     any_body_preds_in_set,
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
+    recursive_components,
     strongly_connected_components,
 )
 
@@ -650,6 +652,48 @@ def check_stratified(rules, origins=None) -> None:
             raise error
 
 
+def _origins(adorned_code):
+    """``{symbol: predicate}`` of the adorned and the magic predicate
+    symbols of the rewrite of *adorned_code*, once unadorned, and of the
+    predicate of the program each is of."""
+    origins = {}
+    for rule in adorned_code.formulas:
+        functor = rule.consequent.functor
+        origin = unadorned_predicate_symbol(functor)
+        origins[ReplaceAdornedSymbolWalker().walk(functor)] = origin
+        origins[magic_predicate(rule.consequent, adorned=False).functor] = (
+            origin
+        )
+    return origins
+
+
+def check_no_new_recursion(rules, origins, recursive) -> None:
+    """
+    Raise :class:`NewRecursionInMagicSetsRewriteError` if the rewritten
+    *rules* have a cycle of predicates none of which is of a predicate of
+    *recursive*, by *origins* (head symbol -> predicate): a recursion of
+    the rewrite's own, not the program's.
+
+    Balbin's magic sets give all the call sites of a predicate with one
+    adornment one adorned predicate and one magic predicate. In
+    ``a(x) :- p(x, y), q(y)`` and ``b(x) :- q(x), p(x, y)``, with ``p``
+    computed before ``q`` in the first and after in the second,
+    ``magic_q^b`` reads ``p^bf`` and ``magic_p^bf`` reads ``q^b``, which
+    reads ``magic_q^b``: a cycle, though neither ``p`` nor ``q`` is
+    recursive. The whole program is then evaluated as one recursive
+    stratum, rule by rule until nothing changes, which costs more than
+    the bindings save. A cycle with a recursive predicate in it is the
+    recursion of the program, which magic sets keep.
+    """
+    for component in recursive_components(rules):
+        if recursive.isdisjoint(origins.get(p, p) for p in component):
+            names = sorted({origins.get(p, p).name for p in component})
+            raise NewRecursionInMagicSetsRewriteError(
+                "The rewrite would put in a cycle predicates that are in "
+                f"none in the program: {', '.join(names)}"
+            )
+
+
 def magic_rewrite(
     query: Expression, datalog: DatalogProgram, seed_from_edb: bool = True
 ) -> Tuple[Symbol, Union]:
@@ -677,32 +721,65 @@ def magic_rewrite(
     """
     # A predicate whose binding would put an aggregation or a negation in a
     # cycle of the rewritten program is left unbound, and the rewrite done
-    # again: it is then computed whole, the others still bound.
+    # again: it is then computed whole, the others still bound. A predicate
+    # recursive in the program is left unbound whenever it is reported; one
+    # that is not, once: a cycle of such predicates is one of the rewrite's
+    # own (see check_no_new_recursion), which one more predicate left
+    # unbound rarely removes, and each attempt is a whole rewrite.
     # When that does not help, only the predicates that cannot be computed
-    # whole are bound, the others left unbound.
-    unbound = set()
+    # whole are bound, the others left unbound, and the cycles of that
+    # rewrite kept: unrewritten, the program has no answer (the relation of
+    # similarities to a query text can be the magic predicate of its own
+    # percentile). Without such predicates, the program is solved
+    # unrewritten.
+    rules = datalog.intensional_database().get(query.functor)
+    reachable = reachable_code(getattr(rules, "formulas", ()), datalog)
+    recursive = set().union(*recursive_components(reachable.formulas))
+    unbound, unbinds_left, checked = set(), 1, recursive
     invariants = program_invariants(datalog)
     while True:
         try:
             return _magic_rewrite(
-                query, datalog, seed_from_edb, unbound, invariants
+                query, datalog, seed_from_edb, unbound, invariants, checked
             )
         except UnstratifiedMagicSetsRewriteError as error:
-            if error.predicate is not None and error.predicate not in unbound:
-                unbound.add(error.predicate)
+            predicate = error.predicate
+            if predicate in recursive and predicate not in unbound:
+                unbound.add(predicate)
                 continue
-            others = set(datalog.intensional_database()) - set(
-                needed_positions(datalog)
-            )
-            if others <= unbound:
-                raise
-            unbound |= others
+            if predicate is not None and predicate not in recursive:
+                if unbinds_left and predicate not in unbound:
+                    unbinds_left -= 1
+                    unbound.add(predicate)
+                    continue
+                failure = error
+                if checked is not None:  # not the needed bindings' rewrite
+                    failure = NewRecursionInMagicSetsRewriteError(str(error))
+            else:
+                failure = error
+        except NewRecursionInMagicSetsRewriteError as error:
+            failure = error
+        needed = needed_positions(datalog)
+        others = set(datalog.intensional_database()) - set(needed)
+        if others <= unbound or not any(
+            rule.consequent.functor in needed for rule in reachable.formulas
+        ):
+            raise failure
+        unbound |= others
+        checked = None
 
 
 def _magic_rewrite(
-    query, datalog, seed_from_edb, unbound_predicates, invariants=None
+    query,
+    datalog,
+    seed_from_edb,
+    unbound_predicates,
+    invariants=None,
+    recursive=None,
 ):
-    """:func:`magic_rewrite`, the *unbound_predicates* left unbound."""
+    """:func:`magic_rewrite`, the *unbound_predicates* left unbound; the
+    rewrite must not add a cycle without a predicate of *recursive*, the
+    recursive predicates of the program, when it is given."""
     # 1. Create a SIPS and use it to adorn the code
     sips = LeftToRightSIPS(datalog, seed_from_edb, invariants)
     sips.unbound_predicates = unbound_predicates
@@ -749,6 +826,10 @@ def _magic_rewrite(
         unadorned_predicate_symbol(rule.consequent.functor)
         for rule in magic_rules
     })
+    if recursive is not None:
+        check_no_new_recursion(
+            unadorned_code, _origins(adorned_code), recursive
+        )
     # 6. Restrictions of stored relations are left to the rules using them
     return goal, Union(unfold_restrictions(unadorned_code, datalog, goal))
 

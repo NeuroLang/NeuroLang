@@ -36,7 +36,11 @@ from nl_core.datalog.constraints_representation import (
     RightImplication,
     iter_implications,
 )
-from nl_core.datalog.exceptions import InvalidMagicSetError
+from nl_core.datalog.exceptions import (
+    InvalidMagicSetError,
+    NewRecursionInMagicSetsRewriteError,
+    NoConstantPredicateFoundError,
+)
 from nl_expr.exceptions import SymbolNotFoundError
 from nl_core.datalog.expression_processing import (
     EqualitySymbolLeftHandSideNormaliseMixin,
@@ -1060,6 +1064,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         """
         try:
             return self._magic_rewrite_query_seeded(query, True)
+        except (
+            NewRecursionInMagicSetsRewriteError, NoConstantPredicateFoundError
+        ):
+            # not seeding only binds less: it would bind nothing either,
+            # and it would not undo a recursion of the rewrite's own
+            raise
         except (
             InvalidMagicSetError, UnsupportedProgramError, SymbolNotFoundError
         ):

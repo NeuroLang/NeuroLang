@@ -244,6 +244,23 @@ Unreleased
   bundles co-activated by language studies (neurosynth_iit) took 46 s in
   1 334 steps, now 30 s in 952.
 
+- Magic sets no longer make a non-recursive program recursive. All the
+  call sites of a predicate with the same bound arguments share one
+  adorned and one magic predicate, which can close a cycle of predicates
+  none of which is recursive (``traverses^bbb`` reads
+  ``magic_traverses^bbb``, which reads ``traverses^bbb``, in the WMQL
+  tract bundles): the program was then one recursive stratum, rule by
+  rule until nothing changed. Such a query is now solved unrewritten,
+  unless it has a predicate bound only through its head
+  (``similar_study``), which needs the rewrite. The rewrite leaves unbound
+  at most one non-recursive predicate whose binding would leave the
+  program unstratified, then gives up; a rewrite given up for a cycle of
+  its own is not tried again without seeding from the stored relations,
+  since binding fewer predicates does not undo the cycle. On
+  ``neurosynth_iit`` at 2 mm, the ``af`` bundle took 22.5 s, now 7.1 s,
+  ``extreme_capsule`` 19.4 s, now 4.3 s, and Fig. 2b's program without
+  its bootstrap 19.4 s, now 14.8 s, with the same answers.
+
 - A choice over a few rows of an engine's view (the voxels of an image) by
   the view reads those rows alone, and a vector over a few of its columns
   reads them through the view's index by column entities, rather than the

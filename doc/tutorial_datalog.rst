@@ -639,6 +639,18 @@ completes in about 20 seconds.
     skos:definition(t, d) & similar_study(d, s)``, ``similar_study`` is
     computed for the definitions of ``ri_task`` alone.
 
+    The rewrite gives all the call sites of a predicate with the same
+    bound arguments one adorned and one magic predicate. Two rules
+    reading ``p`` and ``q`` in opposite orders, ``a(x) :- p(x, y) &
+    q(y)`` and ``b(x) :- q(x) & p(x, y)``, then make ``magic_q`` depend
+    on ``p``, and ``magic_p`` on ``q``: a cycle, though neither is
+    recursive, which would have the whole program evaluated as one
+    recursive stratum, rule by rule until nothing changes. When the
+    rewrite has a cycle without a predicate recursive in the program
+    (the WMQL tract bundles have them), the query is solved unrewritten,
+    unless it has a predicate bound only through its head, such as
+    ``similar_study``, which needs the rewrite.
+
 
 Part 9: The Complete Program
 ==============================

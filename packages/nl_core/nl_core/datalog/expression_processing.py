@@ -354,6 +354,18 @@ def _recursive_components(rules):
     return components.values()
 
 
+def recursive_components(rules):
+    """The sets of the predicates defined by *rules* which are in a cycle
+    of their dependencies: a component of several predicates, or of one
+    whose rules use it."""
+    for component in _recursive_components(rules):
+        heads = {r.consequent.functor for r in component}
+        if len(heads) > 1 or any(
+            r.consequent.functor in _body_predicates(r) for r in component
+        ):
+            yield heads
+
+
 @functools.lru_cache(maxsize=1 << 14)
 def _body_predicates(implication):
     """The functors of the body of *implication*, cached: stratifying a
