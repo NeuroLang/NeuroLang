@@ -501,6 +501,46 @@ def test_marg_query_unbound_variable():
         )
 
 
+@pytest.mark.parametrize("program, variables, body", [
+    # a query on a rule, solved on its own path, once failed with a
+    # KeyError of pandas
+    ('ans(streamline) :- uf(x, "left")', ("streamline",), "x"),
+    ('both(s) :- uf(s, "left")\nans(study) :- both(s)', ("study",), "s"),
+    ('n(count(x)) :- uf(x, h)\nans(count) :- n(c)', ("count",), "c"),
+    ('ans(study, year) :- uf(s, "left"), year(s, y)', ("study", "year"),
+     "s, y"),
+    ('ans[a](study) :- uf(s, "left")\nans[b](x) :- uf(x, "left")',
+     ("study",), "s"),
+    ('ans(streamline) :- t(x, "left")', ("streamline",), "x"),
+])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_query_head_variable_missing_from_body(
+    program, variables, body, dry_run
+):
+    """A variable of a query's head absent from its body is reported,
+    with the variables of the body, also by a dry run."""
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "left"), (2, "right")], name="t")
+    nl.add_tuple_set([(1, 2000), (2, 2001)], name="year")
+    nl.execute_datalog_program("uf(x, h) :- t(x, h)")
+    with pytest.raises(UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(program, dry_run=dry_run)
+    error = exc_info.value
+    assert (error.variables, error.occurrences, error.query) == (
+        variables, (), True
+    )
+    assert f"variables of the body ({body})" in error.suggestion
+
+
+def test_rule_head_variable_missing_from_body():
+    nl = NeurolangPDL()
+    nl.add_tuple_set([(1, "left")], name="t")
+    with pytest.raises(
+        UnboundVariablesError, match="In q: the variable s of the head"
+    ):
+        nl.execute_datalog_program('q(s) :- t(x, "left")')
+
+
 def test_deterministic_query():
     nl = NeurolangPDL()
     d1 = [(1,), (2,), (3,), (4,), (5,)]

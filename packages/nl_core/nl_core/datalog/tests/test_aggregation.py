@@ -3,7 +3,10 @@ from typing import AbstractSet
 import pytest
 import numpy as np
 
-from nl_expr.exceptions import ForbiddenUnstratifiedAggregation
+from nl_expr.exceptions import (
+    ForbiddenUnstratifiedAggregation,
+    UnboundVariablesError,
+)
 
 from nl_expr.expression_walker import ExpressionBasicEvaluator
 from nl_expr.expressions import (
@@ -454,3 +457,12 @@ def test_percentile_aggregation_ignores_nan():
     solution = Chase(dl).build_chase_solution()
     (result,), = solution[Q].value.unwrap()
     assert result == pytest.approx(9.)
+
+
+def test_head_variable_missing_from_body_named():
+    dl = Datalog()
+    x, y, z, P, Q = S_('x'), S_('y'), S_('z'), S_('P'), S_('Q')
+    with pytest.raises(UnboundVariablesError) as exc_info:
+        dl.walk(Imp_(P(z, Fa_(S_('count'), (y,))), Q(x, y)))
+    assert exc_info.value.rule == 'P'
+    assert exc_info.value.variables == ('z',)

@@ -49,7 +49,10 @@ from .expression_processing import (
     is_aggregation_rule,
 )
 from .expressions import AggregationApplication, TranslateToLogic
-from .range_restriction import check_range_restriction
+from .range_restriction import (
+    check_range_restriction,
+    unbound_head_variables_error,
+)
 
 FA2L = FunctionApplicationToPythonLambda()
 
@@ -189,7 +192,9 @@ class DatalogWithAggregationMixin(PatternWalker):
         )
 
         if not consequent_symbols.issubset(antecedent._symbols):
-            raise NeuroLangException(
+            raise unbound_head_variables_error(
+                Implication(consequent, antecedent)
+            ) or NeuroLangException(
                 "All variables on the consequent need to be on the antecedent"
             )
 
