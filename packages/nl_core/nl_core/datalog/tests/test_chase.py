@@ -961,6 +961,35 @@ def test_semi_naive_solution_is_the_naive_one(program, cq_class, seed):
     assert solutions[0] == solutions[1]
 
 
+def test_semi_naive_skips_a_rule_whose_atoms_have_no_new_tuples():
+    """
+    R(x, y) :- Q(x, z) & Q(z, y) has two atoms of the rules' predicates:
+    it sees the whole instance, and was evaluated at each iteration of
+    P's closure, although Q has no new tuples after the first one.
+    """
+    T = S_('T')
+    evaluated = []
+
+    class C(ChaseSemiNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
+        def chase_step(self, instance, rule, restriction_instance=None):
+            evaluated.append(rule.consequent.functor)
+            return super().chase_step(instance, rule, restriction_instance)
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(E, {(i, i + 1) for i in range(8)})
+    dl.add_extensional_predicate_from_tuples(F, {(0, 1), (1, 2)})
+    dl.walk(Eb_((
+        Imp_(P(x, y), E(x, y)),
+        Imp_(P(x, y), P(x, z) & E(z, y)),
+        Imp_(Q(x, y), F(x, y)),
+        Imp_(T(x, y), Q(x, z) & Q(z, y)),
+    )))
+    solution = C(dl).build_chase_solution()
+    assert set(solution[T].value) == {(0, 2)}
+    assert len(solution[P].value) == 36
+    assert evaluated.count(T) == 2 < evaluated.count(P) // 2
+
+
 def test_semi_naive_first_iteration_sees_the_tuples_of_earlier_strata():
     """P(1, 2), from a stratum before the recursive one, is seen by
     Q(x, y) :- P(x, y) in its first iteration, although P(y, x) :- P(x, y)
