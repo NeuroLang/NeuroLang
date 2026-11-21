@@ -174,9 +174,9 @@ def test_symbols_by_type_kept_until_a_table_changes(monkeypatch):
     assert set(first) == {S_('a'), S_('b')}
     comparisons.clear()
     second = inner.symbols_by_type(int)
-    assert second == first and not comparisons
-    second[S_('z')] = C_[int](0)  # the caller's own dict
-    assert set(inner.symbols_by_type(int)) == {S_('a'), S_('b')}
+    assert second is first and not comparisons
+    with pytest.raises(TypeError):  # read-only: shared by the callers
+        second[S_('z')] = C_[int](0)
 
     inner[S_('d')] = C_[int](3)
     assert set(inner.symbols_by_type(int)) == {S_('a'), S_('b'), S_('d')}

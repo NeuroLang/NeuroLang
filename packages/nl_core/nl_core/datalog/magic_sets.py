@@ -176,7 +176,6 @@ def program_invariants(datalog) -> dict:
     (44 attempts, 25 s of a query of tracts)."""
     return {
         "edb": edb_with_prob_symbols(datalog),
-        "stored": datalog.extensional_database(),
         "prob_symbols": probabilistic_symbols(datalog),
         "aggregate_positions": aggregate_positions(datalog),
         "needed_positions": needed_positions(datalog),
@@ -197,7 +196,6 @@ class SIPS(ABC):
         if invariants is None:
             invariants = program_invariants(datalog)
         self.edb = invariants["edb"]
-        self.stored = invariants["stored"]
         self.prob_symbols = invariants["prob_symbols"]
         self.seed_from_edb = seed_from_edb
         self.seeding_edb_atoms = set()
@@ -475,7 +473,7 @@ class LeftToRightSIPS(SIPS):
         database."""
         return (
             isinstance(functor, Symbol) and
-            functor in self.stored and
+            functor in self.datalog.extensional_database() and
             functor not in self.prob_symbols
         )
 
@@ -486,7 +484,7 @@ class LeftToRightSIPS(SIPS):
         tuples."""
         if not self._stored(functor):
             return False
-        relation = self.stored[functor].value
+        relation = self.datalog.extensional_database()[functor].value
         return len(relation) <= config.getint(
             "MAGIC_SETS", "seed_rows", fallback=100
         )

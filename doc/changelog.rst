@@ -224,8 +224,9 @@ Unreleased
   of its 70 s, now 6.5 s, the rewritten programs of the three engines'
   questions and examples unchanged. Rules are ordered definitions first
   in one reading of their bodies, not one comparison of thousands of
-  symbols a pass; the relations of the extensional database are read
-  once a rewrite, not once a literal; and when the seeded rewrite binds
+  symbols a pass; ``symbols_by_type`` returns the read-only mapping it
+  keeps rather than a copy, and ``extensional_database`` filters it once
+  while it is kept, not once a literal checked (15 000 times); and when the seeded rewrite binds
   nothing, the rewrite is not tried again unseeded, which only binds
   less (7 attempts again for each of 3 answers).
 
