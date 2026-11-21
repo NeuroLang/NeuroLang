@@ -11,6 +11,9 @@ from importlib.metadata import PackageNotFoundError, version
 # assistant checks its queries in forked children (utils/llm/validation.py).
 # One thread keeps them safe, if set before numpy loads, as the REPL and the
 # server import this package first. A value of the environment is kept.
+# Where numpy loaded first, the child keeps Accelerate to its own thread
+# (BLASSetThreading, macOS 15 and later); before macOS 15, the query runs in
+# a thread, which its time limit cannot stop in a call to C.
 _BLAS_THREADS = os.environ.get("VECLIB_MAXIMUM_THREADS")
 if sys.platform == "darwin":
     os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
