@@ -239,12 +239,12 @@ Unreleased
   unless it has a predicate bound only through its head
   (``similar_study``), which needs the rewrite. The rewrite leaves unbound
   at most one non-recursive predicate whose binding would leave the
-  program unstratified, then gives up, and is not tried again without
-  seeding from the stored relations. On ``neurosynth_iit`` at 2 mm, the
-  25 left bundles of ``freesurfer_queries.dl`` took 206 s, now 79 s
-  (``af`` 46 s, now 9.3 s; ``extreme_capsule`` 29 s, now 5.3 s), and
-  Fig. 2b's program without its bootstrap 65 s, now 20.5 s (14 rewrites
-  of 54 s, now 2 of 9 s), with the same answers.
+  program unstratified, then gives up; a rewrite given up for a cycle of
+  its own is not tried again without seeding from the stored relations,
+  since binding fewer predicates does not undo the cycle. On
+  ``neurosynth_iit`` at 2 mm, the ``af`` bundle took 22.5 s, now 7.1 s,
+  ``extreme_capsule`` 19.4 s, now 4.3 s, and Fig. 2b's program without
+  its bootstrap 19.4 s, now 14.8 s, with the same answers.
 
 - A choice over a few rows of an engine's view (the voxels of an image) by
   the view reads those rows alone, and a vector over a few of its columns
