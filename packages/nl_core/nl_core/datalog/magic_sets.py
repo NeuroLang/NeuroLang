@@ -58,7 +58,7 @@ AGGREGATES = (AggregationApplication, ProbabilisticQuery)
 
 def order_conjunction_constant_atoms_first(
     formulas: Tuple[Expression, ...], bound: Set[Symbol] = frozenset(),
-    binding=lambda atom: False,
+    binding=lambda atom: False, last=lambda atom: 0,
 ) -> Tuple[Expression, ...]:
     """
     Order a rule body so constant-bearing atoms are adorned first.
@@ -70,7 +70,10 @@ def order_conjunction_constant_atoms_first(
     Builtins, such as ``x > 0``, are not constant-bearing atoms: they
     bind nothing. The atoms ``binding`` accepts (the stored relations of
     the query's rule, or those binding a predicate that needs it, see
-    :class:`LeftToRightSIPS`) count as constant-bearing atoms.
+    :class:`LeftToRightSIPS`) count as constant-bearing atoms. They
+    are put in the order of their rank by ``last``, then in their
+    original order: the rule ``task(t)`` restricting ``definition(t, d)``,
+    then ``definition(t, d)``, then ``sim(d, 'x')``, which needs ``d``.
 
     Magic sets adorns rule bodies left to right; a constant-bearing atom
     only seeds the magic set (``magic_P(c) :- ()``) while its shared
@@ -89,14 +92,14 @@ def order_conjunction_constant_atoms_first(
     """
     if not all(isinstance(f, FunctionApplication) for f in formulas):
         return formulas
-    constant_atoms = [
+    constant_atoms = sorted((
         f for f in formulas
         if isinstance(f.functor, Symbol)
         and (
             binding(f) or
             any(isinstance(arg, Constant) or arg in bound for arg in f.args)
         )
-    ]
+    ), key=last)
     if not constant_atoms:
         return formulas
     prior_vars = set()
@@ -361,11 +364,13 @@ class LeftToRightSIPS(SIPS):
         keeps). That literal joins the bodies of the magic rules of the
         literals right of it; in the query's rule, it is put first.
         - or it is a variable of a positive literal of a deterministic
-        relation of the extensional database, put first, sharing a
-        variable with an argument a predicate of the rule needs bound, as
-        ``q`` of ``sim(q, s) :- study(s), v == f(q, s), v > .5`` (see
+        relation of the extensional database sharing a variable with an
+        argument a predicate of the rule needs bound, as ``q`` of
+        ``sim(q, s) :- study(s), v == f(q, s), v > .5`` (see
         :func:`needed_positions`): ``d`` in ``task(t, d), sim(d, s)``,
-        whatever ``seed_from_edb``.
+        whatever ``seed_from_edb``. That literal is put first, after the
+        constants and the rules sharing its variables, which restrict
+        it: ``ri_task(t), definition(t, d), sim(d, s)``.
 
     Probabilistic literals are those of probabilistic facts and choices,
     of within-language probabilistic queries, and of the predicates
@@ -1176,20 +1181,55 @@ def adorn_code(
             if isinstance(rule.antecedent, Conjunction):
                 needed = sips.variables_needed(rule)
                 seeds = in_query_rule and sips.seed_from_edb
+                head_bound = {
+                    arg for arg, a in zip(
+                        rule.consequent.args,
+                        getattr(consequent.functor, "adornment", ""),
+                    ) if a == "b"
+                }
 
-                def binding(atom, needed=needed, seeds=seeds):
+                def binds(atom, needed=needed):
                     return (
                         sips._stored(atom.functor) and
                         not needed.isdisjoint(atom.args)
-                    ) or (seeds and sips.seeds(atom.functor))
+                    )
+                # The constants bind first, then the rules restricting
+                # the variables of those stored relations, the stored
+                # relations, and the literals needing their variables:
+                # task(t), definition(t, d), sim(d, s), whatever the
+                # order of the body.
+                stored_vars = {
+                    arg for atom in rule.antecedent.formulas
+                    if isinstance(atom, FunctionApplication) and binds(atom)
+                    for arg in atom.args
+                }
+
+                def binding(atom, seeds=seeds, binds=binds,
+                            stored_vars=stored_vars):
+                    return binds(atom) or (
+                        seeds and sips.seeds(atom.functor)
+                    ) or (
+                        atom.functor in idb and
+                        atom.functor not in sips.needed_positions and
+                        atom.functor not in sips.prob_symbols and
+                        not stored_vars.isdisjoint(atom.args)
+                    )
+
+                def last(atom, binds=binds, head_bound=head_bound):
+                    if any(
+                        isinstance(atom.args[i], Symbol) and
+                        atom.args[i] not in head_bound
+                        for i in sips.needed_positions.get(atom.functor, ())
+                    ):
+                        return 3
+                    if any(
+                        isinstance(arg, Constant) or arg in head_bound
+                        for arg in atom.args
+                    ):
+                        return 0
+                    return 2 if binds(atom) else int(atom.functor in idb)
                 formulas = order_conjunction_constant_atoms_first(
-                    rule.antecedent.formulas, {
-                        arg for arg, a in zip(
-                            rule.consequent.args,
-                            getattr(consequent.functor, "adornment", ""),
-                        ) if a == "b"
-                    },
-                    binding,
+                    rule.antecedent.formulas, head_bound, binding, last,
                 )
                 if formulas != rule.antecedent.formulas:
                     rule = rule.apply(
