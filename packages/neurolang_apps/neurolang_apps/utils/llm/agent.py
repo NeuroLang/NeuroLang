@@ -33,10 +33,10 @@ from neurolang_apps.utils import engine_registry
 
 from . import prompts
 from .comments import comment_rules, commented_query
-from .config import AssistantConfig, ProviderConfig
+from .config import AssistantConfig, ProviderConfig, for_engine
 from .context import EngineContext
 from .examples import load_examples, select_examples
-from .providers import LLMError, make_client
+from .providers import LLMError, LLMRefusal, make_client
 from .validation import (
     QueryTimeout, QueryTooLarge, _in_child, check_query, run_preview,
 )
@@ -288,12 +288,23 @@ def _gave_rows(observation: str) -> bool:
     return bool(re.match(r"(\w+: )?[1-9]\d* rows", observation))
 
 
+def engine_config(name: str) -> dict:
+    """Return the configuration of the engine *name*, {} if it is not
+    registered."""
+    if name in engine_registry.list_engine_names():
+        return engine_registry.get_engine_config(name)
+    return {}
+
+
 class Toolbox:
     """
     The tools of the ReAct agent on an engine.
 
     :meth:`call` returns the observation of a tool call and, for an
-    accepted ``final_answer``, the query and its explanation.
+    accepted ``final_answer``, the query and its explanation. A query is
+    checked within *check_timeout* seconds and run within
+    *query_timeout*; *timeout_hint*, the engine's
+    ``assistant_timeout_guidance``, follows the message of either timeout.
     """
 
     def __init__(
@@ -301,12 +312,15 @@ class Toolbox:
         query_timeout: Optional[float] = None,
         query_memory_mb: Optional[float] = None,
         max_cells: Optional[int] = None,
+        check_timeout: Optional[float] = None, timeout_hint: str = "",
     ):
         self.context = context
         self.language = language
         self.preview_rows = preview_rows
         self.query_timeout = query_timeout
         self.query_memory_mb = query_memory_mb
+        self.check_timeout = check_timeout
+        self.timeout_hint = timeout_hint
         # The most cells of a result kept whole (validation.Preview.frames),
         # MAX_KEPT_CELLS if None.
         self.max_cells = max_cells
@@ -390,11 +404,19 @@ class Toolbox:
     def tool_search_values(self, pattern: str, predicate=None, column=None):
         return self.context.search_values(pattern, predicate, column), None
 
-    def tool_check_query(self, query: str):
-        result = check_query(
-            self.context.nl, query, self.language,
-            self.context.engine_name if self.context.declared else "",
+    def _check(self, query: str, engine_name: str = ""):
+        """Check *query* (see validation.check_query) within the time."""
+        return check_query(
+            self.context.nl, query, self.language, engine_name,
+            self.check_timeout, self.timeout_hint,
         )
+
+    def _engine_name(self) -> str:
+        """The engine's name, for the notes on the constants."""
+        return self.context.engine_name if self.context.declared else ""
+
+    def tool_check_query(self, query: str):
+        result = self._check(query, self._engine_name())
         if not result.ok:
             return f"The query fails:\n{result.message}", None
         text = "The query is valid."
@@ -405,23 +427,21 @@ class Toolbox:
         return text, None
 
     def tool_run_query(self, query: str):
-        check = check_query(self.context.nl, query, self.language)
+        check = self._check(query)
         if not check.ok:
             return f"The query fails:\n{check.message}", None
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
-            self.context.engine_name if self.context.declared else "",
+            self._engine_name(),
             self.query_timeout, self.query_memory_mb, self.max_cells,
+            self.timeout_hint,
         )
         if preview.ok and preview.rows:
             self.queries_with_rows.append(query.strip())
         return preview.text, None
 
     def tool_final_answer(self, query: str, explanation: str = ""):
-        result = check_query(
-            self.context.nl, query, self.language,
-            self.context.engine_name if self.context.declared else "",
-        )
+        result = self._check(query, self._engine_name())
         if not result.ok:
             return (
                 f"The answer is rejected: the query fails:\n{result.message}"
@@ -430,8 +450,9 @@ class Toolbox:
         normalised = " ".join(query.split())
         preview = run_preview(
             self.context.nl, query, self.language, self.preview_rows,
-            self.context.engine_name if self.context.declared else "",
+            self._engine_name(),
             self.query_timeout, self.query_memory_mb, self.max_cells,
+            self.timeout_hint,
         )
         if not preview.ok:
             return (
@@ -480,7 +501,9 @@ class Agent:
     :class:`~.examples.Example`, by default the engine's bank, and the
     engine is described by *description*, by default the description
     of its configuration, and *guidance* tells how to answer on it, by
-    default its configuration's ``assistant_guidance``.
+    default its configuration's ``assistant_guidance``. The time limits of
+    *config* it leaves None are the engine's (see
+    :func:`~.config.for_engine`).
     """
 
     strategy = ""
@@ -494,9 +517,9 @@ class Agent:
     ):
         self.nl = nl
         self.provider = provider
-        self.config = config
         self.language = language
         self.engine_name = engine_name
+        self.config = for_engine(config, self._engine_config())
         self.client = client or make_client(provider, config.timeout)
         self.fallback_client = fallback_client
         self.context = EngineContext(nl, engine_name, loaded)
@@ -537,22 +560,28 @@ class Agent:
 
     def _engine_config(self) -> dict:
         """Return the configuration of the engine, if it is registered."""
-        if self.engine_name in engine_registry.list_engine_names():
-            return engine_registry.get_engine_config(self.engine_name)
-        return {}
+        return engine_config(self.engine_name)
 
     def _complete(self, result: AgentResult, messages, tools=None,
                   temperature=None):
         """
         Return the model's reply to *messages*, counting its usage. An
         empty reply (all the tokens spent on reasoning, or a glitch of
-        the provider) is asked for again once.
+        the provider) and a refusal of the provider's safeguards (see
+        :class:`~.providers.LLMRefusal`), often a false positive, are
+        asked for again once.
         """
-        for _ in range(2):
-            reply = self.client.complete(
-                messages, tools, self.config.temperature
-                if temperature is None else temperature,
-            )
+        for attempt in range(2):
+            try:
+                reply = self.client.complete(
+                    messages, tools, self.config.temperature
+                    if temperature is None else temperature,
+                )
+            except LLMRefusal:
+                result.calls += 1
+                if attempt:
+                    raise
+                continue
             result.calls += 1
             result.usage.update(reply.usage)
             if reply.text.strip() or reply.tool_calls:
@@ -739,7 +768,13 @@ class IclAgent(Agent):
                 )
                 self._step(result, AgentStep(reply.text.strip(), "answer"))
                 return result
-            check = check_query(self.nl, query, self.language)
+            check = check_query(
+                self.nl, query, self.language,
+                timeout=self.config.check_timeout,
+                timeout_hint=self._engine_text(
+                    None, "assistant_timeout_guidance"
+                ),
+            )
             self._step(result, AgentStep(
                 "", "query", {"query": query},
                 "valid" if check.ok else check.message,
@@ -805,6 +840,8 @@ class ReactAgent(Agent):
         toolbox = Toolbox(
             self.context, self.language, self.config.preview_rows,
             self.config.query_timeout, self.config.query_memory_mb,
+            check_timeout=self.config.check_timeout,
+            timeout_hint=self._engine_text(None, "assistant_timeout_guidance"),
         )
         messages = [
             {"role": "system", "content": self.system_prompt(

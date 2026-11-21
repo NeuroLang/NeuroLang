@@ -278,8 +278,31 @@ def squall_datalog(text: str) -> str:
     return output.getvalue().strip()
 
 
+def timeout_message(timeout: float, hint: str = "", check=False) -> str:
+    """
+    Return the message of a query stopped after *timeout* seconds, its
+    run or, if *check*, its dry run, followed by *hint*, the engine's
+    advice on restricting its queries (``assistant_timeout_guidance``).
+    """
+    if check:
+        message = (
+            f"Checking the query (rewriting it for the engine, without "
+            f"running it) took more than {timeout:.0f} s and was stopped: "
+            "the program is too large. Check and run its parts on their "
+            "own, restricted with constants or joins."
+        )
+    else:
+        message = (
+            f"The query ran for more than {timeout:.0f} s and was stopped: "
+            "restrict it with constants or joins before running it again."
+        )
+    hint = " ".join(hint.split())
+    return f"{message}\n{hint}" if hint else message
+
+
 def check_query(
-    nl, text: str, language: str, engine_name: str = ""
+    nl, text: str, language: str, engine_name: str = "",
+    timeout: Optional[float] = None, timeout_hint: str = "",
 ) -> CheckResult:
     """
     Check that the query *text* in *language* can run on the engine *nl*.
@@ -288,8 +311,29 @@ def check_query(
     engine, which finds the predicates that do not exist or are used
     with the wrong number of arguments, but the chase is not run. The
     constants matching no value of the sorts the engine *engine_name*
-    declares are noted.
+    declares are noted. With a *timeout* (seconds), the check runs in a
+    child process stopped when it exceeds it, and fails with a message
+    followed by *timeout_hint* (see :func:`timeout_message`).
     """
+    if timeout:
+        try:
+            return _in_child(
+                lambda: check_query(nl, text, language, engine_name),
+                timeout, None,
+            )
+        except QueryTimeout:
+            return CheckResult(
+                False, timeout_message(timeout, timeout_hint, check=True)
+            )
+        except QueryStopped:
+            return CheckResult(
+                False,
+                "The check was stopped: the call running it was cancelled.",
+            )
+        except (QueryTooLarge, QueryCrashed):
+            # Killed by the system, or crashed, not because of the query:
+            # checked as without a time limit.
+            return check_query(nl, text, language, engine_name)
     text = text.strip()
     if not text:
         return CheckResult(False, "The query is empty.")
@@ -527,7 +571,7 @@ def _accelerate() -> bool:
 def run_preview(
     nl, text: str, language: str, rows: int = 10, engine_name: str = "",
     timeout: Optional[float] = None, memory_mb: Optional[float] = None,
-    max_cells: Optional[int] = None,
+    max_cells: Optional[int] = None, timeout_hint: str = "",
 ) -> Preview:
     """
     Run the query *text* and return the first *rows* rows of its result,
@@ -536,7 +580,8 @@ def run_preview(
 
     The rules it defines are discarded with the scope it runs in. With a
     *timeout* (seconds) or a *memory_mb* limit, the query runs in a child
-    process stopped when it exceeds them.
+    process stopped when it exceeds them; the message of a timeout is
+    followed by *timeout_hint* (see :func:`timeout_message`).
     """
     def preview():
         return _preview(nl, text, language, rows, engine_name, max_cells)
@@ -546,11 +591,7 @@ def run_preview(
     try:
         return _in_child(preview, timeout, memory_mb)
     except QueryTimeout:
-        return Preview(
-            False,
-            f"The query ran for more than {timeout:.0f} s and was stopped: "
-            "restrict it with constants or joins before running it again.",
-        )
+        return Preview(False, timeout_message(timeout, timeout_hint))
     except QueryTooLarge:
         return Preview(
             False,

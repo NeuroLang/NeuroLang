@@ -1,0 +1,23 @@
+# Merged into the entry of tracts in ../engines.yaml (see
+# doc/engine_configuration.rst): the engines with tractography, which all
+# extend tracts, inherit it.
+#
+# How the LLM assistant (.ask, neurolang-query --ask) is to write its
+# queries on the streamlines: added to its system prompt.
+assistant_guidance: >
+  Each white-matter bundle (uf(x, h), af, ilf, cst...) is a query over all
+  the streamlines, which takes seconds to tens of seconds: a query over
+  many bundles at once can run for minutes. Answer for the bundles the
+  question names, one at a time, and bind the bundle first in a rule,
+  uf(x, "left") before endpoint_point(x, e, ex, ey, ez), endpoint_in or
+  traverses, so that only its streamlines are joined.
+
+# Added to the message of a query, or of its check, stopped at the
+# assistant's time limit (assistant_query_timeout, assistant_check_timeout
+# in ../engines.yaml).
+assistant_timeout_guidance: >
+  On tractography, restrict it to one bundle, with its hemisphere, e.g.
+  uf(x, "left"); bind the bundle first in each rule, before
+  endpoint_point(x, e, ex, ey, ez) or the other relations of the
+  streamlines' points, and filter with constants or joins (one atlas's
+  regions, a distance <= 3); answer for the other bundles in other queries.

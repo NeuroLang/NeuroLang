@@ -16,6 +16,7 @@ format of its API.
 """
 
 import json
+import re
 import subprocess
 import sys
 import time
@@ -31,6 +32,17 @@ ANTHROPIC_VERSION = "2023-06-01"
 
 class LLMError(Exception):
     """Raised when a provider cannot be reached or gives a bad reply."""
+
+
+class LLMRefusal(LLMError):
+    """
+    Raised when the provider's safeguards decline a request: a reply
+    whose ``finish_reason`` is ``content_filter``, or with a ``refusal``
+    (OpenAI API); whose ``stop_reason`` is ``refusal`` (Anthropic API); a
+    command failing with a message of :data:`COMMAND_REFUSAL` (``claude
+    -p``). Such classifiers have false positives: the agent asks again
+    once.
+    """
 
 
 @dataclass
@@ -229,7 +241,16 @@ class OpenAIChatClient(ChatClient):
         return payload
 
     def _reply(self, data: dict) -> Reply:
-        message = data["choices"][0]["message"]
+        choice = data["choices"][0]
+        message = choice["message"]
+        if (
+            choice.get("finish_reason") == "content_filter"
+            or message.get("refusal")
+        ):
+            raise LLMRefusal(
+                f"{self.provider.name}: the provider declined the request "
+                f"({message.get('refusal') or 'content filter'})."
+            )
         calls = [
             ToolCall(
                 call.get("id") or f"call_{i}",
@@ -370,6 +391,11 @@ class AnthropicChatClient(ChatClient):
         return payload
 
     def _reply(self, data: dict) -> Reply:
+        if data.get("stop_reason") == "refusal":
+            raise LLMRefusal(
+                f"{self.provider.name}: the model's safeguards declined the "
+                "request (stop_reason: refusal)."
+            )
         text, calls = [], []
         for block in data["content"]:
             if block["type"] == "text":
@@ -398,6 +424,9 @@ class AnthropicChatClient(ChatClient):
 
 
 SYSTEM_PLACEHOLDER = "{system}"
+# What a command writes when the model's safeguards decline the request:
+# claude -p, "API Error: ...'s safeguards flagged this message".
+COMMAND_REFUSAL = re.compile(r"safeguards flagged", re.IGNORECASE)
 COMMAND_ATTEMPTS = 3
 COMMAND_RETRY_SECONDS = 5
 
@@ -480,10 +509,13 @@ class CommandChatClient:
                     ) from exc
                 time.sleep(COMMAND_RETRY_SECONDS)
         if completed.returncode != 0:
-            raise LLMError(
+            output = (completed.stderr or completed.stdout).strip()
+            error = (
+                LLMRefusal if COMMAND_REFUSAL.search(output) else LLMError
+            )
+            raise error(
                 f"{name}: the command failed with status "
-                f"{completed.returncode}: "
-                f"{(completed.stderr or completed.stdout).strip()[:300]}"
+                f"{completed.returncode}: {output[:300]}"
             )
         return Reply(completed.stdout.strip())
 

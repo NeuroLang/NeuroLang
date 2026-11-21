@@ -14,6 +14,7 @@ from ..config import (
     EXAMPLE_CONFIG,
     LLMConfigError,
     config_path,
+    for_engine,
     load_config,
     parse_config,
 )
@@ -53,13 +54,35 @@ def test_example_configuration_is_valid():
 def test_the_defaults_are_those_of_the_defaults_file():
     defaults = yaml.safe_load(DEFAULTS_FILE.read_text())
     assert defaults["assistant"]["max_steps"] == 16
-    assistant = AssistantConfig()
+    assistant = for_engine(AssistantConfig(), {})
     for name, value in defaults["assistant"].items():
         assert getattr(assistant, name) == value, name
     provider = ProviderConfig("p", "openai", "m")
     for name, value in defaults["provider"].items():
         assert getattr(provider, name) == value, name
-    assert parse_config(PROVIDERS).assistant == assistant
+    assert parse_config(PROVIDERS).assistant == AssistantConfig()
+
+
+def test_the_time_limits_are_the_user_s_then_the_engine_s_then_the_default():
+    engine = {"assistant_query_timeout": 300, "assistant_check_timeout": 180}
+    # Unset: the engine's, else the defaults.
+    assert AssistantConfig().query_timeout is None
+    resolved = for_engine(AssistantConfig(), engine)
+    assert (resolved.query_timeout, resolved.check_timeout) == (300, 180)
+    plain = for_engine(AssistantConfig(), {})
+    assert (plain.query_timeout, plain.check_timeout) == (
+        DEFAULTS["assistant"]["query_timeout"],
+        DEFAULTS["assistant"]["check_timeout"],
+    )
+    # Set by the configuration file, or by the caller: theirs, 0 included
+    # (no limit), the other one still the engine's.
+    data = {**PROVIDERS, "assistant": {"query_timeout": 45}}
+    given = for_engine(parse_config(data).assistant, engine)
+    assert (given.query_timeout, given.check_timeout) == (45, 180)
+    assert for_engine(AssistantConfig(check_timeout=0), engine)\
+        .check_timeout == 0
+    # Resolving again changes nothing.
+    assert for_engine(resolved, {}) == resolved
 
 
 def test_the_docs_quote_the_defaults():

@@ -17,7 +17,7 @@ are never written in the file.
 """
 
 import os
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Optional
 
@@ -99,8 +99,11 @@ class AssistantConfig:
     if any, answers instead.
     *query_timeout* and *query_memory_mb* stop a query the agent runs
     after that many seconds, or when it uses that much memory: it runs in
-    a child process. With *comment_rules*, the accepted query is shown
-    with a comment line explaining each rule (see
+    a child process. *check_timeout* stops the dry run that checks a query
+    (``check_query``) after that many seconds. The two time limits are
+    None until :func:`for_engine` sets them: to the value given here, else
+    to the engine's, else to the default. With *comment_rules*, the
+    accepted query is shown with a comment line explaining each rule (see
     :mod:`~neurolang_apps.utils.llm.comments`). *verify_rounds* is the number
     of final answers of the ReAct agent that its verification may reject:
     each final answer is translated back into English, without the
@@ -119,10 +122,33 @@ class AssistantConfig:
     temperature: float = _ASSISTANT["temperature"]
     timeout: float = _ASSISTANT["timeout"]
     preview_rows: int = _ASSISTANT["preview_rows"]
-    query_timeout: float = _ASSISTANT["query_timeout"]
+    # None: the engine's, else defaults.yaml's (see for_engine).
+    query_timeout: Optional[float] = None
+    check_timeout: Optional[float] = None
     query_memory_mb: float = _ASSISTANT["query_memory_mb"]
     verify_rounds: int = _ASSISTANT["verify_rounds"]
     comment_rules: bool = _ASSISTANT["comment_rules"]
+
+
+# The settings an engine may give, as ``assistant_<setting>`` of its entry
+# in engines.yaml, when neither the configuration file nor the caller does.
+ENGINE_SETTINGS = ("query_timeout", "check_timeout")
+
+
+def for_engine(config: AssistantConfig, engine: dict) -> AssistantConfig:
+    """
+    Return *config* with each of :data:`ENGINE_SETTINGS` it leaves None
+    set to the value of the engine configuration *engine*
+    (``assistant_query_timeout``...), else to that of defaults.yaml: an
+    explicit setting wins over the engine's, which wins over the default.
+    """
+    resolved = {}
+    for name in ENGINE_SETTINGS:
+        value = getattr(config, name)
+        if value is None:
+            value = engine.get(f"assistant_{name}")
+        resolved[name] = _ASSISTANT[name] if value is None else value
+    return replace(config, **resolved)
 
 
 @dataclass(frozen=True)

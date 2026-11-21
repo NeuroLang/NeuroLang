@@ -148,6 +148,40 @@ and text-to-SPARQL systems.
     may reject; after them, the answer is kept with a warning. The REPL
     and ``neurolang-query --ask`` show the English reading of the query.
 
+Each query the agent checks (``check_query``, and the check before
+``run_query`` and ``final_answer``) and each query it runs is stopped at a
+time limit, in a child process: ``check_timeout`` seconds for the dry run
+of the check, ``query_timeout`` for the run (and ``query_memory_mb`` of
+memory). The observation of a stopped query says so, and asks for a query
+restricted with constants or joins; the engine's
+``assistant_timeout_guidance``, if any, follows it. A time limit is, in
+this order:
+
+1. the ``query_timeout`` or ``check_timeout`` of the ``assistant``
+   settings of ``llm.yaml``, or of the ``AssistantConfig`` given in
+   Python, when set;
+2. else the engine's, ``assistant_query_timeout`` and
+   ``assistant_check_timeout`` of its entry in ``engines.yaml`` (see
+   :ref:`neurolang-engine-registry`);
+3. else the default of ``defaults.yaml``: 30 s for a run, 120 s for a
+   check.
+
+The engines with tractography (``tracts`` and those extending it,
+``neurosynth_iit``, ``neurostore_iit``, ``neurosynth_disconnectome7t``...)
+give 300 s for a run and 180 s for a check: each white-matter bundle is a
+query over all the streamlines, and a program joining a bundle to the
+parcels it ends in takes from 15 s, for one bundle bound first, to more
+than 3 minutes, over a dozen bundles. Their guidance asks, after a
+timeout, for one bundle at a time, bound first in each rule, before
+``endpoint_point``. Setting ``query_timeout`` in ``llm.yaml`` gives it to
+every engine, these ones included.
+
+A provider's refusal (the safeguards of the model declining the request:
+``stop_reason: refusal`` of the Anthropic API, ``finish_reason:
+content_filter`` or a ``refusal`` of the OpenAI API, "safeguards flagged
+this message" of ``claude -p``), often a false positive, is asked again
+once, as an empty reply is.
+
 With ``samples`` above 1, either strategy answers that many times, at a
 temperature of at least 0.7, and the answer whose rows most of them give
 is kept (self-consistency). With ``fallback_provider: NAME``, a provider
@@ -482,8 +516,12 @@ decode; ``--unconfined`` lifts it all. ``repl`` refuses ``.ask``, ``.llm``,
 the machine's ``llm.yaml``, the client's model being the assistant.
 
 The time and memory a query may take are those of the ``assistant``
-settings of ``llm.yaml`` (``query_timeout``, ``query_memory_mb``): a query
-of every voxel of the brain may need more than their default 4 GB.
+settings of ``llm.yaml`` (``query_timeout``, ``check_timeout``,
+``query_memory_mb``), the time limits it does not set being the engine's
+(300 s for a run on the engines with tractography) or else the defaults:
+a query of every voxel of the brain may need more than their default
+4 GB. The ``/mcp`` of the REPL server reads no ``llm.yaml``: its limits
+are the engine's or the defaults.
 
 The engine's MNI grid is of 2 mm unless ``--resolution`` gives another,
 as the REPL server's: at its native 1 mm, ``neurosynth`` takes 12 GB instead
