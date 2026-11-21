@@ -373,6 +373,26 @@ def test_previews_stop_slow_queries(forking, nl, monkeypatch):
     assert not preview.ok and "more than 0 s and was stopped" in preview.text
 
 
+def test_previews_stop_slow_queries_in_a_thread(nl, monkeypatch):
+    """Where the query runs in a thread rather than a child (numpy's BLAS
+    would crash it), its timeout reads as such, not as an internal error."""
+    import time
+
+    import neurolang_apps
+
+    from .. import validation
+
+    def slow(*args, **kwargs):
+        while True:
+            time.sleep(0.01)
+
+    monkeypatch.setattr(neurolang_apps, "BLAS_FORK_SAFE", False)
+    monkeypatch.setattr(validation, "_accelerate", lambda: True)
+    monkeypatch.setattr(validation, "_execute", slow)
+    preview = run_preview(nl, "ans(s) :- study(s)", "datalog", timeout=0.2)
+    assert not preview.ok and "more than 0 s and was stopped" in preview.text
+
+
 def test_search_matches_iris_and_shows_varied_predicates(nl):
     blake = "http://dbpedia.org/resource/Quentin_Blake"
     nl.add_tuple_set(

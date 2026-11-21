@@ -279,6 +279,11 @@ Unreleased
 
 **Bug fixes:**
 
+- AI assistant: a query running longer than ``query_timeout`` in a thread
+  (where a child process would crash, numpy's BLAS being Accelerate) tells
+  the model it ran for more than that many seconds and was stopped, where
+  it read *Internal error — QueryTimeout*.
+
 - AI assistant: an answer given when the ReAct agent ran out of steps,
   the last query that gave rows, says so: its summary reads *Out of steps:
   no final answer after N steps*, as a warning on the web page and in
