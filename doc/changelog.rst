@@ -220,6 +220,15 @@ Unreleased
   language studies on neurosynth_iit took 240 to 267 s, now 118 to 120 s,
   with the same answer.
   
+- The semi-naive chase no longer evaluates again a rule with several atoms
+  of its stratum's predicates when none of them has new tuples: the rules
+  of tract queries rewritten with magic sets, 90 % of whose evaluations
+  found nothing. A chase step looks up in the instance the relations its
+  plan reads, rather than copying them all, and drops the tuples already
+  derived only when it found some. The chase of the Fig. 2b query of the
+  bundles co-activated by language studies (neurosynth_iit) took 46 s in
+  1 334 steps, now 30 s in 952.
+
 - A choice over a few rows of an engine's view (the voxels of an image) by
   the view reads those rows alone, and a vector over a few of its columns
   reads them through the view's index by column entities, rather than the
