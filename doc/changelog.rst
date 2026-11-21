@@ -235,6 +235,17 @@ Unreleased
   language studies on neurosynth_iit took 240 to 267 s, now 118 to 120 s,
   with the same answer.
   
+- The magic-sets rewrite of the Fig. 2b query (neurosynth_iit) took 18.5 s
+  of its 70 s, now 6.5 s, the rewritten programs of the three engines'
+  questions and examples unchanged. Rules are ordered definitions first
+  in one reading of their bodies, not one comparison of thousands of
+  symbols a pass; ``symbols_by_type`` returns the read-only mapping it
+  keeps rather than a copy, and ``extensional_database`` filters it once
+  while it is kept, not once a literal checked (15 000 times). When the
+  seeded rewrite finds no constant to bind, it is not tried again
+  unseeded, which only binds less (on master before this change, 7 more
+  attempts for each of the 3 answers).
+
 - The semi-naive chase no longer evaluates again a rule with several atoms
   of its stratum's predicates when none of them has new tuples: the rules
   of tract queries rewritten with magic sets, 90 % of whose evaluations

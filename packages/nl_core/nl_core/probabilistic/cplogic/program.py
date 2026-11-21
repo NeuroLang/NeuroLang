@@ -95,17 +95,12 @@ class CPLogicMixin(PatternWalker):
             set_symb, Constant[typing.AbstractSet](set())
         ).value
 
-    def extensional_database(self):
-        exclude = (
-            self.protected_keywords
+    def not_relations(self):
+        return (
+            super().not_relations()
             | self.pfact_pred_symbs
             | self.pchoice_pred_symbs
         )
-        ret = self.symbol_table.symbols_by_type(typing.AbstractSet)
-        for keyword in exclude:
-            if keyword in ret:
-                del ret[keyword]
-        return ret
 
     def add_probabilistic_facts_from_tuples(self, symbol, iterable):
         """

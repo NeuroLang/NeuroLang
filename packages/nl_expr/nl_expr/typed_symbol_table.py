@@ -1,5 +1,6 @@
 import collections
 from itertools import chain
+from types import MappingProxyType
 
 from .exceptions import NeuroLangException
 from .type_system import Unknown, is_leq_informative
@@ -83,21 +84,25 @@ class TypedSymbolTable(collections.abc.MutableMapping):
 
     def symbols_by_type(self, type_, include_subtypes=True):
         """
-        Return a new dict of the symbols of type *type_* (or of a type
-        more informative, if *include_subtypes*), of the table and the
-        scopes enclosing it. Comparing every type of the table is computed
-        once until the table or one of those scopes changes: a magic-sets
-        rewrite asks for the relations of the extensional database
-        thousands of times (15 000 for a query of tracts, half of it).
+        Return a read-only mapping of the symbols of type *type_* (or of
+        a type more informative, if *include_subtypes*), of the table and
+        the scopes enclosing it. It is computed once, and the same mapping
+        returned, until the table or one of those scopes changes: a
+        magic-sets rewrite asks for the relations of the extensional
+        database thousands of times (15 000 for a query of tracts), and
+        comparing every type, or copying the result, each time was most
+        of it.
         """
         key = (type_, include_subtypes)
         versions = self._versions()
         cached = self._by_type_cache.get(key)
         if cached is None or cached[0] != versions:
             cached = self._by_type_cache[key] = (
-                versions, self._symbols_by_type_now(type_, include_subtypes)
+                versions, MappingProxyType(
+                    self._symbols_by_type_now(type_, include_subtypes)
+                )
             )
-        return dict(cached[1])
+        return cached[1]
 
     def _symbols_by_type_now(self, type_, include_subtypes):
         ret = dict()

@@ -3,8 +3,10 @@
 import numpy as np
 import pandas as pd
 import pytest
+from nl_core.datalog import magic_sets
 
 from ...frontend import NeurolangDL
+from ...frontend import probabilistic_frontend, query_resolution_datalog
 from ...frontend.probabilistic_frontend import NeurolangPDL
 
 
@@ -602,6 +604,30 @@ def test_frontend_similar_study_when_magic_sets_are_unstratified(frontend):
     assert sorted(res.as_pandas_dataframe().values.tolist()) == [
         ["U", 1], ["V", 2]
     ]
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_frontend_rewrite_not_seeded_only_when_it_binds_more(
+    frontend, monkeypatch
+):
+    """
+    Not seeding from the stored relations only binds less: when the
+    seeded rewrite binds nothing, the query is solved as it is, without
+    trying the rewrite again unseeded.
+    """
+    seeds = []
+
+    def recording(query, datalog, seed_from_edb=True):
+        seeds.append(seed_from_edb)
+        return magic_sets.magic_rewrite(query, datalog, seed_from_edb)
+
+    for module in (probabilistic_frontend, query_resolution_datalog):
+        monkeypatch.setattr(module, "magic_rewrite", recording)
+    nl = frontend()
+    nl.add_tuple_set([("1", "a"), ("2", "b")], name="r")
+    res = nl.execute_datalog_program("ans(x, y) :- r(x, y)")
+    assert len(res.as_pandas_dataframe()) == 2
+    assert seeds == [True]
 
 
 @pytest.mark.parametrize("program", [

@@ -4,6 +4,7 @@ Magic Sets [1] rewriting implementation for Datalog.
 [1] F. Bancilhon, D. Maier, Y. Sagiv, J. D. Ullman, in ACM PODS ’86, pp. 1–15.
 """
 
+from collections import Counter, defaultdict
 from abc import ABC, abstractmethod
 from typing import Iterable, List, Set, Tuple
 
@@ -952,19 +953,36 @@ def order_rules_definitions_first(rules):
     taken as known, and the rules after a recursive one are still
     ordered.
     """
-    # the predicates of each body, read once, not once a pass; the rules
-    # by position, as comparing rules is comparing their expressions
-    pending = [(rule, _body_predicates(rule)) for rule in rules]
+    # Passes: each takes, in order, the rules whose body has no predicate
+    # defined by a rule still to take but their own, or the first rule
+    # left when none has. A rule waits on a count of such predicates,
+    # updated when the last rule of one is taken: each body is read once,
+    # not once a pass (a pass compared thousands of symbols, 16 s of a
+    # query of tracts). Rules go by position, as comparing rules is
+    # comparing their expressions.
+    rules = list(rules)
+    heads = [rule.consequent.functor for rule in rules]
+    rules_of = Counter(heads)
+    waiting_on = [_body_predicates(rule) for rule in rules]
+    users = defaultdict(list)
+    for i, body in enumerate(waiting_on):
+        waiting_on[i] = {p for p in body if p in rules_of and p != heads[i]}
+        for predicate in waiting_on[i]:
+            users[predicate].append(i)
+    pending = dict.fromkeys(range(len(rules)))
     ordered = []
     while pending:
-        heads = {rule.consequent.functor for rule, _ in pending}
-        ready = [
-            i for i, (rule, body) in enumerate(pending)
-            if not body & (heads - {rule.consequent.functor})
-        ] or [0]
-        ordered += [pending[i][0] for i in ready]
-        ready = set(ready)
-        pending = [p for i, p in enumerate(pending) if i not in ready]
+        ready = [i for i in pending if not waiting_on[i]] or [
+            next(iter(pending))
+        ]
+        for i in ready:
+            del pending[i]
+            ordered.append(rules[i])
+            rules_of[heads[i]] -= 1
+        for predicate in {heads[i] for i in ready}:
+            if rules_of[predicate] == 0:
+                for j in users[predicate]:
+                    waiting_on[j].discard(predicate)
     return tuple(ordered)
 
 
