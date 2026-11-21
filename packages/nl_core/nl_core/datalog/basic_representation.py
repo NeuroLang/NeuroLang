@@ -267,14 +267,25 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
         )
 
     def intensional_database(self):
-        return {
-            k: v for k, v
-            in self.symbol_table.items()
-            if (
-                k not in self.protected_keywords
-                and k.type is UnionOfConjunctiveQueries
-            )
-        }
+        """
+        Return a read-only mapping of the rules of each predicate defined
+        by rules. It is read from the symbol table once, and the same
+        mapping returned, until the table changes: a query asks for it some
+        75 times, each a walk of every symbol of the table and of the
+        scopes enclosing it (about 30 ms each on NeuroStore's).
+        """
+        protected = frozenset(self.protected_keywords)
+        return self.symbol_table.computed(
+            ("intensional_database", protected),
+            lambda: MappingProxyType({
+                k: v for k, v
+                in self.symbol_table.items()
+                if (
+                    k not in protected
+                    and k.type is UnionOfConjunctiveQueries
+                )
+            })
+        )
 
     def predicate_terms(self, predicate):
         try:

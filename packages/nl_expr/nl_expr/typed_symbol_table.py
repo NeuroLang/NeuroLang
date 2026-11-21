@@ -17,7 +17,8 @@ class TypedSymbolTable(collections.abc.MutableMapping):
         self.enclosing_scope = enclosing_scope
         self.readonly = readonly
         # changed with each assignment or deletion: the symbols of a type,
-        # kept until the table or a scope enclosing it changes
+        # and what else ``computed`` keeps, until the table or a scope
+        # enclosing it changes
         self._version = 0
         self._by_type_cache = {}
 
@@ -93,15 +94,23 @@ class TypedSymbolTable(collections.abc.MutableMapping):
         comparing every type, or copying the result, each time was most
         of it.
         """
-        key = (type_, include_subtypes)
+        return self.computed(
+            ("symbols_by_type", type_, include_subtypes),
+            lambda: MappingProxyType(
+                self._symbols_by_type_now(type_, include_subtypes)
+            )
+        )
+
+    def computed(self, key, compute):
+        """
+        Return ``compute()``, computed once for *key* and returned again
+        until the table or one of the scopes enclosing it changes: the
+        result must depend on their symbols alone.
+        """
         versions = self._versions()
         cached = self._by_type_cache.get(key)
         if cached is None or cached[0] != versions:
-            cached = self._by_type_cache[key] = (
-                versions, MappingProxyType(
-                    self._symbols_by_type_now(type_, include_subtypes)
-                )
-            )
+            cached = self._by_type_cache[key] = (versions, compute())
         return cached[1]
 
     def _symbols_by_type_now(self, type_, include_subtypes):

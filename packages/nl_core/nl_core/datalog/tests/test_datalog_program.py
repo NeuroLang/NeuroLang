@@ -385,3 +385,42 @@ def test_a_rule_cannot_define_a_function_of_the_engine():
         match="`left_of` is a function of the engine",
     ):
         dl.walk(Imp_(S_('left_of')(x), S_('R')(x)))
+
+
+def test_intensional_database_kept_until_the_rules_change(monkeypatch):
+    """The rules are read from the symbol table once, until it, or a scope
+    enclosing it, changes; a rule added in a scope is gone when it ends."""
+    from nl_expr.typed_symbol_table import TypedSymbolTable
+
+    walks = []
+    iterate = TypedSymbolTable.__iter__
+    monkeypatch.setattr(
+        TypedSymbolTable, "__iter__",
+        lambda table: walks.append(table) or iterate(table)
+    )
+    Q, R, T = S_('Q'), S_('R'), S_('T')
+    x, y = S_('x'), S_('y')
+    dl = Datalog()
+    dl.walk(DT.walk(ExpressionBlock((
+        T_(Q(C_(1), C_(2))), Imp_(R(x, y), Q(x, y)),
+    ))))
+    first = dl.intensional_database()
+    assert first.keys() == {R}
+    with pytest.raises(TypeError):
+        first[T] = None  # read-only: the same mapping for every caller
+    walks.clear()
+    assert dl.intensional_database() is first
+    assert walks == []
+
+    dl.walk(DT.walk(Imp_(R(x, y), Q(y, x))))
+    assert len(dl.intensional_database()[R].formulas) == 2
+
+    dl.push_scope()
+    dl.walk(DT.walk(Imp_(T(x), R(x, y))))
+    assert dl.intensional_database().keys() == {R, T}
+    dl.pop_scope()
+    assert dl.intensional_database().keys() == {R}
+    assert len(dl.intensional_database()[R].formulas) == 2
+
+    del dl.symbol_table[R]
+    assert dl.intensional_database() == {}
