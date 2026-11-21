@@ -1226,6 +1226,12 @@ class NeurolangPDL(QueryBuilderDatalog):
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         postprob_idb = idbs.get("post_probabilistic", Union(tuple()))
+        if query is not None:
+            det_idb = self._restricted_rules(
+                det_idb,
+                query if isinstance(query, (list, tuple)) else (query,),
+                prob_idb.formulas + postprob_idb.formulas,
+            )
         if stratum_solver is None:
             stratum_solver = self._stratum_solver(show_ra_options(show_ra))
         solution = stratum_solver.deterministic(det_idb)
