@@ -166,6 +166,23 @@ rules of the same names (``active``, ``seed``…) without adding to
 these. ``.scope off`` keeps them in the session; rules submitted
 without a query are kept in any case.
 
+Each query the agent runs is stopped at ``query_timeout`` seconds, or
+when it uses more than ``query_memory_mb`` MB, in a child process
+forked from the session's, which is killed then, whatever the query
+does. On macOS, numpy's
+BLAS, Apple's Accelerate, crashes a forked child once the parent ran it
+with several threads: ``neurolang_apps`` keeps it to one thread when
+imported before numpy (``VECLIB_MAXIMUM_THREADS=1``), and otherwise, as
+in a script or a notebook importing numpy first, the child keeps it to
+its own thread (``BLASSetThreading``, macOS 15 and later). Before macOS
+15, in that case, and where the system cannot fork (Windows, a parent
+too large to copy), the query runs in a thread of the session's process
+with the time limit only, which stops it only when it runs Python code
+again, not during a long call to pandas or numpy; set
+``VECLIB_MAXIMUM_THREADS=1`` before Python starts to keep the limit
+there. The REPL server's limit, ``query_minutes``, ends the session's
+process, on any system.
+
 Once a query is accepted, one more request asks the model for a line
 explaining each of its rules, which is written above the rule as a
 comment. The query itself is the one that was checked: the model only
