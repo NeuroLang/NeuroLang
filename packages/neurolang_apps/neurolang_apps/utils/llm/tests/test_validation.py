@@ -542,4 +542,47 @@ def test_a_child_is_not_forked_where_the_blas_would_crash_it(monkeypatch):
 
     monkeypatch.setattr(neurolang_apps, "BLAS_FORK_SAFE", False)
     monkeypatch.setattr(validation, "_accelerate", lambda: True)
+    monkeypatch.setattr(validation, "_accelerate_threading", lambda: None)
     assert validation._in_child(os.getpid, 20, 4096) == os.getpid()
+
+
+def test_a_slow_query_is_stopped_after_numpy_loaded_first(forking):
+    """
+    A query is stopped at its time limit even where numpy loaded before
+    neurolang_apps and ran its BLAS with several threads, as in a script
+    or a notebook: on macOS, the child that runs it keeps Accelerate to
+    its own thread, where it ran in a thread that could not be stopped
+    during a call to C, e.g. pandas, or here time.sleep. The child still
+    multiplies matrices.
+    """
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "import time, numpy as np\n"
+        "np.random.rand(1000, 1000) @ np.random.rand(1000, 1000)\n"
+        "import neurolang_apps\n"
+        "from neurolang_apps.utils.llm import validation as v\n"
+        "if v._accelerate() and v._accelerate_threading() is None:\n"
+        "    print('skip: Accelerate before macOS 15'); raise SystemExit\n"
+        "m = np.random.rand(1000, 1000)\n"
+        "print(v._in_child(lambda: float((m @ m).sum()) > 0, 30, None))\n"
+        "def slow():\n"
+        "    m @ m\n"
+        "    time.sleep(60)\n"
+        "start = time.monotonic()\n"
+        "try:\n"
+        "    v._in_child(slow, 1, None)\n"
+        "except v.QueryTimeout:\n"
+        "    print('stopped', time.monotonic() - start < 10)\n"
+    )
+    env = {k: v for k, v in os.environ.items()
+           if k != "VECLIB_MAXIMUM_THREADS"}
+    run = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True,
+        env=env, timeout=50,
+    )
+    if run.stdout.startswith("skip:"):
+        pytest.skip(run.stdout.strip())
+    assert run.stdout.split() == ["True", "stopped", "True"], run.stderr
