@@ -528,9 +528,12 @@ class ChaseSemiNaive:
         A rule whose body has at most one atom of a predicate of ``rules``
         has it bound to the tuples new since the previous iteration, its
         delta, or found earlier in this one: its other results are already
-        in ``instance``. From the second iteration, it is not evaluated if
-        they are none; in the first one, the delta is the whole relation.
-        Other rules see the whole instance.
+        in ``instance``; in the first iteration, the delta is the whole
+        relation. Other rules see the whole instance. From the second
+        iteration, a rule is not evaluated if none of the predicates of
+        ``rules`` in its body has new tuples: it would find those it found
+        when last evaluated (a rewrite of tract queries with magic sets
+        has rules with several, 90 % of their evaluations found nothing).
         """
         continue_chase = not instance_update.is_empty()
         functors = {rule.consequent.functor for rule in rules}
@@ -563,12 +566,12 @@ class ChaseSemiNaive:
             continue_chase = False
             for rule in rules:
                 atoms = recursive_atoms[rule]
+                if iteration > 1 and not any(
+                    a in delta or a in instance_update for a in atoms
+                ):
+                    continue
                 restriction_instance = instance_update
                 if len(atoms) < 2:
-                    if iteration > 1 and not any(
-                        a in delta or a in instance_update for a in atoms
-                    ):
-                        continue
                     restriction_instance = delta | instance_update
                 with log_performance(LOG, 'Evaluating rule %s', (rule,)):
                     instance_update = self.per_rule_update(
