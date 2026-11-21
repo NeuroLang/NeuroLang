@@ -2694,12 +2694,6 @@ class ExcludedConstants(ExpressionWalker):
             if isinstance(f, FunctionApplication)
             and is_atom_a_deterministic_relation(f, self.symbol_table)
         ]
-        present = {
-            (f.args[0], f.args[1].value) for f in formulas
-            if isinstance(f, FunctionApplication) and f.functor == NE
-            and isinstance(f.args[0], Symbol)
-            and isinstance(f.args[1], Constant)
-        }
         excluded = {}
         for atom in formulas:
             if not isinstance(atom, FunctionApplication):
@@ -2711,15 +2705,12 @@ class ExcludedConstants(ExpressionWalker):
                         for d in deterministic
                         for j, other in enumerate(d.args) if other == arg
                     ):
-                        if (arg, constant.value) not in present:
-                            excluded.setdefault(
-                                (arg, constant.value), NE(arg, constant)
-                            )
-        if not excluded and all(
-            a is b for a, b in zip(formulas, conjunction.formulas)
-        ):
+                        excluded.setdefault(NE(arg, constant), None)
+        excluded = tuple(e for e in excluded if e not in formulas)
+        if not excluded and formulas == conjunction.formulas:
+            # the walker walks again what it is given anew
             return conjunction
-        return Conjunction(formulas + tuple(excluded.values()))
+        return Conjunction(formulas + excluded)
 
     def _absent(self, atom, position, constant):
         """Whether no tuple of *atom*'s relation has *constant* at
