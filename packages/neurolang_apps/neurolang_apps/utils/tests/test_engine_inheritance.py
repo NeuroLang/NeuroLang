@@ -284,8 +284,6 @@ def test_a_relation_file_downloaded_is_checked_by_its_md5(
 def _fetched(relation, tmp_path):
     """The table of *relation* of the engines, at its tag on GitLab,
     checked by its md5, as the engines download it (skip if offline)."""
-    import pandas as pd
-
     from neurolang_apps.utils import engine_registry
 
     entry = get_engine_config("neurosynth")["relations"][relation]
@@ -294,7 +292,7 @@ def _fetched(relation, tmp_path):
         path = engine_registry._resolve_relation_file(entry, "e", tmp_path)
     except Exception as error:  # offline, GitLab down
         pytest.skip(f"cannot fetch {entry['file']}: {error!r}")
-    return pd.read_csv(path, sep="\t")
+    return engine_registry.read_relation_file(path)
 
 
 def test_the_guidance_of_the_assistant_is_inherited():
@@ -342,10 +340,15 @@ RELATIONS = {
 }
 
 
+VOXEL = "schaefer400_voxel_partial_functional_connectivity"
+
+
 def test_the_connectivity_is_four_relations_of_cortex_and_subcortex():
     """The connectivity engines have the four relations, structural and
-    functional over Schaefer 400 + Tian and Destrieux + Tian, and no
-    other; their descriptions tell them apart and name the subcortex."""
+    functional over Schaefer 400 + Tian and Destrieux + Tian, and the
+    functional engine the partial connectivity of the voxels to Schaefer's
+    parcels, and no other; their descriptions tell them apart and name the
+    subcortex."""
     from neurolang_apps.utils.engine_registry import (
         get_acknowledgements, get_predicates)
 
@@ -354,10 +357,11 @@ def test_the_connectivity_is_four_relations_of_cortex_and_subcortex():
         kind = engine.split("_")[0]
         assert {r for r in cfg["relations"]
                 if r.endswith("_connectivity")} == {
-            r for r in RELATIONS if f"_{kind}_" in r}
+            r for r in RELATIONS if f"_{kind}_" in r} | (
+            {VOXEL} if kind == "functional" else set())
     predicates = get_predicates("neurosynth")
     connectivity = {p for p in predicates if p.endswith("_connectivity")}
-    assert connectivity == set(RELATIONS)
+    assert connectivity == set(RELATIONS) | {VOXEL}
     for name, (label, value, atlas, _) in RELATIONS.items():
         assert [a["sort"] for a in predicates[name]["arguments"]] == \
             [label, label, value]
@@ -383,6 +387,58 @@ def test_the_connectivity_is_four_relations_of_cortex_and_subcortex():
     # the connectivity engines share the atlas of 400, others do not load it
     assert "schaefer400" in get_predicates("functional_connectivity")
     assert "schaefer400" not in get_predicates("tracts")
+
+
+def test_the_voxels_partial_connectivity_is_a_parquet_relation():
+    """Each cortical voxel (its centre in MNI millimetres) and each of the
+    400 Schaefer parcels, a partial correlation, in a Parquet table of the
+    dataset's v2.5."""
+    from neurolang_apps.utils.engine_registry import (
+        get_acknowledgements, get_predicates)
+
+    for engine in ("functional_connectivity", "neurosynth", "neurostore"):
+        cfg = get_engine_config(engine)
+        entry = cfg["relations"][VOXEL]
+        assert entry["file"].startswith("https://gitlab.inria.fr/dwasserm/"
+                                        "neurolang-hcp-connectivity/-/raw/")
+        assert entry["file"].endswith(
+            "/parquet/schaefer400_17_voxel_partial_functional_connectivity"
+            ".parquet")
+        assert "/-/raw/v2.5/" in entry["file"]
+        predicate = get_predicates(engine)[VOXEL]
+        assert [a["sort"] for a in predicate["arguments"]] == [
+            "mni", "schaefer400_label", "partial_correlation"]
+        text = " ".join(predicate["description"].split())
+        assert "partial correlation" in text and "Schaefer" in text
+        assert "voxel" in text and "not structural" in text
+        assert "schaefer400(l, r)" in text
+        assert cfg["sorts"]["partial_correlation"]["type"] == "float"
+    # the other tables of the functional engine stay full correlations at v2.4
+    cfg = get_engine_config("functional_connectivity")
+    for name in RELATIONS:
+        if name in cfg["relations"]:
+            assert "/-/raw/v2.4/tsv/" in cfg["relations"][name]["file"]
+    texts = get_acknowledgements("functional_connectivity")
+    assert any("Ledoit" in t and "10.1016/S0047-259X(03)00096-4" in t
+               for t in texts)
+
+
+@pytest.mark.xfail(strict=True, reason="v2.5 of the dataset is not "
+                   "published: no md5 yet")
+def test_the_voxels_partial_connectivity_is_pinned_by_its_md5():
+    entry = get_engine_config("functional_connectivity")["relations"][VOXEL]
+    assert entry["md5"]
+
+
+@pytest.mark.network
+def test_the_voxels_partial_connectivity_file(tmp_path):
+    table = _fetched(VOXEL, tmp_path)
+    assert list(table.columns) == ["x", "y", "z", "label", "r"]
+    assert table.r.between(-1, 1).all() and table.r.notna().all()
+    labels = set(table.label)
+    assert len(labels) <= 400
+    assert not any("-" in r or "_" in r for r in labels)
+    assert table.groupby(["x", "y", "z"]).ngroups <= 132032
 
 
 @pytest.mark.network

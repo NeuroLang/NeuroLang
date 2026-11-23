@@ -80,6 +80,54 @@ done; wait
    the engines' tables (two parcels, a parcel and a Tian region, two Tian
    regions) and the gradients.
 
+## Voxel partial functional connectivity
+
+The relation `schaefer400_voxel_partial_functional_connectivity` of the
+`functional_connectivity` engine (`voxel_functional.py`): the partial
+correlation of each of the 132,032 cortical voxels of Schaefer's 400-parcel
+atlas (17 networks, 2 mm) with each parcel, controlling for the other 399.
+It reads the HCP's *volumetric* ICA-FIX runs
+(`MNINonLinear/Results/rfMRI_REST{1,2}_{LR,RL}/*_hp2000_clean.nii.gz`),
+which are on the atlas's 2 mm FSL MNI152 grid, and, from `HCP_DIR`,
+`hcp_restricted.csv` (`Family_ID`, `Age_in_Yrs`) and `hcp_behavioral.csv`
+(`Gender`).
+
+1. `python -m hcp_connectivity voxel-functional WORK HCP_DIR PARTS --task I
+   --tasks N`: a task of the subjects (those with the four runs and a
+   phenotype); embarrassingly parallel, so on a Slurm array
+   `sbatch --array=0-99 --wrap "python -m hcp_connectivity voxel-functional
+   WORK HCP_DIR PARTS"`. For each run, the voxels' series and the mean of
+   each parcel's voxels (a voxel's own parcel without it); the partial
+   correlation of a voxel with a parcel follows from the inverse of the
+   parcels' covariance, shrunk by Ledoit-Wolf's coefficient (one per run,
+   of the parcels' correlations), by a rank-2 update for each voxel
+   (Woodbury), so that no matrix is inverted per voxel: 2 s a run, the
+   reading of the file takes longer. nilearn's
+   `ConnectivityMeasure(kind="partial correlation",
+   cov_estimator=LedoitWolf())` on the standardised series of a voxel and
+   the parcels gives the same values (1e-4 on a real run; it takes 2.6 s a
+   voxel). The Fisher z are averaged over the four runs; a voxel without
+   signal in a run (outside the subject's brain mask: about 3 %) has none
+   for the subject. A part (`PARTS/part-<task>.npz`, about 630 MB, float32;
+   saved after each subject, so a task started again goes on) keeps the sums
+   of the group's regression, below.
+2. `python -m hcp_connectivity combine voxel-functional WORK PARTS DATASET
+   [--threshold 0.05]`: the group, for each voxel, the regression of the z of
+   the subjects with signal in it (at least 4) on their age and sex, each
+   family counting once (a subject weighs 1 / the subjects of its family,
+   fixed by all the eligible subjects), read at the mean age and an equal
+   mix of the sexes, turned back by tanh:
+   `parquet/schaefer400_17_voxel_partial_functional_mean.parquet` (the
+   matrix, indexed by the voxel's centre `x y z` in MNI millimetres) and
+   `..._functional_subjects.parquet` (the subjects, their family, weight,
+   age and sex), and the engine's table
+   `parquet/schaefer400_17_voxel_partial_functional_connectivity.parquet`
+   (`x y z label r`, float32, the pairs above the threshold, sorted).
+   Partial correlations are small (about -0.2 to 0.2), so the number of
+   rows above 0.02, 0.03, 0.05, 0.1, ... is printed to choose the
+   threshold: the engine's table is a Parquet file because the full one
+   (53 million pairs) is too large to load.
+
 ## Population tractogram (the subcortex, a stop-gap, superseded)
 
 Superseded in the engines by the subjects' own tractography (below,

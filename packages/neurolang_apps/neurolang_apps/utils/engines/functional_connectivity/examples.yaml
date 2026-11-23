@@ -8,10 +8,12 @@ questions:
   - Which regions are functionally connected at rest with the left posterior cingulate (precuneus)?
   - Which cortical regions is the left thalamus functionally connected to at rest?
   - Which gyri and sulci are functionally connected at rest with the left hippocampus?
+  - Which cortical voxels are directly connected at rest to the left posterior cingulate (precuneus), by partial correlation?
 examples:
   datalog:
     - "ans(l, r) :- schaefer400_tian_functional_connectivity('17Networks LH DefaultA pCunPCC 1', l, r), (r > 0.3)"
     - "ans(l1, l2, r) :- schaefer400_tian_functional_connectivity(l1, l2, r), (l1 < l2), (r > 0.7)"
+    - "ans(x_mm, y_mm, z_mm, partial_r) :- schaefer400_voxel_partial_functional_connectivity(x_mm, y_mm, z_mm, '17Networks LH DefaultA pCunPCC 1', partial_r), (partial_r > 0.1)"
 
 # Questions on the resting-state functional connectivity: the correlation
 # of the spontaneous fMRI activity of two regions at rest, stored, read
@@ -21,7 +23,9 @@ examples:
 # co-activation of regions by task studies (the meta-analysis engines).
 # Two relations, each of every pair of regions of the cortex and the
 # subcortex of an atlas: schaefer400_tian_functional_connectivity and
-# destrieux_tian_functional_connectivity.
+# destrieux_tian_functional_connectivity; and the partial correlation of
+# each cortical voxel (its centre x, y, z in MNI millimetres) with each
+# Schaefer parcel, schaefer400_voxel_partial_functional_connectivity.
 assistant_examples:
   - question: Which regions are functionally connected at rest with the left posterior cingulate (precuneus)?
     topic: "Functional connectivity"
@@ -88,3 +92,18 @@ assistant_examples:
       default(l) :- schaefer400(l, x), startswith('17Networks RH Default', l)
       in_default(y) :- partner(l), default(l), (y == 'default')
       ans(probability) :- PROB[in_default(y)] = probability
+
+  - question: Which cortical voxels are directly connected at rest to the left posterior cingulate (precuneus), by partial correlation?
+    topic: "Functional connectivity"
+    datalog: |-
+      ans(x_mm, y_mm, z_mm, partial_r) :- schaefer400_voxel_partial_functional_connectivity(x_mm, y_mm, z_mm, '17Networks LH DefaultA pCunPCC 1', partial_r), (partial_r > 0.1)
+
+  - question: Which Schaefer parcels is the cortical voxel at MNI (-6, -56, 30) directly connected to at rest, by partial correlation?
+    topic: "Functional connectivity"
+    datalog: |-
+      ans(parcel, partial_r) :- schaefer400_voxel_partial_functional_connectivity(-6.0, -56.0, 30.0, parcel, partial_r), (partial_r > 0.05)
+
+  - question: How many cortical voxels does each Schaefer parcel have directly connected to it at rest, with a partial correlation above 0.1?
+    topic: "Functional connectivity"
+    datalog: |-
+      ans(parcel, count(x_mm, y_mm, z_mm)) :- schaefer400_voxel_partial_functional_connectivity(x_mm, y_mm, z_mm, parcel, partial_r), (partial_r > 0.1)

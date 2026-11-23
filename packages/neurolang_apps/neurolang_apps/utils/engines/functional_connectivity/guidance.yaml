@@ -10,7 +10,8 @@ assistant_guidance: >
   The resting-state functional connectivity is the Pearson correlation r
   (-1 to 1; a full correlation, not a partial one, so it includes the
   shared, indirect influences) of the spontaneous fMRI activity of two
-  regions at rest, over 964 HCP subjects: schaefer400_tian_functional_connectivity(l1, l2, r) over
+  regions at rest, over 964 HCP subjects (its region relations; the voxel
+  relation below is partial): schaefer400_tian_functional_connectivity(l1, l2, r) over
   the 400 Schaefer parcels and Tian's subcortical regions, and
   destrieux_tian_functional_connectivity(l1, l2, r) over the Destrieux
   parcels and Tian's regions. Each relation has the cortex, the subcortex
@@ -36,3 +37,17 @@ assistant_guidance: >
   weighted by r / sum(r). The correlations of the subcortex are weaker
   (0.3 at most between two subcortical regions, about 0.2 to the
   cortex), so their thresholds are lower, (r > 0.2).
+  The connectivity of a cortical voxel is another relation,
+  schaefer400_voxel_partial_functional_connectivity(x, y, z, parcel, r):
+  the partial correlation of the voxel, a 2 mm voxel of the Schaefer atlas
+  given by its centre (x, y, z) in MNI millimetres (even numbers, as -6.0,
+  -56.0, 30.0), with each of the 400 Schaefer parcels, controlling for the
+  other parcels, so it is the direct connection, without the influence
+  shared through the others; a question on the voxels connected to a
+  parcel, directly connected or partially correlated is answered with it.
+  Partial correlations are much smaller than the full ones (0.1 is strong,
+  its thresholds (r > 0.05), (r > 0.1)), and only the pairs above a
+  threshold are stored: an absent pair is not an unconnected one, and no
+  anticorrelation is stored. The voxels are counted over the three
+  coordinates, count(x, y, z); count(x) counts the distinct values of x,
+  not the voxels.
