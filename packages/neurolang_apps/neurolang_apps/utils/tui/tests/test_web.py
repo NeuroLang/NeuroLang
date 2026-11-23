@@ -19,6 +19,7 @@ from neurolang_apps.utils.tui.web import (  # noqa: E402
 from neurolang_apps.utils.tui.tests import test_nifti  # noqa: E402
 
 tiny = test_nifti.tiny  # the REPL on the tiny engine, with its template
+tracts = test_nifti.tracts  # the tiny engine, with streamlines
 
 
 @pytest.fixture
@@ -261,6 +262,78 @@ class TestDownloads:
             web.download(0, "pdf")
         with pytest.raises(ValueError, match="no such result"):
             web.download(3, "csv")
+
+
+PAIRS = (
+    "ans(x, y, z, x2, y2, z2, w) :- mni(x, y, z), mni(x2, y2, z2), "
+    "weight(1, 2, 3, w)"
+)
+
+
+class TestDownloadsOfWhatTheViewerDraws:
+    """The streamlines and the networks of a result, and the layers the
+    viewer draws of them, are offered as files too."""
+
+    @pytest.fixture
+    def web(self, tracts):
+        return WebRepl(tracts._nl, engine_name="tiny")
+
+    def test_an_image_has_no_other_files(self, web):
+        [table] = web.submit("ans(i, j, k, w) :- weight(i, j, k, w)").tables
+        assert table["files"] == []
+
+    def test_streamlines_are_a_tractogram_and_a_layer(self, web):
+        [table] = web.submit("ans(s) :- tract(s)").tables
+        assert [f["kind"] for f in table["files"]] == ["trk", "layer"]
+
+    def test_the_tractogram_holds_every_streamline(
+        self, web, tmp_path, monkeypatch
+    ):
+        """Not only those the viewer draws, at most MAX_STREAMLINES."""
+        import nibabel as nib
+
+        monkeypatch.setattr(nifti.brain_viewer, "MAX_STREAMLINES", 2)
+        web.submit("ans(x) :- uncinate(x, s)")
+        name, mime, data = web.download(0, "trk")
+        assert name == "result-1.trk"
+        assert mime == "application/octet-stream"
+        loaded = nib.streamlines.load(str(_written(data, tmp_path / name)))
+        assert len(loaded.streamlines) == 3
+
+    def test_the_layer_of_streamlines_counts_them(self, web, tmp_path):
+        web.submit("ans(s) :- tract(s)")
+        name, _, data = web.download(0, "layer")
+        assert name == "result-1-streamlines.nii.gz"
+        image = nifti.read_nifti(_written(data, tmp_path / name))
+        assert image.shape == (4, 4, 4)
+        assert np.asanyarray(image.dataobj).sum() > 0
+
+    def test_a_network_is_its_edges_and_a_layer(self, web, tmp_path):
+        [table] = web.submit(PAIRS).tables
+        assert [f["kind"] for f in table["files"]] == ["network", "layer"]
+        network = web.download(0, "network")
+        assert network.name == "result-1-network.csv"
+        assert network.mime == "text/csv"
+        lines = network.data.decode().splitlines()
+        assert lines[0] == "source,target,w"
+        assert len(lines) == 2  # the two points, joined once, its max w
+        assert lines[1].endswith(",0.75")
+        name, _, data = web.download(0, "layer")
+        assert name == "result-1-node_strength.nii.gz"
+        nifti.read_nifti(_written(data, tmp_path / name))
+
+    def test_each_answer_of_a_program_offers_its_own(self, web):
+        tables = web.submit(
+            "ans[seen](i, j, k) :- voxel(i, j, k)\n"
+            "ans[tracts](s) :- tract(s)\n"
+            f"ans[pairs]{PAIRS[3:]}\n"
+        ).tables
+        assert [[f["kind"] for f in t["files"]] for t in tables] == [
+            [], ["trk", "layer"], ["network", "layer"]
+        ]
+        assert tables[0]["nifti"] == [None]
+        assert web.download(1, "trk").name == "tracts.trk"
+        assert web.download(2, "network").name == "pairs-network.csv"
 
 
 def _written(data: bytes, path):

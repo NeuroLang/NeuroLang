@@ -229,6 +229,18 @@ class Download(NamedTuple):
 # The files of a result: the separator of its text formats, the type of each.
 TEXT_FORMATS = {"csv": (",", "text/csv"), "tsv": ("\t", "text/tab-separated-values")}
 NIFTI_MIME = "application/gzip"
+# The files of what the viewer draws of a result (nifti.block_file): the
+# extension and type of each, and its name in the menus.
+FILE_KINDS = {
+    "trk": ("trk", "application/octet-stream"),
+    "network": ("csv", "text/csv"),
+    "layer": ("nii.gz", NIFTI_MIME),
+}
+FILE_LABELS = {
+    "trk": "Streamlines, TRK",
+    "network": "Network edges, CSV",
+    "layer": "Viewer layer, NIfTI",
+}
 
 
 def _file_stem(block: ResultBlock, index: int) -> str:
@@ -855,12 +867,19 @@ class WebRepl:
         index = next(
             (i for i, b in enumerate(self.app.results) if b is block), 0
         )
+        try:  # nothing that fails here may hide a result
+            files = nifti.block_files(self.app, block)
+        except Exception:
+            files = []
+        files = [{"kind": kind, "label": FILE_LABELS[kind]} for kind in files]
         try:
             columns = nifti.image_columns(self.app, block)
-            return {"block": index, "nifti": columns, "nifti_reason": ""}
-        except Exception as error:  # nothing that fails here may hide a result
+            return {"block": index, "nifti": columns, "nifti_reason": "",
+                    "files": files}
+        except Exception as error:
             reason = str(error) or "no NIfTI image can be made of this result"
-            return {"block": index, "nifti": None, "nifti_reason": reason}
+            return {"block": index, "nifti": None, "nifti_reason": reason,
+                    "files": files}
 
     def upload(self, name: str, data: bytes) -> dict:
         """
@@ -911,7 +930,8 @@ class WebRepl:
         Return the file of kind *kind* of the result *block*, the number the
         table gave: ``csv`` or ``tsv`` with all its rows (the table holds
         at most ``max_rows``), or a ``nifti`` image of the column *value*
-        (the default one when empty), gzipped. A
+        (the default one when empty), gzipped, or one of :data:`FILE_KINDS`
+        (:func:`~.nifti.block_file`). A
         :class:`~.nifti.SaveError` tells why a result has no image.
         """
         try:
@@ -923,6 +943,10 @@ class WebRepl:
             separator, mime = TEXT_FORMATS[kind]
             text = _text(result.frame, separator)
             return Download(f"{stem}.{kind}", mime, text.encode("utf-8"))
+        if kind in FILE_KINDS:
+            extension, mime = FILE_KINDS[kind]
+            suffix, data = nifti.block_file(self.app, result, kind)
+            return Download(f"{stem}{suffix}.{extension}", mime, data)
         if kind != "nifti":
             raise ValueError(f"Unknown kind of file {kind!r}.")
         request = nifti.SaveRequest(Path(f"{stem}.nii.gz"), value or None)

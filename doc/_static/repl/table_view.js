@@ -49,25 +49,29 @@ function downloadMenu(payload, download) {
     ? payload.nifti.map((value) => item(imageName(value), "nifti", value ?? ""))
     : [item("NIfTI image", "nifti", "", payload.nifti_reason || "This result is not an image"),
       element("p", { className: "note", textContent: payload.nifti_reason || "This result is not an image" })]; // the reason, to read, not only a tooltip
+  // what the viewer draws of it: its streamlines, its network, their layer
+  const files = (payload.files ?? []).map(({ kind, label }) => item(label, kind));
   const menu = element("details", { className: "rt-menu" },
     element("summary", { textContent: "Download", title: "Save the whole result as a file" }),
-    element("div", { className: "rt-menu-items" }, item("All rows, CSV", "csv"), item("All rows, TSV", "tsv"), ...images));
+    element("div", { className: "rt-menu-items" }, item("All rows, CSV", "csv"), item("All rows, TSV", "tsv"), ...images, ...files));
   return menu;
 }
 
-// Buttons for the NIfTI images of the *payloads* (the tables of a reply), for the brain tab.
+// Buttons for the files of the *payloads* (the tables of a reply), for the brain tab: their NIfTI images,
+// and their streamlines, networks and the layers the viewer draws of them.
 export function imageButtons(payloads, download) {
-  const buttons = payloads.flatMap((payload) => (Array.isArray(payload.nifti)
-    ? payload.nifti.map((value) => {
-      const label = [payload.title, value].filter(Boolean).join(": ");
-      const button = element("button", {
-        type: "button", className: "ghost", textContent: label ? `Download NIfTI: ${label}` : "Download NIfTI",
-        title: "Save the result as a NIfTI image (.nii.gz)",
-      });
-      button.addEventListener("click", () => download(payload.block, "nifti", value ?? ""));
-      return button;
-    })
-    : []));
+  const button = (payload, text, title, kind, value = "") => {
+    const label = [payload.title, value].filter(Boolean).join(": ");
+    const node = element("button", { type: "button", className: "ghost", textContent: label ? `${text}: ${label}` : text, title });
+    node.addEventListener("click", () => download(payload.block, kind, value));
+    return node;
+  };
+  const buttons = payloads.flatMap((payload) => [
+    ...(Array.isArray(payload.nifti)
+      ? payload.nifti.map((value) => button(payload, "Download NIfTI", "Save the result as a NIfTI image (.nii.gz)", "nifti", value ?? ""))
+      : []),
+    ...(payload.files ?? []).map(({ kind, label }) => button(payload, `Download ${label}`, "Save what the viewer draws of the result", kind)),
+  ]);
   return buttons.length ? element("div", { className: "row brain-bar" }, ...buttons) : null;
 }
 
