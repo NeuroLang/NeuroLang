@@ -443,3 +443,55 @@ def test_the_default_threshold_is_005(monkeypatch):
                         lambda *args: seen.update(threshold=args[3]))
     main(["combine", "voxel-functional", "w", "p", "d"])
     assert seen["threshold"] == 0.05
+
+
+def spoil(hcp, subject, runs):
+    """No signal in any voxel of parcel 3 (it lies outside the brain of
+    the run), in the *runs* of *subject*."""
+    for run in runs:
+        path = (hcp / "hcp" / subject / "MNINonLinear" / "Results" / run /
+                f"{run}_hp2000_clean.nii.gz")
+        image = nib.load(str(path))
+        data = np.asarray(image.dataobj).copy()
+        data[atlas() == 3] = 7.0
+        nib.save(nib.Nifti1Image(data, image.affine), path)
+
+
+def test_a_run_without_signal_in_a_parcel_is_left_out_of_the_subjects_mean(
+    hcp, capsys
+):
+    """The partial correlations of a run need signal in every parcel: such
+    a run is left out, the subject's z the mean of its other runs."""
+    spoil(hcp, "100003", ["rfMRI_REST1_LR"])
+    out = hcp / "parts"
+    voxel_functional.run(hcp / "work", hcp / "hcp", out, 2, 8)  # 100003
+    assert "100003" in capsys.readouterr().out
+    sums = GroupSums.of(out)
+    assert sums.subjects == ["100003"]
+    # the mean of the three other runs' z
+    labels = atlas()
+    mask = labels > 0
+    expected = 0.0
+    for run in voxel_functional.RUNS[1:]:
+        image = nib.load(str(voxel_functional.run_path(
+            hcp / "hcp", "100003", run)))
+        series = image.get_fdata(dtype=np.float32)[mask].T
+        valid = series.std(axis=0) > 0
+        z = np.full((series.shape[1], len(NAMES)), np.nan, dtype=np.float32)
+        z[valid] = connectivity(series[:, valid], labels[mask][valid],
+                                len(NAMES))
+        expected = expected + z
+    weight = sums.weights[0]
+    valid = ~np.isnan(expected).any(axis=1)
+    assert (sums.n_valid == 1).tolist() == valid.tolist()
+    np.testing.assert_allclose(sums.sums[0][valid] / weight,
+                               expected[valid] / 3, atol=1e-5)
+
+
+def test_a_subject_without_a_usable_run_is_left_out(hcp, capsys):
+    spoil(hcp, "100003", voxel_functional.RUNS)
+    out = hcp / "parts"
+    voxel_functional.run(hcp / "work", hcp / "hcp", out, 2, 8)
+    message = capsys.readouterr().out
+    assert "100003" in message and "no usable run" in message
+    assert not list(out.glob("part-*.npz"))

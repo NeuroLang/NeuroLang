@@ -11,7 +11,9 @@ age, sex and family (``HCP_DIR/hcp_restricted.csv``, ``hcp_behavioral.
 csv``), the partial correlation of each voxel of the atlas with each
 parcel, controlling for the other parcels (:func:`partial_correlations`;
 a voxel's own parcel is the mean of its voxels without it), its Fisher z,
-averaged over the four runs; NaN for a voxel without signal in a run.
+averaged over the four runs (a run with a parcel without signal is left
+out, a subject with no such run too); NaN for a voxel without signal in a
+run.
 
 The group (:class:`GroupSums`): for each voxel the z of the subjects with
 signal in it, regressed on their age and sex, each family counting once
@@ -351,7 +353,7 @@ def run(work: Path, hcp: Path, out: Path, task: int, tasks: int) -> None:
         if subject in done:
             continue
         start = time.time()
-        z = 0.0
+        z, used = 0.0, 0
         try:
             for name in RUNS:
                 image = nib.load(str(run_path(hcp, subject, name)))
@@ -359,16 +361,24 @@ def run(work: Path, hcp: Path, out: Path, task: int, tasks: int) -> None:
                     image.affine, affine), "not the grid of the atlas"
                 series = image.get_fdata(dtype=np.float32)[mask].T
                 valid = series.std(axis=0) > 0  # the others: no signal
+                if (np.bincount(parcels[valid], minlength=len(names) + 1)[1:]
+                        < 2).any():  # a parcel outside the run's brain mask
+                    print(f"{subject}: {name} left out: a parcel without "
+                          "signal", flush=True)
+                    continue
                 r = np.full((series.shape[1], len(names)), np.nan,
                             dtype=np.float32)
                 r[valid] = connectivity(series[:, valid], parcels[valid],
                                         len(names))
-                z = z + r
+                z, used = z + r, used + 1
         except Exception as error:  # a broken run: the subject left out
             print(f"{subject}: {type(error).__name__}: {error}", flush=True)
             continue
+        if not used:
+            print(f"{subject}: left out, no usable run", flush=True)
+            continue
         phenotype = phenotypes.loc[subject]
-        sums.add(subject, z / len(RUNS), weights[subject], phenotype["age"],
+        sums.add(subject, z / used, weights[subject], phenotype["age"],
                  phenotype["male"], phenotype["family"])
         added += 1
         sums.save(path)  # a task killed loses at most the subject at work

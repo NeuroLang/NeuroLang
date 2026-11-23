@@ -108,7 +108,8 @@ which are on the atlas's 2 mm FSL MNI152 grid, and, from `HCP_DIR`,
    the parcels gives the same values (1e-4 on a real run; it takes 2.6 s a
    voxel). The Fisher z are averaged over the four runs; a voxel without
    signal in a run (outside the subject's brain mask: about 3 %) has none
-   for the subject. A part (`PARTS/part-<task>.npz`, about 630 MB, float32;
+   for the subject, and a run in which a whole parcel has none is left out
+   (a subject with no such run is left out; the log says which). A part (`PARTS/part-<task>.npz`, about 630 MB, float32;
    saved after each subject, so a task started again goes on) keeps the sums
    of the group's regression, below.
 2. `python -m hcp_connectivity combine voxel-functional WORK PARTS DATASET
