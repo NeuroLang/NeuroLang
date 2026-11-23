@@ -207,6 +207,29 @@ class TestEngineRegistry:
         assert list(df.columns) == ["a", "b"]
         assert df.values.tolist() == [[1, "x"], [2, "y"]]
 
+    def test_read_relation_file_parquet(self, tmp_path):
+        import pandas as pd
+
+        path = tmp_path / "r.parquet"
+        pd.DataFrame({"a": [1, 2], "b": ["x", "y"], "c": [0.5, 1.5]}
+                     ).astype({"c": "float32"}).to_parquet(path)
+        df = engine_registry.read_relation_file(path)
+        assert list(df.columns) == ["a", "b", "c"]
+        assert df.values.tolist() == [[1, "x", 0.5], [2, "y", 1.5]]
+        assert df["c"].dtype == "float32"
+        # an uploaded file: the bytes, the path naming them
+        df = engine_registry.read_relation_file(path, path.read_bytes())
+        assert df["a"].tolist() == [1, 2]
+
+    def test_parquet_has_no_separator_and_is_a_supported_format(self,
+                                                                tmp_path):
+        assert engine_registry.relation_file_separator("r.parquet") is None
+        with pytest.raises(
+            engine_registry.UnsupportedRelationFile,
+            match=r"Supported: .*\.parquet",
+        ):
+            engine_registry.read_relation_file(tmp_path / "r.xlsx")
+
     def test_read_relation_file_expands_home(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HOME", str(tmp_path))
         (tmp_path / "r.csv").write_text("a\n1\n")
@@ -226,6 +249,16 @@ class TestEngineRegistry:
         (tmp_path / "r.tsv").write_text("a\tb\n1\tx\n")
         nl = NeurolangPDL()
         cfg = {"relations": {"rel": {"file": "r.tsv"}}}
+        engine_registry._phase_relations(nl, cfg, "e", tmp_path, tmp_path)
+        assert set(nl.symbols["rel"].value) == {(1, "x")}
+
+    def test_phase_relations_parquet(self, tmp_path):
+        import pandas as pd
+        from neurolang.frontend import NeurolangPDL
+
+        pd.DataFrame({"a": [1], "b": ["x"]}).to_parquet(tmp_path / "r.parquet")
+        nl = NeurolangPDL()
+        cfg = {"relations": {"rel": {"file": "r.parquet"}}}
         engine_registry._phase_relations(nl, cfg, "e", tmp_path, tmp_path)
         assert set(nl.symbols["rel"].value) == {(1, "x")}
 

@@ -1882,35 +1882,38 @@ class UnsupportedRelationFile(ValueError):
     """Raised for a relation file whose extension is not supported."""
 
 
-def relation_file_separator(path) -> str:
+def relation_file_separator(path):
     """
-    Return the column separator of the relation file *path*.
+    Return the column separator of the relation file *path*, ``None`` for
+    a Parquet file.
 
     It follows from the extension: ``.csv`` or ``.tsv``, optionally
-    followed by ``.gz``. Other extensions raise
+    followed by ``.gz``, or ``.parquet``. Other extensions raise
     :class:`UnsupportedRelationFile`.
     """
     suffixes = [s.lower() for s in Path(path).suffixes]
+    if suffixes[-1:] == [".parquet"]:
+        return None
     if suffixes[-1:] == [".gz"]:
         suffixes = suffixes[:-1]
     sep = RELATION_FILE_SEPARATORS.get(suffixes[-1] if suffixes else "")
     if sep is None:
         raise UnsupportedRelationFile(
             f"Unsupported relation file format: {Path(path).name}. "
-            "Supported: .csv, .tsv, .csv.gz, .tsv.gz"
+            "Supported: .csv, .tsv, .csv.gz, .tsv.gz, .parquet"
         )
     return sep
 
 
 def read_relation_file(path, data: bytes = None) -> pd.DataFrame:
     """
-    Return the rows of the CSV or TSV file *path* as a DataFrame.
+    Return the rows of the CSV, TSV or Parquet file *path* as a DataFrame.
 
-    The first line of the file is the header. ``~`` in *path* is
+    The first line of a CSV or TSV file is the header. ``~`` in *path* is
     expanded and the separator follows from the extension (see
-    :func:`relation_file_separator`); gzipped files are decompressed.
-    With *data*, the rows are those bytes (an uploaded file), *path* only
-    naming them.
+    :func:`relation_file_separator`); gzipped files are decompressed. A
+    Parquet file keeps the column types it was written with. With *data*,
+    the rows are those bytes (an uploaded file), *path* only naming them.
     """
     import io
 
@@ -1918,6 +1921,8 @@ def read_relation_file(path, data: bytes = None) -> pd.DataFrame:
 
     path = Path(path).expanduser()
     sep = relation_file_separator(path)
+    if sep is None:
+        return pd.read_parquet(path if data is None else io.BytesIO(data))
     if data is None:
         return pd.read_csv(path, sep=sep)
     gzipped = path.name.lower().endswith(".gz")
