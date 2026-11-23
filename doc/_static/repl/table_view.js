@@ -45,8 +45,10 @@ function downloadMenu(payload, download) {
     });
     return button;
   };
+  const layer = (payload.files ?? []).some(({ kind }) => kind === "layer"); // a network's, streamlines' image
   const images = Array.isArray(payload.nifti)
     ? payload.nifti.map((value) => item(imageName(value), "nifti", value ?? ""))
+    : layer ? []
     : [item("NIfTI image", "nifti", "", payload.nifti_reason || "This result is not an image"),
       element("p", { className: "note", textContent: payload.nifti_reason || "This result is not an image" })]; // the reason, to read, not only a tooltip
   // what the viewer draws of it: its streamlines, its network, their layer

@@ -216,6 +216,9 @@ class Reply:
     graph: str = ""
     tokens: dict = field(default_factory=dict)
     uploads: dict = field(default_factory=dict)
+    # the files of the results ``.view`` drew, for the brain tab: the
+    # ``title`` of each and what :meth:`WebRepl._downloads_of` tells
+    downloads: List[dict] = field(default_factory=list)
 
 
 class Download(NamedTuple):
@@ -629,7 +632,16 @@ class WebRepl:
         answered = self.app.assistant.last_run
         query = self.app.last_query
         returned = _viewers_returned() if self.html else nullcontext([])
-        with returned as viewers:
+        viewed = []  # whether .view drew the results, not a file
+
+        def results_layers(app, request, layers=nifti.last_results_layers):
+            shown = layers(app, request)
+            viewed.append(shown is not None)
+            return shown
+
+        with returned as viewers, mock.patch.object(
+            nifti, "last_results_layers", results_layers
+        ):
             try:
                 self.app._run_line(text)
             except QuitRepl:
@@ -660,6 +672,8 @@ class WebRepl:
             "squall" if self.app.settings.squall else "datalog",
             self.predicates(), self._rated is not None, self._graph, tokens,
             self.uploads(),
+            [{"title": block.title, **self._downloads_of(block)}
+             for block in self.app.results] if any(viewed) else [],
         )
 
     def uploads(self) -> dict:

@@ -260,7 +260,8 @@ def submit(text):
          "predicates": getattr(reply, "predicates", []),
          "ratable": getattr(reply, "ratable", False),
          "graph": getattr(reply, "graph", ""),
-         "uploads": getattr(reply, "uploads", {})}
+         "uploads": getattr(reply, "uploads", {}),
+         "downloads": getattr(reply, "downloads", [])}
     )
 
 # The providers of the AI assistant, for the page's form: none when this

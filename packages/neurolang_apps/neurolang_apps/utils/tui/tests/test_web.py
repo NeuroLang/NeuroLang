@@ -336,6 +336,44 @@ class TestDownloadsOfWhatTheViewerDraws:
         assert web.download(2, "network").name == "pairs-network.csv"
 
 
+class TestDownloadsOfTheView:
+    """The reply of .view tells the files of the results it draws, for the
+    buttons of the brain tab: those of the tables of an earlier reply are
+    of another result, or none after a reload."""
+
+    @pytest.fixture
+    def web(self, tracts, monkeypatch):
+        monkeypatch.setattr(
+            nifti.brain_viewer, "viewer_html", lambda *a, **k: "<html/>"
+        )
+        return WebRepl(tracts._nl, engine_name="tiny")
+
+    def test_the_view_of_the_results_tells_their_files(self, web):
+        web.submit(
+            "ans[seen](i, j, k) :- voxel(i, j, k)\n"
+            "ans[tracts](s) :- tract(s)\n"
+        )
+        reply = web.submit(".view")
+        assert reply.viewers and not reply.tables
+        assert [(d["title"], d["block"], d["nifti"]) for d in
+                reply.downloads] == [("seen", 0, [None]), ("tracts", 1, None)]
+        assert [f["kind"] for f in reply.downloads[1]["files"]] == [
+            "trk", "layer"
+        ]
+
+    def test_the_view_of_a_file_has_none(self, web, tmp_path):
+        import nibabel as nib
+
+        web.submit("ans(i, j, k) :- voxel(i, j, k)")
+        path = tmp_path / "image.nii.gz"
+        nib.save(nib.Nifti1Image(np.ones((2, 2, 2)), np.eye(4)), path)
+        reply = web.submit(f".view {path}")
+        assert reply.viewers and reply.downloads == []
+
+    def test_a_reply_without_a_view_has_none(self, web):
+        assert web.submit("ans(i, j, k) :- voxel(i, j, k)").downloads == []
+
+
 def _written(data: bytes, path):
     """Write the *data* of a file the page saved, and return its path."""
     path.write_bytes(data)

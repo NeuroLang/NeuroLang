@@ -157,10 +157,6 @@ const setBusy = (busy) => {
   }
 };
 
-// The tables of the last result, for the downloads of the brain tab, which
-// shows a result that .view may have taken from an earlier reply.
-let lastTables = [];
-
 // The file of a result: the worker makes it, the page offers it to be saved.
 function requestDownload(block, kind, value = "") {
   setBusy(true);
@@ -683,7 +679,7 @@ const workerMessages = {
     if (data.failed && !data.tables?.length) results.classList.remove("has");
     if (data.tables?.length) showTables(data);
     showGraph(data);
-    if (data.viewers?.length) showViewer(data.viewers.at(-1));
+    if (data.viewers?.length) showViewer(data.viewers.at(-1), data.downloads);
     else if (data.tables?.length) markViewerStale();
     else if (/^\.view\b/.test(lastRun.trim())) dropViewer(); // the view failed: its output says why
     setBusy(false);
@@ -827,7 +823,6 @@ function applyReply(data) {
 // The tables of a reply, each with the queries that go on from it when it is the only one;
 // those of a program with several queries (ans[name]) in a tab each.
 function showTables({ tables, prompt }) {
-  lastTables = tables;
   // A result is a relation to go on from only if the query that made it is known.
   const query = prompt || (lastRun.trim().startsWith(".") ? "" : lastRun);
   const squall = $("mode").value === "squall";
@@ -850,10 +845,12 @@ function showNetwork(tables) {
   $("tab-network").hidden = !view;
 }
 
-// The brain viewer page of a reply, in the brain tab, with the buttons of the images of the tables.
-function showViewer(page) {
+// The brain viewer page of a reply, in the brain tab, with the buttons of the files of the results it
+// draws, *downloads*, which the reply of .view tells (those of the last tables are another result's,
+// or none after a reload).
+function showViewer(page, downloads = []) {
   const viewer = Object.assign(document.createElement("iframe"), { sandbox: "allow-scripts", srcdoc: themed(page, theme()), title: "NeuroLang brain viewer" });
-  show("brain", ...[imageButtons(lastTables, requestDownload), viewer].filter(Boolean));
+  show("brain", ...[imageButtons(downloads, requestDownload), viewer].filter(Boolean));
   setViewerStale(false);
 }
 
