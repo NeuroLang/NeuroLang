@@ -1,5 +1,5 @@
 """The partial correlations of cortical voxels with the parcels of an atlas,
-on small synthetic data: against a brute-force reference, the worker and
+on small synthetic data: against nilearn, the worker and
 the group table."""
 
 import sys
@@ -37,32 +37,54 @@ def synthetic(T=200, seed=0):
     return series, parcels
 
 
-def reference(series, parcels, n, alpha):
-    """For each voxel, the matrix of the correlations of the voxel with the
-    parcels' means, its own parcel's without it, shrunk by *alpha* and
-    inverted: the partial correlations."""
-    T, V = series.shape
-    out = np.zeros((V, n))
-    for v in range(V):
-        means = np.column_stack([
-            series[:, [u for u in range(V)
-                       if parcels[u] == j + 1 and u != v]].mean(axis=1)
-            for j in range(n)])
-        correlation = np.corrcoef(np.column_stack([series[:, v], means]).T)
-        shrunk = (1 - alpha) * correlation + alpha * np.eye(n + 1)
-        precision = np.linalg.inv(shrunk)
-        out[v] = -precision[0, 1:] / np.sqrt(
-            precision[0, 0] * np.diag(precision)[1:])
-    return out
+def nilearn_partial(series, parcels, n, v):
+    """nilearn's partial correlations of voxel *v* with the parcels (its
+    own without it), on the standardised series, Ledoit-Wolf's covariance
+    of the voxel and the parcels (as nilearn would estimate it): the
+    result, and the coefficient it used."""
+    from nilearn.connectome import ConnectivityMeasure
+    from sklearn.covariance import LedoitWolf
+
+    means = np.column_stack([
+        series[:, [u for u in range(series.shape[1])
+                   if parcels[u] == j + 1 and u != v]].mean(axis=1)
+        for j in range(n)])
+    X = np.column_stack([series[:, v], means])
+    X = (X - X.mean(axis=0)) / X.std(axis=0)
+    measure = ConnectivityMeasure(kind="partial correlation",
+                                  cov_estimator=LedoitWolf())
+    return (measure.fit_transform([X])[0][0, 1:],
+            measure.cov_estimator_.shrinkage_)
 
 
-@pytest.mark.parametrize("alpha", [0.0, 0.05, 0.4])
-def test_partial_correlations_are_those_of_the_reference(alpha):
-    series, parcels = synthetic()
-    expected = reference(series, parcels, N_PARCELS, alpha)
-    found = partial_correlations(series, parcels, N_PARCELS, alpha)
-    assert found.shape == expected.shape
-    np.testing.assert_allclose(found, expected, atol=1e-8)
+def test_partial_correlations_are_those_of_nilearn():
+    """With the coefficient nilearn's Ledoit-Wolf finds for the voxel's
+    own variables, the same values as ConnectivityMeasure(kind="partial
+    correlation")."""
+    series, parcels = synthetic(T=300, seed=7)
+    for v in (0, 5, 6, 13, 23):
+        expected, alpha = nilearn_partial(series, parcels, N_PARCELS, v)
+        found = partial_correlations(series, parcels, N_PARCELS, alpha)[v]
+        np.testing.assert_allclose(found, expected, atol=1e-10)
+
+
+def test_the_coefficient_of_the_run_is_that_of_nilearn_with_many_parcels():
+    """The run's one coefficient stands for each voxel's own (the
+    parcels' means being most of their variables): with many parcels, as
+    in the atlas, nilearn's values to 1e-3."""
+    n, per, T = 100, 20, 600
+    rng = np.random.default_rng(0)
+    parcels = np.repeat(np.arange(1, n + 1), per)
+    signals = rng.standard_normal((T, 12)) @ rng.standard_normal((12, n)) \
+        + rng.standard_normal((T, n))
+    series = signals[:, parcels - 1] + 2 * rng.standard_normal(
+        (T, len(parcels)))
+    alpha = ledoit_wolf_alpha(series, parcels, n)
+    found = partial_correlations(series, parcels, n, alpha)
+    for v in (0, 7, 333, len(parcels) - 1):
+        expected, own = nilearn_partial(series, parcels, n, v)
+        assert own == pytest.approx(alpha, rel=0.02)
+        np.testing.assert_allclose(found[v], expected, atol=1e-3)
 
 
 def test_chunks_of_voxels_do_not_change_the_result():
