@@ -418,9 +418,10 @@ def test_the_group_matrix_is_the_adjusted_connectivity(hcp):
     assert list(full.columns) == NAMES
     assert list(full.index.names) == ["x", "y", "z"]
     np.testing.assert_allclose(full.values, adjusted, atol=1e-6)
-    # the subjects, with what the group was adjusted for
-    subjects = pd.read_parquet(
-        dataset / "parquet" / f"{KEY}_functional_subjects.parquet")
+    # the subjects, with what the group was adjusted for: beside the
+    # parts, never in the dataset (HCP restricted data)
+    assert not list(dataset.rglob("*subjects*"))
+    subjects = pd.read_parquet(hcp / "parts" / "subjects.parquet")
     assert list(subjects.columns) == ["subject", "family", "weight", "age",
                                       "male"]
     assert subjects.subject.tolist() == SUBJECTS

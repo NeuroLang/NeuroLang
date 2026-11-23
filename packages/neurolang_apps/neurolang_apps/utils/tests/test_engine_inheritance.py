@@ -432,6 +432,9 @@ def test_the_voxels_partial_connectivity_is_pinned_by_its_md5():
 
 @pytest.mark.network
 def test_the_voxels_partial_connectivity_file(tmp_path):
+    entry = get_engine_config("neurosynth")["relations"][VOXEL]
+    if not entry.get("md5"):  # pinned by the strict xfail below
+        pytest.skip("the dataset's v2.5 is not published: no md5 yet")
     table = _fetched(VOXEL, tmp_path)
     assert list(table.columns) == ["x", "y", "z", "label", "r"]
     assert table.r.between(-1, 1).all() and table.r.notna().all()

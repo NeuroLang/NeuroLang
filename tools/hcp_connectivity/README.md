@@ -124,10 +124,13 @@ which are on the atlas's 2 mm FSL MNI152 grid, and, from `HCP_DIR`,
    mix of the sexes, turned back by tanh:
    `parquet/schaefer400_17_voxel_partial_functional_mean.parquet` (the
    matrix, indexed by the voxel's centre `x y z` in MNI millimetres) and
-   `..._functional_subjects.parquet` (the subjects, their family, weight,
-   age and sex), and the engine's table
+   the engine's table
    `parquet/schaefer400_17_voxel_partial_functional_connectivity.parquet`
    (`x y z label r`, float32, the pairs above the threshold, sorted).
+   The subjects, with their family, weight, exact age and sex, go to
+   `PARTS/subjects.parquet`, not to the dataset: they are HCP restricted
+   data, which the published dataset must not hold (the parts too hold
+   them, and stay where they are made).
    Partial correlations are small (about -0.2 to 0.2), so the number of
    rows above 0.02, 0.03, 0.05, 0.1, ... is printed to choose the
    threshold: the engine's table is a Parquet file because the full one

@@ -34,11 +34,12 @@ millimetres:
 
 - ``parquet/<KEY>_functional_mean.parquet`` (the group's regression of the
   subjects' Fisher z on age and sex, read at the mean age and both sexes,
-  family-weighted, tanh; the index ``x y z``, the columns the parcels) and
-  ``parquet/<KEY>_functional_subjects.parquet`` (the subjects with their
-  family, weight, age and sex);
+  family-weighted, tanh; the index ``x y z``, the columns the parcels);
 - ``parquet/<KEY>_functional_connectivity.parquet`` (``x y z label r``,
-  the pairs of r above a threshold, sorted), the engine's table.
+  the pairs of r above a threshold, sorted), the engine's table;
+- and, beside the parts, not in DATASET, ``PARTS/subjects.parquet``: the
+  subjects with their family, weight, age and sex, HCP restricted data,
+  which is not to be redistributed.
 
 And the linear gradients of the cortex of each (gradients.py):
 ``parquet/<a>[_functional]_gradients.parquet``, ``...
@@ -162,8 +163,7 @@ def voxel_functional(work: Path, parts: Path, dataset: Path,
     pd.DataFrame({"subject": sums.subjects, "family": sums.families,
                   "weight": sums.weights, "age": sums.ages,
                   "male": sums.male}).sort_values("subject").to_parquet(
-        dataset / "parquet" / f"{KEY}_functional_subjects.parquet",
-        index=False)
+        parts / "subjects.parquet", index=False)  # restricted: not DATASET
     for cutoff in CUTOFFS:
         print(f"r > {cutoff}: {int((r > cutoff).sum())} rows", flush=True)
     print(f"{int((sums.n_valid == 0).sum())} voxels without signal in any "
