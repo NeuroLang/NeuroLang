@@ -95,8 +95,12 @@ which are on the atlas's 2 mm FSL MNI152 grid, and, from `HCP_DIR`,
 1. `python -m hcp_connectivity voxel-functional WORK HCP_DIR PARTS --task I
    --tasks N`: a task of the subjects (those with the four runs and a
    phenotype); embarrassingly parallel, so on a Slurm array
-   `sbatch --array=0-99 --wrap "python -m hcp_connectivity voxel-functional
-   WORK HCP_DIR PARTS"`. For each run, the voxels' series and the mean of
+   `sbatch --array=0-99 --cpus-per-task=8 --wrap "python -m
+   hcp_connectivity voxel-functional WORK HCP_DIR PARTS"`. A task peaks at
+   14 GB (a run is 4.3 GB as float32); on a cluster that schedules by cores
+   alone (Slurm's `CR_CORE`, where `--mem` is not enforced), ask for enough
+   cores that a node's tasks fit in its memory: 8 on margaret's nodes of
+   2 GB a core, whose 4-core tasks ran out of memory. For each run, the voxels' series and the mean of
    each parcel's voxels (a voxel's own parcel without it); the partial
    correlation of a voxel with a parcel follows from the inverse of the
    parcels' covariance, shrunk by Ledoit-Wolf's coefficient (one per run,
