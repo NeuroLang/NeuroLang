@@ -471,14 +471,14 @@ def test_the_row_counts_at_several_thresholds_are_printed(hcp, capsys):
         assert f"r > {cutoff}:" in out
 
 
-def test_the_default_threshold_is_005(monkeypatch):
+def test_the_default_threshold_is_that_of_the_dataset(monkeypatch):
     from hcp_connectivity.__main__ import main
 
     seen = {}
     monkeypatch.setattr(combine, "voxel_functional",
                         lambda *args: seen.update(threshold=args[3]))
     main(["combine", "voxel-functional", "w", "p", "d"])
-    assert seen["threshold"] == 0.05
+    assert seen["threshold"] == 0.01  # v2.5
 
 
 def spoil(hcp, subject, runs):

@@ -172,15 +172,12 @@ def voxel_functional(work: Path, parts: Path, dataset: Path,
           f"subject, {int((sums.n_valid < len(sums.subjects)).sum())} "
           "without it in some")
     voxel, parcel = np.nonzero(np.abs(r) > threshold)
-    rank = np.argsort(np.argsort(names))
-    order = np.lexsort((rank[parcel], mm[voxel, 2], mm[voxel, 1],
-                        mm[voxel, 0]))
-    voxel, parcel = voxel[order], parcel[order]
     pd.DataFrame({"x": mm[voxel, 0].astype(np.float32),
                   "y": mm[voxel, 1].astype(np.float32),
                   "z": mm[voxel, 2].astype(np.float32),
                   "label": pd.Categorical(np.asarray(names)[parcel]),
-                  "r": r[voxel, parcel]}).to_parquet(
+                  "r": r[voxel, parcel]}).sort_values(
+        ["x", "y", "z", "label"]).to_parquet(
         dataset / "parquet" / f"{KEY}_functional_connectivity.parquet",
         compression="zstd", index=False)
     print(f"{len(sums.subjects)} subjects; {len(voxel)} rows of |r| above "

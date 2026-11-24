@@ -117,7 +117,7 @@ which are on the atlas's 2 mm FSL MNI152 grid, and, from `HCP_DIR`,
    saved after each subject, so a task started again goes on) keeps the sums
    of the group's regression, below.
 2. `python -m hcp_connectivity combine voxel-functional WORK PARTS DATASET
-   [--threshold 0.05]`: the group, for each voxel, the regression of the z of
+   [--threshold 0.01]`: the group, for each voxel, the regression of the z of
    the subjects with signal in it (at least 4) on their age and sex, each
    family counting once (a subject weighs 1 / the subjects of its family,
    fixed by all the eligible subjects), read at the mean age and an equal

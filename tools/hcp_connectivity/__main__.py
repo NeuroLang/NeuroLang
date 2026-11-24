@@ -86,7 +86,7 @@ def main(argv=None) -> None:
                                       "tractography", "voxel-functional"])
     for path in ("work", "parts", "dataset"):
         sub.add_argument(path, type=Path)
-    sub.add_argument("--threshold", type=float, default=0.05,
+    sub.add_argument("--threshold", type=float, default=0.01,
                      help="voxel-functional: the engine table keeps the "
                      "pairs whose |r| is above it (the counts at some "
                      "cutoffs are printed)")

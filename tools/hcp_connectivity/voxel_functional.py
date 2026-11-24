@@ -27,6 +27,7 @@ from pathlib import Path
 
 import nibabel as nib
 import numpy as np
+from nibabel.affines import apply_affine
 
 import pandas as pd
 
@@ -73,7 +74,7 @@ def centres(labels: np.ndarray, affine: np.ndarray):
     order of the array (``labels > 0`` as a mask), and their centres in
     millimetres: arrays (voxels, 3)."""
     voxels = np.argwhere(labels > 0)
-    return voxels, voxels @ affine[:3, :3].T + affine[:3, 3]
+    return voxels, apply_affine(affine, voxels)
 
 
 def _means(series: np.ndarray, parcels: np.ndarray, n: int) -> np.ndarray:
