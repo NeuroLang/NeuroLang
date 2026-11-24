@@ -1,0 +1,76 @@
+# Does the probability help? Replication prediction on the SMR evidence
+
+Protocol: `PROTOCOL.md` (written before the run; `PROTOCOL.at` is its time). Raw answers: `results/`. Everything below was
+computed by `analyse.py` (pre-registered metrics) except the last section, which is **post hoc** (`smoothing.py`).
+
+240 items (gene, disease, held-out QTL dataset), 222 genes, base rate 29%: will the held-out dataset find the gene significant,
+given the other datasets' tests? Every system outputs a probability (D1 and D2 a 0/1). 95% intervals resample genes.
+
+| System | What it has | Brier [95% CI] | Brier skill | Log-loss | ECE | AUC |
+|---|---|---|---|---|---|---|
+| D1 BiomedSQL's yes/no ("any signal") | the other datasets | 0.680 [0.620, 0.739] | -2.29 | 2.777 | 0.688 | 0.500 |
+| D2 majority vote | the other datasets | 0.304 [0.243, 0.363] | -0.47 | 1.253 | 0.297 | 0.692 |
+| L1 LLM, no data | its own knowledge | 0.216 [0.201, 0.232] | -0.05 | 0.626 | 0.196 | 0.699 |
+| L2 LLM + the evidence table | p-values, tissues, kinds | **0.138** [0.116, 0.159] | +0.33 | 0.431 | 0.117 | 0.858 |
+| **P NeuroLang** (a ReAct agent writes the conditional query) | the QTL tokens | 0.221 [0.180, 0.261] | -0.07 | 0.803 | 0.194 | 0.757 |
+
+The agent returned the engine's exact share on 240 of 240 items (valid query every time, median 3 model calls).
+
+Paired, P minus the other (Brier; negative means P is better):
+- vs D2 majority: -0.083 [-0.117, -0.050]. **The probability beats the deterministic decision made from the same evidence**, and
+  BiomedSQL's yes/no answer is the worst system (it says "yes" for every item, and 29% replicate).
+- vs L1 LLM without data: +0.005 [-0.035, +0.047] on Brier (log-loss worse for P, +0.177 [+0.031, +0.338]).
+- vs L2 LLM with the evidence: **+0.083 [+0.053, +0.114]. The LLM that reads the table is clearly better than the share.**
+
+## Where the share loses
+
+The loss is entirely in genes tested in few other datasets (Brier of the share, and of L2):
+
+| Datasets that tested the gene (other than the held-out one) | Items | Replicated | Share | L2 |
+|---|---|---|---|---|
+| 1 | 27 | 19% | 0.783 | 0.250 |
+| 2-3 | 43 | 28% | 0.271 | 0.194 |
+| 4-9 | 79 | 23% | 0.133 | 0.109 |
+| 10 or more | 91 | 38% | 0.107 | 0.103 |
+
+With one other dataset the share says 1.0 (one of one found it significant) while 19% replicate: the share has no notion of how
+little evidence it has. The LLM shrinks towards a base rate. With 10 or more datasets the two are equal. The calibration doc
+already listed this as a limit ("hard 0 and 1 supports, no pseudo-count"); this experiment measures its cost.
+
+## Post hoc: a prior on the units of evidence (`smoothing.py`)
+
+Decided after seeing the table above, so exploratory. A Beta prior (a imaginary datasets that found the gene significant, b that
+did not) makes the probability (k + a) / (n + a + b): still an exact conditional probability over a uniform choice of unit of
+evidence, and expressible as extra tokens in the same Datalog program. a and b were fitted by log-loss on 1,197 predictions of
+131 genes **that are not among the 240 items' genes** (a = 0.05, b = 1; a is at the edge of the grid), then applied unchanged.
+
+| | Brier | skill | Log-loss | ECE | AUC |
+|---|---|---|---|---|---|
+| share, unsmoothed | 0.221 | -0.07 | 0.803 | 0.194 | 0.756 |
+| share + prior (0.05, 1) | 0.144 | +0.30 | 0.451 | 0.088 | 0.817 |
+| L2 LLM + evidence | 0.138 | +0.33 | 0.431 | 0.117 | 0.858 |
+
+Brier, share + prior minus L2: +0.006 [-0.006, +0.019]: **no detectable difference**. The smoothed share is better calibrated
+(ECE 0.088 against 0.117, not tested for significance) and ranks worse (AUC 0.817 against 0.858: it ignores how strong each
+p-value is, which the LLM sees). Per bin of n the two agree within 0.01 to 0.02 except n = 1 to 3.
+
+## What this shows, and what it does not
+
+Shown:
+1. A probability carries information that the deterministic answer of the benchmark throws away: 0.680 and 0.304 for the yes/no and
+   the majority against 0.221 (0.144 smoothed). On BiomedSQL's own question the deterministic answer is not merely less
+   accurate, it is uninformative.
+2. NeuroLang computes that probability exactly; an agent writes the query correctly 240 of 240 times from the engine's guidance.
+3. With the prior, the engine's number matches in accuracy a strong LLM that reads the same evidence, at about $0.0046 per answer
+   for the LLM (list price, about $3,800 for the 825,346 predictions of the calibration experiment) against minutes of local
+   computation for the engine, and with a stated, auditable model (a share of the units of evidence).
+
+Not shown:
+- That the probabilistic engine is **more accurate** than an LLM reading the evidence: unsmoothed it is worse (0.221 against
+  0.138); smoothed, post hoc, it is equal. The LLM ranks better (AUC 0.858 against 0.817 or 0.757).
+- Any advantage on uncertain questions in general: one question template, one disease family, one model.
+
+## Limits
+240 items from 430 pairs (222 genes); one model for the LLM systems and the agent; the QTL datasets share GWAS and donors, so the
+outcome is not an independent replication; the prior was chosen after the failure was seen (fitted on other genes, but chosen
+as a remedy post hoc); the LLM was asked once per item (no repeats); the item set and thresholds are BiomedSQL's.

@@ -1,0 +1,41 @@
+240 items, 222 genes, base rate 0.292; missing answers {'L1 LLM, no data': 1, 'L2 LLM + evidence': 0, 'P NeuroLang': 0}; the agent's value differs from the direct computation on 0 items
+
+system                   Brier          95% CI  skill logloss    ECE    AUC
+D1 any signal            0.680 [0.620,0.739]  -2.29   2.777  0.688  0.500
+D2 majority              0.304 [0.243,0.363]  -0.47   1.253  0.297  0.692
+L1 LLM, no data          0.216 [0.201,0.232]  -0.05   0.626  0.196  0.699
+L2 LLM + evidence        0.138 [0.116,0.159]  +0.33   0.431  0.117  0.858
+P NeuroLang              0.221 [0.180,0.261]  -0.07   0.803  0.194  0.757
+P direct computation     0.221 [0.180,0.261]  -0.07   0.803  0.194  0.756
+
+paired differences, P NeuroLang minus the other (Brier and log-loss: negative = P better; AUC: positive = P better); 95% CI over genes
+  P - D2 majority         brier    -0.083 [-0.117, -0.050]
+  P - D2 majority         logloss  -0.450 [-0.608, -0.289]
+  P - D2 majority         auc      +0.064 [+0.029, +0.100]
+  P - L1 LLM, no data     brier    +0.005 [-0.035, +0.047]
+  P - L1 LLM, no data     logloss  +0.177 [+0.031, +0.338]
+  P - L1 LLM, no data     auc      +0.057 [-0.034, +0.143]
+  P - L2 LLM + evidence   brier    +0.083 [+0.053, +0.114]
+  P - L2 LLM + evidence   logloss  +0.372 [+0.245, +0.507]
+  P - L2 LLM + evidence   auc      -0.101 [-0.143, -0.059]
+
+reliability of P NeuroLang: bin | n | mean predicted | observed
+  [0.0,0.2]   68 | 0.116 | 0.074
+  [0.2,0.4]   56 | 0.272 | 0.196
+  [0.4,0.6]   43 | 0.494 | 0.233
+  [0.6,0.8]    9 | 0.705 | 0.889
+  [0.8,1.0]   64 | 0.977 | 0.562
+
+reliability of L2 LLM + evidence: bin | n | mean predicted | observed
+  [0.0,0.2]   61 | 0.096 | 0.049
+  [0.2,0.4]   68 | 0.272 | 0.118
+  [0.4,0.6]   67 | 0.481 | 0.328
+  [0.6,0.8]   14 | 0.692 | 0.571
+  [0.8,1.0]   30 | 0.874 | 0.967
+
+reliability of L1 LLM, no data: bin | n | mean predicted | observed
+  [0.0,0.2]    3 | 0.083 | 0.333
+  [0.2,0.4]   61 | 0.318 | 0.131
+  [0.4,0.6]  150 | 0.497 | 0.273
+  [0.6,0.8]   20 | 0.699 | 0.700
+  [0.8,1.0]    6 | 0.800 | 1.000

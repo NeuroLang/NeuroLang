@@ -1,0 +1,9 @@
+fitted on 1197 predictions of 131 genes (none of the items' genes): a=0.05, b=1, log-loss 0.450
+share (unsmoothed)       Brier 0.221 skill -0.07 logloss 0.803 ECE 0.194 AUC 0.756
+share + prior (0.05, 1)  Brier 0.144 skill +0.30 logloss 0.451 ECE 0.088 AUC 0.817
+L2 LLM + evidence        Brier 0.138 skill +0.33 logloss 0.431 ECE 0.117 AUC 0.858
+  n = 1    items  27: share 0.783 prior 0.258 L2 0.250
+  n 2-3    items  43: share 0.271 prior 0.188 L2 0.194
+  n 4-9    items  79: share 0.133 prior 0.122 L2 0.109
+  n >= 10  items  91: share 0.107 prior 0.109 L2 0.103
+Brier, share + prior minus L2: +0.006 [-0.006, +0.019]
