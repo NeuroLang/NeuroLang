@@ -1,0 +1,67 @@
+test: 20 templates, 80 items, 67 with a non-empty answer, 7 truncated
+
+== all items
+system         runs |  judge          95% CI | strict          95% CI
+agent A           3 |   87.5   [ 75.8, 96.2] |   10.8   [  0.0, 22.5]
+agent B           3 |   87.5   [ 76.2, 97.1] |   11.7   [  2.1, 23.3]
+agent C           3 |   87.9   [ 77.9, 96.7] |   27.1   [ 12.1, 43.3]
+no database       1 |   25.0   [  8.8, 43.8] |    0.0   [  0.0,  0.0]
+always empty      1 |       -                 |   16.2   [  3.8, 31.2]
+oracle            1 |       -                 |  100.0   [100.0,100.0]
+
+== items with a non-empty gold answer
+system         runs |  judge          95% CI | strict          95% CI
+agent A           3 |   88.6   [ 76.3, 97.5] |    0.0   [  0.0,  0.0]
+agent B           3 |   86.4   [ 73.3, 96.7] |    0.0   [  0.0,  0.0]
+agent C           3 |   83.8   [ 67.5, 97.1] |   15.8   [  2.3, 32.1]
+no database       1 |   26.3   [  9.2, 45.0] |    0.0   [  0.0,  0.0]
+always empty      1 |       -                 |    0.0   [  0.0,  0.0]
+oracle            1 |       -                 |  100.0   [100.0,100.0]
+
+== paired differences in judge accuracy (percentage points, all items)
+  agent B - agent A: +0.0 [-14.2, +15.0]
+  agent C - agent B: +0.4 [-13.3, +15.0]
+  agent C - agent A: +0.4 [-13.3, +15.0]
+  agent A - no database: +62.5 [+41.2, +81.7]
+
+== the runs apart (judge accuracy over templates)
+  agent A: run 1: 90.0, run 2: 88.8, run 3: 83.8
+  agent B: run 1: 85.0, run 2: 86.2, run 3: 91.2
+  agent C: run 1: 86.2, run 2: 88.8, run 3: 88.8
+
+== per template (judge, mean over items and runs): A B C
+  Q3   100 100 100   0   (oracle 4/4)
+  Q4   100 100 100   0   (oracle 4/4)
+  Q6   100 100 100  25   (oracle 4/4)
+  Q7   100 100 100   0   (oracle 4/4)
+  Q9    83 100 100 100   (oracle 4/4)
+  Q10  100  58  33   0   (oracle 4/4)
+  Q22   67 100 100   0   (oracle 4/4)
+  Q26   58  50  50   0   (oracle 4/4)
+  Q34  100 100 100  50   (oracle 4/4)
+  Q36  100 100 100   0   (oracle 4/4)
+  Q38  100 100 100 100   (oracle 4/4)
+  Q40  100  75  75   0   (oracle 4/4)
+  Q45   67  42  58   0   (oracle 4/4)
+  Q52    0 100 100   0   (oracle 4/4)
+  Q61  100 100 100   0   (oracle 4/4)
+  Q63   83 100 100 100   (oracle 4/4)
+  Q65  100 100 100 100   (oracle 4/4)
+  Q67   92  25  42   0   (oracle 4/4)
+  Q69  100 100 100   0   (oracle 4/4)
+  Q71  100 100 100  25   (oracle 4/4)
+
+== judge accuracy by family: templates with a development twin / without
+  agent A      with twin (18 templates):  88.4
+  agent A      without   (2 templates):  79.2
+  agent B      with twin (18 templates):  88.9
+  agent B      without   (2 templates):  75.0
+  agent C      with twin (18 templates):  89.4
+  agent C      without   (2 templates):  75.0
+  no database  with twin (18 templates):  26.4
+  no database  without   (2 templates):  12.5
+
+== cost and time
+  agent A: $3.26 for 240 answers, median 11 s, median calls 3, no valid answer 1
+  agent B: $6.12 for 240 answers, median 17 s, median calls 4, no valid answer 1
+  agent C: $8.08 for 240 answers, median 15 s, median calls 3, no valid answer 0
