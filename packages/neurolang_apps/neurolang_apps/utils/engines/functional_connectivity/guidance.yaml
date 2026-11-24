@@ -45,9 +45,12 @@ assistant_guidance: >
   other parcels, so it is the direct connection, without the influence
   shared through the others; a question on the voxels connected to a
   parcel, directly connected or partially correlated is answered with it.
-  Partial correlations are much smaller than the full ones (0.1 is strong,
-  its thresholds (r > 0.05), (r > 0.1)), and only the pairs above a
-  threshold are stored: an absent pair is not an unconnected one, and no
-  anticorrelation is stored. The voxels are counted over the three
+  Partial correlations are much smaller than the full ones, and only the
+  pairs whose |r| is above 0.01 are stored: an absent pair is near 0, not
+  an unconnected one. A voxel and its own parcel are 0.02 to 0.09, most of
+  the stored pairs; a voxel and another parcel are its direct links, 0.01
+  to 0.13, above 0.03 strong and above 0.05 rare, so the thresholds are
+  (r > 0.02), (r > 0.03), (r > 0.05); the anticorrelations are few and
+  weak, -0.01 to -0.03, (r < 0). The voxels are counted over the three
   coordinates, count(x, y, z); count(x) counts the distinct values of x,
   not the voxels.

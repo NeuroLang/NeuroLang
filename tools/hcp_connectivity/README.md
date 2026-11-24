@@ -126,15 +126,29 @@ which are on the atlas's 2 mm FSL MNI152 grid, and, from `HCP_DIR`,
    matrix, indexed by the voxel's centre `x y z` in MNI millimetres) and
    the engine's table
    `parquet/schaefer400_17_voxel_partial_functional_connectivity.parquet`
-   (`x y z label r`, float32, the pairs above the threshold, sorted).
+   (`x y z label r`, float32, the pairs whose |r| is above the threshold,
+   the anticorrelations too, sorted).
    The subjects, with their family, weight, exact age and sex, go to
    `PARTS/subjects.parquet`, not to the dataset: they are HCP restricted
    data, which the published dataset must not hold (the parts too hold
    them, and stay where they are made).
-   Partial correlations are small (about -0.2 to 0.2), so the number of
-   rows above 0.02, 0.03, 0.05, 0.1, ... is printed to choose the
-   threshold: the engine's table is a Parquet file because the full one
-   (53 million pairs) is too large to load.
+   Partial correlations are small, so the number of rows above 0.02,
+   0.03, 0.05, 0.1, ... (and below their negatives) is printed to choose
+   the threshold: the engine's table is a Parquet file because the full
+   one (53 million pairs) is too large to load. `combine` holds two parts
+   and the matrices at once: 62 GB at its peak for 132,032 voxels.
+
+   The dataset's v2.5 is that of the 966 subjects with the four runs (426
+   families; 101107's REST1_LR left out, a parcel outside its brain mask),
+   with `--threshold 0.01`: of 52.8 million pairs, the full matrix (194 MB)
+   and 237,073 pairs whose |r| is above 0.01 (1.6 MB). A voxel and its own
+   parcel are 0.02 to 0.09 (the 5th and 95th percentiles; 131,454 pairs
+   above 0.01), its own parcel being its strongest for 91 % of the voxels;
+   a voxel and another parcel are 0 at the median, 103,903 pairs above
+   0.01, 3,068 above 0.05, at most 0.13, half of those above 0.01 within
+   the voxel's own network (6 % by chance); 1,716 pairs are below -0.01,
+   none below -0.031. The negative side of the other parcels, mirrored,
+   puts the pairs above 0.01 that chance alone would give at about 1.7 %.
 
 ## Population tractogram (the subcortex, a stop-gap, superseded)
 

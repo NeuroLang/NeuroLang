@@ -88,8 +88,8 @@ def main(argv=None) -> None:
         sub.add_argument(path, type=Path)
     sub.add_argument("--threshold", type=float, default=0.05,
                      help="voxel-functional: the engine table keeps the "
-                     "pairs whose r is above it (the counts at some cutoffs "
-                     "are printed)")
+                     "pairs whose |r| is above it (the counts at some "
+                     "cutoffs are printed)")
     sub = command("population", "the connectivity of the cortex and the "
                   "subcortex from a population tractogram, into OUT "
                   "(WORK: its atlases; needs the internet)", "work", "out")

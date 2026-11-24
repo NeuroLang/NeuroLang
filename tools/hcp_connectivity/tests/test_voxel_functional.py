@@ -434,8 +434,8 @@ def test_the_engine_table_keeps_the_pairs_above_the_threshold(hcp):
     assert list(frame.columns) == ["x", "y", "z", "label", "r"]
     full = pd.read_parquet(
         dataset / "parquet" / f"{KEY}_functional_mean.parquet")
-    assert len(frame) == int((full.values > 0.05).sum()) > 0
-    assert (frame.r > 0.05).all() and frame.r.between(-1, 1).all()
+    assert len(frame) == int((np.abs(full.values) > 0.05).sum()) > 0
+    assert (frame.r.abs() > 0.05).all() and frame.r.between(-1, 1).all()
     assert set(frame.label) <= set(NAMES)
     # sorted, so that a table made again is the same file
     keys = list(zip(frame.x, frame.y, frame.z, frame.label))
@@ -449,6 +449,19 @@ def test_the_engine_table_keeps_the_pairs_above_the_threshold(hcp):
     row = frame.iloc[0]
     column = full.loc[(row.x, row.y, row.z), row.label]
     assert row.r == pytest.approx(column, abs=1e-5)
+
+
+def test_the_engine_table_keeps_the_anticorrelations(hcp, monkeypatch):
+    """A pair whose r is below -threshold is kept, as one above it; one
+    between them is not."""
+    n_voxels = int((atlas() > 0).sum())
+    r = np.zeros((n_voxels, len(NAMES)), dtype=np.float32)
+    r[3, 0], r[4, 1], r[5, 2], r[6, 0] = 0.02, -0.02, -0.005, 0.005
+    monkeypatch.setattr(GroupSums, "adjusted", lambda self: r)
+    dataset = table(hcp, 0.01)
+    frame = pd.read_parquet(
+        dataset / "parquet" / f"{KEY}_functional_connectivity.parquet")
+    assert sorted(frame.r.tolist()) == pytest.approx([-0.02, 0.02])
 
 
 def test_the_row_counts_at_several_thresholds_are_printed(hcp, capsys):

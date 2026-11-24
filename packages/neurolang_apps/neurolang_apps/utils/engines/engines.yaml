@@ -447,10 +447,10 @@ engines:
       destrieux_tian_functional_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.4/tsv/destrieux_tian_functional_connectivity.tsv.gz
         md5: 8bb4dfa8856f0639422e72840e30ff3c
-      # Parquet (x, y, z, label, r), the pairs above a threshold; the
-      # dataset's v2.5 (its md5 to be set when the tag is published).
+      # Parquet (x, y, z, label, r), the pairs whose |r| > 0.01.
       schaefer400_voxel_partial_functional_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.5/parquet/schaefer400_17_voxel_partial_functional_connectivity.parquet
+        md5: 506de97fa50579fb5bba569d6c712971
     acknowledgements:
       - >-
         Resting-state functional connectivity
@@ -504,7 +504,8 @@ engines:
         a family weighted so that each family counts once, and adjusted for
         age and sex by a regression of z on them across the subjects, read
         at the mean age and an equal mix of the sexes, and turned back
-        into a correlation (tanh). Ledoit O, Wolf M. A well-conditioned
+        into a correlation (tanh); the pairs whose |r| is above 0.01 are
+        kept. Ledoit O, Wolf M. A well-conditioned
         estimator for large-dimensional covariance matrices. Journal of
         Multivariate Analysis 88:365-411 (2004).
         doi:10.1016/S0047-259X(03)00096-4.
@@ -519,8 +520,8 @@ engines:
         type: float
         description: >-
           a partial correlation of resting-state fMRI time series, of a
-          voxel and a parcel controlling for the other parcels, about -0.2
-          to 0.2
+          voxel and a parcel controlling for the other parcels: -0.03 to
+          0.18 in the relation, whose |r| is above 0.01
     predicates:
       schaefer400_tian_functional_connectivity:
         description: >-
@@ -564,11 +565,15 @@ engines:
           data, adjusted for age and sex, each family counted once
           (.credits). The voxel is the centre (x, y, z), in MNI
           millimetres, of a 2 mm voxel of the Schaefer atlas, the parcel
-          its label (schaefer400(l, r)). Only the pairs whose partial r is
-          above a threshold are stored: a voxel and parcel absent are not
-          unconnected. Partial correlations are far smaller than the full
-          ones of schaefer400_tian_functional_connectivity (0.2 is strong).
-          Functional, not structural nor the co-activation of task studies
+          its label (schaefer400(l, r)), 966 subjects. Only the pairs whose
+          |r| is above 0.01 are stored (237,073): an absent pair is near 0,
+          not tested. Partial correlations are far smaller than the full
+          ones of schaefer400_tian_functional_connectivity: a voxel and its
+          own parcel 0.02 to 0.09 (most of the stored pairs), a voxel and
+          another parcel rarely above 0.05 (3,068 pairs) and at most 0.13;
+          the negative r, anticorrelations, are few (1,716) and at least
+          -0.03. Functional, not structural nor the co-activation of task
+          studies
         arguments:
           - mni
           - schaefer400_label

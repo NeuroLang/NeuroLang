@@ -423,8 +423,6 @@ def test_the_voxels_partial_connectivity_is_a_parquet_relation():
                for t in texts)
 
 
-@pytest.mark.xfail(strict=True, reason="v2.5 of the dataset is not "
-                   "published: no md5 yet")
 def test_the_voxels_partial_connectivity_is_pinned_by_its_md5():
     entry = get_engine_config("functional_connectivity")["relations"][VOXEL]
     assert entry["md5"]

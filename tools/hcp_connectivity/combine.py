@@ -36,7 +36,7 @@ millimetres:
   subjects' Fisher z on age and sex, read at the mean age and both sexes,
   family-weighted, tanh; the index ``x y z``, the columns the parcels);
 - ``parquet/<KEY>_functional_connectivity.parquet`` (``x y z label r``,
-  the pairs of r above a threshold, sorted), the engine's table;
+  the pairs whose |r| is above a threshold, sorted), the engine's table;
 - and, beside the parts, not in DATASET, ``PARTS/subjects.parquet``: the
   subjects with their family, weight, age and sex, HCP restricted data,
   which is not to be redistributed.
@@ -147,9 +147,10 @@ CUTOFFS = (0.02, 0.03, 0.05, 0.1, 0.15, 0.2, 0.3)
 def voxel_functional(work: Path, parts: Path, dataset: Path,
                      threshold: float) -> None:
     """The group partial connectivity of the voxels with the parcels
-    (voxel_functional.py): the matrix, the subjects and the pairs of r
-    above *threshold* (see the module's docstring); the number of pairs
-    above some cutoffs is printed, to choose the threshold."""
+    (voxel_functional.py): the matrix, the subjects and the pairs whose |r|
+    is above *threshold*, the anticorrelations too (see the module's
+    docstring); the number of pairs above some cutoffs is printed, to
+    choose the threshold."""
     from .voxel_functional import KEY, GroupSums, centres, schaefer_volume
 
     labels, affine, names = schaefer_volume(work / "atlases")
@@ -165,11 +166,12 @@ def voxel_functional(work: Path, parts: Path, dataset: Path,
                   "male": sums.male}).sort_values("subject").to_parquet(
         parts / "subjects.parquet", index=False)  # restricted: not DATASET
     for cutoff in CUTOFFS:
-        print(f"r > {cutoff}: {int((r > cutoff).sum())} rows", flush=True)
+        print(f"r > {cutoff}: {int((r > cutoff).sum())} rows; "
+              f"r < -{cutoff}: {int((r < -cutoff).sum())}", flush=True)
     print(f"{int((sums.n_valid == 0).sum())} voxels without signal in any "
           f"subject, {int((sums.n_valid < len(sums.subjects)).sum())} "
           "without it in some")
-    voxel, parcel = np.nonzero(r > threshold)
+    voxel, parcel = np.nonzero(np.abs(r) > threshold)
     rank = np.argsort(np.argsort(names))
     order = np.lexsort((rank[parcel], mm[voxel, 2], mm[voxel, 1],
                         mm[voxel, 0]))
@@ -181,7 +183,7 @@ def voxel_functional(work: Path, parts: Path, dataset: Path,
                   "r": r[voxel, parcel]}).to_parquet(
         dataset / "parquet" / f"{KEY}_functional_connectivity.parquet",
         compression="zstd", index=False)
-    print(f"{len(sums.subjects)} subjects; {len(voxel)} rows above "
+    print(f"{len(sums.subjects)} subjects; {len(voxel)} rows of |r| above "
           f"{threshold}")
 
 
