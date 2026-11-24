@@ -34,12 +34,10 @@ from .fakes import ScriptedClient, assistant_config  # noqa: E402
 PAIN = "ans(s) :- mentions(s, 'pain')"
 
 
-def provider(auth="login", **options):
+def provider():
     """Return a Claude Code provider for the tests."""
-    entry = {"api_key_env": "FAKE_KEY"} if auth == "key" else {}
     return ProviderConfig(
-        "claude-agent", "claude-code", "sonnet", tool_calling="native",
-        auth=auth, **{**entry, **options},
+        "claude-agent", "claude-code", "sonnet", tool_calling="native"
     )
 
 
@@ -54,19 +52,15 @@ def parsed(**entry):
 
 def test_claude_code_provider_defaults():
     p = parsed(model="sonnet")
-    assert (p.api, p.auth, p.tool_calling, p.api_key_env) == (
-        "claude-code", "login", "native", None
+    assert (p.api, p.tool_calling, p.api_key_env) == (
+        "claude-code", "native", None
     )
-    k = parsed(model="sonnet", auth="key", api_key_env="ANTHROPIC_API_KEY")
-    assert (k.auth, k.api_key_env) == ("key", "ANTHROPIC_API_KEY")
 
 
 @pytest.mark.parametrize("entry, message", [
     ({}, "lacks model"),
     ({"model": "s", "tool_calling": "text"}, "only tool_calling: native"),
-    ({"model": "s", "auth": "oauth"}, "auth"),
-    ({"model": "s", "auth": "key"}, "needs api_key_env"),
-    ({"model": "s", "auth": "login", "api_key_env": "K"}, "no api_key_env"),
+    ({"model": "s", "api_key_env": "K"}, "api_key_env"),
     ({"model": "s", "base_url": "http://x"}, "base_url"),
 ])
 def test_claude_code_provider_is_checked(entry, message):
@@ -74,30 +68,17 @@ def test_claude_code_provider_is_checked(entry, message):
         parsed(**entry)
 
 
-def test_the_example_configuration_has_the_claude_agents():
+def test_the_example_configuration_has_the_claude_agent():
     config = load_config(EXAMPLE_CONFIG)
-    assert config.providers["claude-agent"].auth == "login"
-    assert config.providers["claude-agent-key"].auth == "key"
-    assert config.providers["claude-agent-key"].api_key_env
+    assert config.providers["claude-agent"].api == "claude-code"
 
 
-def test_a_login_needs_no_key(monkeypatch):
+def test_a_shared_server_refuses_the_sign_in(monkeypatch):
     monkeypatch.delenv(MULTI_USER_ENV, raising=False)
-    assert provider("login").api_key() is None
-
-
-def test_a_login_is_refused_on_a_shared_server(monkeypatch):
+    assert provider().api_key() is None
     monkeypatch.setenv(MULTI_USER_ENV, "1")
     with pytest.raises(LLMConfigError, match="shared server"):
-        provider("login").api_key()
-    monkeypatch.setenv("FAKE_KEY", "sk-test")
-    assert provider("key").api_key() == "sk-test"
-
-
-def test_a_key_is_read_from_the_environment(monkeypatch):
-    monkeypatch.delenv("FAKE_KEY", raising=False)
-    with pytest.raises(LLMConfigError, match="FAKE_KEY"):
-        provider("key").api_key()
+        provider().api_key()
 
 
 # --- the claude CLI ---------------------------------------------------------
@@ -127,10 +108,9 @@ def fake_claude(tmp_path, monkeypatch):
         def __truediv__(self, name):
             return folder / name
 
-        def sign_in(self, method="claude.ai", logged_in=True,
-                    email="me@x.org"):
+        def sign_in(self, method="claude.ai", logged_in=True):
             (folder / "status.json").write_text(json.dumps(
-                {"loggedIn": logged_in, "authMethod": method, "email": email}
+                {"loggedIn": logged_in, "authMethod": method}
             ))
 
     fake = FakeClaude()
@@ -147,7 +127,6 @@ def recorded_env(folder):
 def test_status_reads_the_sign_in(fake_claude):
     status = claude_cli.status()
     assert status.logged_in and status.method == "claude.ai"
-    assert status.email == "me@x.org"
 
 
 def test_status_runs_claude_without_the_keys(
@@ -183,47 +162,35 @@ def test_no_claude_executable(monkeypatch, tmp_path):
         claude_cli.require_login()
 
 
-def test_a_login_runs_the_cli_without_the_keys(fake_claude, monkeypatch):
+def test_the_cli_runs_without_the_keys(fake_claude, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "t")
-    with claude_cli.settings(provider("login")) as cli:
-        assert cli.env == {}
-        subprocess.run([cli.path, "-p"], check=True)
+    with claude_cli.settings(provider()) as path:
+        subprocess.run([path, "-p"], check=True)
     env = recorded_env(fake_claude)
     assert "ANTHROPIC_API_KEY" not in env
     assert "ANTHROPIC_AUTH_TOKEN" not in env
 
 
-def test_a_login_needs_a_subscription(fake_claude):
+def test_the_cli_needs_a_subscription(fake_claude):
     fake_claude.sign_in(method="api_key")
     with pytest.raises(LLMError, match="not signed in"):
-        with claude_cli.settings(provider("login")):
+        with claude_cli.settings(provider()):
             pass
 
 
-def test_a_key_runs_the_cli_with_the_key_and_a_private_configuration(
-        fake_claude, monkeypatch):
-    monkeypatch.setenv("FAKE_KEY", "sk-test")
-    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "t")
-    fake_claude.sign_in(method="api_key")  # a key needs no sign-in
-    with claude_cli.settings(provider("key")) as cli:
-        config = Path(cli.env["CLAUDE_CONFIG_DIR"])
-        assert cli.env["ANTHROPIC_API_KEY"] == "sk-test"
-        assert config.is_dir()
-        subprocess.run(
-            [cli.path, "-p"], check=True, env={**os.environ, **cli.env}
-        )
-    env = recorded_env(fake_claude)
-    assert env["ANTHROPIC_API_KEY"] == "sk-test"
-    assert "ANTHROPIC_AUTH_TOKEN" not in env
-    assert not config.exists()
-
-
 def test_the_wrapper_is_removed(fake_claude):
-    with claude_cli.settings(provider("login")) as cli:
-        wrapper = Path(cli.path)
+    with claude_cli.settings(provider()) as path:
+        wrapper = Path(path)
         assert wrapper.exists()
     assert not wrapper.exists()
+
+
+def test_a_shared_server_does_not_run_the_cli(fake_claude, monkeypatch):
+    monkeypatch.setenv(MULTI_USER_ENV, "1")
+    with pytest.raises(LLMConfigError, match="shared server"):
+        with claude_cli.settings(provider()):
+            pass
 
 
 # --- the SDK conversation ---------------------------------------------------
@@ -249,7 +216,7 @@ def no_cli(monkeypatch):
     @contextlib.contextmanager
     def settings(p):
         seen["provider"] = p
-        yield claude_cli.CliSettings("/fake/claude", {"FAKE": "1"})
+        yield "/fake/claude"
 
     monkeypatch.setattr(claude_code.claude_cli, "settings", settings)
     return seen
@@ -279,12 +246,11 @@ def text_reply(text, **options):
     return run
 
 
-def agent(nl, auth="login", **options):
-    instance = claude_code.ClaudeCodeAgent(
-        nl, provider(auth), assistant_config(**options), "datalog",
+def agent(nl, **options):
+    return claude_code.ClaudeCodeAgent(
+        nl, provider(), assistant_config(**options), "datalog",
         client=ScriptedClient([]),
     )
-    return instance
 
 
 def tool_calls(instance, calls):
@@ -346,14 +312,13 @@ def test_the_agent_uses_the_engine_tools_alone(nl, no_cli, monkeypatch):
     assert options.max_turns == 7
     assert options.model == "sonnet"
     assert options.cli_path == "/fake/claude"
-    assert options.env == {"FAKE": "1"}
     assert set(options.mcp_servers) == {"neurolang"}
     assert "mcp__neurolang__final_answer" in options.allowed_tools
     assert all(t.startswith("mcp__neurolang__") for t in options.allowed_tools)
     assert "Datalog" in options.system_prompt or "datalog" in (
         options.system_prompt
     )
-    assert no_cli["provider"].auth == "login"
+    assert no_cli["provider"].api == "claude-code"
 
 
 def test_out_of_steps_the_last_query_with_rows_answers(
@@ -377,6 +342,9 @@ def test_a_rejected_verification_goes_back_to_the_model(
         nl, no_cli, monkeypatch):
     react = agent(nl, verify_rounds=1)
     react.client = ScriptedClient([
+        "The studies that mention memory.",
+        "VERDICT: no\nIt is about memory, not pain.",
+        # The answer given again is verified too, and accepted.
         "The studies that mention memory.",
         "VERDICT: no\nIt is about memory, not pain.",
     ])
@@ -448,16 +416,6 @@ def test_the_client_reads_a_conversation(no_cli, monkeypatch):
     ])
     assert "USER:\none" in seen["prompt"]
     assert "ASSISTANT:\ntwo" in seen["prompt"]
-
-
-def test_the_client_refuses_a_login_on_a_shared_server(
-        no_cli, monkeypatch):
-    monkeypatch.setenv(MULTI_USER_ENV, "1")
-    scripted(monkeypatch, text_reply("pong"))
-    with pytest.raises(LLMConfigError, match="shared server"):
-        make_client(provider("login")).complete(
-            [{"role": "user", "content": "ping"}]
-        )
 
 
 @pytest.mark.slow

@@ -92,22 +92,13 @@ providers:
     tool_calling: text
 
   # Claude Code itself runs the agent (api: claude-code, extra claude): one
-  # conversation per question, native tool calls on the engine's tools.
-  # auth: login uses the sign-in you made with `claude` on this machine, no
-  # key; for your own use only (refused on a shared server, where
-  # neurolang-repl-serve --users needs auth: key). NeuroLang has no login
-  # of its own: run `claude` in a terminal to sign in.
+  # conversation per question, native tool calls on the engine's tools. It
+  # uses the sign-in you made with `claude` on this machine, no key; for
+  # your own use only (neurolang-repl-serve --users refuses it). NeuroLang
+  # has no login of its own: run `claude` in a terminal to sign in.
   claude-agent:
     api: claude-code
     model: sonnet               # an alias of the CLI, or a model name
-    auth: login
-
-  # The same with an Anthropic API key, allowed everywhere.
-  claude-agent-key:
-    api: claude-code
-    model: sonnet
-    auth: key
-    api_key_env: ANTHROPIC_API_KEY
 
   # Any server with an OpenAI-compatible API, here Ollama.
   local:

@@ -818,21 +818,34 @@ class ReactAgent(Agent):
             final = turn(result, messages, toolbox, temperature)
             if final is None:
                 continue
-            rejection = None
-            if self.config.verify_rounds > 0:
-                rejection = self._verify(
-                    result, question, final[0], toolbox.answer_rows
-                )
-            if rejection is None or rejections >= self.config.verify_rounds:
-                result.query, result.explanation = final
-                result.frames = toolbox.answer_frames
-                result.valid = True
+            rejection = self._accept(
+                result, question, final, toolbox, rejections
+            )
+            if rejection is None:
                 return result
             rejections += 1
             messages.append(
                 {"role": "user", "content": prompts.observation(rejection)}
             )
         return self._out_of_steps(result)
+
+    def _accept(self, result, question, final, toolbox, rejections):
+        """
+        Verify the *final* answer (query, explanation) of *toolbox*, after
+        *rejections* rejected ones. Return None, with the answer in
+        *result*, if it is accepted, or else the observation rejecting it.
+        """
+        rejection = None
+        if self.config.verify_rounds > 0:
+            rejection = self._verify(
+                result, question, final[0], toolbox.answer_rows
+            )
+        if rejection is None or rejections >= self.config.verify_rounds:
+            result.query, result.explanation = final
+            result.frames = toolbox.answer_frames
+            result.valid = True
+            return None
+        return rejection
 
     def _out_of_steps(self, result: AgentResult) -> AgentResult:
         """

@@ -194,37 +194,6 @@ def test_llm_shows_and_changes_the_settings(app):
     assert app.assistant.strategy == "react"
 
 
-def test_llm_shows_the_claude_sign_in(app, monkeypatch):
-    from neurolang_apps.utils.llm import claude_cli
-
-    app.assistant._config = parse_config({
-        "default_provider": "agent",
-        "providers": {
-            "agent": {"api": "claude-code", "model": "sonnet"},
-            "keyed": {"api": "claude-code", "model": "sonnet",
-                      "auth": "key", "api_key_env": "FAKE_KEY"},
-            "first": {"base_url": "http://llm.test/v1", "model": "m1"},
-        },
-    })
-    signed = [claude_cli.Status(True, "claude.ai", "me@x.org")]
-    monkeypatch.setattr(claude_cli, "status", lambda: signed[0])
-    app._run_line(".llm")
-    assert "Claude: signed in as me@x.org (claude.ai)" in output(app)
-    signed[0] = claude_cli.Status(False)
-    app._run_line(".llm")
-    assert "Claude: not signed in: run `claude` in a terminal" in output(app)
-    signed[0] = claude_cli.Status(True, "api_key")
-    app._run_line(".llm")
-    assert output(app).count("not signed in") == 2
-    # A key is the environment's: no sign-in to ask about.
-    signed.clear()
-    app._run_line(".llm provider keyed")
-    assert "Claude: API key of FAKE_KEY" in output(app)
-    before = output(app)
-    app._run_line(".llm provider first")
-    assert "Claude:" not in output(app)[len(before):]
-
-
 REACT_PAIN = (
     'Thought: run it\nAction: run_query\nAction Input: {"query": '
     '"ans(s) :- mentions(s, \'pain\')"}',

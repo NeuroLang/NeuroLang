@@ -305,21 +305,15 @@ The ``api`` of a provider is one of:
     conversation per question, with native tool calls on the engine's
     tools, which run in the REPL's process, on its engine; Claude Code's
     own tools and its settings (``CLAUDE.md``, hooks) are off. It needs
-    ``model`` (an alias such as ``sonnet``, or a model name) and ``auth``:
-
-    ``login`` (the default)
-        The sign-in you made with ``claude`` on this machine: no API key.
-        NeuroLang has no login of its own, run ``claude`` in a terminal to
-        sign in; ``.llm`` tells whether you are. The CLI is run without
-        ``ANTHROPIC_API_KEY`` and ``ANTHROPIC_AUTH_TOKEN``, which it would
-        use before your sign-in, and a sign-in that is an API key is
-        refused. It is for your own use, on your machine: Anthropic does not
-        allow a product to offer claude.ai sign-in without its approval, so
-        ``neurolang-repl-serve --users`` refuses it.
-    ``key``
-        An API key, read from ``api_key_env``, with a configuration folder
-        of its own for each request: allowed everywhere, shared servers
-        included.
+    ``model`` (an alias such as ``sonnet``, or a model name) and uses the
+    sign-in you made with ``claude`` on this machine: no API key, and no
+    ``api_key_env``. NeuroLang has no login of its own, run ``claude`` in a
+    terminal to sign in. The CLI is run without ``ANTHROPIC_API_KEY`` and
+    ``ANTHROPIC_AUTH_TOKEN``, which it would use before your sign-in, and a
+    sign-in that is an API key is refused. It is for your own use, on your
+    machine: Anthropic does not allow a product to offer claude.ai sign-in
+    without its approval, so ``neurolang-repl-serve --users`` refuses it
+    (use an API key provider there).
 
     With ``default_provider: claude-agent`` in ``llm.yaml``, the page of
     ``neurolang-repl-serve --local`` uses it too, as it uses the machine's
