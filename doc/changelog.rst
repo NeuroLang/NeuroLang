@@ -40,7 +40,9 @@ Unreleased
   ReAct agent (extra ``claude``): one conversation per question, native
   tool calls on the engine's tools, instead of a ``claude -p`` process per
   step, with your own sign-in to ``claude``, no API key. It is refused by
-  ``neurolang-repl-serve --users``.
+  ``neurolang-repl-serve --users``. The ``claude-code`` entry of
+  ``llm.example.yaml`` (``api: command``, ``claude -p``) is deprecated in
+  its favour, as the entry ``claude-agent``.
 
 - Brain viewer: the streamlines of a result with one other column, such
   as ``ans(x, side) :- uncinate(x, side)``, can be coloured by bundle, a

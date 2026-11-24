@@ -82,7 +82,9 @@ providers:
     tool_calling: native
     max_tokens: 16000           # its thinking counts in max_tokens
 
-  # Claude Code in print mode, using its own login: no API key here.
+  # Deprecated: use claude-agent below. Claude Code in print mode, using its
+  # own login: no API key here, but one `claude -p` process per step, the
+  # whole conversation sent again each time, and only the text tool protocol.
   claude-code:
     api: command
     command: [claude, -p, --model, sonnet, --tools, "",
