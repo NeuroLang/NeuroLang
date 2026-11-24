@@ -34,6 +34,17 @@ likely unit of evidence, as studies are in the neuroimaging engines:
   BiomedSQL's threshold, p_SMR_multi < 2.95e-6 (any probe of the gene).
 * ``selected_qtl(qtl_dataset)``: a uniform probabilistic choice of one QTL
   dataset.
+
+And the same evidence with a prior, two imaginary units of evidence, as the
+``prior_significant`` and ``prior_none`` options say how much each weighs
+against one dataset: ``prior_significant`` is tested and significant for
+every (gene, disease) pair, ``prior_none`` is tested and never significant.
+
+* ``evidence_unit(unit)``: the 28 datasets and the two imaginary units.
+* ``unit_tested(unit, gene, disease)``, ``unit_significant(unit, gene,
+  disease)``: the tests of the datasets, and those of the imaginary units.
+* ``selected_unit(unit)``: a probabilistic choice of one unit, a dataset with
+  weight 1, the imaginary units with their weights (normalised).
 """
 
 import logging
@@ -93,7 +104,17 @@ def _table(db: Path, source: str) -> pd.DataFrame:
     return df
 
 
-def init_engine(nl, mask, data_dir: Path) -> None:
+PRIOR_SIGNIFICANT = "prior_significant"
+PRIOR_NONE = "prior_none"
+
+
+def init_engine(
+    nl,
+    mask,
+    data_dir: Path,
+    prior_significant: float = 0.01,
+    prior_none: float = 0.5,
+) -> None:
     db = Path(data_dir) / "biomedsql" / "db"
     frames = {name: _table(db, source) for name, source in TABLES.items()}
     for name, df in frames.items():
@@ -119,4 +140,32 @@ def init_engine(nl, mask, data_dir: Path) -> None:
     )
     nl.add_uniform_probabilistic_choice_over_set(
         [(q,) for q in sorted(raw.Omic)], name="selected_qtl"
+    )
+
+    pairs = tests[["Gene", "Disease"]].drop_duplicates()
+    imaginary = {}
+    for unit in (PRIOR_SIGNIFICANT, PRIOR_NONE):
+        imaginary[unit] = pd.DataFrame(
+            {"Omic": unit, "Gene": pairs.Gene, "Disease": pairs.Disease}
+        )
+    significant = tests.loc[
+        tests.p_SMR_multi < SMR_THRESHOLD, ["Omic", "Gene", "Disease"]
+    ]
+    nl.add_tuple_set(
+        pd.concat(
+            [tests[["Omic", "Gene", "Disease"]], *imaginary.values()]
+        ),
+        name="unit_tested",
+    )
+    nl.add_tuple_set(
+        pd.concat([significant, imaginary[PRIOR_SIGNIFICANT]]),
+        name="unit_significant",
+    )
+    weights = {q: 1.0 for q in sorted(raw.Omic)}
+    weights[PRIOR_SIGNIFICANT] = float(prior_significant)
+    weights[PRIOR_NONE] = float(prior_none)
+    total = sum(weights.values())
+    nl.add_tuple_set([(u,) for u in weights], name="evidence_unit")
+    nl.add_probabilistic_choice_from_tuples(
+        [(w / total, u) for u, w in weights.items()], name="selected_unit"
     )

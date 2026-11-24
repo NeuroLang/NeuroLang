@@ -26,6 +26,7 @@ assistant_guidance: 'Answer a question with the rows that hold what it asks and 
   the probability that a dataset found the gene significant, given that it tested it, PROB[(qtl_significant(q,
   g, d) & selected_qtl(q)) // (qtl_tested(q, g, d) & selected_qtl(q))] = p; restrict the datasets (to
   the brain ones, say) with a rule of its own, brain(q) :- qtl_dataset(q, t, k, ''brain''), added on both
-  sides of //: the probabilistic query takes no function or comparison itself.
-
-  '
+  sides of //: the probabilistic query takes no function or comparison itself. To predict whether a QTL
+  dataset not yet seen would find the gene significant, prefer support_prior(g, d, PROB), the same share
+  with a prior of two imaginary datasets: a gene tested in one dataset is not given probability 1; support
+  is the plain share.'

@@ -1,0 +1,23 @@
+1. For yes/no questions (druggable, approved, black box warning, significant, associated), never return a bare boolean from an `ans()` with no columns. Return the supporting rows with the identifying columns (drug name, SNP, gene, p-value, beta, and similar). An empty result means "no".
+
+2. For "Is gene X druggable?", return the drugs that target X, with drugName, drugIsApproved, linked targets and max clinical trial phase. Match the gene as a target of the drug, not as a free-text indication field. If no drugs target it, return nothing.
+
+3. For "Is drug X approved to treat Y?", return one row per drug-target-indication record with drug name, trade names, synonyms, target, approved symbol and name, MeSH heading, EFO term, first approval year and max phase for the indication. Do not filter on max phase = 4 or on approval status in the query. The returned phase and year let the reader judge approval.
+
+4. For "What is drug X?" or a trade-name question, match the name against the trade-names field with a substring match, not an exact column. Return the full profile: trade names, drug name, molecular type, action type, mechanism of action, linked diseases, linked targets, max phase, first approval year and approval flag. Include every mechanism and target row.
+
+5. For "What mechanism type does drug X use?", return the mechanism-of-action text (drugMechanismOfAction), not the short action-type field. Return all rows.
+
+6. For black box warning questions, return drugName and blackBoxWarning with the flag as an output column, never as a filter. Match the drug name as a substring or prefix, because salt forms (e.g. "X Hydrochloride") are separate rows. Always return a result, even when the flag is false.
+
+7. For "Which drugs of type T are approved by the FDA to treat D?", join indications to the drug table on the drug identifier. Require the approval flag true, the molecular type, and the indication match, with a case-insensitive or substring match on the disease term. Check that the matched rows actually satisfy every condition, and return nothing if none do. Do not equate an indication record with approval; check the drug's approved flag and the indication's max phase.
+
+8. For GWAS "genome-wide significant SNP count" questions, count distinct SNP identifiers with p < 5e-8, grouped by the chromosome in the build the gold uses (the chr_38 column), and return the chromosome and the count. Filter on chromosome 38 coordinates, not the 37 coordinates, and deduplicate.
+
+9. For "Is SNP X significant in AD/PD?", return SNP, p and b for that SNP with no p-value filter, so the reader can compare against 5e-8.
+
+10. For association questions between a gene and a disease, use the SMR table and return only rows that pass significance: p_SMR_multi below the threshold and p_HEIDI at or above 0.05. Return nothing when no row passes. Do not return non-significant rows, the prior table, or GWAS nearby-gene matches.
+
+11. For "relevance of gene X in disease Y using SMR", return topRSID, Disease, Gene, p_SMR_multi, p_HEIDI and b_SMR, restricted to significant rows. If none pass, the result is empty. For "top SNP and functional significance in a given omic/tissue", return topRSID, Disease, Gene, p_SMR_multi, p_HEIDI, omic tissue, omic type and func_sig for all matching rows, with no aggregation that picks one SNP.
+
+12. For "nearest gene to SNP X", look the SNP up in every GWAS table (PD and AD) and return a source-table label and the nearest-gene field. A missing answer is never acceptable; always write a working query.

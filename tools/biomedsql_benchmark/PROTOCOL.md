@@ -164,3 +164,9 @@ measures mostly generalization to a new constant and a sibling template, not to 
   the syntax trees are identical except for the whitespace of two docstrings (checked). `FROZEN.json` is the v2 freeze (new hashes);
   `FROZEN.v1.json` has those of the test run.
 
+- v2check result (2026-11-24): conditions A and C rerun once on the v2 engine (test split, judge): A 70/80 (72/80 on v1), C 69/80 (69/80 on v1):
+  no change beyond run-to-run noise.
+- 2026-11-24, engine v3: `engines.yaml` gives `biomedsql` the predicates `support_prior`, `evidence_unit`, `unit_tested`, `unit_significant`, `selected_unit`
+  (two imaginary units of evidence; `replication/PROTOCOL_PRIOR.md`) and its guidance one sentence about them. The test results above are v1
+  (`FROZEN.v1.json`); `FROZEN.v2.json` is the freeze after the formatting; `FROZEN.json` is v3. No run under this protocol follows; the runs of
+  `strategies/` and the replication experiments are under their own protocols.

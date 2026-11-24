@@ -1,0 +1,23 @@
+1. For "what is X" questions about a drug, return the full profile: trade names, drug name, molecular type, action type, mechanism of action, linked diseases, linked targets, max clinical phase, approval year and approval status. Do not return only an ID or name, and match the name against both the drug name and the trade-name fields.
+
+2. "Mechanism type" means the drugMechanismOfAction column (e.g. "X receptor inhibitor"), not the generic action-type column. Return all mechanism rows for the drug.
+
+3. For black-box-warning questions, return rows of (drugName, blackBoxWarning) with the actual flag value as a column. Never put the flag in the head as a constant filter or return a bare boolean. Match salt and parent forms of the name (e.g. "X Hydrochloride" and "X") so every related drug row is returned.
+
+4. Never output an empty or failed query. Always produce a query that returns the requested rows, and use substring or prefix name matching rather than exact equality when the name might have variants.
+
+5. For "most significantly associated SNP" questions, apply a significance threshold before taking the minimum p-value. Return an empty result if no SNP passes, rather than returning the best non-significant one. Use the SMR multi-SNP p-value with the functional-significance flag and HEIDI filter. Return the top SNP together with disease, tissue, p_SMR_multi, p_HEIDI, alleles, frequency and func_sig.
+
+6. Match tissue and omic names by the tissue or omic-tissue label field using the question's wording, not guessed dataset codes. Check which column holds the tissue name, since a wrong match gives a wrong top SNP.
+
+7. For "is there an association between gene and disease" questions, return only rows that pass the significance criteria (significant p_SMR_multi, and HEIDI not rejecting). If nothing passes, return empty. Do not return non-significant rows, prior probabilities or raw nearby-SNP p-values.
+
+8. For "relevance of gene in disease using SMR" and "top SNP in gene" questions, keep only functionally significant SMR results (the significance flag, p_SMR_multi below threshold and HEIDI passing). Return topRSID, disease, gene, p_SMR_multi, p_HEIDI and b_SMR. An empty result is the correct answer when nothing is significant.
+
+9. For "do gene mutations increase risk" questions, return the GWAS SNP rows (SNP, p, b) located in or near the gene, ordered by p ascending and limited to 100. Do not use a bare boolean, SMR rows or prior probabilities, and do not apply an effect-direction or significance filter.
+
+10. For counts of genome-wide significant SNPs on a chromosome, count distinct SNPs with p < 5e-8, filtering on the GRCh38 chromosome column. Return the chromosome and the unique SNP count as columns, deduplicating rsIDs.
+
+11. For "nearest gene to SNP" questions, query the nearest-gene annotation tables for that rsID and return source_table and nearestGene for every table containing it. Do not return an empty answer.
+
+12. Return the columns the question asks for plus identifying context (names, ids, tissue), and always keep the entity name in the output. Prefer returning the full matching rows over bare scalars or booleans.

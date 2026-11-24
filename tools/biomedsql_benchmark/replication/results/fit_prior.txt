@@ -1,0 +1,7 @@
+2763 predictions of 222 genes; unsmoothed log-loss 0.443
+  a=0.01 b=0.5 log-loss 0.413
+  a=0.05 b=0.5 log-loss 0.413
+  a=0.01 b=1 log-loss 0.414
+  a=0.05 b=1 log-loss 0.414
+  a=0.1 b=0.5 log-loss 0.414
+chosen a=0.01, b=0.5; on the edge of the grid: True

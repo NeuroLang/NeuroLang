@@ -47,11 +47,17 @@ def load_tests(smr_path):
     return tests.reset_index(), info
 
 
-def main(smr_path, predictions_path):
+def main(
+    smr_path, predictions_path, out="items.json", seed=SEED, exclude=None
+):
+    """Draw N items; with *exclude* (an items file), no gene of that file."""
     tests, info = load_tests(smr_path)
     preds = pd.read_parquet(predictions_path)
     preds = preds[preds.p > 0]
-    rng = random.Random(SEED)
+    if exclude:
+        used = {i["gene"] for i in json.load(open(HERE / exclude))}
+        preds = preds[~preds.gene.isin(used)]
+    rng = random.Random(int(seed))
     pairs = sorted(set(zip(preds.gene, preds.disease)))
     rng.shuffle(pairs)
     by_pair = {k: g for k, g in preds.groupby(["gene", "disease"])}
@@ -90,7 +96,7 @@ def main(smr_path, predictions_path):
                 "evidence": evidence,
             }
         )
-    (HERE / "items.json").write_text(json.dumps(items, indent=1))
+    (HERE / out).write_text(json.dumps(items, indent=1))
     y = [i["y"] for i in items]
     print(
         len(items),

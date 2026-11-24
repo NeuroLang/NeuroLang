@@ -1,0 +1,23 @@
+1. Never use a bare boolean `ans()` for yes/no questions. Return the supporting rows (entity name plus the evidence columns, e.g. drug name and flag, SNP with p and beta). An empty result is the "no" answer.
+
+2. For "Is X a druggable gene?", return the drug rows that target the gene: drug name, approval flag, linked targets and max clinical trial phase. Match the gene as a target of the drug, whether through a target-string match or the target column of the indication table. Do not require approval.
+
+3. For "Is drug D approved to treat indication I?", return the indication rows with drug name, trade names, synonyms, target, symbol, target name, MeSH heading, EFO term, first-approval year and max phase. Do not hard-code phase 4, because the question's answer depends on the row's actual phase. Match the indication through its EFO term or MeSH heading, case-insensitively and by substring where needed.
+
+4. For black box warning questions, return the drug name and its black-box flag from the drug table, selecting by drug name. Do not put the flag value in the query as a filter. Salt forms and parent names may produce several rows, so match the name by containment.
+
+5. For "mechanism type" or "mechanism of action" questions, return the mechanism-of-action text column, not the action-type column. One drug can have several distinct mechanisms, so return all of them.
+
+6. For "approved small-molecule therapies for disease X", require an exact indication match, the molecule type, and approval at max phase 4 (or the approval flag) on the indication row. If nothing satisfies all of these, return empty rather than loosening the criteria. Do not join drug and indication tables without a shared key, since that produces spurious rows.
+
+7. For "most significant SNP in tissue T for disease D" with SMR, use only results that meet significance (functionally significant, with a low SMR p and a passing HEIDI test). If none qualify, return an empty result rather than the least-bad row. Match the tissue and dataset naming exactly as stored, and return the top SNP with p_SMR_multi, p_HEIDI, alleles, frequency and significance flag.
+
+8. For "is there an SMR signal or relevance of gene G in disease D", return only significant, HEIDI-passing associations. Non-significant rows count as no signal, so the result should be empty. When rows are returned, include the top rsID, p_SMR_multi, p_HEIDI and b_SMR.
+
+9. For "top SNP in gene G for disease D based on dataset T", filter by the dataset or tissue, the gene and the disease. Return a row only if it is significant (adjusted SMR p below threshold and a passing HEIDI test).
+
+10. For "how many genome-wide significant SNPs in chrN", count distinct SNPs using the GRCh38 chromosome column (the `chr_38` field), not the build-37 one. Use p < 5e-8 and return the chromosome with the distinct count.
+
+11. For "is SNP significant in disease" with GWAS data, return the SNP's row (SNP, p, b) without applying the significance threshold in the query. The p-value in the row lets the reader judge significance.
+
+12. For "do mutations in gene G increase the risk of disease D", return GWAS SNP rows (SNP, p, b) within the gene's region or annotated to the gene, ordered by significance and limited to 100. Do not filter by direction or threshold, and do not substitute SMR or prior-probability tables.

@@ -1,0 +1,20 @@
+1197 items, 131 genes, base rate 0.317; engine - closed form max |diff| 2.22e-16; L2 answers missing 0
+
+system                    Brier         95% CI  skill logloss    ECE    AUC
+share (unsmoothed)        0.157 [0.136,0.181]  +0.27   0.512  0.057  0.810
+support_prior (engine)    0.147 [0.127,0.169]  +0.32   0.458  0.033  0.820
+L2 LLM + evidence         0.129 [0.114,0.146]  +0.40   0.403  0.041  0.875
+
+paired differences (Brier, log-loss: negative = first better)
+  support_prior (engine) - share (unsmoothed)   brier    -0.010 [-0.016, -0.006]
+  support_prior (engine) - share (unsmoothed)   logloss  -0.054 [-0.083, -0.032]
+  support_prior (engine) - share (unsmoothed)   auc      +0.010 [+0.004, +0.016]
+  support_prior (engine) - L2 LLM + evidence    brier    +0.018 [+0.009, +0.028]
+  support_prior (engine) - L2 LLM + evidence    logloss  +0.055 [+0.029, +0.081]
+  support_prior (engine) - L2 LLM + evidence    auc      -0.055 [-0.096, -0.032]
+
+Brier by the number of other datasets that tested the gene
+  n 1     items   25: share 0.653 prior 0.339 L2 0.256
+  n 2-3   items   81: share 0.267 prior 0.229 L2 0.205
+  n 4-9   items  317: share 0.167 prior 0.163 L2 0.149
+  n >=10  items  774: share 0.126 prior 0.125 L2 0.109

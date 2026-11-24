@@ -74,3 +74,32 @@ Not shown:
 240 items from 430 pairs (222 genes); one model for the LLM systems and the agent; the QTL datasets share GWAS and donors, so the
 outcome is not an independent replication; the prior was chosen after the failure was seen (fitted on other genes, but chosen
 as a remedy post hoc); the LLM was asked once per item (no repeats); the item set and thresholds are BiomedSQL's.
+
+# The prior in the engine, on held-out genes (`PROTOCOL_PRIOR.md`)
+
+Pre-registered after the post hoc result above. `support_prior` is now an engine predicate: two imaginary units of evidence (one always
+significant, one never) weigh in a probabilistic choice over 30 units, so that the probability is (k + a) / (n + a + b). The engine's value equals
+the closed form to 2.2e-16 on all 1,197 evaluation predictions, solved by lifted inference only (0.2 s each).
+
+Fit: a = 0.01, b = 0.5 by log-loss on the 2,763 predictions of the 222 genes of the first item set. **a is on the edge of the pre-registered grid** (its
+smallest value); the surface is flat there (log-loss 0.413 for a = 0.01 and 0.05, 0.414 at 0.1), so the grid being too small changes nothing visible.
+
+Amendments before the run (see the protocol): only 145 fresh pairs exist, and the 131 genes behind them are those on which the earlier post hoc
+prior was fitted, so the evaluation uses every held-out prediction with support > 0 of those 131 genes (1,197 predictions, base rate 31.7%). Their data
+informed the earlier post hoc fit, not this one; the form of the prior was chosen after seeing the failure on the first 222 genes.
+
+| System | Brier [95% CI over genes] | Skill | Log-loss | ECE | AUC |
+|---|---|---|---|---|---|
+| share (unsmoothed) | 0.157 [0.136, 0.181] | +0.27 | 0.512 | 0.057 | 0.810 |
+| `support_prior` (engine) | 0.147 [0.127, 0.169] | +0.32 | 0.458 | 0.033 | 0.820 |
+| L2, Sonnet + the evidence table | **0.129** [0.114, 0.146] | +0.40 | 0.403 | 0.041 | 0.875 |
+
+Paired Brier: `support_prior` - share **-0.010 [-0.016, -0.006]**; `support_prior` - L2 **+0.018 [+0.009, +0.028]**.
+
+- The prior generalises as a modest improvement on the share (and on log-loss and AUC); it is the better calibrated of the three (ECE 0.033).
+- **The tie of the earlier post hoc result did not hold**: on these genes the LLM that reads the evidence is better than the smoothed share on Brier, log-loss and AUC,
+  with intervals excluding 0, in every group of the number of datasets (n = 1: 0.339 against 0.256; n >= 10: 0.125 against 0.109).
+- The unsmoothed share is much better here (0.157) than on the first item set (0.221): these genes were tested in more datasets (65% of the predictions have 10 or more),
+  where the prior matters little. The first set's n = 1 weakness (27 of 240 items) is 25 of 1,197 here.
+- Reading: the engine gives an exact, calibrated, auditable probability; it does not beat an LLM that sees the p-values and tissues of the other datasets, which the share ignores.
+  A weighted choice of units (by the strength of each test) is the obvious next step and is not tested.

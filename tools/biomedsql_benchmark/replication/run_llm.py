@@ -81,12 +81,15 @@ def ask(prompt):
     return out
 
 
-def main(out_path):
-    items = json.load(open(HERE / "items.json"))
+def main(out_path, items_file="items.json", systems="L1,L2"):
+    items = json.load(open(HERE / items_file))
+    wanted = systems.split(",")
     jobs = []
     for item in items:
-        jobs.append(("L1", item, question(item) + FORMAT))
-        jobs.append(("L2", item, question(item) + table(item) + FORMAT))
+        if "L1" in wanted:
+            jobs.append(("L1", item, question(item) + FORMAT))
+        if "L2" in wanted:
+            jobs.append(("L2", item, question(item) + table(item) + FORMAT))
     with ThreadPoolExecutor(8) as pool:
         replies = list(pool.map(lambda j: ask(j[2]), jobs))
     with open(out_path, "w") as f:
@@ -107,4 +110,4 @@ def main(out_path):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(*sys.argv[1:])
