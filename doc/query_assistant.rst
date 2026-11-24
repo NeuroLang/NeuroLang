@@ -299,6 +299,32 @@ The ``api`` of a provider is one of:
     A local command that reads the conversation on its standard input
     and writes the reply on its standard output. ``{system}`` in its
     arguments is replaced by the system prompt.
+``claude-code``
+    Claude Code runs the agent, through the Claude Agent SDK (``pip install
+    "neurolang[claude]"``, and Claude Code, ``claude``, installed): one
+    conversation per question, with native tool calls on the engine's
+    tools, which run in the REPL's process, on its engine; Claude Code's
+    own tools and its settings (``CLAUDE.md``, hooks) are off. It needs
+    ``model`` (an alias such as ``sonnet``, or a model name) and ``auth``:
+
+    ``login`` (the default)
+        The sign-in you made with ``claude`` on this machine: no API key.
+        NeuroLang has no login of its own, run ``claude`` in a terminal to
+        sign in; ``.llm`` tells whether you are. The CLI is run without
+        ``ANTHROPIC_API_KEY`` and ``ANTHROPIC_AUTH_TOKEN``, which it would
+        use before your sign-in, and a sign-in that is an API key is
+        refused. It is for your own use, on your machine: Anthropic does not
+        allow a product to offer claude.ai sign-in without its approval, so
+        ``neurolang-repl-serve --users`` refuses it.
+    ``key``
+        An API key, read from ``api_key_env``, with a configuration folder
+        of its own for each request: allowed everywhere, shared servers
+        included.
+
+    With ``default_provider: claude-agent`` in ``llm.yaml``, the page of
+    ``neurolang-repl-serve --local`` uses it too, as it uses the machine's
+    configuration. The ``icl`` strategy, the comments on the rules and the
+    check of the answers make one request of the same provider each.
 
 API keys are only read from the environment variable that
 ``api_key_env`` names: the file rejects an inline key.

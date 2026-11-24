@@ -2163,6 +2163,27 @@ def test_without_guests_there_are_none(serve, console):
         == "guest:abc"
 
 
+def test_the_sessions_of_a_shared_server_say_so(serve, tmp_path):
+    """The sign-in to Claude of whoever runs the server is not theirs."""
+    from neurolang_apps.utils.llm.config import MULTI_USER_ENV
+
+    assert serve.MULTI_USER_ENV == MULTI_USER_ENV
+    users = _users(serve, tmp_path, ann=("a", ["admin"]))
+    users.change("ann", env={"TEST_LLM_KEY": "k-1"})
+    os.environ["SERVER_KEY"] = "s-1"
+    try:
+        env, groups = serve.session_identity(users, "ann", ["SERVER_KEY"])
+        assert env == {"SERVER_KEY": "s-1", "TEST_LLM_KEY": "k-1",
+                       MULTI_USER_ENV: "1"}
+        assert groups == "admin"
+    finally:
+        del os.environ["SERVER_KEY"]
+    env, group = serve.session_identity(users, "guest:abc", ["SERVER_KEY"])
+    assert env == {"SERVER_KEY": None, serve.BRING_KEY_ENV: "1",
+                   MULTI_USER_ENV: "1"}
+    assert group == "guest"
+
+
 def test_a_guests_sessions_have_no_key_of_the_server(serve):
     env, group = serve.guest_identity(["ALBERT_API_KEY"])
     assert env == {"ALBERT_API_KEY": None, serve.BRING_KEY_ENV: "1"}

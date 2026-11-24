@@ -20,7 +20,8 @@ PACKAGES = {
     "neurolang": ("neurolang", "--extra dev"),
     "neurolang_apps": (
         "neurolang-apps",
-        "--extra dev --extra tui --extra llm --extra dashboard --extra mcp",
+        "--extra dev --extra tui --extra llm --extra claude "
+        "--extra dashboard --extra mcp",
     ),
 }
 

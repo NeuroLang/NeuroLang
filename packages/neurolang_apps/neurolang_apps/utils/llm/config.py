@@ -11,9 +11,11 @@ shipped with NeuroLang is used.
 A provider speaks the OpenAI chat completions API (``api: openai``:
 OpenRouter, Albert, vLLM, Ollama…), the Anthropic messages API
 (``api: anthropic``) or is a local command reading the conversation on
-its standard input (``api: command``, e.g. ``claude -p``). Its API key
-is read from the environment variable named by ``api_key_env``: keys
-are never written in the file.
+its standard input (``api: command``, e.g. ``claude -p``), or is Claude
+Code itself (``api: claude-code``, run by the Agent SDK: with
+``auth: login``, the user's own sign-in to the ``claude`` CLI, with
+``auth: key``, an API key). Its API key is read from the environment
+variable named by ``api_key_env``: keys are never written in the file.
 """
 
 import os
@@ -32,7 +34,11 @@ DEFAULTS = yaml.safe_load(DEFAULTS_FILE.read_text(encoding="utf-8"))
 _PROVIDER = DEFAULTS["provider"]
 _ASSISTANT = DEFAULTS["assistant"]
 
-APIS = ("openai", "anthropic", "command")
+APIS = ("openai", "anthropic", "command", "claude-code")
+CLAUDE_AUTH = ("login", "key")
+# "1" in the sessions of a shared server (neurolang-repl-serve --users): a
+# user's own sign-in to Claude is not allowed there, only API keys.
+MULTI_USER_ENV = "NEUROLANG_REPL_USERS"
 TOOL_CALLING = ("text", "native")
 STRATEGIES = ("react", "icl")
 LANGUAGES = ("auto", "squall", "datalog")
@@ -57,7 +63,9 @@ class ProviderConfig:
     whether the ReAct agent uses the provider's ``native`` tool calls or
     the ``text`` Thought/Action/Observation protocol, which any chat
     model can follow. *requests_per_minute* spaces the requests to the
-    provider's rate limit, if any.
+    provider's rate limit, if any. *auth* tells how ``claude-code``
+    signs in: ``login``, with the ``claude`` CLI the user signed in to,
+    or ``key``, with the API key of *api_key_env*.
     """
 
     name: str
@@ -70,9 +78,17 @@ class ProviderConfig:
     max_tokens: int = _PROVIDER["max_tokens"]
     command: tuple = ()
     requests_per_minute: Optional[float] = None
+    auth: str = "login"
 
     def api_key(self) -> Optional[str]:
         """Return the API key of the provider, read from the environment."""
+        if (self.api == "claude-code" and self.auth == "login"
+                and os.environ.get(MULTI_USER_ENV) == "1"):
+            raise LLMConfigError(
+                f"The LLM provider {self.name!r} uses the sign-in of the "
+                "user who runs it: it is not allowed on a shared server. "
+                "Use a provider with auth: key."
+            )
         if not self.api_key_env:
             return None
         key = os.environ.get(self.api_key_env)
@@ -193,9 +209,9 @@ def _provider(name: str, entry) -> ProviderConfig:
             f"Provider {name!r} has an inline api_key: put the key in an "
             "environment variable and name it with api_key_env."
         )
-    required = ("command",) if entry.get("api") == "command" else (
-        "base_url", "model"
-    )
+    required = {
+        "command": ("command",), "claude-code": ("model",),
+    }.get(entry.get("api"), ("base_url", "model"))
     missing = [key for key in required if not entry.get(key)]
     if missing:
         raise LLMConfigError(
@@ -208,6 +224,8 @@ def _provider(name: str, entry) -> ProviderConfig:
             f"Provider {name!r} has unknown keys: {', '.join(unknown)}."
         )
     entry = {"api": "openai", "model": "", **entry}
+    if entry["api"] == "claude-code":
+        entry = {"tool_calling": "native", **entry}
     if entry.get("command"):
         entry["command"] = tuple(str(arg) for arg in entry["command"])
     provider = ProviderConfig(name=name, **entry)
@@ -221,7 +239,34 @@ def _provider(name: str, entry) -> ProviderConfig:
             f"Provider {name!r} is a command: it supports only "
             "tool_calling: text."
         )
+    if provider.api == "claude-code":
+        _check_claude_code(provider)
     return provider
+
+
+def _check_claude_code(provider: ProviderConfig) -> None:
+    """Raise LLMConfigError if the ``claude-code`` *provider* is invalid."""
+    name = provider.name
+    _check_choice(provider.auth, CLAUDE_AUTH, f"auth of provider {name!r}")
+    if provider.tool_calling != "native":
+        raise LLMConfigError(
+            f"Provider {name!r} is Claude Code: it supports only "
+            "tool_calling: native."
+        )
+    if provider.base_url or provider.command:
+        raise LLMConfigError(
+            f"Provider {name!r} is Claude Code: it takes no base_url nor "
+            "command."
+        )
+    if provider.auth == "key" and not provider.api_key_env:
+        raise LLMConfigError(
+            f"Provider {name!r} has auth: key and needs api_key_env."
+        )
+    if provider.auth == "login" and provider.api_key_env:
+        raise LLMConfigError(
+            f"Provider {name!r} has auth: login and no api_key_env: it "
+            "uses your sign-in to claude, not a key."
+        )
 
 
 def _assistant(entry) -> AssistantConfig:

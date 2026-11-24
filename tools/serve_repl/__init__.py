@@ -236,6 +236,9 @@ BRING_KEY_ENV = "NEUROLANG_REPL_BRING_KEY"
 # provider, model, base_url, key) and that they may not give their own key.
 ASSISTANT_ENV = "NEUROLANG_REPL_LLM"
 OWN_KEY_ENV = "NEUROLANG_REPL_OWN_KEY"
+# "1" in the sessions of the users: the sign-in to Claude of whoever runs the
+# server is not theirs (neurolang_apps.utils.llm.config.MULTI_USER_ENV).
+MULTI_USER_ENV = "NEUROLANG_REPL_USERS"
 # The shortest password a user gives themselves.
 SHORTEST_PASSWORD = 8
 # Where the text embeddings are kept between builds: making them takes
@@ -2579,6 +2582,21 @@ def guest_identity(strip=()) -> tuple:
         GUEST_GROUP
 
 
+def session_identity(users: "Users", name: str, strip=()) -> tuple:
+    """Return the variables and the groups of the sessions of *name*, a user
+    of *users* or a guest: those of :func:`guest_identity`, or the server's
+    keys *strip* names under the user's and their groups'; and, in all, that
+    the server is shared, so that no one uses the sign-in to Claude of whoever
+    runs it."""
+    if name.startswith(GUEST_PREFIX):
+        env, groups = guest_identity(strip)
+    else:
+        env, groups = users.identity(name)
+        # The server's keys, under the user's and their groups'.
+        env = {**{n: os.environ[n] for n in strip if n in os.environ}, **env}
+    return {**env, MULTI_USER_ENV: "1"}, groups
+
+
 def server_key_names(env_file_names=()) -> list:
     """Return the variables holding keys of the server: those of
     ``--env-file`` and those the providers of its configuration read."""
@@ -3936,12 +3954,7 @@ def main(argv=None) -> None:
             strip = server_key_names(env_file_names)
 
             def identity(name):
-                if name.startswith(GUEST_PREFIX):
-                    return guest_identity(strip)
-                env, groups = users.identity(name)
-                # The server's keys, under the user's and their groups'.
-                return {**{n: os.environ[n] for n in strip
-                           if n in os.environ}, **env}, groups
+                return session_identity(users, name, strip)
 
             backend = Sessions(
                 args.data_dir, identity=identity, withhold=strip,

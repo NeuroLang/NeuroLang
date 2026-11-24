@@ -832,6 +832,13 @@ class ReactAgent(Agent):
             messages.append(
                 {"role": "user", "content": prompts.observation(rejection)}
             )
+        return self._out_of_steps(result)
+
+    def _out_of_steps(self, result: AgentResult) -> AgentResult:
+        """
+        Return *result* ended without a final answer: the last query that
+        gave rows answers, or else the last one tried, as an error.
+        """
         # Out of steps: the verdict of a rejected answer is not that of
         # the answer given instead.
         result.verified, result.back_translation = None, ""
@@ -988,6 +995,10 @@ def make_agent(
     strategy: Optional[str] = None, **options,
 ) -> Agent:
     """Return the agent of *strategy* (default: the configuration's)."""
-    return AGENTS[strategy or config.strategy](
-        nl, provider, config, language, **options
-    )
+    agent = AGENTS[strategy or config.strategy]
+    if provider.api == "claude-code" and agent is ReactAgent:
+        # Claude Code runs the ReAct loop itself, on the engine's tools.
+        from .claude_code import ClaudeCodeAgent
+
+        agent = ClaudeCodeAgent
+    return agent(nl, provider, config, language, **options)

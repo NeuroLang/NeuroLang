@@ -36,6 +36,13 @@ Unreleased
   ``NeurolangPDL.expect(f, event, result)`` builds it from Python. A rule that
   calls a relation inside an expression now fails with an error that says so.
 
+- Query assistant: the provider ``api: claude-code`` has Claude Code run the
+  ReAct agent (extra ``claude``): one conversation per question, native
+  tool calls on the engine's tools, instead of a ``claude -p`` process per
+  step. ``auth: login`` uses your own sign-in to ``claude``, with no API
+  key, and is refused by ``neurolang-repl-serve --users``; ``auth: key``
+  uses an API key, anywhere. ``.llm`` shows the sign-in.
+
 - Brain viewer: the streamlines of a result with one other column, such
   as ``ans(x, side) :- uncinate(x, side)``, can be coloured by bundle, a
   colour per value of the column, which a legend names, or by direction,

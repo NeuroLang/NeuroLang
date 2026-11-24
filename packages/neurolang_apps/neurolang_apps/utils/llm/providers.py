@@ -506,6 +506,10 @@ def make_client(
 
     In a browser (Pyodide) the requests are sent by the browser itself.
     """
+    if provider.api == "claude-code":
+        from .claude_code import ClaudeCodeClient
+
+        return ClaudeCodeClient(provider, timeout)
     if transport is None and sys.platform == "emscripten":
         from .browser import BrowserTransport
 

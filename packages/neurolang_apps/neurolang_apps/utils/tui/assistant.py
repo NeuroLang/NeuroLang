@@ -660,11 +660,33 @@ def _llm_status(app) -> None:
         f"Provider: [bold]{provider.name}[/bold] — {provider.api} "
         f"{escape(details)}, model {escape(provider.model or '-')}, "
         f"tool calling {provider.tool_calling}\n"
+        f"{_claude_status(provider)}"
         f"Strategy: {strategy} · steps: {steps} · language: "
         f"{config.assistant.language}\n"
         f"Providers: {', '.join(sorted(config.providers))}\n"
         f"[dim]Configuration: {config.path}[/dim]"
     )
+
+
+def _claude_status(provider) -> str:
+    """Return the line telling how a ``claude-code`` *provider* signs in:
+    the sign-in of the ``claude`` CLI, which NeuroLang only reports (the
+    user makes it with ``claude``), or the variable of its key; none for
+    another provider."""
+    if provider.api != "claude-code":
+        return ""
+    if provider.auth == "key":
+        return f"Claude: API key of {escape(provider.api_key_env)}\n"
+    from neurolang_apps.utils.llm import LLMError, claude_cli
+
+    try:
+        status = claude_cli.status()
+    except LLMError as exc:
+        return f"Claude: {escape(str(exc))}\n"
+    if status.logged_in and status.method != "api_key":
+        return (f"Claude: signed in as {escape(status.email or '?')} "
+                f"({escape(status.method)})\n")
+    return "Claude: not signed in: run `claude` in a terminal to sign in\n"
 
 
 @command(
