@@ -977,6 +977,13 @@ def test_the_bundles_in_a_headless_browser(tmp_path):
             _LINES, 7, (["a", "b"], ["#ff00ff", "#00ffff"], [0, 1, 0])
         ), space="RAS",
     )
+    # NiiVue dithers the colour of each streamline by a random amount each
+    # time it colours them (fiberDither), and on SwiftShader that moves
+    # the pixels at the edges of the lines in and out of the counts: the
+    # same draw then counts differently. Math.random fixed, it counts the same.
+    html = html.replace(
+        "<head>", "<head><script>Math.random = function () { return 0.5; };"
+        "</script>", 1)
     result = _run_in_chrome(tmp_path, html, _BUNDLES_CHECK)
     assert result["errors"] == [] and "failed" not in result, result
     assert result["control"] and result["choice"] == "bundle"
