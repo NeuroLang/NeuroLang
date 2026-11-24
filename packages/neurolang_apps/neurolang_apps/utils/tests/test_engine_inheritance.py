@@ -91,7 +91,7 @@ def test_unknown_base_and_cycle():
 
 def test_builtin_engines():
     assert list_engine_names() == [
-        "destrieux", "functional_connectivity", "neurostore",
+        "biomedsql", "destrieux", "functional_connectivity", "neurostore",
         "neurostore_disconnectome7t", "neurostore_iit", "neurostore_tracts",
         "neurosynth", "neurosynth_disconnectome7t", "neurosynth_iit",
         "neurosynth_tracts", "structural_connectivity", "tracts",

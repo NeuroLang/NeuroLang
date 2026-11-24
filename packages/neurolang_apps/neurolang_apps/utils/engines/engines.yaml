@@ -1601,6 +1601,85 @@ engines:
       HCP's MNI152 space), so that ans(x) :- uf(x, "left") and .view work
       at the prompt.
 
+  biomedsql:
+    label: "BiomedSQL"
+    description: >
+      The tables of BiomedSQL (NIH-CARD), a text-to-SQL benchmark of the
+      genetics of neurodegenerative diseases and of drugs: the Parkinson's
+      disease GWAS of Nalls et al. 2019 (pd_gwas), Mendelian-randomisation
+      (SMR) tests of genes as mediators of six diseases across 28 QTL
+      datasets (smr), drug annotations (drug) and drug targets and
+      indications (drug_indication). The QTL datasets are also equally
+      likely units of evidence: selected_qtl(q) is a uniform choice of one,
+      and qtl_tested / qtl_significant say which tested a gene for a
+      disease and which found it significant.
+    python_init: "neurolang_apps.utils.engines.biomedsql.init"
+    builtins: [lcase, str_contains]
+    acknowledgements:
+      - >-
+        BiomedSQL (https://huggingface.co/datasets/NIH-CARD/BiomedSQL,
+        licence openrail++), NIH Center for Alzheimer's and Related
+        Dementias.
+    sorts:
+      gene:
+        columns: [gene]
+        type: str
+        description: "a gene symbol, e.g. 'GPNMB'"
+      disease:
+        columns: [disease]
+        type: str
+        description: "a disease code: AD, PD, ALS, FTD, LBD or PSP"
+      qtl_dataset:
+        columns: [qtl_dataset]
+        type: str
+        description: "a QTL dataset, e.g. 'brain_mMeta' or 'Whole_Blood'"
+    predicates:
+      pd_gwas:
+        description: >-
+          Parkinson's disease GWAS (Nalls et al. 2019, without 23andMe): a
+          SNP's allele frequency, effect size b, standard error, p-value,
+          GRCh38 chromosome and position and nearest gene; genome-wide
+          significance is p < 5e-8
+        columns: [uuid, snp, freq, b, se, p, chr, bp, nearest_gene]
+      smr:
+        description: >-
+          SMR test of a gene probe as a mediator of a disease (AD, PD, ALS,
+          FTD, LBD, PSP) in a QTL dataset: its top SNP, the multi-SNP SMR
+          p-value (significant below 2.95e-6) and the HEIDI p-value
+        columns: [uuid, qtl_dataset, disease, gene, top_snp, p_smr_multi, p_heidi]
+      drug:
+        description: >-
+          A drug: ChEMBL id, name, trade names and synonyms (comma-separated
+          text), molecular type, action type, mechanism of action, year of
+          first approval, highest clinical-trial phase, whether it is
+          approved and whether it has a black-box warning
+        columns: [uuid, chembl_id, name, trade_names, synonyms, molecular_type, action_type, mechanism, year_approved, max_phase, approved, black_box]
+      drug_indication:
+        description: >-
+          A drug, one of its targets (gene symbol) and a disease it is used
+          or tested for (MeSH heading, EFO term), with the highest
+          clinical-trial phase reached for that disease (4 = approved)
+        columns: [uuid, name, trade_names, synonyms, target, mesh_heading, efo_term, max_phase]
+      qtl_dataset:
+        description: >-
+          A QTL dataset of the SMR tests, its tissue, its kind and its organ
+          (brain, blood, spinal cord, cerebrospinal fluid, liver, muscle or
+          nerve)
+        columns: [qtl_dataset, tissue, kind, organ]
+      qtl_tested:
+        description: "The QTL dataset tested the gene as a mediator of the disease"
+        arguments: [qtl_dataset, gene, disease]
+      qtl_significant:
+        description: >-
+          The QTL dataset found the gene significant as a mediator of the
+          disease (p_smr_multi < 2.95e-6 for a probe of the gene)
+        arguments: [qtl_dataset, gene, disease]
+      selected_qtl:
+        description: >-
+          Probabilistic choice of one QTL dataset, all equally likely: the
+          QTL datasets as units of evidence
+        arguments: [qtl_dataset]
+
   # Example template usage (commented out — uncomment to enable):
   #
   #   template_demo:

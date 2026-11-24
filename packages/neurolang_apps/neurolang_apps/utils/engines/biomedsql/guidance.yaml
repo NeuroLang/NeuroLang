@@ -1,0 +1,24 @@
+# Merged into the entry of biomedsql in ../engines.yaml (see
+# doc/engine_configuration.rst).
+assistant_guidance: >
+  Names of drugs and diseases are matched as BiomedSQL does, by a
+  case-insensitive substring: str_contains(lcase(name), 'paclitaxel'),
+  over the name, the trade names and the synonyms of a drug (one rule
+  for each, as an OR), and over mesh_heading and efo_term for a disease.
+  Gene symbols and disease codes (AD, PD, ALS, FTD, LBD, PSP) are
+  matched exactly in smr, and gene names by substring in nearest_gene
+  of pd_gwas. A question on a SNP's or a gene's association with
+  Parkinson's disease uses pd_gwas (genome-wide significance p < 5e-8);
+  one on a gene as a mediator, an SMR signal or a QTL uses smr
+  (significant when p_smr_multi < 2.95e-6). Answer such lookups with
+  the rows themselves, without PROB.
+  A question asking how consistently, how strongly or with what
+  probability the evidence supports a gene as a mediator of a disease,
+  or what share of the QTL datasets agree, is answered with the QTL
+  datasets as equally likely units of evidence: the probability that
+  a dataset found the gene significant, given that it tested it,
+  PROB[(qtl_significant(q, g, d) & selected_qtl(q)) // (qtl_tested(q,
+  g, d) & selected_qtl(q))] = p; restrict the datasets (to the brain
+  ones, say) with a rule of its own, brain(q) :- qtl_dataset(q, t, k,
+  'brain'), added on both sides of //: the
+  probabilistic query takes no function or comparison itself.

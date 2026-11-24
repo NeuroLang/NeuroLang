@@ -1,0 +1,67 @@
+# Merged into the entry of biomedsql in ../engines.yaml (see doc/engine_configuration.rst).
+# Few-shot bank for the query assistant: BiomedSQL questions (and new probabilistic ones on the
+# QTL datasets as units of evidence) with their NeuroLang queries; the constants differ from
+# those of the evaluation set (scratch/probe/results/biomedsql_gold.jsonl).
+assistant_examples:
+- question: What is the effect size of rs7191588 in Parkinson's disease?
+  datalog: |-
+    ans(snp, b) :- pd_gwas(u, snp, f, b, se, p, c, bp, g), (snp == 'rs7191588')
+- question: What is the effect size of rs12140547 in Parkinson's disease?
+  datalog: |-
+    ans(snp, b) :- pd_gwas(u, snp, f, b, se, p, c, bp, g), (snp == 'rs12140547')
+- question: Is there an association between GAK and Parkinson's disease?
+  datalog: |-
+    ans(snp, p, b) :- pd_gwas(u, snp, f, b, se, p, c, bp, g), str_contains(g, 'GAK'), (p < 5e-08)
+- question: Is there an association between NUCKS1 and Parkinson's disease?
+  datalog: |-
+    ans(snp, p, b) :- pd_gwas(u, snp, f, b, se, p, c, bp, g), str_contains(g, 'NUCKS1'), (p < 5e-08)
+- question: What is the chemblId of the drug Cobimetinib Fumarate?
+  datalog: |-
+    match(u) :- drug(u, c, n, t, y, mt, at, me, ya, mp, ap, bb), str_contains(lcase(n), 'cobimetinib fumarate')
+    match(u) :- drug(u, c, n, t, y, mt, at, me, ya, mp, ap, bb), str_contains(lcase(t), 'cobimetinib fumarate')
+    match(u) :- drug(u, c, n, t, y, mt, at, me, ya, mp, ap, bb), str_contains(lcase(y), 'cobimetinib fumarate')
+    ans(name, chembl_id) :- drug(u, chembl_id, name, t, y, mt, at, me, ya, mp, ap, bb), match(u)
+- question: What is the chemblId of the drug Tecalcet Hydrochloride?
+  datalog: |-
+    match(u) :- drug(u, c, n, t, y, mt, at, me, ya, mp, ap, bb), str_contains(lcase(n), 'tecalcet hydrochloride')
+    match(u) :- drug(u, c, n, t, y, mt, at, me, ya, mp, ap, bb), str_contains(lcase(t), 'tecalcet hydrochloride')
+    match(u) :- drug(u, c, n, t, y, mt, at, me, ya, mp, ap, bb), str_contains(lcase(y), 'tecalcet hydrochloride')
+    ans(name, chembl_id) :- drug(u, chembl_id, name, t, y, mt, at, me, ya, mp, ap, bb), match(u)
+- question: Are there any SMR association signals with the gene MAPT-AS1 in Parkinson's Disease?
+  datalog: |-
+    ans(top_snp, p) :- smr(u, q, 'PD', 'MAPT-AS1', top_snp, p, h), (p < 2.95e-06)
+- question: Are there any SMR association signals with the gene SH2D4B in Alzheimer's Disease?
+  datalog: |-
+    ans(top_snp, p) :- smr(u, q, 'AD', 'SH2D4B', top_snp, p, h), (p < 2.95e-06)
+- question: Are there any INPP5D SNPs that have a statistically significant adjusted SMR p-value in association with Alzheimer's Disease and what tissues are they significant in?
+  datalog: |-
+    ans(top_snp, p) :- smr(u, q, 'AD', 'INPP5D', top_snp, p, h), (p < 2.95e-06)
+- question: Are there any ADAMTS4 SNPs that have a statistically significant adjusted SMR p-value in association with Alzheimer's Disease and what tissues are they significant in?
+  datalog: |-
+    ans(top_snp, p) :- smr(u, q, 'AD', 'ADAMTS4', top_snp, p, h), (p < 2.95e-06)
+- question: How consistently do the QTL datasets support LRRC37A as a mediator of progressive supranuclear palsy?
+  datalog: |-
+    support(g, d, PROB) :- (qtl_significant(q, g, d) & selected_qtl(q)) // (qtl_tested(q, g, d) & selected_qtl(q))
+    ans(probability) :- support('LRRC37A', 'PSP', probability)
+- question: How consistently do the QTL datasets support TREML4 as a mediator of Alzheimer's disease?
+  datalog: |-
+    support(g, d, PROB) :- (qtl_significant(q, g, d) & selected_qtl(q)) // (qtl_tested(q, g, d) & selected_qtl(q))
+    ans(probability) :- support('TREML4', 'AD', probability)
+- question: Among the brain QTL datasets, what is the probability that one finds CRHR1-IT1 significant as a mediator of Parkinson's disease, given that it tested it?
+  datalog: |-
+    brain(q) :- qtl_dataset(q, t, k, 'brain')
+    brain_support(g, d, PROB) :- (qtl_significant(q, g, d) & selected_qtl(q) & brain(q)) // (qtl_tested(q, g, d) & selected_qtl(q) & brain(q))
+    ans(probability) :- brain_support('CRHR1-IT1', 'PD', probability)
+- question: Among the brain QTL datasets, what is the probability that one finds MAPT significant as a mediator of Alzheimer's disease, given that it tested it?
+  datalog: |-
+    brain(q) :- qtl_dataset(q, t, k, 'brain')
+    brain_support(g, d, PROB) :- (qtl_significant(q, g, d) & selected_qtl(q) & brain(q)) // (qtl_tested(q, g, d) & selected_qtl(q) & brain(q))
+    ans(probability) :- brain_support('MAPT', 'AD', probability)
+- question: Which genes are supported as mediators of Alzheimer's disease by at least 75% of the QTL datasets that tested them, and with what probability?
+  datalog: |-
+    support(g, d, PROB) :- (qtl_significant(q, g, d) & selected_qtl(q)) // (qtl_tested(q, g, d) & selected_qtl(q))
+    ans(gene, probability) :- support(gene, 'AD', probability), (probability >= 0.75)
+- question: Which genes are supported as mediators of Parkinson's disease by at least 75% of the QTL datasets that tested them, and with what probability?
+  datalog: |-
+    support(g, d, PROB) :- (qtl_significant(q, g, d) & selected_qtl(q)) // (qtl_tested(q, g, d) & selected_qtl(q))
+    ans(gene, probability) :- support(gene, 'PD', probability), (probability >= 0.75)
