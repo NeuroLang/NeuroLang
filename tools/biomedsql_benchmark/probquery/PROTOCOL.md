@@ -86,3 +86,29 @@ Reported per level and pooled, S2 against S1, with intervals resampling template
 
 Reading: no threshold is fixed. The effort comparison is descriptive and reported beside H7: whether the Datalog arm is cheaper, dearer, or
 equal per question and per correct answer, and how the gap moves with the level.
+
+## Amendment 2, before any scored run (2026-11-25): the build
+What the build changed, and why, before any scored answer existed (development answers only: 7 questions per arm, S1 and S2 7/7, S0 0/7):
+- **Templates.** 21 templates were written, 3 per level, as listed in `questions.json`. Four example shapes of the level table were first replaced
+  because NeuroLang's lifted solvers refused them:
+  - P4, evidence in both a brain and a blood dataset;
+  - P4, both PD and AD evidence (too few instances rather than refused);
+  - P5, "or in at least two datasets" (needs `!=`);
+  - P6, PD but not AD evidence (the same table used positively and negated).
+
+  Choosing templates by what the engine can solve would favour S2. **These four shapes are therefore restored as additional scored templates**
+  (P4d, P4e, P5d, P6d, `engine_refused: true`), worded as in the protocol. Where S2 cannot produce an answer, it is scored as wrong, as the protocol
+  says. Every reading is reported twice: on all templates, and without these four.
+- **Other build choices:**
+  - Instances whose gold is exactly 0 or 1 are not drawn.
+  - Evidence-only templates draw from all six diseases (PD alone gives too few drug instances).
+  - P6a conditions on evidence in a reliable dataset; the protocol's example, "given G has blood evidence", makes the answer always 1.
+  - P1's lineage is one row, by the level's definition.
+- **The S2 engine** is a NeurolangPDL with only the two lifted solvers. It loads the five BiomedSQL tables, the deterministic tables, and the
+  uncertain tables as probabilistic facts, and holds no other relation of the `biomedsql` engine (no `qtl_*`, `unit_*`), so S1 and S2 see the same
+  data.
+  - S2's guidance is the uncertainty paragraph plus the Datalog language notes of the `biomedsql` guidance. The rest of that guidance (BiomedSQL's
+    answer conventions and the `qtl_*` relations) is left out.
+  - No worked examples for either arm.
+- **Time.** Agent time (model plus tool) is reported separately from wall time, because S2's harness adds about 45 s per question that is neither.
+- **Runs** happen on the Margaret cluster: DuckDB 2.0.1, one run per question and arm, `--max-usd 40`.
