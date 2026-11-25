@@ -61,3 +61,22 @@ in its head.
    it is the finding.
 5. Base rates differ by rung (Q3 and Q6 are rare). Brier skill against each rung's base rate is reported beside the Brier.
 6. Every rung and every system is reported. The ladder's complexity measures are fixed above, not tuned after the results.
+
+## Amendment, before any LLM call (2026-11-25)
+- **Draw restricted to pairs with signal.** Drawn as written, the items have almost no positives: only 333 of 80,549 pairs tested by at least 4
+  datasets have any significant dataset, and the base rates were 0 to 0.7%. Items are therefore drawn from pairs whose evidence holds at least one
+  significant dataset (`ladder_items.py SMR 1 ladder_items_signal.json`), the support > 0 condition of every earlier experiment here.
+- The resulting base rates:
+
+  | Q1 | Q2 | Q3 | Q4 | Q5 | Q6 |
+  |---|---|---|---|---|---|
+  | 0.31 | 0.55 | 0.18 | 0.33 | 0.06 | 0.05 |
+
+  The draw covers 58 loci (38 for Q5, 41 for Q6). Q5 and Q6 have about 8 positives each, so their intervals will be wide.
+- **Seen before this amendment:** the engine-only scores on this draw (`results/ladder_analysis_signal.txt`; for example, Q5 skill -1.13 against its
+  base rate). No LLM answer and no comparison existed.
+- **Engine queries.** Q3, written as three `held_sig` atoms with distinct variables, is a self-join the lifted solvers refuse. Q1, Q3 and Q4 use three
+  positional relations instead (`held1`, `held2`, `held3`), and Q4 is a union of the three pairs through a helper rule. The engine equals the closed
+  forms to 4.4e-16 on every rung, with no weighted model counting.
+- **Q6 details.** The evidence is a joint table: dataset, organ, PD, AD, with "not tested" where missing. Each disease must be tested in at least 4
+  datasets.
