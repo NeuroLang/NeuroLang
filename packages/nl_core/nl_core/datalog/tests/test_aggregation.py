@@ -3,7 +3,10 @@ from typing import AbstractSet
 import pytest
 import numpy as np
 
-from nl_expr.exceptions import ForbiddenUnstratifiedAggregation
+from nl_expr.exceptions import (
+    ForbiddenUnstratifiedAggregation,
+    UnboundVariablesError,
+)
 
 from nl_expr.expression_walker import ExpressionBasicEvaluator
 from nl_expr.expressions import (
@@ -78,6 +81,24 @@ def test_aggregation_parsing():
         dl.walk(U_([
             Imp_(Q(x, Fa_(C_(sum), (y,)), Fa_(C_(sum), (y,))), P(x, y)),
         ]))
+
+
+def test_aggregation_unbound_variable_rejected():
+    dl = Datalog()
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    for consequent in (Q(x, Fa_(C_(sum), (y,))), Q(x, y)):
+        with pytest.raises(UnboundVariablesError) as exc_info:
+            dl.walk(Imp_(consequent, P(x)))
+        assert exc_info.value.rule == 'Q'
+        assert exc_info.value.variables == ('y',)
+    assert Q not in dl.symbol_table
+
+    dl.walk(Imp_(Q(x, Fa_(C_(sum), (y,))), P(x, y)))
+    assert Q in dl.symbol_table
 
 
 def test_aggregation_non_stratified():

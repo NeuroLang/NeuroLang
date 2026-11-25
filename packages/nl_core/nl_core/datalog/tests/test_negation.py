@@ -61,6 +61,21 @@ def test_non_recursive_negation():
     assert solution_instance['G'].value == {(2,), (3,)}
 
 
+def test_unbound_head_variable_rejected_with_negation():
+    dl = Datalog()
+    P = S_('P')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        dl.walk(Implication(Q(x, y), P(x) & ~R(x)))
+    assert exc_info.value.rule == 'Q'
+    assert exc_info.value.variables == ('y',)
+    assert Q not in dl.symbol_table
+
+
 def test_body_of_negated_ground_atoms():
     """A conjunction without positive formulas is true when its negated
     atoms are false."""
