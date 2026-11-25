@@ -87,8 +87,8 @@ def is_conjunctive_expression(expression):
         formulas = [expression]
 
     return all(
-        expression == Constant(True)
-        or expression == Constant(False)
+        expression == TRUE
+        or expression == FALSE
         or (
             isinstance(expression, FunctionApplication)
             and not any(
@@ -107,7 +107,7 @@ def is_conjunctive_expression_with_nested_predicates(
     stack = [expression]
     while stack:
         exp = stack.pop()
-        if exp == Constant(True) or exp == Constant(False):
+        if exp == TRUE or exp == FALSE:
             pass
         elif isinstance(exp, FunctionApplication):
             stack += [

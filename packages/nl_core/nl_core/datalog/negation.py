@@ -13,7 +13,14 @@ from nl_expr.expressions import (
     Symbol,
     is_leq_informative,
 )
-from nl_expr.logic import Conjunction, Implication, Negation, Union
+from nl_expr.logic import (
+    FALSE,
+    TRUE,
+    Conjunction,
+    Implication,
+    Negation,
+    Union,
+)
 from nl_expr.logic.transformations import NegationOfTruthValueMixin
 from nl_expr.type_system import Unknown
 from .basic_representation import (
@@ -166,7 +173,7 @@ def is_conjunctive_negation(expression):
     stack = [expression]
     while stack:
         exp = stack.pop()
-        if exp == Constant(True) or exp == Constant(False):
+        if exp == TRUE or exp == FALSE:
             pass
         elif isinstance(exp, FunctionApplication):
             stack += [
