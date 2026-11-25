@@ -204,3 +204,47 @@ Corrected reading:
 - The ordering logistic < graded <= prior holds under every split. The gap of the engine's predicates to the LLM holds except on the 13 clean loci,
   where the interval is too wide to say.
 - For future evaluations of this kind, split by locus, not by gene.
+
+# Can the engine beat an LLM given the same evidence? (`PROTOCOL_SAME.md`)
+
+Pre-registered. Models were scored out of fold under 5 locus-grouped folds (`same_evidence_models.py`, `results/same_models.txt`). The LLM
+arms are Sonnet 5.5 through OpenRouter, 2,874 answers, none cut short, $11.31 (`run_same_llm.py`, `results/same_llm.jsonl`). Readings are on the
+1,437 items of `items.json` and `items_eval.json`, 65 loci, base rate 31.2% (`analyse_same.py`, `results/same_analysis.txt`). All these
+predictions had been seen in earlier analyses.
+
+| System | Evidence | Brier [95% CI over loci] | Log-loss | AUC |
+|---|---|---|---|---|
+| L2-full (Sonnet) | p-values, tissues, kinds, gene | **0.128** [0.112, 0.148] | 0.402 | 0.874 |
+| F2 logistic (fitted) | full table, 8 features | 0.131 [0.110, 0.156] | 0.418 | 0.850 |
+| L2-flags (Sonnet) | which datasets found it, gene masked | 0.143 [0.123, 0.166] | 0.450 | 0.824 |
+| E* engine (`support_graded` in every fold) | flags and binned p-values | 0.145 [0.123, 0.169] | 0.453 | 0.821 |
+| E1 `support_prior` | flags | 0.145 [0.124, 0.168] | 0.456 | 0.819 |
+| F1 best function of (k, n) | flags | 0.147 [0.125, 0.170] | 0.465 | 0.806 |
+| E3 noisy-OR | flags and binned p-values | 0.150 [0.128, 0.173] | 0.472 | 0.786 |
+| F3 boosted trees (fitted) | full table | 0.159 [0.124, 0.193] | 0.532 | 0.846 |
+
+Readings, by the rules fixed beforehand:
+1. **Ceiling: not the case.** No model fitted on the full table beats L2-full: logistic +0.003 [-0.005, +0.013], trees +0.031 [-0.004, +0.070],
+   F1 +0.019 [+0.009, +0.028]. On this data, "the engine beats an LLM reading the full evidence" is not the case.
+2. **Same evidence: equal.** E* - L2-flags +0.0016 [-0.0011, +0.0044]; `support_prior` - L2-flags +0.0020 [-0.0013, +0.0053]. Given only the
+   engine's evidence, Sonnet and the engine are indistinguishable: the engine does not beat it, and it does not beat the engine.
+3. **Parity on the full table: not reached.** E* - L2-full +0.016 [+0.009, +0.025], above the 0.010 margin. Exact lifted forms recover none of the
+   logistic's advantage on these items (E* - logistic +0.013 [+0.010, +0.017]).
+
+What this means:
+- **The LLM's whole lead is the extra evidence.** L2-flags - L2-full is +0.015 [+0.008, +0.023], the same size as the engine's gap. Given the same
+  evidence, Sonnet's reasoning adds nothing over the engine's exact share.
+- `support_prior` sits at the ceiling of what (k, n) allows: F1, the best function of k and n, scores 0.1367 against 0.1374 on all 3,960
+  predictions.
+- The rerun through OpenRouter matches the earlier direct answers: L2-full - L2 direct is -0.002 [-0.005, +0.001].
+- The engine's case rests on what it is, not on accuracy:
+  - exact, by lifted inference;
+  - calibrated (ECE 0.033 for `support_prior`);
+  - auditable, as a stated model over units of evidence;
+  - fast: milliseconds per answer, against $11.31 for these 2,874 answers.
+
+Deviations:
+- F1 was first run shrinking each (k, n) cell towards the base rate, which my brief to the agent said but the protocol did not. It was rerun
+  shrinking towards the fitted prior, as the protocol says; the first version scored 0.165, the corrected one 0.137 on all predictions.
+- In F3, one dataset never appears among the "other" datasets in training. Its column is all missing and is dropped before fitting.
+- One outer fold holds 1,729 of the 3,960 predictions: one locus is very large.
