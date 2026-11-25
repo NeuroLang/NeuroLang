@@ -57,7 +57,10 @@ def features(others, heldout, organ, source):
     ]
 
 
-def main(smr_path, predictions_path):
+def fit_logistic(smr_path, predictions_path):
+    """The logistic, fitted on the predictions of the genes of items.json;
+    its ids, outcomes and probabilities on the other genes' predictions,
+    and the model and the number fitted on."""
     smr = pd.read_parquet(
         smr_path,
         columns=["Omic", "Gene", "Disease", "p_SMR_multi", "Omic_tissue",
@@ -86,19 +89,26 @@ def main(smr_path, predictions_path):
     ev = preds[~train].reset_index(drop=True)
     ye = y[~train]
     ids = [f"{r.gene}|{r.disease}|{r.heldout}" for r in ev.itertuples()]
+    p = clf.predict_proba(X[~train])[:, 1]
+    return ids, ye, p, clf, int(train.sum()), len(fit_genes), ev
+
+
+def main(smr_path, predictions_path):
+    ids, ye, p, clf, n_fit, n_genes, ev = fit_logistic(
+        smr_path, predictions_path)
     answers = {}
     for line in open(HERE / "results/eval_answers.jsonl"):
         r = json.loads(line)
         answers[r["id"]] = r
     systems = {
         "support_prior (engine)": [answers[i]["support_prior"] for i in ids],
-        "logistic on the table": clf.predict_proba(X[~train])[:, 1],
+        "logistic on the table": p,
         "L2, Sonnet + the evidence table": [answers[i]["L2"] for i in ids],
     }
     systems = {k: np.clip(np.asarray(v, float), *CLIP)
                for k, v in systems.items()}
 
-    print(f"fitted on {train.sum()} predictions ({len(fit_genes)} genes); "
+    print(f"fitted on {n_fit} predictions ({n_genes} genes); "
           f"evaluated on {len(ev)} ({ev.gene.nunique()} genes)")
     print("coefficients:")
     for name, c in zip(NAMES, clf.coef_[0]):

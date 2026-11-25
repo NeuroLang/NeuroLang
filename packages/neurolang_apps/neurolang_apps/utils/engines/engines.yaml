@@ -1611,7 +1611,8 @@ engines:
       and drug targets and indications (drug_indication). The QTL datasets
       are also equally likely units of evidence: selected_qtl(q) is a
       uniform choice of one, and qtl_tested / qtl_significant say which
-      tested a gene for a disease and which found it significant.
+      tested a gene for a disease and which found it significant;
+      unit_evidence grades each test by the strength of its p-value.
     python_init: "neurolang_apps.utils.engines.biomedsql.init"
     python_init_options:
       # The weight, against one dataset, of the two imaginary units of
@@ -1620,6 +1621,16 @@ engines:
       # (tools/biomedsql_benchmark/replication/fit_prior.py).
       prior_significant: 0.01
       prior_none: 0.5
+      # The probability that a QTL dataset's test is evidence (unit_evidence),
+      # by the -log10 p_SMR_multi of its strongest probe: [lowest -log10 p,
+      # probability] in increasing order (5.53 is BiomedSQL's threshold).
+      # Fitted by log-loss on the same predictions, the prior above fixed
+      # (tools/biomedsql_benchmark/replication/prototype_weighted.py).
+      evidence_strength:
+        - [0.0, 0.0025]
+        - [3.0, 0.0874]
+        - [5.53, 0.8172]
+        - [8.0, 1.0]
     builtins: [lcase, str_contains]
     # The probability that a QTL dataset found a gene significant for a
     # disease, given that it tested it: the share of the datasets that
@@ -1627,6 +1638,7 @@ engines:
     datalog_init: |
       support(g, d, PROB) :- (qtl_significant(q, g, d) & selected_qtl(q)) // (qtl_tested(q, g, d) & selected_qtl(q))
       support_prior(g, d, PROB) :- (unit_significant(u, g, d) & selected_unit(u)) // (unit_tested(u, g, d) & selected_unit(u))
+      support_graded(g, d, PROB) :- (unit_evidence(u, g, d) & selected_unit(u)) // (unit_tested(u, g, d) & selected_unit(u))
     acknowledgements:
       - >-
         BiomedSQL (https://huggingface.co/datasets/NIH-CARD/BiomedSQL,

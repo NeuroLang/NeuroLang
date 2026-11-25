@@ -120,8 +120,11 @@ What it shows:
 - Supports of exactly 0 and 1 are sometimes wrong: 184 of the 1,688
   held-out positives had support 0, and 66 of the 658 supports of 1 were not
   significant in the held-out dataset, so the log-loss is infinite.  A
-  pseudo-count, an imaginary dataset of prior evidence, would remove those;
-  it is not tested here.
+  pseudo-count, an imaginary dataset of prior evidence, would remove those.
+  The engine has it as ``support_prior`` (two imaginary units of evidence),
+  and ``support_graded`` also weighs each test by the strength of its
+  p-value; both are evaluated on held-out genes in
+  ``tools/biomedsql_benchmark/replication/RESULTS.md``.
 
 
 Limits

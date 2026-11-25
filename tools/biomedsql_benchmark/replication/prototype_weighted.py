@@ -152,11 +152,11 @@ def fit(form, rows, y, n_units, prior=None):
 def cross_validate(form, rows, y, fold, n_units, prior=None):
     p = np.empty(len(y))
     for f in range(FOLDS):
-        tr, te = fold != f, fold == f
-        theta = fit(form, flat([rows[i] for i in np.where(tr)[0]]), y[tr],
-                    n_units, prior)
-        p[te] = predict(theta, form, flat([rows[i] for i in np.where(te)[0]]),
-                        n_units)
+        fitted, held = fold != f, fold == f
+        theta = fit(form, flat([rows[i] for i in np.where(fitted)[0]]),
+                    y[fitted], n_units, prior)
+        p[held] = predict(theta, form,
+                          flat([rows[i] for i in np.where(held)[0]]), n_units)
     return p
 
 

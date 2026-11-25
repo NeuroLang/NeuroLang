@@ -1,0 +1,35 @@
+engine support_graded: 6482 values in 1.2 s
+engine support_prior: 6482 values in 1.7 s
+
+== primary: 1197 predictions, 131 genes, base rate 0.3166
+  engine - closed form, max |diff|: graded 3.33e-16, prior 3.33e-16
+  system            Brier          95% CI logloss    ECE    AUC
+  support_graded    0.143 [0.124, 0.164]   0.449  0.047  0.825
+  support_prior     0.147 [0.127, 0.169]   0.458  0.033  0.820
+  L2                0.129 [0.114, 0.146]   0.403  0.041  0.875
+  logistic          0.131 [0.112, 0.151]   0.413  0.010  0.858
+  paired, support_graded minus (negative = graded better)
+    - support_prior  brier    -0.0036 [-0.0058, -0.0016]
+    - support_prior  logloss  -0.0087 [-0.0153, -0.0027]
+    - L2             brier    +0.0142 [+0.0054, +0.0235]
+    - L2             logloss  +0.0458 [+0.0232, +0.0696]
+    - logistic       brier    +0.0125 [+0.0073, +0.0176]
+    - logistic       logloss  +0.0357 [+0.0225, +0.0487]
+  Brier by the number of other datasets
+    n 1     (  25): support_graded 0.255 support_prior 0.339 L2 0.256 logistic 0.163
+    n 2-3   (  81): support_graded 0.206 support_prior 0.229 L2 0.205 logistic 0.189
+    n 4-9   ( 317): support_graded 0.161 support_prior 0.163 L2 0.149 logistic 0.155
+    n >=10  ( 774): support_graded 0.126 support_prior 0.125 L2 0.109 logistic 0.114
+
+== secondary: 5285 predictions, 131 genes, base rate 0.0132
+  engine - closed form, max |diff|: graded 6.94e-17, prior 8.67e-19
+  system            Brier          95% CI logloss    ECE    AUC
+  support_graded    0.013 [0.010, 0.016]   0.065  0.008  0.791
+  support_prior     0.013 [0.010, 0.017]   0.072  0.007  0.500
+  paired, support_graded minus (negative = graded better)
+    - support_prior  brier    -0.0005 [-0.0007, -0.0003]
+    - support_prior  logloss  -0.0067 [-0.0098, -0.0039]
+
+== false alarms: 806883 predictions, 22597 genes, base rate 0.0000
+  support_graded   (closed form) mean 0.0044 max 0.0860 Brier 0.00003
+  support_prior    (closed form) mean 0.0019 max 0.0066 Brier 0.00001

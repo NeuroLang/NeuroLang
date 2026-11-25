@@ -45,12 +45,20 @@ every (gene, disease) pair, ``prior_none`` is tested and never significant.
   disease)``: the tests of the datasets, and those of the imaginary units.
 * ``selected_unit(unit)``: a probabilistic choice of one unit, a dataset with
   weight 1, the imaginary units with their weights (normalised).
+
+And the same tests as graded evidence, as strong as their p-value:
+
+* ``unit_evidence(unit, gene, disease)``: a probabilistic fact for each test of
+  ``unit_tested``, with the probability that the ``evidence_strength`` option
+  gives to the -log10 p_SMR_multi of its strongest probe; ``prior_significant``
+  is evidence with probability 1, ``prior_none`` is not evidence.
 """
 
 import logging
 import urllib.request
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 LOG = logging.getLogger(__name__)
@@ -108,12 +116,23 @@ PRIOR_SIGNIFICANT = "prior_significant"
 PRIOR_NONE = "prior_none"
 
 
+def strength_probability(p_values, evidence_strength):
+    """The probability of evidence of tests of these p-values:
+    ``evidence_strength`` lists (lowest -log10 p, probability) pairs in
+    increasing order; below the first, the probability is 0."""
+    lows, probs = zip(*evidence_strength)
+    strength = -np.log10(np.clip(np.asarray(p_values, float), 1e-300, 1))
+    i = np.searchsorted(np.asarray(lows, float), strength, side="right")
+    return np.concatenate([[0.0], probs])[i]
+
+
 def init_engine(
     nl,
     mask,
     data_dir: Path,
     prior_significant: float = 0.01,
     prior_none: float = 0.5,
+    evidence_strength=((0.0, 0.0025), (5.53, 1.0)),
 ) -> None:
     db = Path(data_dir) / "biomedsql" / "db"
     frames = {name: _table(db, source) for name, source in TABLES.items()}
@@ -168,4 +187,17 @@ def init_engine(
     nl.add_tuple_set([(u,) for u in weights], name="evidence_unit")
     nl.add_probabilistic_choice_from_tuples(
         [(w / total, u) for u, w in weights.items()], name="selected_unit"
+    )
+    evidence = tests[["Omic", "Gene", "Disease"]].assign(
+        probability=strength_probability(tests.p_SMR_multi, evidence_strength)
+    )
+    evidence = pd.concat([
+        evidence[evidence.probability > 0],
+        imaginary[PRIOR_SIGNIFICANT].assign(probability=1.0),
+    ])
+    nl.add_probabilistic_facts_from_tuples(
+        evidence[["probability", "Omic", "Gene", "Disease"]].itertuples(
+            index=False, name=None
+        ),
+        name="unit_evidence",
     )

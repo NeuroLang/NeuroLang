@@ -122,3 +122,49 @@ Paired Brier: logistic - `support_prior` **-0.016 [-0.022, -0.011]**; logistic -
   strong the other tests are (largest coefficient: the mean -log10 p, +2.78) and whether datasets of the held-out dataset's organ found the gene
   (same-organ smoothed share, +1.19). It is not evidence of knowledge the table does not hold.
 - These 131 genes were already the evaluation set of `PROTOCOL_PRIOR.md`; this is their second use, and the features were chosen after seeing that result.
+
+# Graded units of evidence in the engine (`PROTOCOL_WEIGHTED.md`)
+
+Pre-registered (protocol committed before the evaluation). The form was chosen by gene-grouped cross-validation on the 222 fitting genes
+(`prototype_weighted.py`): **graded evidence**. Each dataset's test is evidence with a probability π set by the strength of its p-value, through a
+probabilistic fact `unit_evidence(u, g, d)`. The choice `selected_unit` of `support_prior` is kept unchanged, and
+
+    support_graded(g, d, PROB) :- (unit_evidence(u, g, d) & selected_unit(u)) // (unit_tested(u, g, d) & selected_unit(u))
+
+equals (Σ π + a) / (n + a + b). The engine matches it to 3.3e-16 on all 6,482 evaluation predictions, with lifted solvers only. One batched query, with
+the held-out dataset as an answer variable, solves all of them in 1.2 s (`analyse_weighted.py`, `results/weighted_analysis.txt`).
+
+Primary: 1,197 predictions with support > 0 of the 131 evaluation genes. **These genes are not fresh**: this is their third use, and the logistic of
+the previous section pointed to the strength of the tests.
+
+| System | Brier [95% CI over genes] | Log-loss | ECE | AUC |
+|---|---|---|---|---|
+| `support_prior` (engine) | 0.147 [0.127, 0.169] | 0.458 | 0.033 | 0.820 |
+| **`support_graded` (engine)** | 0.143 [0.124, 0.164] | 0.449 | 0.047 | 0.825 |
+| logistic on the table (`post_hoc_logit.py`) | 0.131 [0.112, 0.151] | 0.413 | 0.010 | 0.858 |
+| L2, Sonnet + the evidence table | **0.129** [0.114, 0.146] | 0.403 | 0.041 | 0.875 |
+
+Paired, `support_graded` minus:
+- `support_prior`: Brier **-0.0036 [-0.0058, -0.0016]**, log-loss -0.0087 [-0.0153, -0.0027];
+- L2: Brier **+0.014 [+0.005, +0.024]**, log-loss +0.046 [+0.023, +0.070];
+- logistic: Brier **+0.013 [+0.007, +0.018]**.
+
+By the number n of other datasets (Brier: graded / prior / L2): n = 1 (25 predictions) 0.255 / 0.339 / 0.256; n = 2-3 (81) 0.206 / 0.229 / 0.205;
+n = 4-9 (317) 0.161 / 0.163 / 0.149; n >= 10 (774) 0.126 / 0.125 / 0.109.
+
+Secondary (fresh for this comparison): the 5,285 predictions with support = 0 of the same genes (base rate 1.3%). Here `support_prior` gives every
+prediction the same value. Graded minus prior: Brier -0.0005 [-0.0007, -0.0003], log-loss -0.0067 [-0.0098, -0.0039], AUC 0.791 against 0.500.
+
+False alarms: on the 806,883 predictions of genes never significant anywhere, the mean probability is 0.0044 (max 0.086), against 0.0019 for
+`support_prior`.
+
+Reading, by the rules fixed beforehand:
+- **The graded evidence generalises**: it is better than `support_prior` on both sets, with intervals excluding 0. On the primary set the gain is small
+  (a quarter of the gap to L2). It ranks pairs where no dataset reached the threshold (AUC 0.79), which a thresholded share cannot.
+- **L2 and the logistic remain better**, with intervals excluding 0. Grading closes the gap where few datasets tested the gene (n = 1 to 3: equal to L2).
+  It leaves the gap where many did (n >= 4). There the logistic's other features (organ, source, mean strength across datasets) carry what a weighted
+  share over units cannot. Neither a soft organ weight nor per-dataset weights helped in cross-validation (`results/prototype_weighted.txt`).
+- The graded predicate is less well calibrated than `support_prior` (ECE 0.047 against 0.033) and better on Brier and log-loss.
+
+`freeze.py check` now reports the engine files as changed since the freeze. That is expected: the frozen agent runs are reproducible at commit
+`1f3ea39ce`. `support` and `support_prior` are unchanged (checked against the closed forms and against `results/eval_answers.jsonl`).
