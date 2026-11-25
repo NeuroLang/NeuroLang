@@ -11,6 +11,7 @@ reciprocal-rank fusion of H0 and the posterior; U3 a gate (posterior when a
 truth-free confidence proxy is high, H0 otherwise), if ``dev`` keeps it.
 """
 
+import difflib
 import json
 import random
 import sys
@@ -42,14 +43,34 @@ def ranked(post):
     return np.argsort(-post, kind="stable")
 
 
-def item_id(item):
-    """The disease id an answer item names, or None."""
+def item_ids(item):
+    """The diseases an answer item names, by its OMIM id or by its name, as
+    ``rank_direct`` matches them."""
     if not isinstance(item, dict):
-        return None
+        return []
+    ids = []
     omim = str(item.get("omim", "")).strip()
     if omim in h.W.di:
-        return omim
-    return NAME_TO_ID.get(norm(str(item.get("name", ""))))
+        ids.append(omim)
+    by_name = NAME_TO_ID.get(norm(str(item.get("name", ""))))
+    if by_name is not None and by_name not in ids:
+        ids.append(by_name)
+    return ids
+
+
+def rank_lenient(items, truth):
+    """Like ``rank_direct``, also counting a name close to the truth's
+    (difflib ratio >= 0.85), as phase 2's lenient rank."""
+    tn = norm(h.NAMES[truth])
+    for k, it in enumerate(items or [], 1):
+        if not isinstance(it, dict):
+            continue
+        nm = norm(str(it.get("name", "")))
+        if (str(it.get("omim", "")).strip() == truth or nm == tn
+                or (nm and difflib.SequenceMatcher(None, nm, tn).ratio()
+                    >= 0.85)):
+            return k
+    return None
 
 
 def fused_rank(h0_items, post, truth):
@@ -57,9 +78,9 @@ def fused_rank(h0_items, post, truth):
     posterior's top DEPTH (None if in neither)."""
     score = {}
     for r, item in enumerate(h0_items or [], 1):
-        d = item_id(item)
-        if d is not None and d not in score:
-            score[d] = 1 / (RRF_K + r)
+        for d in item_ids(item):
+            if d not in score:
+                score[d] = 1 / (RRF_K + r)
     for r, i in enumerate(ranked(post)[:DEPTH], 1):
         if post[i] > 0:
             d = h.W.diseases[i]
@@ -209,6 +230,8 @@ def run_patient(p):
         posterior=rank_of(post, h.W.di[truth]),
         H0=h.rank_direct(h0_items, truth),
         U1=h.rank_direct(u1_items, truth),
+        H0_lenient=rank_lenient(h0_items, truth),
+        U1_lenient=rank_lenient(u1_items, truth),
         U2=fused_rank(h0_items, post, truth),
         recall_k=h.W.di[truth] in set(int(i) for i in ranked(post)[:K]),
         parsed=dict(H0=h0_items is not None, U1=u1_items is not None),
@@ -266,6 +289,19 @@ def analyse():
         lines.append(f"  {a} - {b:10} {d.mean():+.3f} "
                      f"[{bs[int(.025 * BOOT)]:+.3f}, "
                      f"{bs[int(.975 * BOOT) - 1]:+.3f}]")
+    lines.append("sensitivity, lenient name matching (MRR): " + ", ".join(
+        f"{a} {np.mean([rr(r[a + '_lenient']) for r in recs]):.3f}"
+        for a in ("H0", "U1")))
+    d = np.array([rr(r["U1_lenient"]) - rr(r["H0_lenient"]) for r in recs])
+    bs = np.sort([d[x].mean() for x in draws])
+    lines.append(f"  U1 - H0 lenient {d.mean():+.3f} "
+                 f"[{bs[int(.025 * BOOT)]:+.3f}, "
+                 f"{bs[int(.975 * BOOT) - 1]:+.3f}]")
+    for label, inside in (("truth among the candidates", True),
+                          ("truth not among them", False)):
+        sel = [j for j, r in enumerate(recs) if r["recall_k"] is inside]
+        lines.append(f"{label} (n={len(sel)}): " + ", ".join(
+            f"{a} {RR[a][sel].mean():.3f}" for a in arms))
     tokens = [u for r in recs for u in r["usage"]]
     cost = sum(2e-6 * u["input_tokens"] + 10e-6 * u["output_tokens"]
                for u in tokens)

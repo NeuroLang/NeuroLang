@@ -35,5 +35,7 @@ Committed results are in `results/`. `hpo_phase1.jsonl` and the calibration dump
 | Union hybrid: development, plan, Sonnet arms | `union_hybrid.py dev`, `plan`; `run_union.sh` | `results/union_dev.json`, `results/union_plan.json`, `results/union_results.json` |
 
 `step14_hpo_hybrid.py` ranks the candidates with numpy's default (unstable) sort. Tied posteriors may come out in a different order on another
-machine, so its H1 to H3 prompts are not replayed from a cache made elsewhere (87 of 100 were not, on the machine of the union run). Its H0 prompts
-are, and the committed results stand. `union_hybrid.py` uses a stable sort.
+machine, so its H1 to H3 prompts are not replayed from a cache made elsewhere. On the machine of the union run, 96 of the 100 patients had ties in
+or at the top 30, the top-30 order differed from a stable sort for 90, and 87 prompts missed the cache. Recomputed there, the posterior ranks of
+the true disease equal the committed ones for all 100, and recall@30 differs for 1 patient (a tie at the 30th place). The H0 prompts replay, and the
+committed results stand. `union_hybrid.py` uses a stable sort.

@@ -31,7 +31,7 @@ Dropped before the run: **U3, a gate** (posterior when a truth-free confidence p
 and the rule fixed in the script before it ran (an interval excluding 0 and an in-sample gain of at least 0.02 MRR) kept neither. The oracle coverage
 of `post_hoc_coverage.py` needs the true disease, so it cannot gate.
 
-Development (not evidence): on the 100 patients of the first hybrid, U2 scored MRR 0.428, the same as H0.
+Development (not evidence): on the 100 patients of the first hybrid, U2 scored MRR 0.428, the same as H0 (0.427 after the amendment below).
 
 ## Metrics
 - The rank of the true disease (a miss if absent), top-1, top-10, MRR, with strict matching by OMIM id or normalised name as before.
@@ -44,3 +44,14 @@ Development (not evidence): on the 100 patients of the first hybrid, U2 scored M
 - U1 equal to H0 (interval contains 0): no detectable gain; the earlier conclusion (Sonnet does not need the posterior) stands for this design.
 - U1 worse than H0: the candidates mislead.
 - No arm is rerun, and all are reported. The earlier 160 patients are not mixed in.
+
+## Amendment, before any Sonnet call of this protocol (2026-11-25)
+After a review of the protocol, before the run:
+- **Naming sensitivity.** U1 sees exact OMIM ids and names of 30 candidates, while H0 must recall them, and scoring is strict. A U1 gain could
+  therefore be a gain in naming, not in diagnosis. Also reported, as a sensitivity analysis: H0 and U1 scored with phase 2's lenient match (the
+  OMIM id, or a name with difflib ratio >= 0.85 to the true disease's), and U1 - H0 on it. If U1 - H0 holds strictly but not leniently, the
+  reading is "naming", not "diagnosis".
+- **Split** of every arm's MRR by whether the true disease is among the posterior's 30 candidates (a property of the posterior only).
+- **Fusion matching** (U2) now credits an answer item to every disease it names, by OMIM id or by name, as strict scoring does. Before, the OMIM
+  field took precedence. The development fusion becomes MRR 0.427 (H0 0.428).
+- `analyse` was exercised end to end on mocked answers; no real answer has been requested.
