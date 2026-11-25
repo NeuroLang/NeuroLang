@@ -272,7 +272,7 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
         by rules. It is read from the symbol table once, and the same
         mapping returned, until the table changes: a query asks for it some
         75 times, each a walk of every symbol of the table and of the
-        scopes enclosing it (about 30 ms each on NeuroStore's).
+        scopes enclosing it (0.3 to 0.5 s of a query on NeuroStore).
         """
         protected = frozenset(self.protected_keywords)
         return self.symbol_table.computed(
