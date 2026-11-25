@@ -288,3 +288,49 @@ Why, from the per-rung pattern (exploratory):
   when the model's structure is right.
 - A model that represents the dependence would test this directly. One option is a latent "real effect" fact per gene and disease, with each
   dataset detecting it with some probability and false positives otherwise; it is still a probabilistic Datalog program.
+
+# A latent real effect to model the dependence (`PROTOCOL_LATENT.md`)
+
+Pre-registered. A latent `real` per gene and disease (prior ρ), detection α by organ when real, false positives β otherwise. The model's five
+parameters are fitted out of fold on the single-held-out predictions, over the same locus-grouped folds. It is re-scored on the ladder's items
+against the same Sonnet answers, with no new LLM call. The engine runs were on the Margaret cluster (`latent_fit.py`, `latent_engine.py`,
+`analyse_latent.py`, `results/latent_analysis.txt`).
+
+**Engine.** The latent is a probabilistic choice; the held-out and evidence datasets are probabilistic facts conditioned on it; the evidence enters
+through `//`. Non-significant evidence uses complementary facts.
+- Q1 to Q3 were solved by the lifted engine on every item, equal to the closed form to 1.6e-15.
+- Q4 (109 of 300 items solved), Q5 (118 of 150) and Q6 (120 of 150) are scored with the closed form, which equals the engine wherever it solved
+  (at most 2.2e-13). The misses are per-item time limits and refusals:
+  - the union of self-joins behind "at least two" grows exponentially with the number of evidence datasets;
+  - negated `sig` evidence was refused (`NotUnateException`, `NonLiftableException`), and so was the two-rule form of the latent.
+- The step that records these refusals did not finish: one probe ran over 1 h 40 min without ending and was cancelled.
+
+| Rung | Latent | Independent engine | Sonnet, same evidence | Sonnet, full table |
+|---|---|---|---|---|
+| Q1 s(h1) | 0.145 | 0.140 | 0.120 | 0.108 |
+| Q2 at least one | 0.198 | 0.226 | 0.195 | 0.168 |
+| Q3 all three | 0.123 | 0.063 | 0.063 | 0.071 |
+| Q4 at least two | 0.138 | 0.148 | 0.133 | 0.115 |
+| Q5 brain ∧ ¬blood | 0.074 | 0.120 | 0.077 | 0.083 |
+| Q6 PD ∧ AD | 0.053 | 0.036 | 0.039 | 0.035 |
+
+Readings, by the rules fixed beforehand (Brier differences, 95% intervals over loci):
+1. **H4, the dependence helps where it should.**
+   - On the dependence-sensitive rungs (Q2, Q4, Q5): latent minus independent engine **-0.025 [-0.044, -0.013]**.
+   - On all rungs pooled: +0.002 [-0.026, +0.029]. It hurts "all three" (Q3, +0.060 [-0.010, +0.139]) and the cross-disease join (Q6, +0.017
+     [+0.002, +0.034]).
+2. **H5, same evidence: now equal.** On the pooled Q4 to Q6, latent minus Sonnet-flags is +0.005 [-0.003, +0.011]. The ladder's gap of +0.017
+   [+0.005, +0.026] closes; the engine does not get ahead. On all rungs: +0.019 [-0.003, +0.040].
+3. **H6, full table: still behind.** Latent minus Sonnet-full is +0.014 [+0.004, +0.021] on Q4 to Q6, and +0.029 [+0.006, +0.049] on all rungs.
+4. **Single question: worse.** Out of fold on the 3,960 single-held-out items, the latent model scores 0.164, against 0.137 for `support_prior`
+   (+0.027 [+0.003, +0.049]). One of the five folds (fold 2, whose test fold holds a 1,729-item locus) converged to very different parameters
+   (ρ 0.22, α_brain 0.58 against 0.94 in the others). That is a plausible but untested part of this loss.
+5. **Coherence:** the latent model is coherent on every item, as is the independent engine. Sonnet with the full table contradicts itself on 1.7%.
+
+What this says:
+- Giving the engine the right dependence structure helps exactly where independence was wrong (Q2, Q5), and brings it level with Sonnet given the
+  same evidence on the harder rungs.
+- It does not make the engine better than Sonnet, and a five-parameter latent is too coarse elsewhere (Q3, Q6, the single question).
+- Exact composition pays only to the extent the model is right, and this model is only partly right.
+- The engine side has a practical limit: with a latent and conditioning, the lifted solvers covered Q1 to Q3 fully but Q4 to Q6 only partly, by
+  time or refusal.
