@@ -248,3 +248,43 @@ Deviations:
   shrinking towards the fitted prior, as the protocol says; the first version scored 0.165, the corrected one 0.137 on all predictions.
 - In F3, one dataset never appears among the "other" datasets in training. Its column is all missing and is dropped before fitting.
 - One outer fold holds 1,729 of the 3,960 predictions: one locus is very large.
+
+# A ladder of questions by first-order complexity (`PROTOCOL_LADDER.md`)
+
+Pre-registered, with one amendment before any LLM call: the draw is restricted to pairs with signal (see the protocol).
+- Three datasets are held out per item.
+- The engine composes `support_prior` exactly, with lifted solvers only (equal to the closed forms to 4.4e-16), and treats the held-out datasets'
+  outcomes as independent.
+- Sonnet 5.5 through OpenRouter, 3,000 answers, 3 without a probability, $16.94.
+- Brier is clipped to [0.02, 0.98]; intervals resample loci (`analyse_ladder.py`, `results/ladder_analysis_signal.txt`).
+
+| Rung (formula) | n | Base rate | Engine | Sonnet, same evidence | Sonnet, full table | Engine - full [95% CI] |
+|---|---|---|---|---|---|---|
+| Q1 s(h1) | 300 | 0.31 | 0.140 | 0.120 | **0.108** | +0.033 [+0.009, +0.066] |
+| Q2 ∃q∈H. s(q) | 300 | 0.55 | 0.226 | 0.195 | **0.168** | +0.059 [+0.027, +0.106] |
+| Q3 ∀q∈H. s(q) | 300 | 0.18 | **0.063** | 0.063 | 0.071 | -0.008 [-0.029, +0.017] |
+| Q4 ∃≥2 q∈H. s(q) | 300 | 0.33 | 0.148 | 0.133 | **0.115** | +0.033 [+0.009, +0.064] |
+| Q5 brain ∧ ¬blood | 150 | 0.06 | 0.120 | **0.077** | 0.083 | +0.037 [-0.008, +0.072] |
+| Q6 PD ∧ AD in one dataset | 150 | 0.05 | 0.036 | 0.039 | **0.035** | +0.001 [-0.008, +0.009] |
+
+Readings, by the rules fixed beforehand:
+1. **H1, not shown.** The engine's deficit against the full table on the pooled harder rungs (Q4 to Q6, +0.026) minus that on Q1 (+0.033) is
+   -0.007 [-0.038, +0.018]. Logical complexity does not close the gap.
+2. **H2, the opposite.** On the pooled Q4 to Q6, the engine minus Sonnet given the same evidence is **+0.017 [+0.005, +0.026]**: Sonnet with the
+   engine's own evidence is better on the harder questions.
+3. **H3, coherence.**
+   - Sonnet with the full table violates the ordering P(all) ≤ P(at least 2) ≤ P(at least 1) ≥ P(h1) ≥ P(all) on 5 of 299 items (1.7%
+     [0.5, 3.3]).
+   - Sonnet with the same evidence violates it on none of 298.
+   - The engine never violates it, by construction.
+
+Why, from the per-rung pattern (exploratory):
+- The engine is worst where independence matters most. On "at least one of three" (Q2) its skill is 0.09 against 0.32 for Sonnet, and on Q5 its
+  skill is -1.13. It is best on "all three" (Q3).
+- The held-out datasets share the GWAS and some donors, so their outcomes are strongly correlated. The engine composes exactly, but under an
+  independence assumption that is wrong for these data, and composition compounds the error. Sonnet's answers behave as if it allowed for the
+  dependence.
+- The lesson is the one of the HPO posterior: exact inference over a misspecified model loses to an LLM's looser judgement. Exactness pays only
+  when the model's structure is right.
+- A model that represents the dependence would test this directly. One option is a latent "real effect" fact per gene and disease, with each
+  dataset detecting it with some probability and false positives otherwise; it is still a probabilistic Datalog program.
