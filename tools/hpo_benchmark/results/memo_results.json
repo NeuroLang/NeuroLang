@@ -1,0 +1,3727 @@
+{
+ "synthetic": [
+  {
+   "disease": "OMIM:133540",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:619656",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 10,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:230650",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 3,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:151100",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:231000",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:209900",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:616973",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:616914",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 2,
+   "H0_lenient": 2,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:107480",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:606693",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:272300",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:615582",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:208920",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": false,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:215700",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:618343",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:620455",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:604804",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": 5,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:130010",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 2,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:612313",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:608393",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:605275",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": 4,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:103580",
+   "pmid": null,
+   "posterior": 2.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:620155",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:270400",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:604213",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:231050",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:614833",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": false,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:214800",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 3,
+   "H0_lenient": 3,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:615688",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:252650",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:615220",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:612463",
+   "pmid": null,
+   "posterior": 3.0,
+   "H0": 10,
+   "H0_lenient": 10,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:609260",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:108300",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:245200",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:611590",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:190350",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:615982",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 4,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:601776",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:219100",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 4,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:616276",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:610168",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 2,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:118450",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:614739",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:616249",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 2,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:135100",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:248250",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:177170",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:613721",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 6,
+   "H0_lenient": 6,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:614816",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 9,
+   "H0_lenient": 2,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:188400",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:162500",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:603553",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:617146",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:301118",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:201910",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 6,
+   "H0_lenient": 2,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:612840",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:617140",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:150250",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:130000",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:159550",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:613795",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 3,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:203200",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:606324",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:620450",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:309300",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:161800",
+   "pmid": null,
+   "posterior": 2.0,
+   "H0": 2,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:159950",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:115200",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:616831",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:617730",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:612653",
+   "pmid": null,
+   "posterior": 2.0,
+   "H0": 4,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:617056",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:610968",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 7,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:300088",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:255310",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 6,
+   "H0_lenient": 6,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:228600",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:312750",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:270420",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:610031",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 2,
+   "H0_lenient": 2,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:131300",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:119600",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:148050",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:102700",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:618882",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 2,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:609528",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:130050",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:300352",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:311200",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:620537",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:105400",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:269150",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:606574",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 5,
+   "H0_lenient": 5,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:256540",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 3,
+   "H0_lenient": 3,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:613750",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:268310",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:105650",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:620465",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:616354",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:167320",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:613990",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 8,
+   "H0_lenient": 2,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:617865",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:146000",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 2,
+   "H0_lenient": 2,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:113620",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:257220",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:604772",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:232700",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:102500",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:101200",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:615032",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:175200",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:306955",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:300867",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 2,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:154700",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:301040",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:615278",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 2,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:275400",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 5,
+   "H0_lenient": 5,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:615193",
+   "pmid": null,
+   "posterior": 2.0,
+   "H0": 6,
+   "H0_lenient": 6,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:162000",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:616211",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:277600",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:206700",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:609200",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 6,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  },
+  {
+   "disease": "OMIM:620535",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:612164",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:257200",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 3,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": false
+  },
+  {
+   "disease": "OMIM:220400",
+   "pmid": null,
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true,
+   "claims_source": true
+  }
+ ],
+ "recognition": [
+  {
+   "pid": 163,
+   "disease": "OMIM:306955",
+   "pmid": "17295247",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 244,
+   "disease": "OMIM:612653",
+   "pmid": "36463227",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 139,
+   "disease": "OMIM:269150",
+   "pmid": "21371013",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 235,
+   "disease": "OMIM:612313",
+   "pmid": "31021519",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 198,
+   "disease": "OMIM:606693",
+   "pmid": "30868101",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 183,
+   "disease": "OMIM:604213",
+   "pmid": "27180139",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 333,
+   "disease": "OMIM:620465",
+   "pmid": "37161035",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 215,
+   "disease": "OMIM:610168",
+   "pmid": "31569402",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 172,
+   "disease": "OMIM:312750",
+   "pmid": "41810194",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 45,
+   "disease": "OMIM:150250",
+   "pmid": "27977582",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 195,
+   "disease": "OMIM:606574",
+   "pmid": "36553465",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 343,
+   "disease": "OMIM:620537",
+   "pmid": "38708366",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 59,
+   "disease": "OMIM:159550",
+   "pmid": "29217778",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 168,
+   "disease": "OMIM:311200",
+   "pmid": "11950863",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 61,
+   "disease": "OMIM:159550",
+   "pmid": "28202457",
+   "claim": {
+    "pmid": "28202457",
+    "first_author": "Tesi",
+    "year": "2017",
+    "title": "Gain-of-function SAMD9L mutations cause a syndrome of cytopenia, immunodeficiency, MDS, and neurological symptoms"
+   },
+   "claims_source": true,
+   "recognised": true
+  },
+  {
+   "pid": 153,
+   "disease": "OMIM:277600",
+   "pmid": "19836009",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 56,
+   "disease": "OMIM:154700",
+   "pmid": "12203992",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 42,
+   "disease": "OMIM:148050",
+   "pmid": "36446582",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 24,
+   "disease": "OMIM:119600",
+   "pmid": "31548836",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 317,
+   "disease": "OMIM:618343",
+   "pmid": "28742248",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 300,
+   "disease": "OMIM:616914",
+   "pmid": "31774634",
+   "claim": {
+    "pmid": "",
+    "first_author": "Graul-Neumann",
+    "year": "2010",
+    "title": "Marfan syndrome with neonatal progeroid syndrome-like lipodystrophy associated with a novel frameshift mutation at the 3' terminus of the FBN1-gene"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 301,
+   "disease": "OMIM:616914",
+   "pmid": "24613577",
+   "claim": {
+    "pmid": "20949439",
+    "first_author": "Graul-Neumann",
+    "year": "2010",
+    "title": "Marfan syndrome with neonatal progeroid syndrome-like lipodystrophy associated with a novel frameshift mutation at the 3' terminus of the FBN1-gene"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 83,
+   "disease": "OMIM:201910",
+   "pmid": "30968594",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 147,
+   "disease": "OMIM:272300",
+   "pmid": "36303223",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 194,
+   "disease": "OMIM:606574",
+   "pmid": "36553465",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 146,
+   "disease": "OMIM:272300",
+   "pmid": "36303223",
+   "claim": {
+    "pmid": "",
+    "first_author": "Mechler",
+    "year": "2015",
+    "title": "Update on molybdenum cofactor deficiency: a mild late-onset phenotype"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 271,
+   "disease": "OMIM:615582",
+   "pmid": "31898322",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 104,
+   "disease": "OMIM:214800",
+   "pmid": "17661815",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 22,
+   "disease": "OMIM:119600",
+   "pmid": "31548836",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 324,
+   "disease": "OMIM:620155",
+   "pmid": "37372360",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 306,
+   "disease": "OMIM:617140",
+   "pmid": "34521999",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 63,
+   "disease": "OMIM:159950",
+   "pmid": "31213928",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 214,
+   "disease": "OMIM:610031",
+   "pmid": "28966590",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 273,
+   "disease": "OMIM:615582",
+   "pmid": "31898322",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 347,
+   "disease": "OMIM:620537",
+   "pmid": "38708366",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 143,
+   "disease": "OMIM:272300",
+   "pmid": "36303223",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 159,
+   "disease": "OMIM:301040",
+   "pmid": "28371217",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 166,
+   "disease": "OMIM:311200",
+   "pmid": "27957444",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 50,
+   "disease": "OMIM:151100",
+   "pmid": "32765928",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 5,
+   "disease": "OMIM:103580",
+   "pmid": "25802881",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 289,
+   "disease": "OMIM:616276",
+   "pmid": "33215859",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 245,
+   "disease": "OMIM:612653",
+   "pmid": "8282779",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 274,
+   "disease": "OMIM:615582",
+   "pmid": "31898322",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 287,
+   "disease": "OMIM:616276",
+   "pmid": "31325447",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 250,
+   "disease": "OMIM:613795",
+   "pmid": "31569402",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 230,
+   "disease": "OMIM:612164",
+   "pmid": "35190816",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 100,
+   "disease": "OMIM:209900",
+   "pmid": "23559858",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 339,
+   "disease": "OMIM:620535",
+   "pmid": "37962958",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 318,
+   "disease": "OMIM:618343",
+   "pmid": "28258187",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 109,
+   "disease": "OMIM:215700",
+   "pmid": "23099195",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 290,
+   "disease": "OMIM:616354",
+   "pmid": "30473892",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 129,
+   "disease": "OMIM:255310",
+   "pmid": "24239060",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 152,
+   "disease": "OMIM:277600",
+   "pmid": "19836009",
+   "claim": {
+    "pmid": "",
+    "first_author": "Dagoneau",
+    "year": "2004",
+    "title": "ADAMTS10 mutations in autosomal recessive Weill-Marchesani syndrome"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 304,
+   "disease": "OMIM:617140",
+   "pmid": "34521999",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 346,
+   "disease": "OMIM:620537",
+   "pmid": "38708366",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 43,
+   "disease": "OMIM:148050",
+   "pmid": "36446582",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 325,
+   "disease": "OMIM:620155",
+   "pmid": "37372360",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 79,
+   "disease": "OMIM:188400",
+   "pmid": "17273972",
+   "claim": {
+    "pmid": "",
+    "first_author": "Jonsson",
+    "year": "1998",
+    "title": "Alport syndrome, mental retardation, midface hypoplasia, and elliptocytosis: a new X linked contiguous gene deletion syndrome?"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 283,
+   "disease": "OMIM:616211",
+   "pmid": "39507621",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 218,
+   "disease": "OMIM:610168",
+   "pmid": "31569402",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 192,
+   "disease": "OMIM:606574",
+   "pmid": "36553465",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 28,
+   "disease": "OMIM:130050",
+   "pmid": "36189931",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 25,
+   "disease": "OMIM:130000",
+   "pmid": "38572164",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 223,
+   "disease": "OMIM:611590",
+   "pmid": "10571775",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 124,
+   "disease": "OMIM:248250",
+   "pmid": "14628289",
+   "claim": {
+    "pmid": "11518780",
+    "first_author": "Weber",
+    "year": "2001",
+    "title": "Novel paracellin-1 mutations in 25 families with familial hypomagnesemia with hypercalciuria and nephrocalcinosis"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 246,
+   "disease": "OMIM:612653",
+   "pmid": "8282779",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 226,
+   "disease": "OMIM:611590",
+   "pmid": "20799361",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 128,
+   "disease": "OMIM:255310",
+   "pmid": "24239060",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 126,
+   "disease": "OMIM:252650",
+   "pmid": "15523648",
+   "claim": {
+    "pmid": "",
+    "first_author": "Jansen",
+    "year": "2016",
+    "title": "ATP6AP1 deficiency causes an immunodeficiency with hepatopathy, cognitive impairment and abnormal protein glycosylation"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 151,
+   "disease": "OMIM:277600",
+   "pmid": "19836009",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 341,
+   "disease": "OMIM:620535",
+   "pmid": "37962958",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 263,
+   "disease": "OMIM:615032",
+   "pmid": "36182950",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 189,
+   "disease": "OMIM:605275",
+   "pmid": "30859559",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 328,
+   "disease": "OMIM:620455",
+   "pmid": "40610405",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 345,
+   "disease": "OMIM:620537",
+   "pmid": "38708366",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 258,
+   "disease": "OMIM:614833",
+   "pmid": "29883675",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 17,
+   "disease": "OMIM:115200",
+   "pmid": "10662742",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 342,
+   "disease": "OMIM:620535",
+   "pmid": "37962958",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 91,
+   "disease": "OMIM:206700",
+   "pmid": "30249237",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 133,
+   "disease": "OMIM:268310",
+   "pmid": "24932600",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 169,
+   "disease": "OMIM:311200",
+   "pmid": "11950863",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 204,
+   "disease": "OMIM:608393",
+   "pmid": "16900296",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 344,
+   "disease": "OMIM:620537",
+   "pmid": "38708366",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 76,
+   "disease": "OMIM:188400",
+   "pmid": "19948535",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 23,
+   "disease": "OMIM:119600",
+   "pmid": "24966961",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 259,
+   "disease": "OMIM:614833",
+   "pmid": "29883675",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 337,
+   "disease": "OMIM:620465",
+   "pmid": "37161035",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 335,
+   "disease": "OMIM:620465",
+   "pmid": "37161035",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 264,
+   "disease": "OMIM:615032",
+   "pmid": "36182950",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 156,
+   "disease": "OMIM:300088",
+   "pmid": "30451291",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 57,
+   "disease": "OMIM:154700",
+   "pmid": "12203992",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 232,
+   "disease": "OMIM:612313",
+   "pmid": "31021519",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 16,
+   "disease": "OMIM:115200",
+   "pmid": "12920062",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 106,
+   "disease": "OMIM:215700",
+   "pmid": "23099195",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 231,
+   "disease": "OMIM:612164",
+   "pmid": "35190816",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 282,
+   "disease": "OMIM:616211",
+   "pmid": "39416860",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 210,
+   "disease": "OMIM:609528",
+   "pmid": "33977139",
+   "claim": {
+    "pmid": "",
+    "first_author": "Kutkowska-Ka\u017amierczak",
+    "year": "2018",
+    "title": "Dominant ELOVL1 mutation causes neurological disorder with ichthyotic keratoderma, spastic paraplegia, hypomyelination and dysmorphic features"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 136,
+   "disease": "OMIM:268310",
+   "pmid": "17665217",
+   "claim": {
+    "pmid": "25817016",
+    "first_author": "White",
+    "year": "2015",
+    "title": "DVL1 frameshift mutations clustering in the penultimate exon cause autosomal-dominant Robinow syndrome"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 293,
+   "disease": "OMIM:616831",
+   "pmid": "37372360",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 108,
+   "disease": "OMIM:215700",
+   "pmid": "23099195",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 95,
+   "disease": "OMIM:208920",
+   "pmid": "28652255",
+   "claim": {
+    "pmid": "11586298",
+    "first_author": "Date",
+    "year": "2001",
+    "title": "Early-onset ataxia with ocular motor apraxia and hypoalbuminemia is caused by mutations in a new HIT superfamily gene"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 13,
+   "disease": "OMIM:115200",
+   "pmid": "12920062",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 294,
+   "disease": "OMIM:616831",
+   "pmid": "37372360",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 134,
+   "disease": "OMIM:268310",
+   "pmid": "24932600",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 340,
+   "disease": "OMIM:620535",
+   "pmid": "37962958",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 295,
+   "disease": "OMIM:616831",
+   "pmid": "33766796",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 149,
+   "disease": "OMIM:277600",
+   "pmid": "25469541",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 135,
+   "disease": "OMIM:268310",
+   "pmid": "22178368",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 94,
+   "disease": "OMIM:208920",
+   "pmid": "28652255",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 236,
+   "disease": "OMIM:612313",
+   "pmid": "31021519",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 89,
+   "disease": "OMIM:206700",
+   "pmid": "28600779",
+   "claim": {
+    "pmid": "20734336",
+    "first_author": "Milewicz",
+    "year": "2010",
+    "title": "De novo ACTA2 mutation causes a novel syndrome of multisystemic smooth muscle dysfunction with prominent myopathy"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 62,
+   "disease": "OMIM:159550",
+   "pmid": "29217778",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 65,
+   "disease": "OMIM:161800",
+   "pmid": "30517146",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 32,
+   "disease": "OMIM:130050",
+   "pmid": "36189931",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 81,
+   "disease": "OMIM:201910",
+   "pmid": "30968594",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 331,
+   "disease": "OMIM:620455",
+   "pmid": "40610405",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 96,
+   "disease": "OMIM:208920",
+   "pmid": "28652255",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 186,
+   "disease": "OMIM:605275",
+   "pmid": "38982897",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 224,
+   "disease": "OMIM:611590",
+   "pmid": "10942416",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 93,
+   "disease": "OMIM:208920",
+   "pmid": "28652255",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 92,
+   "disease": "OMIM:206700",
+   "pmid": "29169895",
+   "claim": {
+    "pmid": "27108799",
+    "first_author": "Gerber",
+    "year": "2016",
+    "title": "Recessive and Dominant De Novo ITPR1 Mutations Cause Gillespie Syndrome"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 70,
+   "disease": "OMIM:167320",
+   "pmid": "19208399",
+   "claim": {
+    "pmid": "15034582",
+    "first_author": "Watts",
+    "year": "2004",
+    "title": "Inclusion body myopathy associated with Paget disease of bone and frontotemporal dementia is caused by mutant valosin-containing protein"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 171,
+   "disease": "OMIM:312750",
+   "pmid": "36147795",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 209,
+   "disease": "OMIM:609528",
+   "pmid": "33977139",
+   "claim": {
+    "pmid": "19096517",
+    "first_author": "Montpetit",
+    "year": "2008",
+    "title": "Disruption of AP1S1, causing a novel neurocutaneous syndrome, perturbs development of the skin and spinal cord"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 243,
+   "disease": "OMIM:612653",
+   "pmid": "8704215",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 54,
+   "disease": "OMIM:154700",
+   "pmid": "11175294",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 336,
+   "disease": "OMIM:620465",
+   "pmid": "35600075",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 261,
+   "disease": "OMIM:615032",
+   "pmid": "36182950",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 20,
+   "disease": "OMIM:119600",
+   "pmid": "31548836",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 201,
+   "disease": "OMIM:606693",
+   "pmid": "20683840",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 240,
+   "disease": "OMIM:612463",
+   "pmid": "25802881",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 237,
+   "disease": "OMIM:612463",
+   "pmid": "25802881",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 219,
+   "disease": "OMIM:610168",
+   "pmid": "31569402",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 211,
+   "disease": "OMIM:609528",
+   "pmid": "33977139",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 51,
+   "disease": "OMIM:151100",
+   "pmid": "32765928",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 251,
+   "disease": "OMIM:613795",
+   "pmid": "31569402",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 90,
+   "disease": "OMIM:206700",
+   "pmid": "29663667",
+   "claim": {
+    "pmid": "27108799",
+    "first_author": "Gerber",
+    "year": "2016",
+    "title": "Recessive and Dominant De Novo ITPR1 Mutations Cause Gillespie Syndrome"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 30,
+   "disease": "OMIM:130050",
+   "pmid": "36189931",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 316,
+   "disease": "OMIM:618343",
+   "pmid": "28258187",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 165,
+   "disease": "OMIM:311200",
+   "pmid": "11950863",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 270,
+   "disease": "OMIM:615582",
+   "pmid": "31898322",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 71,
+   "disease": "OMIM:175200",
+   "pmid": "15200509",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 285,
+   "disease": "OMIM:616276",
+   "pmid": "28540186",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 60,
+   "disease": "OMIM:159550",
+   "pmid": "28202457",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 228,
+   "disease": "OMIM:612164",
+   "pmid": "35190816",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 220,
+   "disease": "OMIM:610968",
+   "pmid": "20839288",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 53,
+   "disease": "OMIM:154700",
+   "pmid": "12203992",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 120,
+   "disease": "OMIM:248250",
+   "pmid": "14628289",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 252,
+   "disease": "OMIM:613795",
+   "pmid": "31569402",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 308,
+   "disease": "OMIM:617140",
+   "pmid": "34521999",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 15,
+   "disease": "OMIM:115200",
+   "pmid": "12920062",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 52,
+   "disease": "OMIM:151100",
+   "pmid": "19768645",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 213,
+   "disease": "OMIM:609528",
+   "pmid": "29051910",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 311,
+   "disease": "OMIM:617730",
+   "pmid": "30053862",
+   "claim": {
+    "pmid": "31481669",
+    "first_author": "Arrondel",
+    "year": "2019",
+    "title": "Defects in t6A tRNA modification due to GON7 and YRDC mutations lead to Galloway-Mowat syndrome"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 253,
+   "disease": "OMIM:613795",
+   "pmid": "31569402",
+   "claim": {
+    "pmid": "",
+    "first_author": "Callewaert",
+    "year": "2008",
+    "title": "Arterial tortuosity syndrome: clinical and molecular findings in 12 families with novel mutations in SLC2A10"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 47,
+   "disease": "OMIM:150250",
+   "pmid": "36267862",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 101,
+   "disease": "OMIM:214800",
+   "pmid": "17661815",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 288,
+   "disease": "OMIM:616276",
+   "pmid": "30847826",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 41,
+   "disease": "OMIM:148050",
+   "pmid": "36446582",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 105,
+   "disease": "OMIM:214800",
+   "pmid": "17661815",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 180,
+   "disease": "OMIM:601776",
+   "pmid": "30249733",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 84,
+   "disease": "OMIM:201910",
+   "pmid": "30968594",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 196,
+   "disease": "OMIM:606574",
+   "pmid": "36553465",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 227,
+   "disease": "OMIM:612164",
+   "pmid": "35190816",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 78,
+   "disease": "OMIM:188400",
+   "pmid": "14585638",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 310,
+   "disease": "OMIM:617730",
+   "pmid": "30053862",
+   "claim": {
+    "pmid": "29053796",
+    "first_author": "Braun",
+    "year": "2017",
+    "title": "Mutations in KEOPS-complex genes cause nephrotic syndrome with primary microcephaly"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 3,
+   "disease": "OMIM:103580",
+   "pmid": "25802881",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 280,
+   "disease": "OMIM:616211",
+   "pmid": "30094525",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 122,
+   "disease": "OMIM:248250",
+   "pmid": "14628289",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 298,
+   "disease": "OMIM:616914",
+   "pmid": "37845262",
+   "claim": {
+    "pmid": "",
+    "first_author": "Jacquinet",
+    "year": "2014",
+    "title": "Neonatal progeroid variant of Marfan syndrome with congenital lipodystrophy results from mutations at the 3' end of FBN1 gene"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 233,
+   "disease": "OMIM:612313",
+   "pmid": "31021519",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 323,
+   "disease": "OMIM:619656",
+   "pmid": "34355836",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 145,
+   "disease": "OMIM:272300",
+   "pmid": "36303223",
+   "claim": {
+    "pmid": "20385644",
+    "first_author": "Veldman",
+    "year": "2010",
+    "title": "Successful treatment of molybdenum cofactor deficiency type A with cPMP"
+   },
+   "claims_source": true,
+   "recognised": false
+  },
+  {
+   "pid": 241,
+   "disease": "OMIM:612463",
+   "pmid": "25802881",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 197,
+   "disease": "OMIM:606693",
+   "pmid": "21696388",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 7,
+   "disease": "OMIM:103580",
+   "pmid": "25802881",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 199,
+   "disease": "OMIM:606693",
+   "pmid": "30868101",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 77,
+   "disease": "OMIM:188400",
+   "pmid": "24637876",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 188,
+   "disease": "OMIM:605275",
+   "pmid": "39003740",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 332,
+   "disease": "OMIM:620455",
+   "pmid": "40610405",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 262,
+   "disease": "OMIM:615032",
+   "pmid": "36182950",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 330,
+   "disease": "OMIM:620455",
+   "pmid": "40610405",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 140,
+   "disease": "OMIM:269150",
+   "pmid": "29333303",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  },
+  {
+   "pid": 238,
+   "disease": "OMIM:612463",
+   "pmid": "25802881",
+   "claim": {
+    "pmid": "",
+    "first_author": "",
+    "year": "",
+    "title": ""
+   },
+   "claims_source": false,
+   "recognised": false
+  }
+ ],
+ "late": [
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 10.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 2.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 2.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 2.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:109400",
+   "pmid": "42462758",
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:208900",
+   "pmid": "42824340",
+   "posterior": 1.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:255700",
+   "pmid": "42993371",
+   "posterior": 3.0,
+   "H0": 4,
+   "H0_lenient": 4,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:255700",
+   "pmid": "42993371",
+   "posterior": 3.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:255700",
+   "pmid": "42993371",
+   "posterior": 6.0,
+   "H0": 1,
+   "H0_lenient": 1,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:615829",
+   "pmid": "42136190",
+   "posterior": 7.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:615829",
+   "pmid": "42136190",
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:615829",
+   "pmid": "42136190",
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:615829",
+   "pmid": "42136190",
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:615829",
+   "pmid": "42136190",
+   "posterior": 1.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:616721",
+   "pmid": "43036732",
+   "posterior": 2944.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:619110",
+   "pmid": "42924046",
+   "posterior": 570.0,
+   "H0": null,
+   "H0_lenient": 2,
+   "parsed": true
+  },
+  {
+   "disease": "OMIM:620988",
+   "pmid": "43036232",
+   "posterior": 28.0,
+   "H0": null,
+   "H0_lenient": null,
+   "parsed": true
+  }
+ ]
+}
