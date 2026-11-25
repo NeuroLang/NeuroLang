@@ -434,3 +434,39 @@ def test_stratification_deep_post_probabilistic_dependency():
         rule.consequent.functor == "R"
         for rule in strats["probabilistic"].formulas
     )
+
+
+def test_reachable_code_from_query_searches_each_predicate_once(monkeypatch):
+    """The code reachable from a query is that of each rule of the
+    predicates of its atoms, found by one search from them all."""
+    code = Union(
+        (
+            Fact(Q(a)),
+            Fact(R(b)),
+            Implication(P(x), Q(x)),
+            Implication(P(x), Conjunction((Z(x), R(x)))),
+            Implication(Z(x), R(x)),
+            Implication(T(x), Z(x)),
+            Implication(S(x), Q(x)),
+        )
+    )
+    program = CPLogicProgram()
+    program.walk(code)
+    calls = []
+    search = stratification.reachable_code
+
+    def counted(query, datalog):
+        calls.append(query)
+        return search(query, datalog)
+
+    monkeypatch.setattr(stratification, "reachable_code", counted)
+    query = Implication(Query(x), Conjunction((P(x), T(x))))
+    reachable = stratification.reachable_code_from_query(query, program)
+    expected = {
+        rule for rule in code.formulas
+        if isinstance(rule, Implication) and not isinstance(rule, Fact)
+        and rule.consequent.functor in (P, Z, T)
+    }
+    assert set(reachable.formulas) == expected
+    assert len(reachable.formulas) == len(expected)
+    assert len(calls) == 1
