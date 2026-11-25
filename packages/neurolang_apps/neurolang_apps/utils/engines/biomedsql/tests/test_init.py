@@ -54,7 +54,8 @@ def engine(tmp_path_factory):
 
 
 def test_strength_probability_by_bin():
-    p = strength_probability([1.0, 1e-3, 1e-6, 1e-9, 1e-300], STRENGTH)
+    # values away from the edges of the bins
+    p = strength_probability([1.0, 5e-4, 1e-6, 1e-9, 1e-300], STRENGTH)
     assert p.tolist() == [0.01, 0.1, 0.8, 1.0, 1.0]
     assert strength_probability([0.5], [[1.0, 0.2]]).tolist() == [0.0]
 

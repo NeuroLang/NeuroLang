@@ -152,19 +152,27 @@ Paired, `support_graded` minus:
 By the number n of other datasets (Brier: graded / prior / L2): n = 1 (25 predictions) 0.255 / 0.339 / 0.256; n = 2-3 (81) 0.206 / 0.229 / 0.205;
 n = 4-9 (317) 0.161 / 0.163 / 0.149; n >= 10 (774) 0.126 / 0.125 / 0.109.
 
-Secondary (fresh for this comparison): the 5,285 predictions with support = 0 of the same genes (base rate 1.3%). Here `support_prior` gives every
-prediction the same value. Graded minus prior: Brier -0.0005 [-0.0007, -0.0003], log-loss -0.0067 [-0.0098, -0.0039], AUC 0.791 against 0.500.
+Secondary (fresh for this comparison): the 5,285 predictions with support = 0 of the same genes (base rate 1.3%). Here `support_prior` is
+0.01 / (n + 0.51), at most 0.02, so it ranks only by how many datasets tested the pair. Graded minus prior: Brier -0.0005 [-0.0007, -0.0003],
+log-loss -0.0067 [-0.0098, -0.0039]. AUC is 0.925 against 0.787 on the raw probabilities. The protocol's metrics clip to [0.02, 0.98], which
+flattens `support_prior` here and gives 0.791 against 0.500; the clipped AUC of `support_prior` is an artefact of the clip.
 
 False alarms: on the 806,883 predictions of genes never significant anywhere, the mean probability is 0.0044 (max 0.086), against 0.0019 for
 `support_prior`.
 
 Reading, by the rules fixed beforehand:
 - **The graded evidence generalises**: it is better than `support_prior` on both sets, with intervals excluding 0. On the primary set the gain is small
-  (a quarter of the gap to L2). It ranks pairs where no dataset reached the threshold (AUC 0.79), which a thresholded share cannot.
+  (a fifth of the gap to L2: 0.0036 of 0.018). Among pairs where no other dataset reached the threshold, it ranks the ones that replicate much
+  better (AUC 0.925 against 0.787, unclipped).
 - **L2 and the logistic remain better**, with intervals excluding 0. Grading closes the gap where few datasets tested the gene (n = 1 to 3: equal to L2).
   It leaves the gap where many did (n >= 4). There the logistic's other features (organ, source, mean strength across datasets) carry what a weighted
   share over units cannot. Neither a soft organ weight nor per-dataset weights helped in cross-validation (`results/prototype_weighted.txt`).
 - The graded predicate is less well calibrated than `support_prior` (ECE 0.047 against 0.033) and better on Brier and log-loss.
+
+Notes:
+- The engine's bin edge at the threshold is 5.530178 (-log10 2.95e-6). It was first written 5.53; no test has a p-value between the two, and the
+  rerun with the exact edge gives the same values.
+- After the protocol commit, two variables of `prototype_weighted.py` were renamed (a spelling check); its output is identical.
 
 `freeze.py check` now reports the engine files as changed since the freeze. That is expected: the frozen agent runs are reproducible at commit
 `1f3ea39ce`. `support` and `support_prior` are unchanged (checked against the closed forms and against `results/eval_answers.jsonl`).

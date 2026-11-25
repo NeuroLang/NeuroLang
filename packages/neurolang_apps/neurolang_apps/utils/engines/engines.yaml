@@ -1623,13 +1623,14 @@ engines:
       prior_none: 0.5
       # The probability that a QTL dataset's test is evidence (unit_evidence),
       # by the -log10 p_SMR_multi of its strongest probe: [lowest -log10 p,
-      # probability] in increasing order (5.53 is BiomedSQL's threshold).
-      # Fitted by log-loss on the same predictions, the prior above fixed
+      # probability] in increasing order (5.530178 is BiomedSQL's threshold,
+      # -log10 2.95e-6). Fitted by log-loss on the same predictions, the
+      # prior above fixed
       # (tools/biomedsql_benchmark/replication/prototype_weighted.py).
       evidence_strength:
         - [0.0, 0.0025]
         - [3.0, 0.0874]
-        - [5.53, 0.8172]
+        - [5.530178, 0.8172]
         - [8.0, 1.0]
     builtins: [lcase, str_contains]
     # The probability that a QTL dataset found a gene significant for a

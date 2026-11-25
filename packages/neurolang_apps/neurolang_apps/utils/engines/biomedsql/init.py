@@ -132,7 +132,9 @@ def init_engine(
     data_dir: Path,
     prior_significant: float = 0.01,
     prior_none: float = 0.5,
-    evidence_strength=((0.0, 0.0025), (5.53, 1.0)),
+    evidence_strength=(
+        (0.0, 0.0025), (3.0, 0.0874), (5.530178, 0.8172), (8.0, 1.0)
+    ),
 ) -> None:
     db = Path(data_dir) / "biomedsql" / "db"
     frames = {name: _table(db, source) for name, source in TABLES.items()}

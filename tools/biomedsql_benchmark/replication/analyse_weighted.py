@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from analyse import CLIP, metrics
+from analyse import CLIP, auc, metrics
 from post_hoc_logit import fit_logistic
 
 HERE = Path(__file__).resolve().parent
@@ -172,6 +172,11 @@ def main(smr_path, predictions_path, data_dir):
             lo, hi = np.percentile(bs, [2.5, 97.5])
             print(f"  {name:16} {m['brier']:6.3f} [{lo:5.3f}, {hi:5.3f}] "
                   f"{m['logloss']:7.3f} {m['ece']:6.3f} {m['auc']:6.3f}")
+        # metrics() clips to [0.02, 0.98], which flattens probabilities below
+        # 0.02: the AUC without the clip ranks them
+        print("  AUC unclipped: " + ", ".join(
+            f"{name} {auc(np.asarray(v, float), y):.3f}"
+            for name, v in systems.items()))
         print("  paired, support_graded minus (negative = graded better)")
         for other in [s for s in systems if s != "support_graded"]:
             for metric in ("brier", "logloss"):

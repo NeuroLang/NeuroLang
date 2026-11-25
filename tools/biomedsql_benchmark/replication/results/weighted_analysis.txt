@@ -1,3 +1,4 @@
+(engine timings of the first evaluation run; this rerun read the cached values)
 engine support_graded: 6482 values in 1.2 s
 engine support_prior: 6482 values in 1.7 s
 
@@ -8,6 +9,7 @@ engine support_prior: 6482 values in 1.7 s
   support_prior     0.147 [0.127, 0.169]   0.458  0.033  0.820
   L2                0.129 [0.114, 0.146]   0.403  0.041  0.875
   logistic          0.131 [0.112, 0.151]   0.413  0.010  0.858
+  AUC unclipped: support_graded 0.825, support_prior 0.820, L2 0.875, logistic 0.858
   paired, support_graded minus (negative = graded better)
     - support_prior  brier    -0.0036 [-0.0058, -0.0016]
     - support_prior  logloss  -0.0087 [-0.0153, -0.0027]
@@ -26,6 +28,7 @@ engine support_prior: 6482 values in 1.7 s
   system            Brier          95% CI logloss    ECE    AUC
   support_graded    0.013 [0.010, 0.016]   0.065  0.008  0.791
   support_prior     0.013 [0.010, 0.017]   0.072  0.007  0.500
+  AUC unclipped: support_graded 0.925, support_prior 0.787
   paired, support_graded minus (negative = graded better)
     - support_prior  brier    -0.0005 [-0.0007, -0.0003]
     - support_prior  logloss  -0.0067 [-0.0098, -0.0039]
