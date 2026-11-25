@@ -55,3 +55,11 @@ After a review of the protocol, before the run:
 - **Fusion matching** (U2) now credits an answer item to every disease it names, by OMIM id or by name, as strict scoring does. Before, the OMIM
   field took precedence. The development fusion becomes MRR 0.427 (H0 0.428).
 - `analyse` was exercised end to end on mocked answers; no real answer has been requested.
+
+## Amendment 2, before any Sonnet call of this protocol (2026-11-25)
+- **Route.** The run goes through OpenRouter (`HPO_LLM_ROUTE=openrouter`, model `anthropic/claude-sonnet-5.5`, Anthropic preferred as host, same
+  list price) instead of the Inria Anthropic key, which is not available on the machine of the run. The model, the prompts, `max_tokens` and the
+  default temperature are unchanged. Each cached answer records the host that served it, and the results report how many came from a host other
+  than Anthropic.
+- One test call with a non-study prompt ("Reply with the single word OK.") checked the route: it was served by Anthropic. It is not cached and not
+  part of the results.

@@ -236,6 +236,7 @@ def run_patient(p):
         recall_k=h.W.di[truth] in set(int(i) for i in ranked(post)[:K]),
         parsed=dict(H0=h0_items is not None, U1=u1_items is not None),
         usage=[h0["usage"], u1["usage"]],
+        hosts=[a.get("host") or "anthropic (direct)" for a in (h0, u1)],
         **proxies(obs, post),
     )
 
@@ -302,6 +303,11 @@ def analyse():
         sel = [j for j, r in enumerate(recs) if r["recall_k"] is inside]
         lines.append(f"{label} (n={len(sel)}): " + ", ".join(
             f"{a} {RR[a][sel].mean():.3f}" for a in arms))
+    hosts = {}
+    for r in recs:
+        for x in r.get("hosts", []):
+            hosts[x] = hosts.get(x, 0) + 1
+    lines.append(f"answers by host: {hosts}")
     tokens = [u for r in recs for u in r["usage"]]
     cost = sum(2e-6 * u["input_tokens"] + 10e-6 * u["output_tokens"]
                for u in tokens)

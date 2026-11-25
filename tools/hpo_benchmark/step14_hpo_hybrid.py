@@ -18,20 +18,38 @@ used_pids = {json.loads(l)["pid"] for l in open("results/hpo_phase2.jsonl")}
 CELLS = [(0, 0), (2, 0), (0, 2), (2, 2)]          # (spurious idx, dropped idx)
 
 
+def _request(prompt):
+    """One answer from Sonnet 5.5: through OpenRouter when HPO_LLM_ROUTE is
+    "openrouter" (OPENROUTER_API_KEY, Anthropic preferred as host), else
+    directly from Anthropic (ANTHROPIC_API_INRIA_KEY)."""
+    if os.environ.get("HPO_LLM_ROUTE") == "openrouter":
+        req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions",
+            data=json.dumps({"model": "anthropic/claude-sonnet-5.5", "max_tokens": 1200,
+                             "messages": [{"role": "user", "content": prompt}],
+                             "provider": {"order": ["Anthropic"]}}).encode(),
+            headers={"Authorization": "Bearer " + os.environ["OPENROUTER_API_KEY"], "content-type": "application/json"})
+        d = json.load(urllib.request.urlopen(req, timeout=180))
+        u = d.get("usage", {})
+        return {"text": d["choices"][0]["message"]["content"] or "",
+                "usage": {"input_tokens": u.get("prompt_tokens", 0), "output_tokens": u.get("completion_tokens", 0)},
+                "route": "openrouter", "host": d.get("provider"), "model": d.get("model")}
+    req = urllib.request.Request("https://api.anthropic.com/v1/messages",
+        data=json.dumps({"model": MODEL, "max_tokens": 1200, "messages": [{"role": "user", "content": prompt}]}).encode(),
+        headers={"x-api-key": os.environ["ANTHROPIC_API_INRIA_KEY"], "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    d = json.load(urllib.request.urlopen(req, timeout=180))
+    return {"text": "".join(b.get("text", "") for b in d["content"] if b["type"] == "text"), "usage": d["usage"]}
+
+
 def ask(prompt):
     key = hashlib.sha256(prompt.encode()).hexdigest()
     f = CACHE / f"{key}.json"
     if f.exists():
         return json.loads(f.read_text())
-    req = urllib.request.Request("https://api.anthropic.com/v1/messages",
-        data=json.dumps({"model": MODEL, "max_tokens": 1200, "messages": [{"role": "user", "content": prompt}]}).encode(),
-        headers={"x-api-key": os.environ["ANTHROPIC_API_INRIA_KEY"], "anthropic-version": "2023-06-01", "content-type": "application/json"})
     for attempt in range(4):
         try:
-            d = json.load(urllib.request.urlopen(req, timeout=180)); break
+            out = _request(prompt); break
         except Exception:
             if attempt == 3: raise
-    out = {"text": "".join(b.get("text", "") for b in d["content"] if b["type"] == "text"), "usage": d["usage"]}
     f.write_text(json.dumps(out)); return out
 
 
