@@ -217,6 +217,16 @@ Unreleased
 
 **Performance:**
 
+- The rules of a program (``DatalogProgram.intensional_database``) are
+  read from the symbol table once, and the same read-only mapping
+  returned, until the table or a scope enclosing it changes
+  (``TypedSymbolTable.computed``, which ``symbols_by_type`` now uses): a
+  query asked for them some 75 times, each a walk of every symbol. A
+  query compiles 0.3 to 0.5 s faster on neurostore and neurosynth: the
+  image-decoding examples of neurostore take 5.4 to 6.0 s rather than 5.7
+  to 6.3 s (with the materialised ``term_studies``), and the banks 9 %
+  (neurostore) and 18 % (neurosynth) less in all.
+
 - Lifted inference: a conjunction implies ``v != c`` when a positive
   deterministic atom of it has ``v`` where none of its tuples has the
   constant ``c`` of an atom of a probabilistic relation at ``v``'s
