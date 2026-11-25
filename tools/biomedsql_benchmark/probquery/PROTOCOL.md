@@ -70,3 +70,19 @@ No worked examples for either agent arm. Development uses 2 extra instances per 
 3. **Secondary:** S2 − S1 on the pooled P4 to P7 alone, and on all levels.
 4. **S0 is a floor.** Without the database it cannot know the rows, so near-zero accuracy is expected and shows that the questions need the data.
 5. Every arm and level is reported, whichever way it comes out.
+
+## Amendment, before any scored run (2026-11-25): the cost of each agent's effort
+Requested before the build finished; no scored answer exists. For every question and arm, the harness logs:
+- input, output and reasoning tokens, and the dollar cost at list price ($2 / $10 per million);
+- steps (model calls) and tool calls, and of those, failed tool calls (SQL errors, NeuroLang parse or solver errors);
+- wall-clock time, split into model time and tool time (SQL or engine execution);
+- the length of the final query the agent relied on (characters and lines; for SQL also the number of `JOIN`, sub-`SELECT` and aggregate
+  clauses).
+
+Reported per level and pooled, S2 against S1, with intervals resampling templates:
+- mean cost, steps, failed tool calls and time per question;
+- **cost per correct answer** (total dollars over number correct), and the ratio S2 / S1;
+- the final query's length.
+
+Reading: no threshold is fixed. The effort comparison is descriptive and reported beside H7: whether the Datalog arm is cheaper, dearer, or
+equal per question and per correct answer, and how the gap moves with the level.
