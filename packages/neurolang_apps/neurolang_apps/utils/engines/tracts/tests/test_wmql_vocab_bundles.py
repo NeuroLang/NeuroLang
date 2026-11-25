@@ -72,3 +72,47 @@ def test_a_program_imports_a_bundle_module_by_its_path_in_the_engine(
     assert "not_the_vocabulary" not in nl.symbols
     nl.execute_datalog_program('.import("bundles/freesurfer_queries.dl")')
     assert "uf" in nl.predicate_documentation()
+
+
+def test_a_bundle_with_endpoint_boxes_is_solved_bound(files, monkeypatch):
+    """``uf`` reads ``endpoint_anterior_of``, the product of the endpoints
+    and the boxes of the terms: whole, 600 k endpoints by 285 terms on the
+    Disconnectome tractogram, beyond 12 GB. Its rewrite with the bindings
+    of the literals has a cycle of its own; the query is still rewritten
+    (it reads the large stored relations of the tractogram),
+    with ``endpoint_anterior_of`` bound to the term ``amygdala``, not
+    solved unrewritten."""
+    from nl_core.datalog import magic_sets
+
+    rewrites = []
+    rewrite = magic_sets._magic_rewrite
+
+    def recorded(*args):
+        rewrites.append(None)
+        rewrites[-1] = rewrite(*args)
+        return rewrites[-1]
+
+    monkeypatch.setattr(magic_sets, "_magic_rewrite", recorded)
+    nl = tracts_engine()
+    nl.execute_datalog_program(example(files).replace(
+        'ans(x) :- uncinate(x, "left")', ""))
+    nl.execute_datalog_program(bundle("freesurfer_queries"))
+    with nl.scope:
+        uf = nl.execute_datalog_program('ans(x) :- uf(x, "left")')
+    assert rewrites[-1] is not None
+    _, program = rewrites[-1]
+    anterior = [
+        rule.consequent for rule in program.formulas
+        if rule.consequent.functor.name.startswith("endpoint_anterior_of")
+    ]
+    assert anterior and all(
+        "^ffbb" in head.functor.name for head in anterior
+    )
+    with nl.scope:
+        nl.execute_datalog_program('ans(x) :- slf_i(x, "left")')
+    assert rewrites[-1] is not None  # traverses alone, as since #1391
+    with nl.scope:
+        uncinate = nl.execute_datalog_program('ans(x) :- uncinate(x, "left")')
+    assert set(uf.as_pandas_dataframe().x) == set(
+        uncinate.as_pandas_dataframe().x
+    )

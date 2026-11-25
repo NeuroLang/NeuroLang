@@ -217,6 +217,15 @@ Unreleased
 
 **Performance:**
 
+- Lifted inference: a conjunction implies ``v != c`` when a positive
+  deterministic atom of it has ``v`` where none of its tuples has the
+  constant ``c`` of an atom of a probabilistic relation at ``v``'s
+  position; the comparison is added before shattering
+  (``ExcludedConstants``), which then removes the self-join through
+  ``c``. ``via_thalamus(l) :- wired('aHIP lh', t), thalamus(t), wired(t,
+  l)`` on neurosynth, declined to weighted model counting (12.9 s), is
+  lifted (1.4 s), with the same answer. See doc/probabilistic_lifting.rst,
+  "Constants a deterministic atom excludes".
 - ``similar_study`` and the other rules of ``query_similarity``: the
   embeddings of query texts are kept on disk, next to the documents', so
   that a new process reads them rather than embedding the texts again
@@ -362,10 +371,35 @@ Unreleased
 
 **Bug fixes:**
 
+- Magic sets: a query of the WMQL bundles ``uf``, ``ilf``, ``af`` or
+  ``ec`` on the Disconnectome engines fits in memory again. Since the
+  rewrite gave up on cycles of its own (#1391), these bundles were solved
+  unrewritten, which computes ``endpoint_anterior_of`` and
+  ``posterior_of`` whole: the product of 600 k endpoints, or 300 k
+  streamlines, by 285 term boxes. ``ans(x) :- uf(x, "left")`` went past
+  12 GB on ``neurosynth_disconnectome7t``; ``slf_i`` and ``cst`` fit,
+  but lost their magic sets too. A program reading a stored relation of
+  more than ``[MAGIC_SETS] seed_rows`` tuples is now first rewritten with
+  the bindings of the constants, the heads and the needed arguments
+  alone, which rarely has a cycle of its own: ``uf(x, "left")`` takes 7 s
+  and 0.4 GB, against 12.5 s and 0.65 GB before #1391; ``af`` 14 s
+  against 50 s; ``slf_i`` 0.2 GB against 0.5 GB on master.
+
 - AI assistant: an answer given when the ReAct agent ran out of steps,
   the last query that gave rows, says so: its summary reads *Out of steps:
   no final answer after N steps*, as a warning on the web page and in
   yellow in the terminal, where it read as a final answer.
+
+- A conditional probabilistic query reading the result of another, as
+  ``p_top(l, p) :- PROB[top_active(l, s) // tom(s)] = p`` with ``top(l)``
+  a threshold on ``p_l(l, p) :- PROB[active(l, s) // tom(s)] = p``,
+  raises ``UnsupportedProgramError``, as the unconditional one does,
+  instead of the internal error *...\_noprob is already in the IDB with
+  different signature*: rewritten with magic sets, the numerator and the
+  denominator of a conditional query were given one predicate of two
+  arities. The error says what is unsupported, and its suggestion how to
+  rewrite the program: filter on a probability after the probabilistic
+  queries, or store the first answer as a relation.
 
 - A predicate whose rule binds a variable only through its head, as
   ``q`` in ``similar_study(q, s)`` of the engine neurosynth, gets the

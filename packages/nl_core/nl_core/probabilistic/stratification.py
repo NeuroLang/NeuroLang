@@ -238,9 +238,23 @@ def _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs):
     wlq_symb_idxs = {idb_symbs.index(wlq_symb) for wlq_symb in wlq_symbs}
     for wlq_symb_idx in wlq_symb_idxs:
         if _wlq_depends_on_other_wlq(wlq_symb_idx, dep_mat, wlq_symb_idxs):
-            raise UnsupportedProgramError(
-                "Unsupported dependency between within-language queries"
+            error = UnsupportedProgramError(
+                "Unsupported dependency between within-language queries: "
+                "a probabilistic query, PROB[...], reads a relation "
+                "computed from the result of another probabilistic query, "
+                "conditional or not, such as the values whose probability "
+                "is above a threshold. A probabilistic query can read "
+                "deterministic and probabilistic relations only."
             )
+            error.suggestion = (
+                "Filter on a probability after the probabilistic queries, "
+                "in a rule reading their results, e.g. "
+                "`ans(l, p) :- p_l(l, p), (p > 0.25)`, not in a relation "
+                "another PROB[...] reads. Or run the first query, add its "
+                "answer as a relation of its own, and use that relation in "
+                "the second query."
+            )
+            raise error
 
 
 def _wlq_depends_on_other_wlq(wlq_symb_idx, dep_mat, wlq_symb_idxs):
