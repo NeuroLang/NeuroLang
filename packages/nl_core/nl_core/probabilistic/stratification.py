@@ -44,13 +44,15 @@ def reachable_code_from_query(query, program):
             extract_logic_atoms(q.antecedent)
         )
     ]
-    reachable = set()
+    # The code reachable from a rule is that of all the rules of its
+    # predicate: one rule of each predicate starts a single search.
+    idb = program.intensional_database()
+    starts = {}
     for pred in predicates:
-        for rule in iter_implications(
-            program.intensional_database().get(pred.functor, None)
-        ):
+        for rule in iter_implications(idb.get(pred.functor, None)):
             if not isinstance(rule, RightImplication):
-                reachable |= set(reachable_code(rule, program).formulas)
+                starts.setdefault(rule.consequent.functor, rule)
+    reachable = set(reachable_code(list(starts.values()), program).formulas)
     return Union(tuple(reachable))
 
 
