@@ -1,0 +1,9 @@
+patients 160 | mean coverage 0.51 | overall MRR posterior 0.286 Sonnet direct 0.429
+low coverage   n= 56 coverage 0.00-0.38 | posterior 0.040  Sonnet 0.295 | Sonnet - posterior +0.255 [+0.148, +0.368]
+middle         n= 51 coverage 0.40-0.65 | posterior 0.221  Sonnet 0.424 | Sonnet - posterior +0.203 [+0.070, +0.332]
+high coverage  n= 53 coverage 0.67-1.00 | posterior 0.609  Sonnet 0.575 | Sonnet - posterior -0.035 [-0.162, +0.093]
+by the number of annotated phenotypes of the true disease:
+few            n= 54 annotations 2-19 | posterior 0.144  Sonnet 0.349 | Sonnet - posterior +0.206 [+0.091, +0.323]
+middle         n= 54 annotations 20-47 | posterior 0.302  Sonnet 0.412 | Sonnet - posterior +0.110 [-0.022, +0.245]
+many           n= 52 annotations 49-199 | posterior 0.418  Sonnet 0.529 | Sonnet - posterior +0.111 [-0.016, +0.236]
+correlation of coverage with posterior MRR 0.62, with Sonnet MRR 0.22

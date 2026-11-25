@@ -1,0 +1,22 @@
+patients 100 diseases 100
+recall@30: 54.0% | unparsed {'H1': 0, 'H2': 0, 'H3': 0}
+arm                       top1  top10    MRR          95% CI
+posterior alone           25.0   43.0  0.328 [0.248,0.411]
+H0 direct                 37.0   58.0  0.428 [0.340,0.519]
+H1 candidates             21.0   47.0  0.293 [0.219,0.373]
+H2 cand.+probabilities    27.0   50.0  0.353 [0.271,0.438]
+H3 cand. ranked           27.0   51.0  0.349 [0.269,0.436]
+
+paired MRR differences, 95% CI over patients
+  H1 - H0              -0.135 [-0.221, -0.052]
+  H2 - H0              -0.075 [-0.166, +0.012]
+  H3 - H0              -0.079 [-0.168, +0.008]
+  H2 - H1              +0.060 [+0.001, +0.120]
+  H3 - H1              +0.056 [+0.006, +0.112]
+  H1 - posterior_rank  -0.035 [-0.103, +0.036]
+  H2 - posterior_rank  +0.025 [+0.002, +0.056]
+  H3 - posterior_rank  +0.021 [-0.043, +0.083]
+
+true disease among candidates (n=54): posterior 0.598 | H0 0.566 | H1 0.543 | H2 0.654 | H3 0.647
+
+not among candidates (n=46): posterior 0.012 | H0 0.267 | H1 0.000 | H2 0.000 | H3 0.000
