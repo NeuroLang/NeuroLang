@@ -1,3 +1,4 @@
+import weakref
 from collections import OrderedDict
 from operator import itemgetter
 from typing import Iterable, Callable, Dict, Union
@@ -98,10 +99,12 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         """
         self._container = None
         self._might_have_duplicates = True
+        self._origin = None
         if iterable is not None:
             if isinstance(iterable, RelationalAlgebraFrozenSet):
                 self._container = iterable._container
                 self._might_have_duplicates = iterable._might_have_duplicates
+                self._rows_of(iterable)
             elif isinstance(iterable, pd.DataFrame):
                 # A deep copy would also join the columns in one block: a
                 # second copy of the rows, gigabytes for those of a
@@ -129,8 +132,49 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def _drop_duplicates_if_needed(self):
         if self._might_have_duplicates:
-            self._container = self._drop_duplicates(self._container)
+            container = self._container
+            self._container = self._drop_duplicates(container)
             self._might_have_duplicates = False
+            self._keep_rows_in_origin(container)
+
+    def _rows_of(self, other):
+        """
+        Remember that the rows of this set are those of *other*, with the
+        same index labels (a view, or a copy under other column names):
+        when this set drops its duplicates, *other* keeps the same rows
+        (:meth:`_keep_rows_in_origin`), so that the next sets made from it
+        do not drop them again (the 10 million rows of a stored relation
+        read by each query).
+        """
+        self._origin = None
+        if (
+            getattr(other, "_might_have_duplicates", False)
+            and other._container is not None
+            and self._container is not None
+        ):
+            self._origin = (
+                weakref.ref(other), other._container, self._container
+            )
+
+    def _keep_rows_in_origin(self, container):
+        """After this set dropped the duplicates of *container*, the set
+        its rows are those of keeps the same rows, by index label, if
+        neither changed its rows since (and so on up)."""
+        origin, self._origin = self._origin, None
+        if origin is None:
+            return
+        reference, origin_container, own_container = origin
+        other = reference()
+        if (
+            other is None or own_container is not container
+            or other._container is not origin_container
+            or not other._might_have_duplicates
+            or not origin_container.index.is_unique
+        ):
+            return
+        other._container = origin_container.loc[self._container.index]
+        other._might_have_duplicates = False
+        other._keep_rows_in_origin(origin_container)
 
     @classmethod
     def create_view_from(cls, other):
@@ -141,6 +185,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         output = cls()
         output._container = other._container
         output._might_have_duplicates = other._might_have_duplicates
+        output._rows_of(other)
         return output
 
     @classmethod
@@ -627,15 +672,18 @@ class NamedRelationalAlgebraFrozenSet(
         self._check_for_duplicated_columns(columns)
         self._columns = tuple(columns)
         self._might_have_duplicates = True
+        self._origin = None
         if iterable is None:
             iterable = []
 
         if isinstance(iterable, NamedRelationalAlgebraFrozenSet):
             self._initialize_from_named_ra_set(iterable)
             self._might_have_duplicates = iterable._might_have_duplicates
+            self._rows_of(iterable)
         elif isinstance(iterable, RelationalAlgebraFrozenSet):
             self._initialize_from_unnamed_ra_set(iterable)
             self._might_have_duplicates = iterable._might_have_duplicates
+            self._rows_of(iterable)
         elif isinstance(iterable, pd.DataFrame):
             self._container = iterable.copy()
             self._container.columns = self._columns
@@ -684,6 +732,7 @@ class NamedRelationalAlgebraFrozenSet(
         output._container = other._container
         output._columns = other._columns
         output._might_have_duplicates = other._might_have_duplicates
+        output._rows_of(other)
         return output
 
     def _empty_set_same_structure(self):
