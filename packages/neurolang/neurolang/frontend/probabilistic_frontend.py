@@ -775,6 +775,15 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
 
         with self.scope:
+            # The query rule is checked as the base implementation does:
+            # a head variable not in the predicate is not bound.
+            self._declare_query(
+                self.new_symbol()(*(
+                    head.arguments if isinstance(head, fe.Operation)
+                    else head
+                )),
+                predicate,
+            )
             query, query_pred_args = self._query_rule(
                 symbol_entry, predicate.expression
             )

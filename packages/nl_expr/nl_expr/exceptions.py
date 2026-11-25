@@ -508,8 +508,12 @@ class UnboundVariablesError(ForbiddenExpressionError):
         Return this error, reported for the rule named *rule*, or for a
         query.
         """
+        occurrences = self.occurrences
+        if query and self.rule is not None:
+            # a query is a rule of a generated name, not to be shown
+            occurrences = tuple(o.replace(self.rule, "") for o in occurrences)
         return type(self)(
-            rule, self.variables, self.occurrences, self.example, query
+            rule, self.variables, occurrences, self.example, query
         )
 
     def _names(self):

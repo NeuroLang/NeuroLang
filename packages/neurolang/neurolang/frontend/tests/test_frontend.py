@@ -1058,6 +1058,72 @@ def test_unbound_head_variable_bound_by_query_constant():
 
 
 @ENGINES
+def test_unbound_head_variable_of_rule_rejected(engine_class):
+    nl = _voxel_engine(engine_class)
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program("near(i, m) :- voxel(i, j, k)")
+    assert exc_info.value.rule == "near"
+    assert exc_info.value.variables == ("m",)
+    assert str(exc_info.value).startswith(
+        "In near: the variable m appears only in `near(i, m)`"
+    )
+    assert not nl.current_program
+
+
+def test_unbound_head_variable_of_probabilistic_rule_rejected():
+    nl = _voxel_engine(frontend.NeurolangPDL)
+    nl.add_probabilistic_facts_from_tuples([(0.5, 0)], name="reliable")
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(
+            "near(i, m) :- reliable(i) & voxel(i, j, k)"
+        )
+    assert exc_info.value.rule == "near"
+    assert exc_info.value.variables == ("m",)
+
+
+@ENGINES
+@pytest.mark.parametrize("rules", [
+    "",
+    "near(i, j) :- voxel(i, j, k)\n",
+], ids=["edb", "idb"])
+def test_unbound_head_variable_of_query_rejected(engine_class, rules):
+    """A query head variable not in the queried predicate: not a KeyError."""
+    nl = _voxel_engine(engine_class)
+    predicate = "near(i, j)" if rules else "voxel(i, j, k)"
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(rules + f"ans(i, m) :- {predicate}")
+    assert exc_info.value.rule is None
+    assert exc_info.value.variables == ("m",)
+    assert str(exc_info.value).startswith(
+        "In the query: the variable m appears only in `(i, m)`"
+    )
+
+
+@ENGINES
+def test_unbound_head_variable_of_named_query_rejected(engine_class):
+    nl = _voxel_engine(engine_class)
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        nl.execute_datalog_program(
+            "near(i, j) :- voxel(i, j, k)\n"
+            "ans[a](i, j) :- near(i, j)\n"
+            "ans[b](i, m) :- near(i, j)"
+        )
+    assert exc_info.value.variables == ("m",)
+
+
+@ENGINES
+def test_head_variable_defined_by_equality_accepted(engine_class):
+    nl = _voxel_engine(engine_class)
+    res = nl.execute_datalog_program(
+        """
+        next_voxel(i, m) :- voxel(i, j, k) & (m == i + 1)
+        ans(i, m) :- next_voxel(i, m)
+        """
+    )
+    assert res.to_unnamed() == {(0, 1), (1, 2), (9, 10)}
+
+
+@ENGINES
 def test_variable_defined_from_head_variable_bound_by_query_constant(
     engine_class
 ):

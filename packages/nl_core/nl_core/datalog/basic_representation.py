@@ -242,13 +242,6 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
                 'constants or symbols'
             )
 
-        consequent_symbols = consequent._symbols - consequent.functor._symbols
-
-        if not consequent_symbols.issubset(antecedent._symbols):
-            raise NeuroLangException(
-                "All variables on the consequent need to be on the antecedent"
-            )
-
         if not is_conjunctive_expression(consequent):
             raise NotConjunctiveExpression(
                 f'Expression {consequent} is not conjunctive'

@@ -1,7 +1,7 @@
 """Programs of several queries, ``ans[name](...) :- ...``, solved together."""
 import pytest
 
-from nl_expr.exceptions import NeuroLangException
+from nl_expr.exceptions import NeuroLangException, UnboundVariablesError
 
 from ...frontend import NeurolangDL
 from ...frontend.probabilistic_frontend import NeurolangPDL
@@ -78,7 +78,9 @@ class TestSeveralQueries:
         assert rows(answer) == [(4,), (5,)]
 
     def test_an_unbound_variable_is_reported(self, nl):
-        with pytest.raises(NeuroLangException, match="consequent|nbound"):
+        with pytest.raises(
+            UnboundVariablesError, match="In the query: the variable z"
+        ):
             nl.execute_datalog_program(
                 "ans[a](x) :- edge(x, y)\nans[b](z) :- edge(x, y)"
             )
