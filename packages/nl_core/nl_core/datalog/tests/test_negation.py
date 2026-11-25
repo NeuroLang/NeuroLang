@@ -296,3 +296,20 @@ def test_a_rule_cannot_define_a_function_of_the_engine():
         match="`gt` is a function of the engine",
     ):
         Datalog().walk(Implication(S_('gt')(x), S_('R')(x) & ~S_('T')(x)))
+
+
+def test_is_conjunctive_negation():
+    """Conjunctions of atoms, negated or not, and of the truth values are
+    conjunctive; other constants and disjunctions are not."""
+    P, Q, f = S_('P'), S_('Q'), S_('f')
+    x, y = S_('x'), S_('y')
+    assert sdn.is_conjunctive_negation(C_(True))
+    assert sdn.is_conjunctive_negation(C_(False))
+    assert sdn.is_conjunctive_negation(logic.Conjunction((
+        P(x), logic.Negation(Q(x, y)), Q(f(x), y), C_(True)
+    )))
+    assert not sdn.is_conjunctive_negation(C_('a'))
+    assert not sdn.is_conjunctive_negation(logic.Conjunction((P(x), y)))
+    assert not sdn.is_conjunctive_negation(
+        logic.Disjunction((P(x), Q(x, y)))
+    )

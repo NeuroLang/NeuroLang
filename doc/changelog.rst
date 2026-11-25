@@ -383,6 +383,16 @@ Unreleased
   arrays as fixed-width bytes instead of through ``repr``; the cache
   ``VERSION`` is 2, so caches kept by earlier versions are found again once.
 
+- Rules walked into a program: ``is_conjunctive_negation``, the guard of
+  type resolution and of the translation of rules to Datalog, built a
+  ``Constant(True)`` and a ``Constant(False)``, inferring their types, for
+  every node of the body it visited (1.3 ms a rule of six atoms); it
+  compares with ``TRUE`` and ``FALSE`` of ``nl_expr.logic`` (28 µs), as do
+  ``is_conjunctive_expression`` and
+  ``is_conjunctive_expression_with_nested_predicates``. Fig. 2b's program
+  (four named answers, neurosynth_iit), whose magic rules are walked once
+  per answer, takes 20.9 s, from 22.5 s, with the same answers.
+
 **Bug fixes:**
 
 - The choice facts of one predicate, ``0.3 ^ choice('a'). 0.7 ^ choice('b').``
