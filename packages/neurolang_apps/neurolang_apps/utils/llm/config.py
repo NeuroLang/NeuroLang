@@ -82,7 +82,8 @@ class ProviderConfig:
         if self.api == "claude-code" and os.environ.get(MULTI_USER_ENV) == "1":
             raise LLMConfigError(
                 f"The LLM provider {self.name!r} uses the sign-in of the "
-                "user who runs it: it is not allowed on a shared server."
+                "user who runs it: it is not allowed on a shared server "
+                "unless an admin allows it to you (--claude-code)."
             )
         if not self.api_key_env:
             return None

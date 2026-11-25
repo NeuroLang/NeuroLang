@@ -282,7 +282,8 @@ Managing the users
 ~~~~~~~~~~~~~~~~~~
 
 ``--list-users``, ``--add-user``, ``--set-password``, ``--set-groups``,
-``--set-llm``, ``--set-group-llm``, ``--own-key``, ``--set-key``,
+``--set-llm``, ``--set-group-llm``, ``--own-key``, ``--claude-code``,
+``--set-key``,
 ``--set-group-key``, ``--remove-user`` and ``--hash-password`` change the
 users file from the command line (see `Managing users`_).
 
@@ -647,10 +648,19 @@ with ``uv run --extra apps`` in a checkout)::
    neurolang-repl-serve --users users.yaml --set-llm bob anthropic claude-sonnet-5-5   # empty key: removes it
    neurolang-repl-serve --users users.yaml --set-group-llm lab openrouter anthropic/claude-sonnet-5.5
    neurolang-repl-serve --users users.yaml --own-key group:lab no       # or NAME yes|no|inherit
+   neurolang-repl-serve --users users.yaml --claude-code group:lab yes  # or NAME yes|no|inherit
    neurolang-repl-serve --users users.yaml --set-key bob ALBERT_API_KEY # a variable of env
    neurolang-repl-serve --users users.yaml --set-group-key lab ALBERT_API_KEY
    neurolang-repl-serve --users users.yaml --remove-user bob
    neurolang-repl-serve --users users.yaml --list-users                 # no secrets
+
+``--claude-code`` (and the *Claude Code* column and menus of the admin
+console) decides who may use the ``claude-code`` provider of the query
+assistant, which runs on the sign-in to ``claude`` of whoever runs the
+server, not of the user. It is off for everyone, and for guests always,
+unless an admin allows it to a user, or to a group (a user's own setting
+wins over their groups'; of several groups, one allowing is enough). It
+is an admin's decision, on the terms of Anthropic's service.
 
 ``--hash-password`` prints the hash of a password, for a file written by
 hand.

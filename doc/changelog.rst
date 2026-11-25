@@ -40,7 +40,8 @@ Unreleased
   ReAct agent (extra ``claude``): one conversation per question, native
   tool calls on the engine's tools, instead of a ``claude -p`` process per
   step, with your own sign-in to ``claude``, no API key. It is refused by
-  ``neurolang-repl-serve --users``. The ``claude-code`` entry of
+  ``neurolang-repl-serve --users``, unless an admin allows it to a user or
+  a group (``--claude-code``, or the admin console). The ``claude-code`` entry of
   ``llm.example.yaml`` (``api: command``, ``claude -p``) is deprecated in
   its favour, as the entry ``claude-agent``.
 

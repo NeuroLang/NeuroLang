@@ -148,7 +148,7 @@
 
 <h2>Users</h2>
 <div class="scroll"><table>
-  <thead><tr><th scope="col">User</th><th scope="col">Groups</th><th scope="col">AI assistant</th><th scope="col">Variables</th><th scope="col">Own key</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+  <thead><tr><th scope="col">User</th><th scope="col">Groups</th><th scope="col">AI assistant</th><th scope="col">Variables</th><th scope="col">Own key</th><th scope="col">Claude Code</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
   <tbody id="users"></tbody>
 </table></div>
 
@@ -159,6 +159,9 @@
   <label>Password <input name="password" type="password" autocomplete="new-password" placeholder="unchanged; none for an ORCID iD"></label>
   <label>Groups <input name="groups" placeholder="admin, lab"></label>
   <label>Their own key in the page <select name="own_key">
+    <option value="">unchanged</option><option value="inherit">as their groups say</option>
+    <option value="yes">allowed</option><option value="no">not allowed</option></select></label>
+  <label>Claude Code (the server's sign-in) <select name="claude_code">
     <option value="">unchanged</option><option value="inherit">as their groups say</option>
     <option value="yes">allowed</option><option value="no">not allowed</option></select></label>
   <button class="primary" name="create" value="1">Add</button>
@@ -178,7 +181,7 @@
 
 <h2>Groups</h2>
 <div class="scroll"><table>
-  <thead><tr><th scope="col">Group</th><th scope="col">Members</th><th scope="col">AI assistant</th><th scope="col">Variables</th><th scope="col">Own key</th></tr></thead>
+  <thead><tr><th scope="col">Group</th><th scope="col">Members</th><th scope="col">AI assistant</th><th scope="col">Variables</th><th scope="col">Own key</th><th scope="col">Claude Code</th></tr></thead>
   <tbody id="groups"></tbody>
 </table></div>
 <form id="group">
@@ -191,9 +194,12 @@
   <label><span><input name="drop" type="checkbox"> remove the assistant</span></label>
   <label>Its users' own key <select name="own_key">
     <option value="">unchanged</option><option value="yes">allowed</option><option value="no">not allowed</option></select></label>
+  <label>Its users' Claude Code (the server's sign-in) <select name="claude_code">
+    <option value="">unchanged</option><option value="yes">allowed</option><option value="no">not allowed</option></select></label>
   <button class="primary">Set the group</button>
 </form>
 <p class="note">The users of a group have its assistant unless they have their own; of several groups, the first by name gives it. A group may forbid its users their own key (a user's own setting wins).</p>
+<p class="note">Claude Code is the provider that runs on the sign-in to <code>claude</code> of whoever runs the server, not of the user. It is off for everyone unless you allow it, to a user or a group (a user's own setting wins); guests never have it. Allow it only where Anthropic's terms let you.</p>
 
 <section id="engines-box" hidden>
 <h2>Engines</h2>
@@ -421,6 +427,7 @@ async function show() {
   $("users").replaceChildren(...state.users.map((user) => row([
     who(user), user.groups.join(", "), assistant(user), user.variables.join(", "),
     (user.own_key ? "allowed" : "not allowed") + (user.own_key_set === undefined || user.own_key_set === null ? "" : " (theirs)"),
+    (user.claude_code ? "allowed" : "not allowed") + (user.claude_code_set === undefined || user.claude_code_set === null ? "" : " (theirs)"),
     actions(user, named),
   ])));
   $("orcid-note").hidden = $("requests-box").hidden = !state.orcid;
@@ -443,6 +450,7 @@ async function show() {
   $("groups").replaceChildren(...(state.groups.length ? state.groups.map((group) => row([
     group.name, group.members.join(", "), group.llm || "-", group.variables.join(", "),
     group.own_key ? "allowed" : "not allowed",
+    group.claude_code ? "allowed" : "not allowed",
   ])) : [row(["No groups."])]));
   for (const select of document.querySelectorAll("select.providers")) {
     if (!select.options.length) select.replaceChildren(...state.providers.map((p) => new Option(p.label, p.id)));
@@ -536,6 +544,8 @@ $("change").addEventListener("submit", (event) => {
   if (form.get("groups").trim() || body.create) body.groups = form.get("groups").split(",").map((g) => g.trim()).filter(Boolean);
   const own = form.get("own_key");
   if (own) body.own_key = own === "inherit" ? "inherit" : own === "yes";
+  const claude = form.get("claude_code");
+  if (claude) body.claude_code = claude === "inherit" ? "inherit" : claude === "yes";
   change("/admin/api/user", body, body.create ? `${name} is added.` : `${name} is changed.`)
     .then(() => { event.target.password.value = ""; });
 });
@@ -564,6 +574,8 @@ $("group").addEventListener("submit", (event) => {
   if (form.get("drop") || form.get("key") || form.get("model").trim() || form.get("base_url").trim()) body.llm = llmOf(form);
   const own = form.get("own_key");
   if (own) body.own_key = own === "yes";
+  const claude = form.get("claude_code");
+  if (claude) body.claude_code = claude === "yes";
   change("/admin/api/group", body, `The group ${name} is changed.`)
     .then(() => { event.target.key.value = ""; });
 });

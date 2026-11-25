@@ -3464,3 +3464,60 @@ def test_mcp_needs_users_and_local(serve, tmp_path, monkeypatch):
     assert "--mcp" in command
     assert dict(zip(command, command[1:]))["--mcp-results-dir"].endswith(
         "repl-mcp")
+
+
+def test_claude_code_is_off_unless_an_admin_allows_it(
+    serve, tmp_path, monkeypatch
+):
+    users = _users(serve, tmp_path, ann=("a", ["lab"]), bob=("b", ["lab"]),
+                   eve=("e", []))
+    assert not any(users.claude_code(n) for n in ("ann", "bob", "eve"))
+    env, _ = serve.session_identity(users, "ann")
+    assert env[serve.MULTI_USER_ENV] == "1"
+    # A group allows its users; a user's own setting wins.
+    users.change_group("lab", claude_code=True)
+    users.change("bob", claude_code=False)
+    assert users.claude_code("ann") and not users.claude_code("bob")
+    assert not users.claude_code("eve")
+    env, _ = serve.session_identity(users, "ann")
+    assert serve.MULTI_USER_ENV not in env
+    env, _ = serve.session_identity(users, "bob")
+    assert env[serve.MULTI_USER_ENV] == "1"
+    users.change("bob", claude_code="inherit")
+    assert users.claude_code("bob")
+    users.change("eve", claude_code=True)
+    assert users.claude_code("eve")
+    # It is kept in the file, and a guest never has it.
+    again = serve.Users(users.path)
+    assert again.claude_code("ann") and again.claude_code("eve")
+    assert again.group_status("lab")["claude_code"]
+    assert again.status("eve")["claude_code"]
+    env, _ = serve.session_identity(again, "guest:abc")
+    assert env[serve.MULTI_USER_ENV] == "1"
+
+
+def test_the_command_line_allows_claude_code(
+    serve, tmp_path, monkeypatch, capsys
+):
+    users = _users(serve, tmp_path, ann=("a", ["admin"]), bob=("b", ["lab"]))
+    path = str(users.path)
+    serve.main(["--users", path, "--claude-code", "group:lab", "yes"])
+    serve.main(["--users", path, "--claude-code", "ann", "yes"])
+    users = serve.Users(users.path)
+    assert users.claude_code("bob") and users.claude_code("ann")
+    capsys.readouterr()
+    serve.main(["--users", path, "--list-users"])
+    assert capsys.readouterr().out.count("claude code") == 3
+    serve.main(["--users", path, "--claude-code", "ann", "inherit"])
+    assert not serve.Users(users.path).claude_code("ann")
+    with pytest.raises(SystemExit):
+        serve.main(["--users", path, "--claude-code", "group:lab", "inherit"])
+
+
+def test_a_users_file_rejects_a_claude_code_that_is_not_a_boolean(
+    serve, tmp_path
+):
+    path = tmp_path / "users.yaml"
+    path.write_text("users:\n  ann:\n    password: x\n    claude_code: maybe\n")
+    with pytest.raises(SystemExit):
+        serve.Users(path)

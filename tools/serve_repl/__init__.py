@@ -1139,6 +1139,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "me": self.user,
             "users": [{"name": name, "groups": entry["groups"],
                        "own_key_set": entry.get("own_key"),
+                       "claude_code_set": entry.get("claude_code"),
                        "orcid_name": entry.get("orcid_name", ""),
                        "orcid": entry.get("orcid", ""),
                        "orcid_only": "password" not in entry,
@@ -1220,11 +1221,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 groups=body.get("groups"), env=body.get("env"),
                 create=bool(body.get("create")), llm=body.get("llm"),
                 own_key=body.get("own_key"),
+                claude_code=body.get("claude_code"),
             )
             return {"ok": True}
         if path == "/admin/api/group":
             self.users.change_group(name, body.get("env"), body.get("llm"),
-                                    body.get("own_key"))
+                                    body.get("own_key"),
+                                    body.get("claude_code"))
             return {"ok": True}
         if path == "/admin/api/merge-orcid":
             into = str(body.get("into", ""))
@@ -2095,7 +2098,8 @@ def read_users_file(path: Path, new: bool = False) -> tuple:
         entry = dict(entry or {})
         group = {"env": _env(path, f"the group {name}", entry.get("env"))}
         _read_assistant(path, f"the group {name}", entry)
-        group.update({k: entry[k] for k in ("llm", "own_key") if k in entry})
+        group.update({k: entry[k] for k in ("llm", "own_key", "claude_code")
+                      if k in entry})
         kept[str(name)] = group
     return {str(name): entry for name, entry in users.items()}, kept
 
@@ -2103,15 +2107,17 @@ def read_users_file(path: Path, new: bool = False) -> tuple:
 def _read_assistant(path, owner: str, entry: dict) -> None:
     """Check the assistant of *entry*: ``llm``, its ``provider``, ``model``,
     ``base_url`` and ``key``, and ``own_key``, whether its users may give
-    their own key."""
+    their own key, and ``claude_code``, whether the sessions may use the
+    Claude Code provider, which runs on the sign-in of the server's user."""
     llm = entry.get("llm")
     if llm is not None:
         if not isinstance(llm, dict) or not llm.get("provider"):
             sys.exit(f"{path}: the llm of {owner} has no provider")
         entry["llm"] = {k: str(llm[k]) for k in
                         ("provider", "model", "base_url", "key") if llm.get(k)}
-    if "own_key" in entry and not isinstance(entry["own_key"], bool):
-        sys.exit(f"{path}: own_key of {owner} is true or false")
+    for policy in ("own_key", "claude_code"):
+        if policy in entry and not isinstance(entry[policy], bool):
+            sys.exit(f"{path}: {policy} of {owner} is true or false")
 
 
 def read_users(path: Path) -> dict:
@@ -2235,6 +2241,17 @@ class Users:
         return all(self._groups.get(g, {}).get("own_key", True)
                    for g in entry.get("groups", []))
 
+    def claude_code(self, name: str) -> bool:
+        """Whether the sessions of *name* may use the Claude Code provider,
+        which runs on the sign-in of the user running the server: as they
+        say, else if one of their groups says so; never unless an admin said
+        so."""
+        entry = self.current().get(name, {})
+        if "claude_code" in entry:
+            return entry["claude_code"]
+        return any(self._groups.get(g, {}).get("claude_code", False)
+                   for g in entry.get("groups", []))
+
     def identity(self, name: str) -> tuple:
         """Return the variables of the sessions of *name* and their groups,
         as :class:`~neurolang_apps.utils.tui.sessions.Sessions` asks: their
@@ -2255,6 +2272,7 @@ class Users:
         their own key; never a key."""
         entry = self.current()[name]
         allowed = {"own_key": self.own_key(name),
+                   "claude_code": self.claude_code(name),
                    "variables": sorted(entry["env"])}
         assistant = self.assistant(name)
         if not assistant:
@@ -2274,13 +2292,15 @@ class Users:
         return {"variables": sorted(entry.get("env", {})),
                 "llm": f"{llm['provider']} ({llm.get('model') or 'its model'})"
                        if llm else "",
-                "own_key": entry.get("own_key", True)}
+                "own_key": entry.get("own_key", True),
+                "claude_code": entry.get("claude_code", False)}
 
     def change_group(self, group: str, env=None, llm=None,
-                     own_key=None) -> None:
+                     own_key=None, claude_code=None) -> None:
         """Change the variables *env* of *group* (a None value removes
         one), its assistant *llm* and whether its users may give their own
-        key, *own_key* (see :meth:`change`); a group left with nothing is
+        key, *own_key* (see :meth:`change`), and whether they may use the
+        Claude Code provider, *claude_code*; a group left with nothing is
         forgotten."""
         with self._changing():
             if not group or not group.strip():
@@ -2289,19 +2309,20 @@ class Users:
                       for n, g in self._groups.items()}
             entry = groups.setdefault(group, {"env": {}})
             _change_env(entry["env"], env)
-            _change_assistant(entry, llm, own_key)
+            _change_assistant(entry, llm, own_key, claude_code)
             if not entry["env"] and set(entry) == {"env"}:
                 del groups[group]
             self._write(self._users, groups)
 
     def change(self, name: str, password=None, groups=None, env=None,
                create: bool = False, llm=None, own_key=None,
-               orcid_name=None) -> None:
+               orcid_name=None, claude_code=None) -> None:
         """Add the user *name* (*create*) or change theirs: the *password*,
         the *groups*, the variables *env* (a None value removes one), their
         assistant *llm* (see :func:`_change_assistant`), whether they may
         give their own key, *own_key* (``"inherit"``: as their groups say),
-        and the name ORCID gives a user named by their iD, *orcid_name*.
+        whether they may use the Claude Code provider, *claude_code* (the
+        same), and the name ORCID gives a user named by their iD, *orcid_name*.
         A new user has a password, or an ORCID iD as their name.
         """
         if password and len(password) < SHORTEST_PASSWORD:
@@ -2329,7 +2350,7 @@ class Users:
                 entry["groups"] = sorted({str(g).strip() for g in groups
                                           if str(g).strip()})
             _change_env(entry["env"], env)
-            _change_assistant(entry, llm, own_key)
+            _change_assistant(entry, llm, own_key, claude_code)
             self._keep_an_admin(users)
             self._write(users)
 
@@ -2410,7 +2431,7 @@ class Users:
                 target["orcid_name"] = source["orcid_name"]
             target["groups"] = sorted(set(target["groups"])
                                       | set(source["groups"]))
-            for key in ("llm", "own_key"):
+            for key in ("llm", "own_key", "claude_code"):
                 if key in source and key not in target:
                     target[key] = source[key]
             for variable, value in source["env"].items():
@@ -2510,7 +2531,8 @@ class Users:
 
         groups = self._groups if groups is None else groups
         kept = {"users": {name: {key: value for key, value in entry.items()
-                                 if value or key in ("password", "own_key")}
+                                 if value or key in ("password", "own_key",
+                                                    "claude_code")}
                           for name, entry in users.items()}}
         if groups:
             kept["groups"] = groups
@@ -2538,12 +2560,13 @@ def _mcp_digest(token: str) -> str:
     return hashlib.sha256(str(token).encode()).hexdigest()
 
 
-def _change_assistant(entry: dict, llm, own_key) -> None:
+def _change_assistant(entry: dict, llm, own_key, claude_code=None) -> None:
     """Change the assistant of a user's or group's *entry*: *llm*, a
     provider of the page's form with its ``model``, ``base_url`` (that of
     ``custom``) and ``key`` (the key it had kept if none is given, for the
     same provider and address only), or False to remove it, None to leave
-    it; *own_key* True, False, ``"inherit"`` or None."""
+    it; *own_key* and *claude_code* (whether the sessions may use the Claude
+    Code provider) True, False, ``"inherit"`` or None."""
     if llm is False:
         entry.pop("llm", None)
     elif llm:
@@ -2568,10 +2591,11 @@ def _change_assistant(entry: dict, llm, own_key) -> None:
         entry["llm"] = {k: str(v) for k, v in {
             "provider": provider, "model": llm.get("model"),
             "base_url": base_url, "key": key}.items() if v}
-    if own_key == "inherit":
-        entry.pop("own_key", None)
-    elif own_key is not None:
-        entry["own_key"] = bool(own_key)
+    for policy, choice in (("own_key", own_key), ("claude_code", claude_code)):
+        if choice == "inherit":
+            entry.pop(policy, None)
+        elif choice is not None:
+            entry[policy] = bool(choice)
 
 
 def guest_identity(strip=()) -> tuple:
@@ -2587,13 +2611,15 @@ def session_identity(users: "Users", name: str, strip=()) -> tuple:
     of *users* or a guest: those of :func:`guest_identity`, or the server's
     keys *strip* names under the user's and their groups'; and, in all, that
     the server is shared, so that no one uses the sign-in to Claude of whoever
-    runs it."""
+    runs it, unless an admin allows it to a user or a group (``claude_code``)."""
     if name.startswith(GUEST_PREFIX):
         env, groups = guest_identity(strip)
     else:
         env, groups = users.identity(name)
         # The server's keys, under the user's and their groups'.
         env = {**{n: os.environ[n] for n in strip if n in os.environ}, **env}
+    if not name.startswith(GUEST_PREFIX) and users.claude_code(name):
+        return env, groups  # an admin allowed them the sign-in
     return {**env, MULTI_USER_ENV: "1"}, groups
 
 
@@ -2917,7 +2943,7 @@ def read_password(path: Path) -> str:
 NOT_CONFIGURED = {"help", "config", "daemon", "hash_password", "list_users",
                   "add_user", "set_password", "set_groups", "set_key",
                   "set_group_key", "set_llm", "set_group_llm", "own_key",
-                  "remove_user", "list_requests", "approve_request",
+                  "claude_code", "remove_user", "list_requests", "approve_request",
                   "decline_request", "merge_orcid", "separate_orcid",
                   "groups"}
 
@@ -3552,6 +3578,13 @@ def parse_args(argv=None):
                         help="let a user, or the users of a group, give "
                         "their own key in the page, or not (a user's "
                         "inherit: as their groups say)")
+    manage.add_argument("--claude-code", nargs=2,
+                        metavar=("NAME|group:GROUP", "yes|no|inherit"),
+                        help="let a user, or the users of a group, use the "
+                        "Claude Code provider, which runs on the sign-in to "
+                        "claude of whoever runs the server: never unless "
+                        "you say yes (a user's inherit: as their groups "
+                        "say)")
     manage.add_argument("--remove-user", metavar="NAME",
                         help="remove the user NAME")
     manage.add_argument("--merge-orcid", nargs=2, metavar=("ORCID", "USER"),
@@ -3764,12 +3797,14 @@ def manage_users(args) -> None:
                       + (f" ({status['variable']})"
                          if status.get("variable") else "")
                       + f"\t{status.get('provider', '')}"
-                      + ("" if status["own_key"] else "\tno own key"))
+                      + ("" if status["own_key"] else "\tno own key")
+                      + ("\tclaude code" if status["claude_code"] else ""))
             for group in sorted(groups):
                 info = users.group_status(group)
                 print(f"group {group}\tassistant: {info['llm'] or '-'}"
                       f"\tvariables: {', '.join(info['variables']) or '-'}"
-                      + ("" if info["own_key"] else "\tno own key"))
+                      + ("" if info["own_key"] else "\tno own key")
+                      + ("\tclaude code" if info["claude_code"] else ""))
             return
         requests = orcid.AccountRequests(orcid.requests_path(args.users))
         if args.list_requests:
@@ -3844,6 +3879,18 @@ def manage_users(args) -> None:
             else:
                 users.change(target, own_key=own)
             done = f"{target} may give their own key: {choice}"
+        elif args.claude_code:
+            target, choice = args.claude_code
+            if choice not in ("yes", "no", "inherit"):
+                sys.exit("--claude-code: yes, no or inherit")
+            allow = {"yes": True, "no": False}.get(choice, "inherit")
+            if target.startswith("group:"):
+                if allow == "inherit":
+                    sys.exit("A group says yes or no")
+                users.change_group(target[6:], claude_code=allow)
+            else:
+                users.change(target, claude_code=allow)
+            done = f"{target} may use Claude Code: {choice}"
         elif args.set_group_key:
             group, variable = args.set_group_key
             key = getpass.getpass(f"{variable} of the group {group} "
@@ -3875,7 +3922,7 @@ def main(argv=None) -> None:
     if (args.list_users or args.add_user or args.set_password
             or args.set_groups or args.set_key or args.set_group_key
             or args.set_llm or args.set_group_llm or args.own_key
-            or args.remove_user or args.list_requests
+            or args.claude_code or args.remove_user or args.list_requests
             or args.approve_request or args.decline_request
             or args.merge_orcid or args.separate_orcid):
         return manage_users(args)
