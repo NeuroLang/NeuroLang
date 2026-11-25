@@ -31,4 +31,9 @@ Committed results are in `results/`. `hpo_phase1.jsonl` and the calibration dump
 | Engine against numpy | `hpo_lifted_check.py` | `results/hpo_lifted_check.jsonl` |
 | Phase 2, agent and direct Sonnet (60 patients) | `step9_hpo_phase2.py`, `hpo_phase2_summary.py`, `hpo_phase2_family.py` | `results/hpo_phase2.jsonl` |
 | Hybrid, candidates to Sonnet (100 patients) | `step14_hpo_hybrid.py` | `results/hybrid_results.json`, `results/hybrid_analysis.txt` |
-| Post hoc: Sonnet's advantage by annotation coverage | `post_hoc_coverage.py` | `RESULTS_HYBRID.md` |
+| Post hoc: Sonnet's advantage by annotation coverage | `post_hoc_coverage.py` | `results/post_hoc_coverage.txt` |
+| Union hybrid: development, plan, Sonnet arms | `union_hybrid.py dev`, `plan`; `run_union.sh` | `results/union_dev.json`, `results/union_plan.json`, `results/union_results.json` |
+
+`step14_hpo_hybrid.py` ranks the candidates with numpy's default (unstable) sort. Tied posteriors may come out in a different order on another
+machine, so its H1 to H3 prompts are not replayed from a cache made elsewhere (87 of 100 were not, on the machine of the union run). Its H0 prompts
+are, and the committed results stand. `union_hybrid.py` uses a stable sort.

@@ -1,0 +1,1474 @@
+[
+ {
+  "pid": 163,
+  "disease": "OMIM:306955",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 244,
+  "disease": "OMIM:612653",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 139,
+  "disease": "OMIM:269150",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 235,
+  "disease": "OMIM:612313",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 198,
+  "disease": "OMIM:606693",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 183,
+  "disease": "OMIM:604213",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 333,
+  "disease": "OMIM:620465",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 215,
+  "disease": "OMIM:610168",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 172,
+  "disease": "OMIM:312750",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 45,
+  "disease": "OMIM:150250",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 195,
+  "disease": "OMIM:606574",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 343,
+  "disease": "OMIM:620537",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 59,
+  "disease": "OMIM:159550",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 168,
+  "disease": "OMIM:311200",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 61,
+  "disease": "OMIM:159550",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 153,
+  "disease": "OMIM:277600",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 56,
+  "disease": "OMIM:154700",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 42,
+  "disease": "OMIM:148050",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 24,
+  "disease": "OMIM:119600",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 317,
+  "disease": "OMIM:618343",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 300,
+  "disease": "OMIM:616914",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 301,
+  "disease": "OMIM:616914",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 83,
+  "disease": "OMIM:201910",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 147,
+  "disease": "OMIM:272300",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 194,
+  "disease": "OMIM:606574",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 146,
+  "disease": "OMIM:272300",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 271,
+  "disease": "OMIM:615582",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 104,
+  "disease": "OMIM:214800",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 22,
+  "disease": "OMIM:119600",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 324,
+  "disease": "OMIM:620155",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 306,
+  "disease": "OMIM:617140",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 63,
+  "disease": "OMIM:159950",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 214,
+  "disease": "OMIM:610031",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 273,
+  "disease": "OMIM:615582",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 347,
+  "disease": "OMIM:620537",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 143,
+  "disease": "OMIM:272300",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 159,
+  "disease": "OMIM:301040",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 166,
+  "disease": "OMIM:311200",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 50,
+  "disease": "OMIM:151100",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 5,
+  "disease": "OMIM:103580",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 289,
+  "disease": "OMIM:616276",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 245,
+  "disease": "OMIM:612653",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 274,
+  "disease": "OMIM:615582",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 287,
+  "disease": "OMIM:616276",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 250,
+  "disease": "OMIM:613795",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 230,
+  "disease": "OMIM:612164",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 100,
+  "disease": "OMIM:209900",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 339,
+  "disease": "OMIM:620535",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 318,
+  "disease": "OMIM:618343",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 109,
+  "disease": "OMIM:215700",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 290,
+  "disease": "OMIM:616354",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 129,
+  "disease": "OMIM:255310",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 152,
+  "disease": "OMIM:277600",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 304,
+  "disease": "OMIM:617140",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 346,
+  "disease": "OMIM:620537",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 43,
+  "disease": "OMIM:148050",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 325,
+  "disease": "OMIM:620155",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 79,
+  "disease": "OMIM:188400",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 283,
+  "disease": "OMIM:616211",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 218,
+  "disease": "OMIM:610168",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 192,
+  "disease": "OMIM:606574",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 28,
+  "disease": "OMIM:130050",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 25,
+  "disease": "OMIM:130000",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 223,
+  "disease": "OMIM:611590",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 124,
+  "disease": "OMIM:248250",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 246,
+  "disease": "OMIM:612653",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 226,
+  "disease": "OMIM:611590",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 128,
+  "disease": "OMIM:255310",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 126,
+  "disease": "OMIM:252650",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 151,
+  "disease": "OMIM:277600",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 341,
+  "disease": "OMIM:620535",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 263,
+  "disease": "OMIM:615032",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 189,
+  "disease": "OMIM:605275",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 328,
+  "disease": "OMIM:620455",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 345,
+  "disease": "OMIM:620537",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 258,
+  "disease": "OMIM:614833",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 17,
+  "disease": "OMIM:115200",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 342,
+  "disease": "OMIM:620535",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 91,
+  "disease": "OMIM:206700",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 133,
+  "disease": "OMIM:268310",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 169,
+  "disease": "OMIM:311200",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 204,
+  "disease": "OMIM:608393",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 344,
+  "disease": "OMIM:620537",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 76,
+  "disease": "OMIM:188400",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 23,
+  "disease": "OMIM:119600",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 259,
+  "disease": "OMIM:614833",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 337,
+  "disease": "OMIM:620465",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 335,
+  "disease": "OMIM:620465",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 264,
+  "disease": "OMIM:615032",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 156,
+  "disease": "OMIM:300088",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 57,
+  "disease": "OMIM:154700",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 232,
+  "disease": "OMIM:612313",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 16,
+  "disease": "OMIM:115200",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 106,
+  "disease": "OMIM:215700",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 231,
+  "disease": "OMIM:612164",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 282,
+  "disease": "OMIM:616211",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 210,
+  "disease": "OMIM:609528",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 136,
+  "disease": "OMIM:268310",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 293,
+  "disease": "OMIM:616831",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 108,
+  "disease": "OMIM:215700",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 95,
+  "disease": "OMIM:208920",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 13,
+  "disease": "OMIM:115200",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 294,
+  "disease": "OMIM:616831",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 134,
+  "disease": "OMIM:268310",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 340,
+  "disease": "OMIM:620535",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 295,
+  "disease": "OMIM:616831",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 149,
+  "disease": "OMIM:277600",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 135,
+  "disease": "OMIM:268310",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 94,
+  "disease": "OMIM:208920",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 236,
+  "disease": "OMIM:612313",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 89,
+  "disease": "OMIM:206700",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 62,
+  "disease": "OMIM:159550",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 65,
+  "disease": "OMIM:161800",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 32,
+  "disease": "OMIM:130050",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 81,
+  "disease": "OMIM:201910",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 331,
+  "disease": "OMIM:620455",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 96,
+  "disease": "OMIM:208920",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 186,
+  "disease": "OMIM:605275",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 224,
+  "disease": "OMIM:611590",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 93,
+  "disease": "OMIM:208920",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 92,
+  "disease": "OMIM:206700",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 70,
+  "disease": "OMIM:167320",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 171,
+  "disease": "OMIM:312750",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 209,
+  "disease": "OMIM:609528",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 243,
+  "disease": "OMIM:612653",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 54,
+  "disease": "OMIM:154700",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 336,
+  "disease": "OMIM:620465",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 261,
+  "disease": "OMIM:615032",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 20,
+  "disease": "OMIM:119600",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 201,
+  "disease": "OMIM:606693",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 240,
+  "disease": "OMIM:612463",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 237,
+  "disease": "OMIM:612463",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 219,
+  "disease": "OMIM:610168",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 211,
+  "disease": "OMIM:609528",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 51,
+  "disease": "OMIM:151100",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 251,
+  "disease": "OMIM:613795",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 90,
+  "disease": "OMIM:206700",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 30,
+  "disease": "OMIM:130050",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 316,
+  "disease": "OMIM:618343",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 165,
+  "disease": "OMIM:311200",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 270,
+  "disease": "OMIM:615582",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 71,
+  "disease": "OMIM:175200",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 285,
+  "disease": "OMIM:616276",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 60,
+  "disease": "OMIM:159550",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 228,
+  "disease": "OMIM:612164",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 220,
+  "disease": "OMIM:610968",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 53,
+  "disease": "OMIM:154700",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 120,
+  "disease": "OMIM:248250",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 252,
+  "disease": "OMIM:613795",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 308,
+  "disease": "OMIM:617140",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 15,
+  "disease": "OMIM:115200",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 52,
+  "disease": "OMIM:151100",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 213,
+  "disease": "OMIM:609528",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 311,
+  "disease": "OMIM:617730",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 253,
+  "disease": "OMIM:613795",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 47,
+  "disease": "OMIM:150250",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 101,
+  "disease": "OMIM:214800",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 288,
+  "disease": "OMIM:616276",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 41,
+  "disease": "OMIM:148050",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 105,
+  "disease": "OMIM:214800",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 180,
+  "disease": "OMIM:601776",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 84,
+  "disease": "OMIM:201910",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 196,
+  "disease": "OMIM:606574",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 227,
+  "disease": "OMIM:612164",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 78,
+  "disease": "OMIM:188400",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 310,
+  "disease": "OMIM:617730",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 3,
+  "disease": "OMIM:103580",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 280,
+  "disease": "OMIM:616211",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 122,
+  "disease": "OMIM:248250",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 298,
+  "disease": "OMIM:616914",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 233,
+  "disease": "OMIM:612313",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 323,
+  "disease": "OMIM:619656",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 145,
+  "disease": "OMIM:272300",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 241,
+  "disease": "OMIM:612463",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 197,
+  "disease": "OMIM:606693",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 7,
+  "disease": "OMIM:103580",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 199,
+  "disease": "OMIM:606693",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 77,
+  "disease": "OMIM:188400",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 188,
+  "disease": "OMIM:605275",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 332,
+  "disease": "OMIM:620455",
+  "cell": [
+   2,
+   2
+  ]
+ },
+ {
+  "pid": 262,
+  "disease": "OMIM:615032",
+  "cell": [
+   0,
+   0
+  ]
+ },
+ {
+  "pid": 330,
+  "disease": "OMIM:620455",
+  "cell": [
+   2,
+   0
+  ]
+ },
+ {
+  "pid": 140,
+  "disease": "OMIM:269150",
+  "cell": [
+   0,
+   2
+  ]
+ },
+ {
+  "pid": 238,
+  "disease": "OMIM:612463",
+  "cell": [
+   2,
+   2
+  ]
+ }
+]

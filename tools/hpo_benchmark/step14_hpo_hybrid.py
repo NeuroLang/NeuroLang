@@ -8,7 +8,6 @@ from hpo_names import disease_names, term_labels, norm
 
 K = 30
 MODEL = "claude-sonnet-5-5"
-KEY = os.environ["ANTHROPIC_API_INRIA_KEY"]
 CACHE = Path("results/hybrid_cache"); CACHE.mkdir(exist_ok=True, parents=True)
 W = World(); NAMES = disease_names(); LABELS = term_labels()
 cases = load_cases(W.replaced)
@@ -18,15 +17,6 @@ real = [c for c in cases if c[0] in test]
 used_pids = {json.loads(l)["pid"] for l in open("results/hpo_phase2.jsonl")}
 CELLS = [(0, 0), (2, 0), (0, 2), (2, 2)]          # (spurious idx, dropped idx)
 
-rng = random.Random(11)
-by_dis = {}
-for pid, (d, obs) in enumerate(real):
-    if pid not in used_pids and d in W.di:
-        by_dis.setdefault(d, []).append(pid)
-dis = sorted(by_dis); rng.shuffle(dis)
-plan = [(rng.choice(by_dis[d]), CELLS[k % 4]) for k, d in enumerate(dis[:100])]
-print("patients", len(plan), "diseases", len({real[p][0] for p, _ in plan}), flush=True)
-
 
 def ask(prompt):
     key = hashlib.sha256(prompt.encode()).hexdigest()
@@ -35,7 +25,7 @@ def ask(prompt):
         return json.loads(f.read_text())
     req = urllib.request.Request("https://api.anthropic.com/v1/messages",
         data=json.dumps({"model": MODEL, "max_tokens": 1200, "messages": [{"role": "user", "content": prompt}]}).encode(),
-        headers={"x-api-key": KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+        headers={"x-api-key": os.environ["ANTHROPIC_API_INRIA_KEY"], "anthropic-version": "2023-06-01", "content-type": "application/json"})
     for attempt in range(4):
         try:
             d = json.load(urllib.request.urlopen(req, timeout=180)); break
@@ -110,26 +100,40 @@ def run_patient(args):
     return rec
 
 
-with ThreadPoolExecutor(6) as pool:
-    recs = list(pool.map(run_patient, plan))
-json.dump(recs, open("results/hybrid_results.json", "w"))
-rk = lambda x: np.inf if x is None else float(x)
-def met(rs, k):
-    r = np.array([rk(x[k]) for x in rs]); return 100 * (r == 1).mean(), 100 * (r <= 10).mean(), np.mean(1 / r)
-print("recall@%d: %.1f%%" % (K, 100 * np.mean([r["recall_k"] for r in recs])), "| unparsed", {a: sum(not r[a + "_parsed"] for r in recs) for a in ("H1", "H2", "H3")})
-arms = [("posterior alone", "posterior_rank"), ("H0 direct", "H0"), ("H1 candidates", "H1"), ("H2 cand.+probabilities", "H2"), ("H3 cand. ranked", "H3")]
-rngb = random.Random(0); n = len(recs)
-draws = [[rngb.randrange(n) for _ in range(n)] for _ in range(5000)]
-print(f"{'arm':24} {'top1':>5} {'top10':>6} {'MRR':>6} {'95% CI':>15}")
-for name, key in arms:
-    t1, t10, m = met(recs, key)
-    bs = sorted(met([recs[i] for i in d], key)[2] for d in draws)
-    print(f"{name:24} {t1:5.1f} {t10:6.1f} {m:6.3f} [{bs[125]:.3f},{bs[4874]:.3f}]")
-print("\npaired MRR differences, 95% CI over patients")
-for a, b in (("H1", "H0"), ("H2", "H0"), ("H3", "H0"), ("H2", "H1"), ("H3", "H1"), ("H1", "posterior_rank"), ("H2", "posterior_rank"), ("H3", "posterior_rank")):
-    f = lambda rs: met(rs, a)[2] - met(rs, b)[2]
-    bs = sorted(f([recs[i] for i in d]) for d in draws)
-    print(f"  {a} - {b:15} {f(recs):+.3f} [{bs[125]:+.3f}, {bs[4874]:+.3f}]")
-for lab, sel in (("true disease among candidates", lambda r: r["recall_k"]), ("not among candidates", lambda r: not r["recall_k"])):
-    rs = [r for r in recs if sel(r)]
-    print(f"\n{lab} (n={len(rs)}): " + " | ".join(f"{name.split()[0]} {met(rs, key)[2]:.3f}" for name, key in arms))
+def main():
+    rng = random.Random(11)
+    by_dis = {}
+    for pid, (d, obs) in enumerate(real):
+        if pid not in used_pids and d in W.di:
+            by_dis.setdefault(d, []).append(pid)
+    dis = sorted(by_dis); rng.shuffle(dis)
+    plan = [(rng.choice(by_dis[d]), CELLS[k % 4]) for k, d in enumerate(dis[:100])]
+    print("patients", len(plan), "diseases", len({real[p][0] for p, _ in plan}), flush=True)
+
+    with ThreadPoolExecutor(6) as pool:
+        recs = list(pool.map(run_patient, plan))
+    json.dump(recs, open("results/hybrid_results.json", "w"))
+    rk = lambda x: np.inf if x is None else float(x)
+    def met(rs, k):
+        r = np.array([rk(x[k]) for x in rs]); return 100 * (r == 1).mean(), 100 * (r <= 10).mean(), np.mean(1 / r)
+    print("recall@%d: %.1f%%" % (K, 100 * np.mean([r["recall_k"] for r in recs])), "| unparsed", {a: sum(not r[a + "_parsed"] for r in recs) for a in ("H1", "H2", "H3")})
+    arms = [("posterior alone", "posterior_rank"), ("H0 direct", "H0"), ("H1 candidates", "H1"), ("H2 cand.+probabilities", "H2"), ("H3 cand. ranked", "H3")]
+    rngb = random.Random(0); n = len(recs)
+    draws = [[rngb.randrange(n) for _ in range(n)] for _ in range(5000)]
+    print(f"{'arm':24} {'top1':>5} {'top10':>6} {'MRR':>6} {'95% CI':>15}")
+    for name, key in arms:
+        t1, t10, m = met(recs, key)
+        bs = sorted(met([recs[i] for i in d], key)[2] for d in draws)
+        print(f"{name:24} {t1:5.1f} {t10:6.1f} {m:6.3f} [{bs[125]:.3f},{bs[4874]:.3f}]")
+    print("\npaired MRR differences, 95% CI over patients")
+    for a, b in (("H1", "H0"), ("H2", "H0"), ("H3", "H0"), ("H2", "H1"), ("H3", "H1"), ("H1", "posterior_rank"), ("H2", "posterior_rank"), ("H3", "posterior_rank")):
+        f = lambda rs: met(rs, a)[2] - met(rs, b)[2]
+        bs = sorted(f([recs[i] for i in d]) for d in draws)
+        print(f"  {a} - {b:15} {f(recs):+.3f} [{bs[125]:+.3f}, {bs[4874]:+.3f}]")
+    for lab, sel in (("true disease among candidates", lambda r: r["recall_k"]), ("not among candidates", lambda r: not r["recall_k"])):
+        rs = [r for r in recs if sel(r)]
+        print(f"\n{lab} (n={len(rs)}): " + " | ".join(f"{name.split()[0]} {met(rs, key)[2]:.3f}" for name, key in arms))
+
+
+if __name__ == "__main__":
+    main()
