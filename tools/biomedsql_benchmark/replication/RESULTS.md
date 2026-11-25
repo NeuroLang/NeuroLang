@@ -176,3 +176,31 @@ Notes:
 
 `freeze.py check` now reports the engine files as changed since the freeze. That is expected: the frozen agent runs are reproducible at commit
 `1f3ea39ce`. `support` and `support_prior` are unchanged (checked against the closed forms and against `results/eval_answers.jsonl`).
+
+# Leak checks, after the evaluation (`leak_checks.py`, `results/leak_checks.txt`)
+
+Two ways information could leak from the fitting genes into the evaluation, checked after the results above (so not pre-registered):
+- **Linked genes.** Genes in one genomic region share a GWAS signal, so their SMR results are correlated, and the split was by gene. Loci were
+  built from the probes' positions (`ProbeChr`, `Probe_bp`), joining genes within 1 Mb: 65 loci over the 353 genes. **111 of the 131 evaluation
+  genes share a locus with a fitting gene** (992 of 1,197 predictions); only 205 predictions in 13 loci are clean.
+- **The held-out dataset.** The fit had seen how each held-out dataset behaves on other genes. Check 2 refits π, a and b without the held-out
+  dataset's outcomes.
+
+| Set | `support_prior` | `support_graded` | logistic | L2 | graded - prior | graded - L2 |
+|---|---|---|---|---|---|---|
+| As published, 1,197 | 0.147 | 0.143 | 0.131 | 0.129 | -0.0036 [-0.0059, -0.0016] | +0.014 [+0.006, +0.023] |
+| Clean loci only, 205 (13 loci) | 0.152 | 0.149 | 0.137 | 0.138 | -0.0033 [-0.0100, +0.0002] | +0.011 [-0.005, +0.039] |
+| Locus-grouped 5-fold refit, out of fold, 3,960 (65 loci) | 0.137 | 0.135 | 0.127 | - | -0.0026 [-0.0049, +0.0011] | - |
+| Dataset-nested refit, 1,197 | 0.147 | 0.145 | - | 0.129 | -0.0026 [-0.0048, -0.0007] | +0.016 [+0.007, +0.025] |
+
+Intervals resample loci in the first three rows below the published one, and genes in the last. With a locus-grouped split, the logistic stays
+better than `support_graded` (-0.0078 [-0.0120, -0.0050]).
+
+Corrected reading:
+- **The evaluation split leaked**: most evaluation genes are linked to fitting genes. The point estimate of the gain of `support_graded` over
+  `support_prior` barely moves (-0.0026 to -0.0036 everywhere), but **once the split respects loci its interval reaches 0**. "The graded evidence
+  generalises" is therefore not established: it holds with a gene split and with a dataset-nested fit, and is borderline with a locus split.
+- Leaving the held-out dataset out of the fit changes little (graded still better than prior, the LLM still better than graded).
+- The ordering logistic < graded <= prior holds under every split. The gap of the engine's predicates to the LLM holds except on the 13 clean loci,
+  where the interval is too wide to say.
+- For future evaluations of this kind, split by locus, not by gene.
