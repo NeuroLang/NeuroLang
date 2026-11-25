@@ -216,6 +216,9 @@ class SIPS(ABC):
         # variables at them in the rule whose arcs are being created
         self.needed_positions = invariants["needed_positions"]
         self.needed_variables = frozenset()
+        # whether the literals of a body bind the variables of those right
+        # of them, or only the constants and the bound head do
+        self.bind_from_body = True
 
     def variables_needed(self, rule):
         """The variables of the body of *rule* at the arguments of a
@@ -375,6 +378,13 @@ class LeftToRightSIPS(SIPS):
         constants and the rules sharing its variables, which restrict
         it: ``ri_task(t), definition(t, d), sim(d, s)``.
 
+    Without ``bind_from_body``, a literal of the intensional database
+    binds only if it has a variable a predicate of the rule needs bound:
+    a magic predicate otherwise gets the bindings of the head and of the
+    constants alone, and reads no predicate the rewrite defines but magic
+    ones, so the rewrite has no cycle the program does not have, but
+    through such a literal.
+
     Probabilistic literals are those of probabilistic facts and choices,
     of within-language probabilistic queries, and of the predicates
     depending on probabilistic facts or choices: magic predicates are thus
@@ -418,7 +428,10 @@ class LeftToRightSIPS(SIPS):
         # positive, non probabilistic predicates
         if (
             unadorned_predicate_symbol(pred.functor) not in self.prob_symbols
-            and not is_neg
+            and not is_neg and (
+                self.bind_from_body
+                or not self.needed_variables.isdisjoint(p.args)
+            )
         ):
             bound_variables.update(
                 arg for arg in p.args if isinstance(arg, Symbol)
@@ -732,16 +745,24 @@ def magic_rewrite(
     # rewrite kept: unrewritten, the program has no answer (the relation of
     # similarities to a query text can be the magic predicate of its own
     # percentile). Without such predicates, the program is solved
-    # unrewritten.
+    # unrewritten. Before either, when the program reads a large stored
+    # relation, it is rewritten with the bindings of the constants, the
+    # heads and the needed arguments alone, which rarely has a cycle of
+    # its own (see LeftToRightSIPS): computed whole, its rules would read
+    # all of that relation, as ``endpoint_anterior_of(x, e, t, h) :-
+    # endpoint_coord(x, e, 1, v), term_box_hi(t, h, 1, b), v > b`` of a
+    # tractogram, 600 k endpoints by 285 term boxes.
     rules = datalog.intensional_database().get(query.functor)
     reachable = reachable_code(getattr(rules, "formulas", ()), datalog)
     recursive = set().union(*recursive_components(reachable.formulas))
     unbound, unbinds_left, checked = set(), 1, recursive
+    bind_from_body = True
     invariants = program_invariants(datalog)
     while True:
         try:
             return _magic_rewrite(
-                query, datalog, seed_from_edb, unbound, invariants, checked
+                query, datalog, seed_from_edb, unbound, invariants, checked,
+                bind_from_body,
             )
         except UnstratifiedMagicSetsRewriteError as error:
             predicate = error.predicate
@@ -760,6 +781,17 @@ def magic_rewrite(
                 failure = error
         except NewRecursionInMagicSetsRewriteError as error:
             failure = error
+        if (
+            bind_from_body
+            and isinstance(failure, NewRecursionInMagicSetsRewriteError)
+            and any(
+                _reads_a_large_relation(rule, datalog)
+                for rule in reachable.formulas
+            )
+        ):
+            unbound, bind_from_body = set(), False
+            continue
+        bind_from_body = True
         needed = needed_positions(datalog)
         others = set(datalog.intensional_database()) - set(needed)
         if others <= unbound or not any(
@@ -777,13 +809,16 @@ def _magic_rewrite(
     unbound_predicates,
     invariants=None,
     recursive=None,
+    bind_from_body=True,
 ):
     """:func:`magic_rewrite`, the *unbound_predicates* left unbound; the
     rewrite must not add a cycle without a predicate of *recursive*, the
-    recursive predicates of the program, when it is given."""
+    recursive predicates of the program, when it is given; the literals
+    of a body bind those right of them if *bind_from_body*."""
     # 1. Create a SIPS and use it to adorn the code
     sips = LeftToRightSIPS(datalog, seed_from_edb, invariants)
     sips.unbound_predicates = unbound_predicates
+    sips.bind_from_body = bind_from_body
     adorned_code, constant_predicates = reachable_adorned_code(
         query, datalog, sips
     )
@@ -1115,6 +1150,18 @@ def connected_literals(predicate, literals):
                 connected.add(i)
                 added = True
     return [literal for i, literal in enumerate(literals) if i in connected]
+
+
+def _reads_a_large_relation(rule, datalog):
+    """Whether the body of *rule* reads a stored relation of more than
+    ``[MAGIC_SETS] seed_rows`` tuples."""
+    edb = datalog.extensional_database()
+    rows = config.getint("MAGIC_SETS", "seed_rows", fallback=100)
+    return any(
+        isinstance(atom, FunctionApplication) and atom.functor in edb
+        and len(edb[atom.functor].value) > rows
+        for atom, _ in _literals(rule.antecedent)
+    )
 
 
 def _symbols_of(literal):

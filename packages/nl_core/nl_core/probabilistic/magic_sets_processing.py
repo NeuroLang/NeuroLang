@@ -2,6 +2,7 @@ import numpy as np
 
 from ..datalog.basic_representation import DatalogProgram
 from ..datalog.expression_processing import dependency_matrix
+from ..datalog.magic_sets import adorned_base_name
 from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import ExpressionWalker
 from nl_expr.expressions import FunctionApplication, Symbol
@@ -105,6 +106,14 @@ def _wlq_dependencies(wlq_symb_idx, dep_mat, wlq_symb_idxs):
     return deps
 
 
+def _noprob_symbol(functor):
+    """The symbol of the rule computing what the query *functor* is the
+    probability of, named after its adornment too: the numerator
+    ``q^cond_num`` and the denominator ``q^cond_den`` of a conditional
+    query share the name ``q``, but not their arguments."""
+    return Symbol(f"{adorned_base_name(functor)}_noprob")
+
+
 def _is_prob_arg(arg):
     return isinstance(arg, ProbabilisticQuery) or (
         get_generic_type(type(arg)) is FunctionApplication
@@ -138,7 +147,7 @@ class ReplaceWLQWalker(ExpressionWalker):
     def replace_probabilistic_queries(self, impl):
         functor = impl.consequent.functor
         if functor in self.symbols:
-            new_symbol = Symbol(f"{functor.name}_noprob")
+            new_symbol = _noprob_symbol(functor)
             non_prob_args = tuple(
                 arg for arg in impl.consequent.args if not _is_prob_arg(arg)
             )
@@ -167,6 +176,6 @@ class ReplaceWLQWalker(ExpressionWalker):
                 for arg, wlq_arg in zip(expr.args, wlq_expr.args)
                 if not _is_prob_arg(wlq_arg)
             )
-            new_expr = Symbol(f"{expr.functor.name}_noprob")(*non_prob_args)
+            new_expr = _noprob_symbol(expr.functor)(*non_prob_args)
             return new_expr
         return self.process_expression(expr)

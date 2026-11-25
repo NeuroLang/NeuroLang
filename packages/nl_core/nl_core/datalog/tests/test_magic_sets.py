@@ -15,7 +15,9 @@ from ..aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..chase import Chase
-from ..expression_processing import extract_logic_free_variables
+from ..expression_processing import (
+    extract_logic_free_variables, recursive_components,
+)
 from ..expressions import AggregationApplication
 from ..exceptions import (
     BoundAggregationApplicationError,
@@ -1315,3 +1317,52 @@ def test_magic_rewrite_stops_at_the_second_cycle_of_its_own(monkeypatch):
         magic_rewrite(q(x), dl)
     assert len(calls) == 2
     assert len(calls[1]) == 1 and calls[1] <= {Agg, Agg2}
+
+
+def test_magic_rewrite_binds_from_constants_a_large_relation_in_a_cycle():
+    """
+    As in the bundles of tracts (``uf``), the program of shared call sites
+    reads ``Above``, the product of ``EV``, a stored relation of more
+    than ``[MAGIC_SETS] seed_rows`` tuples, and ``Box`` restricted by a
+    comparison: unrewritten, it is all the pairs of their rows. The
+    rewrite with the bindings of the literals has a cycle of its own; the
+    one with the bindings of the constants and the head alone has none,
+    binds ``Above`` to its box ``a``, and gives the program's answer.
+    """
+    P, Q, A, B, R = (S_(n) for n in "PQABR")  # noqa: N806
+    EP, EQ, EV, Box, Above = (  # noqa: N806
+        S_(n) for n in ("EP", "EQ", "EV", "Box", "Above")
+    )
+    t, w = S_("t"), S_("w")
+    code = Eb_([
+        Imp_(P(x, y), EP(x, y)),
+        Imp_(Q(x), EQ(x)),
+        Imp_(A(x), P(x, y) & Q(y)),
+        Imp_(B(x), Q(x) & P(x, y)),
+        Imp_(Above(x, t), EV(x, v) & Box(t, w) & C_(operator.gt)(v, w)),
+        Imp_(R(x), A(x) & B(x) & Above(x, a)),
+        Imp_(q(x), R(x)),
+    ])
+    edb = Eb_([
+        F_(EP(a, a)), F_(EP(a, b)), F_(EP(b, c)), F_(EQ(a)), F_(EQ(b)),
+        F_(EV(a, C_(3))), F_(EV(b, C_(1))),
+        F_(Box(a, C_(2))), F_(Box(b, C_(0))),
+    ] + [F_(EV(C_(f"e{i}"), C_(0))) for i in range(100)])
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    goal, mr = magic_rewrite(S_("R")(x), dl)
+    assert not list(recursive_components(mr.formulas))
+    assert any(
+        rule.consequent.functor.name.startswith("Above^fb")
+        for rule in mr.formulas
+    )
+    rewritten = Datalog()
+    rewritten.walk(mr)
+    rewritten.walk(edb)
+    solution = Chase(rewritten).build_chase_solution()
+    assert solution[goal].value == {(a,)}
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+    assert Chase(dl).build_chase_solution()[q].value == {(a,)}
