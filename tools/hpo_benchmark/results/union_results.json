@@ -1,0 +1,6662 @@
+[
+ {
+  "pid": 163,
+  "disease": "OMIM:306955",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 4,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 179,
+    "output_tokens": 795
+   },
+   {
+    "input_tokens": 1599,
+    "output_tokens": 404
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.7287212217165204,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 244,
+  "disease": "OMIM:612653",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 18,
+  "posterior": 40.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 5,
+  "U1_lenient": 5,
+  "U2": 47,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 398,
+    "output_tokens": 849
+   },
+   {
+    "input_tokens": 1826,
+    "output_tokens": 402
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.7305338657404715,
+  "top_coverage": 0.4444444444444444
+ },
+ {
+  "pid": 139,
+  "disease": "OMIM:269150",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 8,
+  "posterior": 3.0,
+  "H0": null,
+  "U1": 3,
+  "H0_lenient": null,
+  "U1_lenient": 3,
+  "U2": 5,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 239,
+    "output_tokens": 1016
+   },
+   {
+    "input_tokens": 1688,
+    "output_tokens": 737
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4821043959472955,
+  "top_coverage": 0.625
+ },
+ {
+  "pid": 235,
+  "disease": "OMIM:612313",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 6,
+  "posterior": 488.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 214,
+    "output_tokens": 977
+   },
+   {
+    "input_tokens": 1782,
+    "output_tokens": 392
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5037160669104077,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 198,
+  "disease": "OMIM:606693",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 12,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 286,
+    "output_tokens": 840
+   },
+   {
+    "input_tokens": 1779,
+    "output_tokens": 345
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9928350946678959,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 183,
+  "disease": "OMIM:604213",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 14,
+  "posterior": 597.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 364,
+    "output_tokens": 897
+   },
+   {
+    "input_tokens": 1893,
+    "output_tokens": 835
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9867204556311117,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 333,
+  "disease": "OMIM:620465",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 395.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 157,
+    "output_tokens": 678
+   },
+   {
+    "input_tokens": 1737,
+    "output_tokens": 358
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.016833413420145212,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 215,
+  "disease": "OMIM:610168",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 8,
+  "posterior": 5.0,
+  "H0": 2,
+  "U1": 3,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 249,
+    "output_tokens": 687
+   },
+   {
+    "input_tokens": 1672,
+    "output_tokens": 366
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9885347119982915,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 172,
+  "disease": "OMIM:312750",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 11.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 205,
+    "output_tokens": 531
+   },
+   {
+    "input_tokens": 1873,
+    "output_tokens": 852
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9818342960036388,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 45,
+  "disease": "OMIM:150250",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 9,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 260,
+    "output_tokens": 1166
+   },
+   {
+    "input_tokens": 1723,
+    "output_tokens": 377
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999954857114773,
+  "top_coverage": 0.7777777777777778
+ },
+ {
+  "pid": 195,
+  "disease": "OMIM:606574",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 6765.5,
+  "H0": 4,
+  "U1": 5,
+  "H0_lenient": 4,
+  "U1_lenient": 5,
+  "U2": 13,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 173,
+    "output_tokens": 663
+   },
+   {
+    "input_tokens": 1595,
+    "output_tokens": 362
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5891160387923796,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 343,
+  "disease": "OMIM:620537",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 2.0,
+  "H0": null,
+  "U1": 4,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 8,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 195,
+    "output_tokens": 912
+   },
+   {
+    "input_tokens": 1814,
+    "output_tokens": 385
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.28237655390573546,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 59,
+  "disease": "OMIM:159550",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 7,
+  "posterior": 35.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 39,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 229,
+    "output_tokens": 362
+   },
+   {
+    "input_tokens": 1684,
+    "output_tokens": 393
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.603677897628823,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 168,
+  "disease": "OMIM:311200",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 13,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 340,
+    "output_tokens": 555
+   },
+   {
+    "input_tokens": 1738,
+    "output_tokens": 377
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9853317674109173,
+  "top_coverage": 0.5384615384615384
+ },
+ {
+  "pid": 61,
+  "disease": "OMIM:159550",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 27.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 184,
+    "output_tokens": 810
+   },
+   {
+    "input_tokens": 1713,
+    "output_tokens": 383
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.07537809144635363,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 153,
+  "disease": "OMIM:277600",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 190,
+    "output_tokens": 686
+   },
+   {
+    "input_tokens": 1598,
+    "output_tokens": 377
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4755280862940403,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 56,
+  "disease": "OMIM:154700",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 8,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 224,
+    "output_tokens": 362
+   },
+   {
+    "input_tokens": 1661,
+    "output_tokens": 395
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5221450548338253,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 42,
+  "disease": "OMIM:148050",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 197,
+    "output_tokens": 801
+   },
+   {
+    "input_tokens": 1644,
+    "output_tokens": 352
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.693908648798974,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 24,
+  "disease": "OMIM:119600",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 9,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 269,
+    "output_tokens": 599
+   },
+   {
+    "input_tokens": 1699,
+    "output_tokens": 380
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.997248329266895,
+  "top_coverage": 0.8888888888888888
+ },
+ {
+  "pid": 317,
+  "disease": "OMIM:618343",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 552.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 203,
+    "output_tokens": 1199
+   },
+   {
+    "input_tokens": 1785,
+    "output_tokens": 914
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.12650664724700034,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 300,
+  "disease": "OMIM:616914",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 9,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 261,
+    "output_tokens": 708
+   },
+   {
+    "input_tokens": 1706,
+    "output_tokens": 407
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999493164234167,
+  "top_coverage": 0.7777777777777778
+ },
+ {
+  "pid": 301,
+  "disease": "OMIM:616914",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 14,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 356,
+    "output_tokens": 831
+   },
+   {
+    "input_tokens": 1791,
+    "output_tokens": 335
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999999999958002,
+  "top_coverage": 0.7142857142857143
+ },
+ {
+  "pid": 83,
+  "disease": "OMIM:201910",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 6655.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 165,
+    "output_tokens": 839
+   },
+   {
+    "input_tokens": 1563,
+    "output_tokens": 320
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.12779050947795292,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 147,
+  "disease": "OMIM:272300",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 1385.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 5,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 203,
+    "output_tokens": 705
+   },
+   {
+    "input_tokens": 1744,
+    "output_tokens": 920
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.6966474028249335,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 194,
+  "disease": "OMIM:606574",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 10,
+  "posterior": 38.0,
+  "H0": 5,
+  "U1": 5,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 4,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 267,
+    "output_tokens": 520
+   },
+   {
+    "input_tokens": 1674,
+    "output_tokens": 608
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8281372180131337,
+  "top_coverage": 0.7
+ },
+ {
+  "pid": 146,
+  "disease": "OMIM:272300",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 12,
+  "posterior": 24.5,
+  "H0": 4,
+  "U1": 5,
+  "H0_lenient": 4,
+  "U1_lenient": 5,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 310,
+    "output_tokens": 536
+   },
+   {
+    "input_tokens": 1720,
+    "output_tokens": 513
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9992384953738508,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 271,
+  "disease": "OMIM:615582",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 11.0,
+  "H0": 7,
+  "U1": 4,
+  "H0_lenient": 2,
+  "U1_lenient": 2,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 181,
+    "output_tokens": 606
+   },
+   {
+    "input_tokens": 1728,
+    "output_tokens": 354
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.2161305666493795,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 104,
+  "disease": "OMIM:214800",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 11,
+  "posterior": 10.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 301,
+    "output_tokens": 755
+   },
+   {
+    "input_tokens": 1727,
+    "output_tokens": 308
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.3773413943547508,
+  "top_coverage": 0.36363636363636365
+ },
+ {
+  "pid": 22,
+  "disease": "OMIM:119600",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 17,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 392,
+    "output_tokens": 352
+   },
+   {
+    "input_tokens": 1791,
+    "output_tokens": 350
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999999999999905,
+  "top_coverage": 0.9411764705882353
+ },
+ {
+  "pid": 324,
+  "disease": "OMIM:620155",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 13,
+  "posterior": 313.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 314,
+    "output_tokens": 857
+   },
+   {
+    "input_tokens": 1831,
+    "output_tokens": 350
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8097275420999567,
+  "top_coverage": 0.5384615384615384
+ },
+ {
+  "pid": 306,
+  "disease": "OMIM:617140",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 1221.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 184,
+    "output_tokens": 854
+   },
+   {
+    "input_tokens": 1685,
+    "output_tokens": 368
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.811749211905857,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 63,
+  "disease": "OMIM:159950",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 46.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 226,
+    "output_tokens": 801
+   },
+   {
+    "input_tokens": 1832,
+    "output_tokens": 743
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.25676738240266556,
+  "top_coverage": 0.42857142857142855
+ },
+ {
+  "pid": 214,
+  "disease": "OMIM:610031",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 13,
+  "posterior": 208.5,
+  "H0": 2,
+  "U1": 4,
+  "H0_lenient": 2,
+  "U1_lenient": 4,
+  "U2": 3,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 329,
+    "output_tokens": 988
+   },
+   {
+    "input_tokens": 1832,
+    "output_tokens": 425
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8602887543210509,
+  "top_coverage": 0.5384615384615384
+ },
+ {
+  "pid": 273,
+  "disease": "OMIM:615582",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 126.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 2,
+  "U1_lenient": 3,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 198,
+    "output_tokens": 897
+   },
+   {
+    "input_tokens": 1806,
+    "output_tokens": 385
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.6021162256970245,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 347,
+  "disease": "OMIM:620537",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 22.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 34,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 163,
+    "output_tokens": 802
+   },
+   {
+    "input_tokens": 1781,
+    "output_tokens": 365
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.020769492354516483,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 143,
+  "disease": "OMIM:272300",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 7771.0,
+  "H0": 3,
+  "U1": 3,
+  "H0_lenient": 3,
+  "U1_lenient": 3,
+  "U2": 5,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 190,
+    "output_tokens": 723
+   },
+   {
+    "input_tokens": 1816,
+    "output_tokens": 360
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.24805213303747947,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 159,
+  "disease": "OMIM:301040",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 8,
+  "posterior": 1607.0,
+  "H0": 1,
+  "U1": 2,
+  "H0_lenient": 1,
+  "U1_lenient": 2,
+  "U2": 1,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 244,
+    "output_tokens": 965
+   },
+   {
+    "input_tokens": 1817,
+    "output_tokens": 883
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9894893104391407,
+  "top_coverage": 0.625
+ },
+ {
+  "pid": 166,
+  "disease": "OMIM:311200",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 12,
+  "posterior": 19.0,
+  "H0": 1,
+  "U1": 2,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 4,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 304,
+    "output_tokens": 749
+   },
+   {
+    "input_tokens": 1695,
+    "output_tokens": 786
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9745756773538987,
+  "top_coverage": 0.5833333333333334
+ },
+ {
+  "pid": 50,
+  "disease": "OMIM:151100",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 157,
+    "output_tokens": 341
+   },
+   {
+    "input_tokens": 1586,
+    "output_tokens": 338
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.2947102625057197,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 5,
+  "disease": "OMIM:103580",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 198,
+    "output_tokens": 830
+   },
+   {
+    "input_tokens": 1670,
+    "output_tokens": 377
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5233921748458792,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 289,
+  "disease": "OMIM:616276",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 9,
+  "posterior": 1.0,
+  "H0": null,
+  "U1": 2,
+  "H0_lenient": null,
+  "U1_lenient": 2,
+  "U2": 5,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 253,
+    "output_tokens": 997
+   },
+   {
+    "input_tokens": 1984,
+    "output_tokens": 424
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8045353408217963,
+  "top_coverage": 0.8888888888888888
+ },
+ {
+  "pid": 245,
+  "disease": "OMIM:612653",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 7,
+  "posterior": 1.5,
+  "H0": 3,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 238,
+    "output_tokens": 591
+   },
+   {
+    "input_tokens": 1672,
+    "output_tokens": 635
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.29774736103989663,
+  "top_coverage": 0.5714285714285714
+ },
+ {
+  "pid": 274,
+  "disease": "OMIM:615582",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 7235.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 8,
+  "U1_lenient": 4,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 157,
+    "output_tokens": 849
+   },
+   {
+    "input_tokens": 1727,
+    "output_tokens": 439
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.0677314708944547,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 287,
+  "disease": "OMIM:616276",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 9,
+  "posterior": 24.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 37,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 261,
+    "output_tokens": 937
+   },
+   {
+    "input_tokens": 1848,
+    "output_tokens": 674
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.994345643076716,
+  "top_coverage": 0.5555555555555556
+ },
+ {
+  "pid": 250,
+  "disease": "OMIM:613795",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 7,
+  "posterior": 9.0,
+  "H0": 5,
+  "U1": 4,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 5,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 220,
+    "output_tokens": 760
+   },
+   {
+    "input_tokens": 1704,
+    "output_tokens": 372
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4003921830057962,
+  "top_coverage": 0.7142857142857143
+ },
+ {
+  "pid": 230,
+  "disease": "OMIM:612164",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 12,
+  "posterior": 2010.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": 1,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 286,
+    "output_tokens": 957
+   },
+   {
+    "input_tokens": 1896,
+    "output_tokens": 845
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9347071719663053,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 100,
+  "disease": "OMIM:209900",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 193,
+    "output_tokens": 456
+   },
+   {
+    "input_tokens": 1569,
+    "output_tokens": 357
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9677938409488727,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 339,
+  "disease": "OMIM:620535",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 2375.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 200,
+    "output_tokens": 793
+   },
+   {
+    "input_tokens": 1675,
+    "output_tokens": 894
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.17597296878549978,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 318,
+  "disease": "OMIM:618343",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 10,
+  "posterior": 45.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 52,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 288,
+    "output_tokens": 1025
+   },
+   {
+    "input_tokens": 1933,
+    "output_tokens": 1014
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8691624737908352,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 109,
+  "disease": "OMIM:215700",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 7,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 243,
+    "output_tokens": 687
+   },
+   {
+    "input_tokens": 1727,
+    "output_tokens": 410
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.40794233588024376,
+  "top_coverage": 0.5714285714285714
+ },
+ {
+  "pid": 290,
+  "disease": "OMIM:616354",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 990.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 197,
+    "output_tokens": 845
+   },
+   {
+    "input_tokens": 1653,
+    "output_tokens": 380
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.19172541842749793,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 129,
+  "disease": "OMIM:255310",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 22.0,
+  "H0": 8,
+  "U1": 6,
+  "H0_lenient": 8,
+  "U1_lenient": 6,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 242,
+    "output_tokens": 736
+   },
+   {
+    "input_tokens": 1779,
+    "output_tokens": 369
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.2715978525856915,
+  "top_coverage": 0.42857142857142855
+ },
+ {
+  "pid": 152,
+  "disease": "OMIM:277600",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 198,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 471,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+   },
+   {
+    "input_tokens": 1657,
+    "output_tokens": 596
+   }
+  ],
+  "hosts": [
+   "anthropic (direct)",
+   "Anthropic"
+  ],
+  "top_probability": 0.5086597452240192,
+  "top_coverage": 0.8333333333333334
+ },
+ {
+  "pid": 304,
+  "disease": "OMIM:617140",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 36,
+  "posterior": 329.0,
+  "H0": 4,
+  "U1": 6,
+  "H0_lenient": 4,
+  "U1_lenient": 6,
+  "U2": 9,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 697,
+    "output_tokens": 850
+   },
+   {
+    "input_tokens": 2240,
+    "output_tokens": 385
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8852353930615828,
+  "top_coverage": 0.4722222222222222
+ },
+ {
+  "pid": 346,
+  "disease": "OMIM:620537",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 82.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 93,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 163,
+    "output_tokens": 736
+   },
+   {
+    "input_tokens": 1754,
+    "output_tokens": 361
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.06213969618496905,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 43,
+  "disease": "OMIM:148050",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 233.5,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 3,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 225,
+    "output_tokens": 676
+   },
+   {
+    "input_tokens": 1760,
+    "output_tokens": 360
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.26565263645744874,
+  "top_coverage": 0.5714285714285714
+ },
+ {
+  "pid": 325,
+  "disease": "OMIM:620155",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 12,
+  "posterior": 23.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 34,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 303,
+    "output_tokens": 1092
+   },
+   {
+    "input_tokens": 1863,
+    "output_tokens": 371
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9978024621461693,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 79,
+  "disease": "OMIM:188400",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 7,
+  "posterior": 35.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 45,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 225,
+    "output_tokens": 926
+   },
+   {
+    "input_tokens": 1714,
+    "output_tokens": 849
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.11539222022271378,
+  "top_coverage": 0.5714285714285714
+ },
+ {
+  "pid": 283,
+  "disease": "OMIM:616211",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 8,
+  "posterior": 6.0,
+  "H0": null,
+  "U1": 8,
+  "H0_lenient": 1,
+  "U1_lenient": 3,
+  "U2": 13,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 250,
+    "output_tokens": 935
+   },
+   {
+    "input_tokens": 1929,
+    "output_tokens": 392
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.44948440692110847,
+  "top_coverage": 0.625
+ },
+ {
+  "pid": 218,
+  "disease": "OMIM:610168",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 11,
+  "posterior": 3.0,
+  "H0": 2,
+  "U1": 3,
+  "H0_lenient": 1,
+  "U1_lenient": 2,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 297,
+    "output_tokens": 902
+   },
+   {
+    "input_tokens": 1837,
+    "output_tokens": 725
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8356431321500016,
+  "top_coverage": 0.7272727272727273
+ },
+ {
+  "pid": 192,
+  "disease": "OMIM:606574",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 17.0,
+  "H0": 4,
+  "U1": 4,
+  "H0_lenient": 4,
+  "U1_lenient": 4,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 201,
+    "output_tokens": 617
+   },
+   {
+    "input_tokens": 1625,
+    "output_tokens": 352
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.887733089444322,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 28,
+  "disease": "OMIM:130050",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 8,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 252,
+    "output_tokens": 582
+   },
+   {
+    "input_tokens": 1724,
+    "output_tokens": 384
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9997281620187909,
+  "top_coverage": 0.625
+ },
+ {
+  "pid": 25,
+  "disease": "OMIM:130000",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 25.0,
+  "H0": 6,
+  "U1": 5,
+  "H0_lenient": 6,
+  "U1_lenient": 5,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 226,
+    "output_tokens": 751
+   },
+   {
+    "input_tokens": 1766,
+    "output_tokens": 402
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.05612690249149204,
+  "top_coverage": 0.42857142857142855
+ },
+ {
+  "pid": 223,
+  "disease": "OMIM:611590",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 3.0,
+  "H0": 1,
+  "U1": 2,
+  "H0_lenient": 1,
+  "U1_lenient": 2,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 247,
+    "output_tokens": 637
+   },
+   {
+    "input_tokens": 1738,
+    "output_tokens": 890
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9949025884378636,
+  "top_coverage": 0.5714285714285714
+ },
+ {
+  "pid": 124,
+  "disease": "OMIM:248250",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 4,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 179,
+    "output_tokens": 584
+   },
+   {
+    "input_tokens": 1720,
+    "output_tokens": 367
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.3365948980547279,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 246,
+  "disease": "OMIM:612653",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 8,
+  "posterior": 1.5,
+  "H0": 3,
+  "U1": 2,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 253,
+    "output_tokens": 505
+   },
+   {
+    "input_tokens": 1577,
+    "output_tokens": 704
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.29729458076362164,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 226,
+  "disease": "OMIM:611590",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 3.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 231,
+    "output_tokens": 733
+   },
+   {
+    "input_tokens": 1699,
+    "output_tokens": 710
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.99881247714452,
+  "top_coverage": 0.5714285714285714
+ },
+ {
+  "pid": 128,
+  "disease": "OMIM:255310",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 9,
+  "posterior": 1165.5,
+  "H0": 7,
+  "U1": null,
+  "H0_lenient": 7,
+  "U1_lenient": null,
+  "U2": 13,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 265,
+    "output_tokens": 915
+   },
+   {
+    "input_tokens": 1779,
+    "output_tokens": 367
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9538602355402565,
+  "top_coverage": 0.4444444444444444
+ },
+ {
+  "pid": 126,
+  "disease": "OMIM:252650",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 13,
+  "posterior": 14.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 309,
+    "output_tokens": 808
+   },
+   {
+    "input_tokens": 1869,
+    "output_tokens": 673
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9076420074732524,
+  "top_coverage": 0.6923076923076923
+ },
+ {
+  "pid": 151,
+  "disease": "OMIM:277600",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 7,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 234,
+    "output_tokens": 904
+   },
+   {
+    "input_tokens": 1676,
+    "output_tokens": 358
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.7818541864387708,
+  "top_coverage": 0.7142857142857143
+ },
+ {
+  "pid": 341,
+  "disease": "OMIM:620535",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 9,
+  "posterior": 1302.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 249,
+    "output_tokens": 818
+   },
+   {
+    "input_tokens": 1773,
+    "output_tokens": 357
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.540980687380911,
+  "top_coverage": 0.7777777777777778
+ },
+ {
+  "pid": 263,
+  "disease": "OMIM:615032",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 16.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 26,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 194,
+    "output_tokens": 969
+   },
+   {
+    "input_tokens": 1802,
+    "output_tokens": 379
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.39531150508861357,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 189,
+  "disease": "OMIM:605275",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 25,
+  "posterior": 9.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 17,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 495,
+    "output_tokens": 937
+   },
+   {
+    "input_tokens": 1972,
+    "output_tokens": 808
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.785066328911563,
+  "top_coverage": 0.64
+ },
+ {
+  "pid": 328,
+  "disease": "OMIM:620455",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 10,
+  "posterior": 1.0,
+  "H0": null,
+  "U1": 1,
+  "H0_lenient": null,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 271,
+    "output_tokens": 1095
+   },
+   {
+    "input_tokens": 1788,
+    "output_tokens": 754
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999700142843448,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 345,
+  "disease": "OMIM:620537",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 2,
+  "posterior": 1494.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 1,
+  "U1_lenient": 2,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 140,
+    "output_tokens": 411
+   },
+   {
+    "input_tokens": 1756,
+    "output_tokens": 374
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.012197183663123987,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 258,
+  "disease": "OMIM:614833",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 344.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 195,
+    "output_tokens": 1004
+   },
+   {
+    "input_tokens": 1673,
+    "output_tokens": 357
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.09246391337819898,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 17,
+  "disease": "OMIM:115200",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 269.0,
+  "H0": 3,
+  "U1": 7,
+  "H0_lenient": 3,
+  "U1_lenient": 5,
+  "U2": 9,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 219,
+    "output_tokens": 865
+   },
+   {
+    "input_tokens": 1739,
+    "output_tokens": 376
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.1422197184940075,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 342,
+  "disease": "OMIM:620535",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 26,
+  "posterior": 2882.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 535,
+    "output_tokens": 910
+   },
+   {
+    "input_tokens": 2003,
+    "output_tokens": 547
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9962768455013655,
+  "top_coverage": 0.7307692307692307
+ },
+ {
+  "pid": 91,
+  "disease": "OMIM:206700",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 6,
+  "posterior": 961.5,
+  "H0": 1,
+  "U1": 4,
+  "H0_lenient": 1,
+  "U1_lenient": 4,
+  "U2": 5,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 207,
+    "output_tokens": 912
+   },
+   {
+    "input_tokens": 1891,
+    "output_tokens": 448
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4522017411637006,
+  "top_coverage": 0.8333333333333334
+ },
+ {
+  "pid": 133,
+  "disease": "OMIM:268310",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 9,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 252,
+    "output_tokens": 806
+   },
+   {
+    "input_tokens": 1687,
+    "output_tokens": 362
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9588757154064309,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 169,
+  "disease": "OMIM:311200",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 12,
+  "posterior": 1.0,
+  "H0": 3,
+  "U1": 1,
+  "H0_lenient": 2,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 327,
+    "output_tokens": 680
+   },
+   {
+    "input_tokens": 1751,
+    "output_tokens": 753
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9097991332112163,
+  "top_coverage": 0.5833333333333334
+ },
+ {
+  "pid": 204,
+  "disease": "OMIM:608393",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 7752.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": 2,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 188,
+    "output_tokens": 922
+   },
+   {
+    "input_tokens": 1693,
+    "output_tokens": 819
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.1517765821331097,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 344,
+  "disease": "OMIM:620537",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 49.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 3,
+  "U1_lenient": 2,
+  "U2": 59,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 157,
+    "output_tokens": 976
+   },
+   {
+    "input_tokens": 1827,
+    "output_tokens": 404
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.2630557893610445,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 76,
+  "disease": "OMIM:188400",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 6572.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 192,
+    "output_tokens": 963
+   },
+   {
+    "input_tokens": 1680,
+    "output_tokens": 342
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.1303377065482707,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 23,
+  "disease": "OMIM:119600",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 13,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 339,
+    "output_tokens": 535
+   },
+   {
+    "input_tokens": 1592,
+    "output_tokens": 247
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.999999983172689,
+  "top_coverage": 0.7692307692307693
+ },
+ {
+  "pid": 259,
+  "disease": "OMIM:614833",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 10,
+  "posterior": 28.0,
+  "H0": null,
+  "U1": 1,
+  "H0_lenient": null,
+  "U1_lenient": 1,
+  "U2": 28,
+  "recall_k": true,
+  "parsed": {
+   "H0": false,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 293,
+    "output_tokens": 1200
+   },
+   {
+    "input_tokens": 1680,
+    "output_tokens": 1086
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4470862115899992,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 337,
+  "disease": "OMIM:620465",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 7464.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 155,
+    "output_tokens": 711
+   },
+   {
+    "input_tokens": 1691,
+    "output_tokens": 370
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.1896548088400961,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 335,
+  "disease": "OMIM:620465",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 5.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 12,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 190,
+    "output_tokens": 675
+   },
+   {
+    "input_tokens": 1749,
+    "output_tokens": 643
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.034695346825161094,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 264,
+  "disease": "OMIM:615032",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 3,
+  "posterior": 1077.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 154,
+    "output_tokens": 348
+   },
+   {
+    "input_tokens": 1807,
+    "output_tokens": 358
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.017733506166960768,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 156,
+  "disease": "OMIM:300088",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 395.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 232,
+    "output_tokens": 692
+   },
+   {
+    "input_tokens": 1792,
+    "output_tokens": 714
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.20800363309443126,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 57,
+  "disease": "OMIM:154700",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 3.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 168,
+    "output_tokens": 359
+   },
+   {
+    "input_tokens": 1638,
+    "output_tokens": 381
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.7839550622530713,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 232,
+  "disease": "OMIM:612313",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 186.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 173,
+    "output_tokens": 893
+   },
+   {
+    "input_tokens": 1699,
+    "output_tokens": 382
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.06381251267735226,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 16,
+  "disease": "OMIM:115200",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 4,
+  "posterior": 6.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 189,
+    "output_tokens": 599
+   },
+   {
+    "input_tokens": 1651,
+    "output_tokens": 398
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.23512446957392913,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 106,
+  "disease": "OMIM:215700",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 9,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 270,
+    "output_tokens": 764
+   },
+   {
+    "input_tokens": 1737,
+    "output_tokens": 385
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9956792897388332,
+  "top_coverage": 0.7777777777777778
+ },
+ {
+  "pid": 231,
+  "disease": "OMIM:612164",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 237.5,
+  "H0": 2,
+  "U1": 4,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 4,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 160,
+    "output_tokens": 711
+   },
+   {
+    "input_tokens": 1844,
+    "output_tokens": 372
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.21119450805417345,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 282,
+  "disease": "OMIM:616211",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 50.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 7,
+  "U1_lenient": null,
+  "U2": 58,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 195,
+    "output_tokens": 760
+   },
+   {
+    "input_tokens": 1737,
+    "output_tokens": 815
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.23751240194039408,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 210,
+  "disease": "OMIM:609528",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 13,
+  "posterior": 160.5,
+  "H0": 2,
+  "U1": 2,
+  "H0_lenient": 2,
+  "U1_lenient": 2,
+  "U2": 4,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 311,
+    "output_tokens": 810
+   },
+   {
+    "input_tokens": 1856,
+    "output_tokens": 851
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.6752943413601392,
+  "top_coverage": 0.46153846153846156
+ },
+ {
+  "pid": 136,
+  "disease": "OMIM:268310",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 15,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 338,
+    "output_tokens": 582
+   },
+   {
+    "input_tokens": 1721,
+    "output_tokens": 369
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9995625669519707,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 293,
+  "disease": "OMIM:616831",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 2,
+  "posterior": 53.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 66,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 140,
+    "output_tokens": 780
+   },
+   {
+    "input_tokens": 1614,
+    "output_tokens": 369
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.02679890562835823,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 108,
+  "disease": "OMIM:215700",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 6600.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 194,
+    "output_tokens": 873
+   },
+   {
+    "input_tokens": 1869,
+    "output_tokens": 444
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.20096971208892242,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 95,
+  "disease": "OMIM:208920",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 204,
+    "output_tokens": 688
+   },
+   {
+    "input_tokens": 1805,
+    "output_tokens": 374
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4089911648301931,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 13,
+  "disease": "OMIM:115200",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 9,
+  "posterior": 16.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 288,
+    "output_tokens": 765
+   },
+   {
+    "input_tokens": 1847,
+    "output_tokens": 389
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4201079732886003,
+  "top_coverage": 0.4444444444444444
+ },
+ {
+  "pid": 294,
+  "disease": "OMIM:616831",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 281.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 154,
+    "output_tokens": 786
+   },
+   {
+    "input_tokens": 1727,
+    "output_tokens": 379
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.09689120465024932,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 134,
+  "disease": "OMIM:268310",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 11,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 288,
+    "output_tokens": 962
+   },
+   {
+    "input_tokens": 1816,
+    "output_tokens": 355
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.6976314824917376,
+  "top_coverage": 0.7272727272727273
+ },
+ {
+  "pid": 340,
+  "disease": "OMIM:620535",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 27,
+  "posterior": 2332.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 527,
+    "output_tokens": 1200
+   },
+   {
+    "input_tokens": 1987,
+    "output_tokens": 660
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999713051324061,
+  "top_coverage": 0.5925925925925926
+ },
+ {
+  "pid": 295,
+  "disease": "OMIM:616831",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 7,
+  "posterior": 194.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 227,
+    "output_tokens": 728
+   },
+   {
+    "input_tokens": 1753,
+    "output_tokens": 348
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.06490659868699801,
+  "top_coverage": 0.7142857142857143
+ },
+ {
+  "pid": 149,
+  "disease": "OMIM:277600",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 186,
+    "output_tokens": 793
+   },
+   {
+    "input_tokens": 1644,
+    "output_tokens": 404
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.7948717819988788,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 135,
+  "disease": "OMIM:268310",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 11,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 301,
+    "output_tokens": 922
+   },
+   {
+    "input_tokens": 1848,
+    "output_tokens": 377
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9892314314984022,
+  "top_coverage": 0.6363636363636364
+ },
+ {
+  "pid": 94,
+  "disease": "OMIM:208920",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 17.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 27,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 186,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 766,
+    "output_tokens_details": {
+     "thinking_tokens": 391
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+   },
+   {
+    "input_tokens": 1750,
+    "output_tokens": 362
+   }
+  ],
+  "hosts": [
+   "anthropic (direct)",
+   "Anthropic"
+  ],
+  "top_probability": 0.7266872515883507,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 236,
+  "disease": "OMIM:612313",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 936.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 221,
+    "output_tokens": 481
+   },
+   {
+    "input_tokens": 1590,
+    "output_tokens": 700
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.46464118370545987,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 89,
+  "disease": "OMIM:206700",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 34.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 20,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 203,
+    "output_tokens": 671
+   },
+   {
+    "input_tokens": 1617,
+    "output_tokens": 445
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.11156815793161384,
+  "top_coverage": 0.4
+ },
+ {
+  "pid": 62,
+  "disease": "OMIM:159550",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 330.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 206,
+    "output_tokens": 835
+   },
+   {
+    "input_tokens": 1678,
+    "output_tokens": 860
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.3189274790687666,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 65,
+  "disease": "OMIM:161800",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 7,
+  "posterior": 47.5,
+  "H0": 2,
+  "U1": 6,
+  "H0_lenient": 1,
+  "U1_lenient": 6,
+  "U2": 3,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 215,
+    "output_tokens": 743
+   },
+   {
+    "input_tokens": 1775,
+    "output_tokens": 394
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.7123544881173545,
+  "top_coverage": 0.8571428571428571
+ },
+ {
+  "pid": 32,
+  "disease": "OMIM:130050",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 3.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 213,
+    "output_tokens": 745
+   },
+   {
+    "input_tokens": 1857,
+    "output_tokens": 446
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.44316613336622435,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 81,
+  "disease": "OMIM:201910",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 6666.5,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 4,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 162,
+    "output_tokens": 846
+   },
+   {
+    "input_tokens": 1783,
+    "output_tokens": 453
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.16746791995911,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 331,
+  "disease": "OMIM:620455",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 6,
+  "posterior": 1.5,
+  "H0": null,
+  "U1": 2,
+  "H0_lenient": null,
+  "U1_lenient": 2,
+  "U2": 4,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 232,
+    "output_tokens": 892
+   },
+   {
+    "input_tokens": 1844,
+    "output_tokens": 407
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.2836598782917318,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 96,
+  "disease": "OMIM:208920",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 17.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 27,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 186,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 766,
+    "output_tokens_details": {
+     "thinking_tokens": 391
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+   },
+   {
+    "input_tokens": 1750,
+    "output_tokens": 362
+   }
+  ],
+  "hosts": [
+   "anthropic (direct)",
+   "Anthropic"
+  ],
+  "top_probability": 0.7266872515883507,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 186,
+  "disease": "OMIM:605275",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 9.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 16,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 204,
+    "output_tokens": 764
+   },
+   {
+    "input_tokens": 1545,
+    "output_tokens": 335
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.17546691605158474,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 224,
+  "disease": "OMIM:611590",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 235,
+    "output_tokens": 751
+   },
+   {
+    "input_tokens": 1606,
+    "output_tokens": 388
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.49196893017290355,
+  "top_coverage": 0.42857142857142855
+ },
+ {
+  "pid": 93,
+  "disease": "OMIM:208920",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 522.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 215,
+    "output_tokens": 644
+   },
+   {
+    "input_tokens": 1656,
+    "output_tokens": 662
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.07529296734255819,
+  "top_coverage": 0.4
+ },
+ {
+  "pid": 92,
+  "disease": "OMIM:206700",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 13,
+  "posterior": 4.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 329,
+    "output_tokens": 902
+   },
+   {
+    "input_tokens": 1935,
+    "output_tokens": 940
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.999999657384728,
+  "top_coverage": 0.7692307692307693
+ },
+ {
+  "pid": 70,
+  "disease": "OMIM:167320",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 14,
+  "posterior": 10.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 366,
+    "output_tokens": 779
+   },
+   {
+    "input_tokens": 1962,
+    "output_tokens": 968
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.23250165510048984,
+  "top_coverage": 0.2857142857142857
+ },
+ {
+  "pid": 171,
+  "disease": "OMIM:312750",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 1352.0,
+  "H0": 5,
+  "U1": 8,
+  "H0_lenient": 5,
+  "U1_lenient": 8,
+  "U2": 12,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 221,
+    "output_tokens": 703
+   },
+   {
+    "input_tokens": 1773,
+    "output_tokens": 387
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.41969443726814387,
+  "top_coverage": 0.8571428571428571
+ },
+ {
+  "pid": 209,
+  "disease": "OMIM:609528",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 11,
+  "posterior": 293.0,
+  "H0": 2,
+  "U1": 3,
+  "H0_lenient": 2,
+  "U1_lenient": 3,
+  "U2": 4,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 282,
+    "output_tokens": 925
+   },
+   {
+    "input_tokens": 1826,
+    "output_tokens": 936
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8548809824270377,
+  "top_coverage": 0.5454545454545454
+ },
+ {
+  "pid": 243,
+  "disease": "OMIM:612653",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 17,
+  "posterior": 13.0,
+  "H0": 3,
+  "U1": 4,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 385,
+    "output_tokens": 651
+   },
+   {
+    "input_tokens": 1765,
+    "output_tokens": 790
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.999114539030363,
+  "top_coverage": 0.47058823529411764
+ },
+ {
+  "pid": 54,
+  "disease": "OMIM:154700",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 13,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 315,
+    "output_tokens": 337
+   },
+   {
+    "input_tokens": 1720,
+    "output_tokens": 355
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9972112565187683,
+  "top_coverage": 0.7692307692307693
+ },
+ {
+  "pid": 336,
+  "disease": "OMIM:620465",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 2,
+  "posterior": 4.0,
+  "H0": null,
+  "U1": 8,
+  "H0_lenient": null,
+  "U1_lenient": 8,
+  "U2": 4,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 158,
+    "output_tokens": 810
+   },
+   {
+    "input_tokens": 1756,
+    "output_tokens": 425
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.09907598482173953,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 261,
+  "disease": "OMIM:615032",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 9,
+  "posterior": 41.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 50,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 252,
+    "output_tokens": 948
+   },
+   {
+    "input_tokens": 1718,
+    "output_tokens": 861
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.46863156044051035,
+  "top_coverage": 0.5555555555555556
+ },
+ {
+  "pid": 20,
+  "disease": "OMIM:119600",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 20,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 440,
+    "output_tokens": 562
+   },
+   {
+    "input_tokens": 1846,
+    "output_tokens": 368
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999999999999998,
+  "top_coverage": 0.95
+ },
+ {
+  "pid": 201,
+  "disease": "OMIM:606693",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 13,
+  "posterior": 1.0,
+  "H0": 2,
+  "U1": 1,
+  "H0_lenient": 2,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 315,
+    "output_tokens": 737
+   },
+   {
+    "input_tokens": 1852,
+    "output_tokens": 359
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999749923471447,
+  "top_coverage": 0.6923076923076923
+ },
+ {
+  "pid": 240,
+  "disease": "OMIM:612463",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 2,
+  "posterior": 114.0,
+  "H0": 6,
+  "U1": 6,
+  "H0_lenient": 6,
+  "U1_lenient": 6,
+  "U2": 12,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 143,
+    "output_tokens": 889
+   },
+   {
+    "input_tokens": 1655,
+    "output_tokens": 406
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.23280838000487777,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 237,
+  "disease": "OMIM:612463",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 2197.5,
+  "H0": 2,
+  "U1": 2,
+  "H0_lenient": 2,
+  "U1_lenient": 2,
+  "U2": 3,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 185,
+    "output_tokens": 704
+   },
+   {
+    "input_tokens": 1575,
+    "output_tokens": 381
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.057401356223213816,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 219,
+  "disease": "OMIM:610168",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 14,
+  "posterior": 2.0,
+  "H0": 4,
+  "U1": 2,
+  "H0_lenient": 2,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 325,
+    "output_tokens": 804
+   },
+   {
+    "input_tokens": 1827,
+    "output_tokens": 390
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9986640237200352,
+  "top_coverage": 0.7857142857142857
+ },
+ {
+  "pid": 211,
+  "disease": "OMIM:609528",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 26,
+  "posterior": 2942.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": false,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 531,
+    "output_tokens": 1200
+   },
+   {
+    "input_tokens": 1739,
+    "output_tokens": 751
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5092314177167494,
+  "top_coverage": 0.6538461538461539
+ },
+ {
+  "pid": 51,
+  "disease": "OMIM:151100",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 37.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 36,
+  "recall_k": false,
+  "parsed": {
+   "H0": false,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 155,
+    "output_tokens": 726
+   },
+   {
+    "input_tokens": 1342,
+    "output_tokens": 344
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.03606580783305015,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 251,
+  "disease": "OMIM:613795",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 11,
+  "posterior": 11.0,
+  "H0": 10,
+  "U1": 6,
+  "H0_lenient": 3,
+  "U1_lenient": 4,
+  "U2": 6,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 294,
+    "output_tokens": 757
+   },
+   {
+    "input_tokens": 1708,
+    "output_tokens": 379
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.44296812848381434,
+  "top_coverage": 0.5454545454545454
+ },
+ {
+  "pid": 90,
+  "disease": "OMIM:206700",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 8,
+  "posterior": 11.0,
+  "H0": 1,
+  "U1": 2,
+  "H0_lenient": 1,
+  "U1_lenient": 2,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 238,
+    "output_tokens": 777
+   },
+   {
+    "input_tokens": 1783,
+    "output_tokens": 733
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9731740000266282,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 30,
+  "disease": "OMIM:130050",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 14,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 340,
+    "output_tokens": 733
+   },
+   {
+    "input_tokens": 1951,
+    "output_tokens": 398
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9997980965334609,
+  "top_coverage": 0.5714285714285714
+ },
+ {
+  "pid": 316,
+  "disease": "OMIM:618343",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 3.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 9,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 201,
+    "output_tokens": 889
+   },
+   {
+    "input_tokens": 1802,
+    "output_tokens": 429
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.49652659877459693,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 165,
+  "disease": "OMIM:311200",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 623.5,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 4,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 274,
+    "output_tokens": 777
+   },
+   {
+    "input_tokens": 1699,
+    "output_tokens": 738
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.05533963014276759,
+  "top_coverage": 0.2857142857142857
+ },
+ {
+  "pid": 270,
+  "disease": "OMIM:615582",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 3,
+  "posterior": 16.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 2,
+  "U1_lenient": 2,
+  "U2": 24,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 170,
+    "output_tokens": 678
+   },
+   {
+    "input_tokens": 1589,
+    "output_tokens": 367
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.1899483151498896,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 71,
+  "disease": "OMIM:175200",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 204,
+    "output_tokens": 575
+   },
+   {
+    "input_tokens": 1593,
+    "output_tokens": 349
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9978626522865003,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 285,
+  "disease": "OMIM:616276",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 2.0,
+  "H0": null,
+  "U1": 1,
+  "H0_lenient": null,
+  "U1_lenient": 1,
+  "U2": 6,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 190,
+    "output_tokens": 965
+   },
+   {
+    "input_tokens": 1807,
+    "output_tokens": 428
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5267184096273098,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 60,
+  "disease": "OMIM:159550",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 38.0,
+  "H0": null,
+  "U1": 4,
+  "H0_lenient": null,
+  "U1_lenient": 4,
+  "U2": 40,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 175,
+    "output_tokens": 1110
+   },
+   {
+    "input_tokens": 1689,
+    "output_tokens": 430
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.038809142133470254,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 228,
+  "disease": "OMIM:612164",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 12,
+  "posterior": 109.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 3,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 298,
+    "output_tokens": 822
+   },
+   {
+    "input_tokens": 2007,
+    "output_tokens": 414
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4251678771715531,
+  "top_coverage": 0.5833333333333334
+ },
+ {
+  "pid": 220,
+  "disease": "OMIM:610968",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 8,
+  "posterior": 3.0,
+  "H0": 8,
+  "U1": 4,
+  "H0_lenient": 2,
+  "U1_lenient": 3,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 242,
+    "output_tokens": 879
+   },
+   {
+    "input_tokens": 1688,
+    "output_tokens": 696
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8999024715215492,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 53,
+  "disease": "OMIM:154700",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 179,
+    "output_tokens": 706
+   },
+   {
+    "input_tokens": 1633,
+    "output_tokens": 353
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8856250593558213,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 120,
+  "disease": "OMIM:248250",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 2.0,
+  "H0": 2,
+  "U1": 1,
+  "H0_lenient": 2,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 180,
+    "output_tokens": 673
+   },
+   {
+    "input_tokens": 1642,
+    "output_tokens": 363
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.24667097899395618,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 252,
+  "disease": "OMIM:613795",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 11,
+  "posterior": 2.0,
+  "H0": null,
+  "U1": 3,
+  "H0_lenient": 6,
+  "U1_lenient": 1,
+  "U2": 9,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 272,
+    "output_tokens": 829
+   },
+   {
+    "input_tokens": 1704,
+    "output_tokens": 384
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5268322607336565,
+  "top_coverage": 0.7272727272727273
+ },
+ {
+  "pid": 308,
+  "disease": "OMIM:617140",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 17,
+  "posterior": 14.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 23,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 396,
+    "output_tokens": 1040
+   },
+   {
+    "input_tokens": 1970,
+    "output_tokens": 1000
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5311010332611205,
+  "top_coverage": 0.5294117647058824
+ },
+ {
+  "pid": 15,
+  "disease": "OMIM:115200",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 73.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 4,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 171,
+    "output_tokens": 718
+   },
+   {
+    "input_tokens": 1611,
+    "output_tokens": 380
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.3162572642083182,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 52,
+  "disease": "OMIM:151100",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 3.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 184,
+    "output_tokens": 629
+   },
+   {
+    "input_tokens": 1586,
+    "output_tokens": 338
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.2562199046723712,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 213,
+  "disease": "OMIM:609528",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 20,
+  "posterior": 598.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 417,
+    "output_tokens": 1148
+   },
+   {
+    "input_tokens": 1953,
+    "output_tokens": 920
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9919423664397262,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 311,
+  "disease": "OMIM:617730",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 16,
+  "posterior": 953.5,
+  "H0": 4,
+  "U1": 4,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 7,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 376,
+    "output_tokens": 815
+   },
+   {
+    "input_tokens": 1762,
+    "output_tokens": 820
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.7746181689664801,
+  "top_coverage": 0.5625
+ },
+ {
+  "pid": 253,
+  "disease": "OMIM:613795",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 4.0,
+  "H0": 6,
+  "U1": 4,
+  "H0_lenient": 2,
+  "U1_lenient": 1,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 189,
+    "output_tokens": 707
+   },
+   {
+    "input_tokens": 1651,
+    "output_tokens": 357
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.6281449966802517,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 47,
+  "disease": "OMIM:150250",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 9,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 266,
+    "output_tokens": 1007
+   },
+   {
+    "input_tokens": 1698,
+    "output_tokens": 383
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5682468546728049,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 101,
+  "disease": "OMIM:214800",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 11,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 285,
+    "output_tokens": 732
+   },
+   {
+    "input_tokens": 1744,
+    "output_tokens": 374
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.3578122771474058,
+  "top_coverage": 0.5454545454545454
+ },
+ {
+  "pid": 288,
+  "disease": "OMIM:616276",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 12,
+  "posterior": 232.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 301,
+    "output_tokens": 1189
+   },
+   {
+    "input_tokens": 1822,
+    "output_tokens": 762
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5096888535692786,
+  "top_coverage": 0.5833333333333334
+ },
+ {
+  "pid": 41,
+  "disease": "OMIM:148050",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 2,
+  "posterior": 128.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 88,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 139,
+    "output_tokens": 764
+   },
+   {
+    "input_tokens": 1592,
+    "output_tokens": 369
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.03488943379742712,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 105,
+  "disease": "OMIM:214800",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 9,
+  "posterior": 2.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 259,
+    "output_tokens": 747
+   },
+   {
+    "input_tokens": 1716,
+    "output_tokens": 350
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4635486553910173,
+  "top_coverage": 0.4444444444444444
+ },
+ {
+  "pid": 180,
+  "disease": "OMIM:601776",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 15,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 348,
+    "output_tokens": 808
+   },
+   {
+    "input_tokens": 1836,
+    "output_tokens": 374
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999999658779231,
+  "top_coverage": 0.8666666666666667
+ },
+ {
+  "pid": 84,
+  "disease": "OMIM:201910",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 6500.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 212,
+    "output_tokens": 646
+   },
+   {
+    "input_tokens": 1564,
+    "output_tokens": 328
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.23732236158208414,
+  "top_coverage": 0.4
+ },
+ {
+  "pid": 196,
+  "disease": "OMIM:606574",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 79.5,
+  "H0": 4,
+  "U1": 4,
+  "H0_lenient": 4,
+  "U1_lenient": 1,
+  "U2": 10,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 185,
+    "output_tokens": 559
+   },
+   {
+    "input_tokens": 1740,
+    "output_tokens": 375
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.4564305563688769,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 227,
+  "disease": "OMIM:612164",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 701.5,
+  "H0": 8,
+  "U1": 10,
+  "H0_lenient": 5,
+  "U1_lenient": 3,
+  "U2": 14,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 191,
+    "output_tokens": 956
+   },
+   {
+    "input_tokens": 1944,
+    "output_tokens": 427
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.29908592690327523,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 78,
+  "disease": "OMIM:188400",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 3,
+  "posterior": 1003.5,
+  "H0": 2,
+  "U1": null,
+  "H0_lenient": 2,
+  "U1_lenient": null,
+  "U2": 3,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 163,
+    "output_tokens": 767
+   },
+   {
+    "input_tokens": 1603,
+    "output_tokens": 354
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.02119287577678052,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 310,
+  "disease": "OMIM:617730",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 15,
+  "posterior": 10.0,
+  "H0": 3,
+  "U1": 3,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 368,
+    "output_tokens": 795
+   },
+   {
+    "input_tokens": 1845,
+    "output_tokens": 342
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5381311028660226,
+  "top_coverage": 0.5333333333333333
+ },
+ {
+  "pid": 3,
+  "disease": "OMIM:103580",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 3,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 161,
+    "output_tokens": 703
+   },
+   {
+    "input_tokens": 1596,
+    "output_tokens": 319
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9266480771692991,
+  "top_coverage": 1.0
+ },
+ {
+  "pid": 280,
+  "disease": "OMIM:616211",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 6,
+  "posterior": 11.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 10,
+  "U1_lenient": null,
+  "U2": 22,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 220,
+    "output_tokens": 1059
+   },
+   {
+    "input_tokens": 1841,
+    "output_tokens": 445
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.2517561057215613,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 122,
+  "disease": "OMIM:248250",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 5.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 10,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 230,
+    "output_tokens": 723
+   },
+   {
+    "input_tokens": 1630,
+    "output_tokens": 287
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.6390644018919902,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 298,
+  "disease": "OMIM:616914",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 17,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 402,
+    "output_tokens": 791
+   },
+   {
+    "input_tokens": 1817,
+    "output_tokens": 382
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999999999812526,
+  "top_coverage": 0.7058823529411765
+ },
+ {
+  "pid": 233,
+  "disease": "OMIM:612313",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 92.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 100,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 167,
+    "output_tokens": 970
+   },
+   {
+    "input_tokens": 1688,
+    "output_tokens": 348
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.12706061089900494,
+  "top_coverage": 0.75
+ },
+ {
+  "pid": 323,
+  "disease": "OMIM:619656",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 11,
+  "posterior": 199.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": 3,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": false,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 290,
+    "output_tokens": 1200
+   },
+   {
+    "input_tokens": 1579,
+    "output_tokens": 943
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.19438818984752115,
+  "top_coverage": 0.45454545454545453
+ },
+ {
+  "pid": 145,
+  "disease": "OMIM:272300",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 6,
+  "posterior": 26.0,
+  "H0": 4,
+  "U1": 4,
+  "H0_lenient": 4,
+  "U1_lenient": 4,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 200,
+    "output_tokens": 439
+   },
+   {
+    "input_tokens": 1636,
+    "output_tokens": 267
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.5432993181943586,
+  "top_coverage": 0.6666666666666666
+ },
+ {
+  "pid": 241,
+  "disease": "OMIM:612463",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 11.0,
+  "H0": 3,
+  "U1": 7,
+  "H0_lenient": 3,
+  "U1_lenient": 7,
+  "U2": 4,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 198,
+    "output_tokens": 786
+   },
+   {
+    "input_tokens": 1649,
+    "output_tokens": 381
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.19337375501680454,
+  "top_coverage": 0.6
+ },
+ {
+  "pid": 197,
+  "disease": "OMIM:606693",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 5,
+  "posterior": 4.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 190,
+    "output_tokens": 775
+   },
+   {
+    "input_tokens": 1791,
+    "output_tokens": 723
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9780487957820582,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 7,
+  "disease": "OMIM:103580",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 8.5,
+  "H0": 2,
+  "U1": 2,
+  "H0_lenient": 2,
+  "U1_lenient": 2,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 185,
+    "output_tokens": 749
+   },
+   {
+    "input_tokens": 1617,
+    "output_tokens": 380
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.16428888383506376,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 199,
+  "disease": "OMIM:606693",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 17,
+  "posterior": 1.0,
+  "H0": 1,
+  "U1": 1,
+  "H0_lenient": 1,
+  "U1_lenient": 1,
+  "U2": 1,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 362,
+    "output_tokens": 835
+   },
+   {
+    "input_tokens": 1840,
+    "output_tokens": 372
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999665096372284,
+  "top_coverage": 0.6470588235294118
+ },
+ {
+  "pid": 77,
+  "disease": "OMIM:188400",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 12,
+  "posterior": 23.0,
+  "H0": 1,
+  "U1": 2,
+  "H0_lenient": 1,
+  "U1_lenient": 2,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 300,
+    "output_tokens": 825
+   },
+   {
+    "input_tokens": 1742,
+    "output_tokens": 971
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.8944000600606675,
+  "top_coverage": 0.5
+ },
+ {
+  "pid": 188,
+  "disease": "OMIM:605275",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 7,
+  "posterior": 83.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": 3,
+  "U1_lenient": 4,
+  "U2": 91,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 220,
+    "output_tokens": 887
+   },
+   {
+    "input_tokens": 1669,
+    "output_tokens": 835
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9229396428781148,
+  "top_coverage": 0.7142857142857143
+ },
+ {
+  "pid": 332,
+  "disease": "OMIM:620455",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 9,
+  "posterior": 1.0,
+  "H0": null,
+  "U1": 1,
+  "H0_lenient": null,
+  "U1_lenient": 1,
+  "U2": 2,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 265,
+    "output_tokens": 927
+   },
+   {
+    "input_tokens": 1929,
+    "output_tokens": 435
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9957187802606292,
+  "top_coverage": 0.5555555555555556
+ },
+ {
+  "pid": 262,
+  "disease": "OMIM:615032",
+  "cell": [
+   0,
+   0
+  ],
+  "n_obs": 5,
+  "posterior": 159.0,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": null,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 182,
+    "output_tokens": 712
+   },
+   {
+    "input_tokens": 1653,
+    "output_tokens": 353
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.6376441419858497,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 330,
+  "disease": "OMIM:620455",
+  "cell": [
+   2,
+   0
+  ],
+  "n_obs": 15,
+  "posterior": 1.0,
+  "H0": null,
+  "U1": 1,
+  "H0_lenient": null,
+  "U1_lenient": 1,
+  "U2": 3,
+  "recall_k": true,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 355,
+    "output_tokens": 853
+   },
+   {
+    "input_tokens": 2045,
+    "output_tokens": 711
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.9999999109499352,
+  "top_coverage": 0.8
+ },
+ {
+  "pid": 140,
+  "disease": "OMIM:269150",
+  "cell": [
+   0,
+   2
+  ],
+  "n_obs": 13,
+  "posterior": 34.5,
+  "H0": null,
+  "U1": 2,
+  "H0_lenient": null,
+  "U1_lenient": 2,
+  "U2": 41,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 328,
+    "output_tokens": 949
+   },
+   {
+    "input_tokens": 1765,
+    "output_tokens": 849
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.995966143779061,
+  "top_coverage": 0.6153846153846154
+ },
+ {
+  "pid": 238,
+  "disease": "OMIM:612463",
+  "cell": [
+   2,
+   2
+  ],
+  "n_obs": 4,
+  "posterior": 52.5,
+  "H0": null,
+  "U1": null,
+  "H0_lenient": null,
+  "U1_lenient": null,
+  "U2": 66,
+  "recall_k": false,
+  "parsed": {
+   "H0": true,
+   "U1": true
+  },
+  "usage": [
+   {
+    "input_tokens": 188,
+    "output_tokens": 885
+   },
+   {
+    "input_tokens": 1604,
+    "output_tokens": 324
+   }
+  ],
+  "hosts": [
+   "Anthropic",
+   "Anthropic"
+  ],
+  "top_probability": 0.026911789031587256,
+  "top_coverage": 0.5
+ }
+]
