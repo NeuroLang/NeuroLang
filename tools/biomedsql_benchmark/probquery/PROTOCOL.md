@@ -125,3 +125,9 @@ What the build changed, and why, before any scored answer existed (development a
 - **Comparison between the models:** descriptive only; no threshold is fixed. Is the S2 - S1 difference of the same sign and size?
 - **Disclosed:** while setting this up, a few lines of the Sonnet S1 run's log were seen (single answers against gold). No Sonnet reading had been
   computed.
+
+## Amendment 4, before any run with the second model (2026-11-25): Qwen3.6-27B instead of Qwen3.5-122B-A10B
+At the user's choice, the second model of amendment 3 is **Qwen3.6-27B** instead: the newest Qwen generation, dense, 27 B parameters, official FP8
+release, served with vLLM on 1 hopper GPU. Qwen 3.6 has no larger open-weight model. Everything else in amendment 3 is unchanged (parsers,
+thinking on, context, `max_tokens`, temperature, step cap, questions, readings, descriptive comparison between the models). Results go to
+`results/qwen36-27b/`. No answer from either Qwen model existed when this was written.
