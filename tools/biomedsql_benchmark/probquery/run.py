@@ -17,6 +17,7 @@ import argparse
 import json
 from pathlib import Path
 
+from arms import RESULTS_TAG
 HERE = Path(__file__).resolve().parent
 
 
@@ -52,7 +53,7 @@ def run_arm(args):
         wanted = args.ids.split(",")
         questions = [q for q in questions if q["id"] in wanted]
     gold = json.load(open(HERE / "gold.json"))
-    out_path = HERE / "results" / ("dev" if args.dev else "") / f"{args.arm}.jsonl"
+    out_path = HERE / "results" / RESULTS_TAG / ("dev" if args.dev else "") / f"{args.arm}.jsonl"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     done = records(out_path)
     seen = {r["id"] for r in done}

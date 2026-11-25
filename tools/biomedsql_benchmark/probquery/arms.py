@@ -7,8 +7,15 @@ Every arm calls Sonnet 5.5 through OpenRouter (``anthropic/claude-sonnet-5.5``,
 Anthropic as the preferred host), temperature 0, at most 8000 tokens per reply,
 with the client of the NeuroLang assistant (``OpenRouterClient``, which also
 records each call's host and cost as OpenRouter reports them).
+
+Another model (PROTOCOL.md, amendment 3) is chosen by the environment:
+``PQ_MODEL`` (model id), ``PQ_BASE_URL`` (an OpenAI-compatible endpoint, e.g.
+vLLM), ``PQ_API_KEY_ENV`` (the variable holding its key) and
+``PQ_RESULTS_TAG`` (results go to ``results/<tag>/``). Unset, every arm uses
+Sonnet through OpenRouter as above.
 """
 
+import os
 import re
 import time
 from pathlib import Path
@@ -19,7 +26,11 @@ import yaml
 from build_tables import DATA, DB, DETERMINISTIC, ENGINES, UNCERTAIN
 
 HERE = Path(__file__).resolve().parent
-MODEL = "anthropic/claude-sonnet-5.5"
+MODEL = os.environ.get("PQ_MODEL", "anthropic/claude-sonnet-5.5")
+BASE_URL = os.environ.get("PQ_BASE_URL", "https://openrouter.ai/api/v1")
+API_KEY_ENV = os.environ.get("PQ_API_KEY_ENV", "OPENROUTER_API_KEY")
+RESULTS_TAG = os.environ.get("PQ_RESULTS_TAG", "")
+OPENROUTER = "openrouter.ai" in BASE_URL
 MAX_TOKENS = 8000
 MAX_STEPS = 25
 TEMPERATURE = 0.0
@@ -192,8 +203,9 @@ def openrouter_client():
 
         def _payload(self, messages, tools, temperature):
             payload = super()._payload(messages, tools, temperature)
-            payload["provider"] = {"order": ["Anthropic"]}
-            payload["usage"] = {"include": True}
+            if OPENROUTER:
+                payload["provider"] = {"order": ["Anthropic"]}
+                payload["usage"] = {"include": True}
             return payload
 
         def complete(self, messages, tools=None, temperature=0.0):
@@ -224,9 +236,9 @@ def openrouter_client():
             return reply
 
     provider = ProviderConfig(
-        name="openrouter", api="openai", model=MODEL,
-        base_url="https://openrouter.ai/api/v1",
-        api_key_env="OPENROUTER_API_KEY", tool_calling="native",
+        name="openrouter" if OPENROUTER else "openai-compatible", api="openai",
+        model=MODEL, base_url=BASE_URL,
+        api_key_env=API_KEY_ENV, tool_calling="native",
         max_tokens=MAX_TOKENS, headers={"X-Title": "NeuroLang"},
     )
     client = OpenRouterClient(provider, REQUEST_TIMEOUT)

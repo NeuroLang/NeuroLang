@@ -28,6 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
+from arms import RESULTS_TAG
 HERE = Path(__file__).resolve().parent
 LEVELS = [f"P{i}" for i in range(1, 8)]
 HARD, EASY = {"P4", "P5", "P6", "P7"}, {"P1", "P2"}
@@ -45,7 +46,7 @@ def correct(level, answer, gold):
 def load(dev, exclude_restored=False):
     """The records of each arm; without the restored templates (P4d, P4e,
     P5d, P6d) if *exclude_restored*."""
-    folder = HERE / "results" / ("dev" if dev else "")
+    folder = HERE / "results" / RESULTS_TAG / ("dev" if dev else "")
     gold = json.load(open(HERE / "gold.json"))
     restored = {q["id"] for q in json.load(open(HERE / "questions.json"))
                 if q.get("restored")}

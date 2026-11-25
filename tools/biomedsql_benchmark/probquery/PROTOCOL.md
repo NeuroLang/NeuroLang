@@ -112,3 +112,16 @@ What the build changed, and why, before any scored answer existed (development a
   - No worked examples for either arm.
 - **Time.** Agent time (model plus tool) is reported separately from wall time, because S2's harness adds about 45 s per question that is neither.
 - **Runs** happen on the Margaret cluster: DuckDB 2.0.1, one run per question and arm, `--max-usd 40`.
+
+## Amendment 3, before any run with the second model (2026-11-25): a second model, Qwen3.5-122B-A10B
+- **Why:** to test whether the comparison between the arms depends on the model.
+- **Model:** Qwen3.5-122B-A10B (open weights; 10 B parameters active per token), official GPTQ-Int4 release. It is served with vLLM 0.33 on
+  2 hopper GPUs of the Margaret cluster, with native tool calls (`qwen3_coder` parser) and thinking on (`qwen3` reasoning parser), as Sonnet
+  reasons through OpenRouter.
+- **What stays the same:** context 65,536 tokens; `max_tokens` 8,000; temperature 0; step cap 25. The same 143 scored questions, gold, prompts,
+  schema and guidance. All three arms (S0, S1, S2), one run each; results in `results/qwen122/`.
+- **Readings:** every reading of the protocol, including H7 and the effort comparison, is repeated for Qwen. Cost is reported as tokens and GPU time
+  (no list price applies to a self-hosted model).
+- **Comparison between the models:** descriptive only; no threshold is fixed. Is the S2 - S1 difference of the same sign and size?
+- **Disclosed:** while setting this up, a few lines of the Sonnet S1 run's log were seen (single answers against gold). No Sonnet reading had been
+  computed.
