@@ -217,6 +217,13 @@ Unreleased
 
 **Performance:**
 
+- Named answers: the code reachable from a query, which the
+  post-processing of each answer's magic rules and the stratification of
+  the program read, was searched once from each rule of each predicate of
+  the query, finding the same rules each time; it is searched once from
+  all of them. Fig. 2b's program (four named answers, neurosynth_iit)
+  takes 21.2 s, from 22.5 s, with the same answers.
+
 - Lifted inference: a conjunction implies ``v != c`` when a positive
   deterministic atom of it has ``v`` where none of its tuples has the
   constant ``c`` of an atom of a probabilistic relation at ``v``'s
