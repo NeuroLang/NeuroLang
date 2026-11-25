@@ -1,0 +1,15 @@
+fitted on 2763 predictions (222 genes); evaluated on 1197 (131 genes)
+coefficients:
+  +0.66  log odds of the smoothed share
+  +0.58  log n
+  +0.21  strongest -log10 p
+  +2.78  mean -log10 p
+  -0.13  any same-organ dataset significant
+  +1.19  same-organ smoothed share
+  -0.85  share of other datasets in the same organ
+  -0.74  any same-source dataset significant
+support_prior (engine)           Brier 0.147  AUC 0.820
+logistic on the table            Brier 0.131  AUC 0.858
+L2, Sonnet + the evidence table  Brier 0.129  AUC 0.875
+Brier, logistic - support_prior: -0.016 [-0.022, -0.011]
+Brier, logistic - L2:            +0.002 [-0.006, +0.010]

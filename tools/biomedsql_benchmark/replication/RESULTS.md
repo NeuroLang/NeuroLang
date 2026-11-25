@@ -103,3 +103,22 @@ Paired Brier: `support_prior` - share **-0.010 [-0.016, -0.006]**; `support_prio
   where the prior matters little. The first set's n = 1 weakness (27 of 240 items) is 25 of 1,197 here.
 - Reading: the engine gives an exact, calibrated, auditable probability; it does not beat an LLM that sees the p-values and tissues of the other datasets, which the share ignores.
   A weighted choice of units (by the strength of each test) is the obvious next step and is not tested.
+
+## Post hoc: what does L2 see that the share does not? (`post_hoc_logit.py`)
+
+Decided after the result above, so exploratory. A logistic regression on eight features of the other datasets' tests (the smoothed share, n, the
+strongest and the mean -log10 p, same-organ and same-source signals), fitted on the 2,763 predictions of the 222 genes of the first item set and
+evaluated on the same 1,197 predictions of the 131 other genes (`results/post_hoc_logit.txt`):
+
+| System | Brier | AUC |
+|---|---|---|
+| `support_prior` (engine) | 0.147 | 0.820 |
+| logistic on the table | 0.131 | 0.858 |
+| L2, Sonnet + the evidence table | 0.129 | 0.875 |
+
+Paired Brier: logistic - `support_prior` **-0.016 [-0.022, -0.011]**; logistic - L2 **+0.002 [-0.006, +0.010]**.
+
+- A simple model fitted on the table matches L2 within the interval: the LLM's edge over the share is the information the share ignores, mostly how
+  strong the other tests are (largest coefficient: the mean -log10 p, +2.78) and whether datasets of the held-out dataset's organ found the gene
+  (same-organ smoothed share, +1.19). It is not evidence of knowledge the table does not hold.
+- These 131 genes were already the evaluation set of `PROTOCOL_PRIOR.md`; this is their second use, and the features were chosen after seeing that result.
