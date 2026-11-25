@@ -1,0 +1,1042 @@
+{
+ "P1a-0": {
+  "gold": 0.0874,
+  "lineage": 1,
+  "max_unit_lineage": 1,
+  "mc": {
+   "estimate": 0.086979,
+   "se": 0.00028180428236455174,
+   "ok": true
+  }
+ },
+ "P1a-1": {
+  "gold": 0.0874,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1a-2": {
+  "gold": 0.0874,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1a-3": {
+  "gold": 0.0874,
+  "lineage": 1,
+  "max_unit_lineage": 1,
+  "mc": {
+   "estimate": 0.087947,
+   "se": 0.0002832178052153501,
+   "ok": true
+  }
+ },
+ "P1a-4": {
+  "gold": 0.0874,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1a-5": {
+  "gold": 0.0874,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1a-6": {
+  "gold": 0.0874,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1a-7": {
+  "gold": 0.0874,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1b-0": {
+  "gold": 0.29,
+  "lineage": 1,
+  "max_unit_lineage": 1,
+  "mc": {
+   "estimate": 0.289637,
+   "se": 0.0004535938802838945,
+   "ok": true
+  }
+ },
+ "P1b-1": {
+  "gold": 0.29,
+  "lineage": 1,
+  "max_unit_lineage": 1,
+  "mc": {
+   "estimate": 0.289465,
+   "se": 0.0004535140723009596,
+   "ok": true
+  }
+ },
+ "P1b-2": {
+  "gold": 0.29,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1b-3": {
+  "gold": 0.29,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1b-4": {
+  "gold": 0.13,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1b-5": {
+  "gold": 0.29,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1b-6": {
+  "gold": 0.13,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1b-7": {
+  "gold": 0.29,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1c-0": {
+  "gold": 0.5,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1c-1": {
+  "gold": 0.1,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1c-2": {
+  "gold": 0.1,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1c-3": {
+  "gold": 0.5,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1c-4": {
+  "gold": 0.1,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1c-5": {
+  "gold": 0.5,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1c-6": {
+  "gold": 0.5,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P1c-7": {
+  "gold": 0.5,
+  "lineage": 1,
+  "max_unit_lineage": 1
+ },
+ "P2a-0": {
+  "gold": 0.9999875484699325,
+  "lineage": 18,
+  "max_unit_lineage": 18,
+  "mc": {
+   "estimate": 0.999991,
+   "se": 2.999986499975751e-06,
+   "ok": true
+  }
+ },
+ "P2a-1": {
+  "gold": 0.8732061908510559,
+  "lineage": 5,
+  "max_unit_lineage": 5
+ },
+ "P2a-2": {
+  "gold": 0.969504704416,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P2a-3": {
+  "gold": 0.9995916901335505,
+  "lineage": 15,
+  "max_unit_lineage": 15
+ },
+ "P2a-4": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2,
+  "mc": {
+   "estimate": 0.166727,
+   "se": 0.0003727319512343958,
+   "ok": true
+  }
+ },
+ "P2a-5": {
+  "gold": 0.23995134762399997,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P2a-6": {
+  "gold": 0.9938915844480001,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P2a-7": {
+  "gold": 0.36700202281550126,
+  "lineage": 5,
+  "max_unit_lineage": 5
+ },
+ "P2b-0": {
+  "gold": 0.8692193205999998,
+  "lineage": 5,
+  "max_unit_lineage": 5
+ },
+ "P2b-1": {
+  "gold": 0.8236,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P2b-2": {
+  "gold": 0.6345999999999999,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P2b-3": {
+  "gold": 0.9546021027598777,
+  "lineage": 8,
+  "max_unit_lineage": 8
+ },
+ "P2b-4": {
+  "gold": 0.6345999999999999,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P2b-5": {
+  "gold": 0.91107676,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P2b-6": {
+  "gold": 0.9945109682560002,
+  "lineage": 6,
+  "max_unit_lineage": 6
+ },
+ "P2b-7": {
+  "gold": 0.9473975200000001,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P2c-0": {
+  "gold": 0.2710000000000001,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P2c-1": {
+  "gold": 0.9794968749999999,
+  "lineage": 9,
+  "max_unit_lineage": 9
+ },
+ "P2c-2": {
+  "gold": 0.19000000000000003,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P2c-3": {
+  "gold": 0.99609375,
+  "lineage": 8,
+  "max_unit_lineage": 8
+ },
+ "P2c-4": {
+  "gold": 0.40950999999999993,
+  "lineage": 5,
+  "max_unit_lineage": 5
+ },
+ "P2c-5": {
+  "gold": 0.9968359375000002,
+  "lineage": 10,
+  "max_unit_lineage": 10
+ },
+ "P2c-6": {
+  "gold": 0.19000000000000003,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P2c-7": {
+  "gold": 0.3439000000000001,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P3a-0": {
+  "gold": 0.9957630783604879,
+  "lineage": 7,
+  "max_unit_lineage": 7
+ },
+ "P3a-1": {
+  "gold": 0.3063795998416624,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P3a-2": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2,
+  "mc": {
+   "estimate": 0.166697,
+   "se": 0.00037270512498622827,
+   "ok": true
+  }
+ },
+ "P3a-3": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P3a-4": {
+  "gold": 0.9957630783604879,
+  "lineage": 7,
+  "max_unit_lineage": 7
+ },
+ "P3a-5": {
+  "gold": 0.9839233299615007,
+  "lineage": 10,
+  "max_unit_lineage": 10
+ },
+ "P3a-6": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P3a-7": {
+  "gold": 0.9964713274355319,
+  "lineage": 9,
+  "max_unit_lineage": 9
+ },
+ "P3b-0": {
+  "gold": 0.7712320754503904,
+  "lineage": 14,
+  "max_unit_lineage": 14
+ },
+ "P3b-1": {
+  "gold": 0.7974999999999998,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P3b-2": {
+  "gold": 0.19000000000000003,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P3b-3": {
+  "gold": 0.7847663950000001,
+  "lineage": 9,
+  "max_unit_lineage": 9
+ },
+ "P3b-4": {
+  "gold": 0.9907735937500004,
+  "lineage": 11,
+  "max_unit_lineage": 11
+ },
+ "P3b-5": {
+  "gold": 0.9925266109374997,
+  "lineage": 13,
+  "max_unit_lineage": 13
+ },
+ "P3b-6": {
+  "gold": 0.7847663950000001,
+  "lineage": 9,
+  "max_unit_lineage": 9
+ },
+ "P3b-7": {
+  "gold": 0.6861894039100003,
+  "lineage": 11,
+  "max_unit_lineage": 11
+ },
+ "P3c-0": {
+  "gold": 0.1430800928,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P3c-1": {
+  "gold": 0.1430800928,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P3c-2": {
+  "gold": 0.06118,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P3c-3": {
+  "gold": 0.06992000000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P3c-4": {
+  "gold": 0.21790451373789602,
+  "lineage": 6,
+  "max_unit_lineage": 6
+ },
+ "P3c-5": {
+  "gold": 0.07866000000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2,
+  "mc": {
+   "estimate": 0.078429,
+   "se": 0.00026884547970721024,
+   "ok": true
+  }
+ },
+ "P3c-6": {
+  "gold": 0.15113260440000004,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P3c-7": {
+  "gold": 0.2975341702182239,
+  "lineage": 10,
+  "max_unit_lineage": 10
+ },
+ "P4a-0": {
+  "gold": 0.7817320057302728,
+  "lineage": 17,
+  "max_unit_lineage": 17
+ },
+ "P4a-1": {
+  "gold": 0.916430960159186,
+  "lineage": 17,
+  "max_unit_lineage": 17
+ },
+ "P4a-2": {
+  "gold": 0.7817320057302728,
+  "lineage": 17,
+  "max_unit_lineage": 17
+ },
+ "P4a-3": {
+  "gold": 0.13928345627378433,
+  "lineage": 19,
+  "max_unit_lineage": 19,
+  "mc": {
+   "estimate": 0.139851,
+   "se": 0.00034683237709158586,
+   "ok": true
+  }
+ },
+ "P4a-4": {
+  "gold": 0.016606000000000003,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P4a-5": {
+  "gold": 0.2830437317504904,
+  "lineage": 19,
+  "max_unit_lineage": 19
+ },
+ "P4a-6": {
+  "gold": 0.916430960159186,
+  "lineage": 17,
+  "max_unit_lineage": 17
+ },
+ "P4a-7": {
+  "gold": 0.916430960159186,
+  "lineage": 17,
+  "max_unit_lineage": 17
+ },
+ "P4b-0": {
+  "gold": 0.07866000000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P4b-1": {
+  "gold": 0.759717766799795,
+  "lineage": 11,
+  "max_unit_lineage": 11
+ },
+ "P4b-2": {
+  "gold": 0.14308009280000006,
+  "lineage": 4,
+  "max_unit_lineage": 4,
+  "mc": {
+   "estimate": 0.142975,
+   "se": 0.0003500473530466985,
+   "ok": true
+  }
+ },
+ "P4b-3": {
+  "gold": 0.14308009280000006,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P4b-4": {
+  "gold": 0.1350275812,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P4b-5": {
+  "gold": 0.06992000000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P4b-6": {
+  "gold": 0.14308009280000006,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P4b-7": {
+  "gold": 0.11861700759999999,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P4c-0": {
+  "gold": 0.064280952,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P4c-1": {
+  "gold": 0.006111008000000001,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P4c-2": {
+  "gold": 0.07866000000000001,
+  "lineage": 3,
+  "max_unit_lineage": 3,
+  "mc": {
+   "estimate": 0.078925,
+   "se": 0.0002696216689641246,
+   "ok": true
+  }
+ },
+ "P4c-3": {
+  "gold": 0.8,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P4c-4": {
+  "gold": 0.006874884000000001,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P4c-5": {
+  "gold": 0.064280952,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P4c-6": {
+  "gold": 0.05713862400000001,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P4c-7": {
+  "gold": 0.06992000000000001,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P5a-0": {
+  "gold": 0.151208992,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P5a-1": {
+  "gold": 0.11861700759999999,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P5a-2": {
+  "gold": 0.48592644155060677,
+  "lineage": 16,
+  "max_unit_lineage": 16
+ },
+ "P5a-3": {
+  "gold": 0.9998903850937638,
+  "lineage": 16,
+  "max_unit_lineage": 16
+ },
+ "P5a-4": {
+  "gold": 0.06118,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P5a-5": {
+  "gold": 0.06992000000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P5a-6": {
+  "gold": 0.20313802586943996,
+  "lineage": 6,
+  "max_unit_lineage": 6
+ },
+ "P5a-7": {
+  "gold": 0.06992000000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P5b-0": {
+  "gold": 0.935804508398701,
+  "lineage": 13,
+  "max_unit_lineage": 13,
+  "mc": {
+   "estimate": 0.935501,
+   "se": 0.0002456397341616376,
+   "ok": true
+  }
+ },
+ "P5b-1": {
+  "gold": 0.2576751282145896,
+  "lineage": 7,
+  "max_unit_lineage": 7
+ },
+ "P5b-2": {
+  "gold": 0.15113260440000004,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P5b-3": {
+  "gold": 0.8139840000000002,
+  "lineage": 5,
+  "max_unit_lineage": 5
+ },
+ "P5b-4": {
+  "gold": 0.99903410204385,
+  "lineage": 17,
+  "max_unit_lineage": 17
+ },
+ "P5b-5": {
+  "gold": 0.7597177667997949,
+  "lineage": 11,
+  "max_unit_lineage": 11
+ },
+ "P5b-6": {
+  "gold": 0.19429866087936,
+  "lineage": 5,
+  "max_unit_lineage": 5
+ },
+ "P5b-7": {
+  "gold": 0.99333082752,
+  "lineage": 8,
+  "max_unit_lineage": 8,
+  "mc": {
+   "estimate": 0.993348,
+   "se": 8.128807351635289e-05,
+   "ok": true
+  }
+ },
+ "P5c-0": {
+  "gold": 0.9888925037093033,
+  "lineage": 18,
+  "max_unit_lineage": 18
+ },
+ "P5c-1": {
+  "gold": 0.0874,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P5c-2": {
+  "gold": 0.3486405650198723,
+  "lineage": 10,
+  "max_unit_lineage": 10,
+  "mc": {
+   "estimate": 0.348704,
+   "se": 0.00047656009105253455,
+   "ok": true
+  }
+ },
+ "P5c-3": {
+  "gold": 0.0874,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P5c-4": {
+  "gold": 0.0874,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P5c-5": {
+  "gold": 0.15918511600000002,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P5c-6": {
+  "gold": 0.9888925037093033,
+  "lineage": 18,
+  "max_unit_lineage": 18
+ },
+ "P5c-7": {
+  "gold": 0.9865209714689395,
+  "lineage": 16,
+  "max_unit_lineage": 16
+ },
+ "P6a-0": {
+  "gold": 0.9871703330835775,
+  "lineage": 16,
+  "max_unit_lineage": 16
+ },
+ "P6a-1": {
+  "gold": 0.9755985343592339,
+  "lineage": 16,
+  "max_unit_lineage": 16
+ },
+ "P6a-2": {
+  "gold": 0.8,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6a-3": {
+  "gold": 0.9755985343592339,
+  "lineage": 16,
+  "max_unit_lineage": 16
+ },
+ "P6a-4": {
+  "gold": 0.8,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6a-5": {
+  "gold": 0.8,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6a-6": {
+  "gold": 0.9999922428522351,
+  "lineage": 20,
+  "max_unit_lineage": 20
+ },
+ "P6a-7": {
+  "gold": 0.8521523059355441,
+  "lineage": 12,
+  "max_unit_lineage": 12
+ },
+ "P6b-0": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6b-1": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6b-2": {
+  "gold": 0.02742704609826601,
+  "lineage": 12,
+  "max_unit_lineage": 12
+ },
+ "P6b-3": {
+  "gold": 0.02742704609826601,
+  "lineage": 12,
+  "max_unit_lineage": 12
+ },
+ "P6b-4": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6b-5": {
+  "gold": 0.0719574326029404,
+  "lineage": 10,
+  "max_unit_lineage": 10
+ },
+ "P6b-6": {
+  "gold": 0.2144013795815088,
+  "lineage": 17,
+  "max_unit_lineage": 17
+ },
+ "P6b-7": {
+  "gold": 0.044830006721370885,
+  "lineage": 17,
+  "max_unit_lineage": 17
+ },
+ "P6c-0": {
+  "gold": 0.9145438462261977,
+  "lineage": 8,
+  "max_unit_lineage": 8
+ },
+ "P6c-1": {
+  "gold": 0.9,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6c-2": {
+  "gold": 0.9677969100799999,
+  "lineage": 6,
+  "max_unit_lineage": 6,
+  "mc": {
+   "estimate": 0.9680787726127776,
+   "se": 0.0005948240857857585,
+   "ok": true
+  }
+ },
+ "P6c-3": {
+  "gold": 0.9,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6c-4": {
+  "gold": 0.9992,
+  "lineage": 8,
+  "max_unit_lineage": 8,
+  "mc": {
+   "estimate": 0.999253200525453,
+   "se": 3.022573428729108e-05,
+   "ok": true
+  }
+ },
+ "P6c-5": {
+  "gold": 0.9,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6c-6": {
+  "gold": 0.9,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P6c-7": {
+  "gold": 0.9653760000000001,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P7a-0": {
+  "gold": 0.8842879697706734,
+  "lineage": 6,
+  "max_unit_lineage": 6
+ },
+ "P7a-1": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P7a-2": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P7a-3": {
+  "gold": 0.16716124,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P7a-4": {
+  "gold": 2.5728070499615003,
+  "lineage": 28,
+  "max_unit_lineage": 13
+ },
+ "P7a-5": {
+  "gold": 5.4062272248325645,
+  "lineage": 36,
+  "max_unit_lineage": 13
+ },
+ "P7a-6": {
+  "gold": 0.34196124,
+  "lineage": 3,
+  "max_unit_lineage": 2
+ },
+ "P7a-7": {
+  "gold": 0.33432248,
+  "lineage": 4,
+  "max_unit_lineage": 2
+ },
+ "P7b-0": {
+  "gold": 0.1430800928,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P7b-1": {
+  "gold": 0.999992242852235,
+  "lineage": 20,
+  "max_unit_lineage": 20
+ },
+ "P7b-2": {
+  "gold": 0.2656882726443434,
+  "lineage": 8,
+  "max_unit_lineage": 8
+ },
+ "P7b-3": {
+  "gold": 0.35881537071241504,
+  "lineage": 12,
+  "max_unit_lineage": 12
+ },
+ "P7b-4": {
+  "gold": 0.9866630891546199,
+  "lineage": 14,
+  "max_unit_lineage": 14
+ },
+ "P7b-5": {
+  "gold": 0.11861700759999999,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P7b-6": {
+  "gold": 0.13495119360000002,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P7b-7": {
+  "gold": 1.1216142827546198,
+  "lineage": 18,
+  "max_unit_lineage": 14
+ },
+ "P7c-0": {
+  "gold": 2.52108,
+  "lineage": 14,
+  "max_unit_lineage": 2
+ },
+ "P7c-1": {
+  "gold": 1.7802936997376002,
+  "lineage": 16,
+  "max_unit_lineage": 4
+ },
+ "P7c-2": {
+  "gold": 2.66092,
+  "lineage": 18,
+  "max_unit_lineage": 2
+ },
+ "P7c-3": {
+  "gold": 2.66092,
+  "lineage": 18,
+  "max_unit_lineage": 2
+ },
+ "P7c-4": {
+  "gold": 0.14858000000000002,
+  "lineage": 4,
+  "max_unit_lineage": 2
+ },
+ "P7c-5": {
+  "gold": 2.52108,
+  "lineage": 14,
+  "max_unit_lineage": 2
+ },
+ "P7c-6": {
+  "gold": 0.06992000000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P7c-7": {
+  "gold": 0.14858000000000002,
+  "lineage": 4,
+  "max_unit_lineage": 2
+ },
+ "P4d-0": {
+  "gold": 0.6951338071758755,
+  "lineage": 9,
+  "max_unit_lineage": 9
+ },
+ "P4d-1": {
+  "gold": 0.9949126747661075,
+  "lineage": 9,
+  "max_unit_lineage": 9
+ },
+ "P4d-2": {
+  "gold": 0.0279428801583376,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P4d-3": {
+  "gold": 0.729972340143588,
+  "lineage": 7,
+  "max_unit_lineage": 7
+ },
+ "P4d-4": {
+  "gold": 0.007638760000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P4d-5": {
+  "gold": 0.007638760000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P4d-6": {
+  "gold": 0.007638760000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P4d-7": {
+  "gold": 0.04011056480849889,
+  "lineage": 5,
+  "max_unit_lineage": 5,
+  "mc": {
+   "estimate": 0.040122,
+   "se": 0.00019624531871104595,
+   "ok": true
+  }
+ },
+ "P4e-0": {
+  "gold": 0.0279428801583376,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P4e-1": {
+  "gold": 0.014609892376,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P5d-0": {
+  "gold": 0.09437113237599999,
+  "lineage": 3,
+  "max_unit_lineage": 3
+ },
+ "P5d-1": {
+  "gold": 0.1457059299918003,
+  "lineage": 6,
+  "max_unit_lineage": 6
+ },
+ "P5d-2": {
+  "gold": 0.5301934980511036,
+  "lineage": 10,
+  "max_unit_lineage": 10,
+  "mc": {
+   "estimate": 0.529283,
+   "se": 0.0004991417693511535,
+   "ok": true
+  }
+ },
+ "P5d-3": {
+  "gold": 0.23995134762399997,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P5d-4": {
+  "gold": 0.0874,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P5d-5": {
+  "gold": 0.9768220916875727,
+  "lineage": 7,
+  "max_unit_lineage": 7
+ },
+ "P5d-6": {
+  "gold": 0.007638760000000001,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ },
+ "P5d-7": {
+  "gold": 0.7450915342614001,
+  "lineage": 5,
+  "max_unit_lineage": 5
+ },
+ "P6d-0": {
+  "gold": 0.1392183598416624,
+  "lineage": 4,
+  "max_unit_lineage": 4
+ },
+ "P6d-1": {
+  "gold": 0.072790107624,
+  "lineage": 3,
+  "max_unit_lineage": 3,
+  "mc": {
+   "estimate": 0.072475,
+   "se": 0.00025927277985743124,
+   "ok": true
+  }
+ },
+ "P6d-2": {
+  "gold": 0.07976124,
+  "lineage": 2,
+  "max_unit_lineage": 2
+ }
+}
