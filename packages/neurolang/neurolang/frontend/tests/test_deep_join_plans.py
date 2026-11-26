@@ -106,3 +106,31 @@ def test_conjunction_of_hundreds_of_atoms_sharing_nothing_with_the_last(shape):
     result = nl.execute_datalog_program(program)
 
     assert [tuple(row) for row in result] == [(0 if shape == "star" else 1,)]
+
+
+@pytest.mark.parametrize("lifted_only", [True, False])
+@pytest.mark.parametrize("shape", ["disjoint", "star"])
+def test_deterministic_atoms_of_many_runs_in_a_probabilistic_query(
+    shape, lifted_only
+):
+    """The deterministic atoms of a probabilistic query are translated to
+    relational algebra by the translation that the plans of the lifting
+    use, whose solvers take no n-ary join. These shapes pass with the n-ary
+    option forced on too: the test guards, it does not reproduce."""
+    n = 17
+    nl = _engine(lifted_only)
+    if shape == "disjoint":
+        nl.add_tuple_set([(1,)], name="r")
+        det = ", ".join(f"r(y{i})" for i in range(n))
+    else:
+        nl.add_tuple_set([tuple(range(n))], name="c")
+        nl.add_tuple_set([(i,) for i in range(n)], name="l")
+        det = (
+            "c(" + ", ".join(f"y{i}" for i in range(n)) + "), "
+            + ", ".join(f"l(y{i})" for i in range(n))
+        )
+
+    found = _solve(nl, f"q(x, PROB) :- a0(x), {det}")
+
+    for x in (0, 1):
+        assert found[(x,)] == pytest.approx(P[0] * (1 + x) / 2, rel=1e-9)

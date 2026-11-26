@@ -33,7 +33,10 @@ from ...utils.relational_algebra_set import (
     RelationalAlgebraFrozenSet,
 )
 from ..expressions import Conjunction, Negation
-from ..translate_to_named_ra import TranslateToNamedRA
+from ..translate_to_named_ra import (
+    TranslateToNamedRA,
+    TranslateToNamedRAWithNaryJoins,
+)
 
 C_ = Constant
 S_ = Symbol
@@ -1287,7 +1290,7 @@ def test_conjunction_of_atoms_sharing_nothing_with_the_last_is_a_flat_join(
     else:
         atoms = (S_("C")(*xs),) + tuple(S_("L")(x) for x in xs)
 
-    result = TranslateToNamedRA().walk(Conjunction(atoms))
+    result = TranslateToNamedRAWithNaryJoins().walk(Conjunction(atoms))
 
     joins = [
         node for _, node in expression_iterator(result)
@@ -1296,3 +1299,10 @@ def test_conjunction_of_atoms_sharing_nothing_with_the_last_is_a_flat_join(
     assert len(joins) == 1
     assert len(joins[0].relations) > 64
     assert _shape_of_the_joins(result)[1] < 64
+
+    # the translation of the solvers of the plans builds none
+    assert not any(
+        isinstance(node, NaryNaturalJoin) for _, node in expression_iterator(
+            TranslateToNamedRA().walk(Conjunction(atoms))
+        )
+    )

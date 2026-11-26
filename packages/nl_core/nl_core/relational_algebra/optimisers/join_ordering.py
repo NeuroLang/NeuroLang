@@ -16,7 +16,11 @@ from ..relational_algebra import (
     RenameColumns,
     Selection
 )
-from .columns import _project_onto_operand, _ra_columns
+from .columns import (
+    _project_onto_operand,
+    _ra_columns,
+    _ra_columns_or_none,
+)
 
 
 class ProductSimplification(ew.PatternWalker):
@@ -126,7 +130,7 @@ def join_in_chunks(
     operands = list(operands)
     if len(operands) <= chunk:
         return reduce(join, operands)
-    columns = list(map(_columns_or_none, operands))
+    columns = list(map(_ra_columns_or_none, operands))
     runs, run_columns = [[operands[0]]], [columns[0]]
     for i, operand in enumerate(operands[1:]):
         if _share_columns(columns[i], columns[i + 1]):
@@ -159,14 +163,6 @@ def _are_independent(column_sets):
     return None not in column_sets and sum(map(len, column_sets)) == len(
         set().union(*column_sets)
     )
-
-
-def _columns_or_none(operand):
-    """The columns of ``operand``, none when they are not known."""
-    try:
-        return set(_ra_columns(operand))
-    except NotImplementedError:
-        return None
 
 
 def _join_run(run, join, chunk):

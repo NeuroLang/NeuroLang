@@ -29,3 +29,11 @@ def _project_onto_operand(operand, attributes):
     if pushed_attrs and pushed_attrs != tuple(operand_cols):
         return Projection(operand, pushed_attrs)
     return operand
+
+
+def _ra_columns_or_none(expr):
+    """Output columns of an RA node or leaf Constant, none if not known."""
+    try:
+        return set(_get_columns_for_RA_or_constant(expr))
+    except (NotImplementedError, AttributeError):
+        return None

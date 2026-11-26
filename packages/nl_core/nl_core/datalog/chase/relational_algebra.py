@@ -24,7 +24,7 @@ from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import extract_logic_free_variables
 from ..expressions import Conjunction, Implication
 from ..instance import MapInstance
-from ..translate_to_named_ra import TranslateToNamedRA
+from ..translate_to_named_ra import TranslateToNamedRAWithNaryJoins
 from ..wrapped_collections import (WrappedNamedRelationalAlgebraFrozenSet,
                                    WrappedRelationalAlgebraSet)
 
@@ -457,7 +457,7 @@ class ChaseNamedRelationalAlgebraMixin:
         builtin_symbols = self._builtins
         rsw = ReplaceSymbolWalker(builtin_symbols)
         conjunction = rsw.walk(conjunction)
-        traslator_to_named_ra = TranslateToNamedRA()
+        traslator_to_named_ra = TranslateToNamedRAWithNaryJoins()
         LOG.info(f"Translating and optimising CQ {conjunction} to RA")
         ra_code = traslator_to_named_ra.walk(conjunction)
         ra_code = self._project_on(ra_code, columns)
