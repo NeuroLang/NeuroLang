@@ -450,6 +450,14 @@ Unreleased
   variable: 28 s to 15 s). The selection of the shattering nests the
   conditions differently above 16 of them.
 
+- Magic sets: a rule using an intensional predicate with a number of
+  arguments other than its definition's, such as ``cnt(x)`` for
+  ``cnt(x, count(y)) :- par(x, y)``, failed with an ``IndexError`` (or an
+  ``AttributeError`` in the chase of the rewrite). The rewrite now declines
+  it (``PredicateArityInMagicSetsError``, naming the predicate and both
+  arities) and the query is solved unrewritten, as for any other program
+  magic sets cannot rewrite.
+
 - Magic sets: a query of the WMQL bundles ``uf``, ``ilf``, ``af`` or
   ``ec`` on the Disconnectome engines fits in memory again. Since the
   rewrite gave up on cycles of its own (#1391), these bundles were solved

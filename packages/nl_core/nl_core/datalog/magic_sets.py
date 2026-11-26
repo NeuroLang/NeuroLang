@@ -30,6 +30,7 @@ from .exceptions import (
     NonConjunctiveAntecedentInMagicSetsError,
     NewRecursionInMagicSetsRewriteError,
     NoConstantPredicateFoundError,
+    PredicateArityInMagicSetsError,
     UnstratifiedMagicSetsRewriteError,
 )
 from .expressions import (
@@ -179,6 +180,7 @@ def program_invariants(datalog) -> dict:
     """What a SIPS reads of the program *datalog*, which a rewrite does not
     change: computed once for the attempts of one rewrite, not once each
     (44 attempts, 25 s of a query of tracts)."""
+    check_predicate_arities(datalog)
     return {
         "edb": edb_with_prob_symbols(datalog),
         "prob_symbols": probabilistic_symbols(datalog),
@@ -558,6 +560,28 @@ def needed_positions(datalog):
     return {
         functor: frozenset(at) for functor, at in positions.items() if at
     }
+
+
+def check_predicate_arities(datalog):
+    """
+    Raise :class:`PredicateArityInMagicSetsError` if a rule of *datalog*
+    uses an intensional predicate with a number of arguments other than
+    its definition's.
+    """
+    rules = get_list_of_intensional_rules(datalog)
+    arities = {
+        rule.consequent.functor: len(rule.consequent.args) for rule in rules
+    }
+    for rule in rules:
+        for atom in extract_logic_predicates(rule.antecedent):
+            if hasattr(atom, "functor") and arities.get(
+                atom.functor, len(atom.args)
+            ) != len(atom.args):
+                raise PredicateArityInMagicSetsError(
+                    f"{atom.functor.name} is defined with "
+                    f"{arities[atom.functor]} arguments and used with "
+                    f"{len(atom.args)}"
+                )
 
 
 def aggregate_positions(datalog):

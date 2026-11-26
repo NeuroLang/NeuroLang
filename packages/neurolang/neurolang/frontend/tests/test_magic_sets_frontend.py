@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from nl_core.datalog import magic_sets
+from nl_core.datalog.exceptions import InvalidMagicSetError
 
 from ...frontend import NeurolangDL
 from ...frontend import probabilistic_frontend, query_resolution_datalog
@@ -573,6 +574,34 @@ def test_frontend_similar_study_bound_after_the_rule_restricting_it(
     )
     assert res.as_pandas_dataframe().values.tolist() == [[4]]
     assert texts == {"a text"}
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+@pytest.mark.parametrize("definition", [
+    "cnt(x, count(y)) :- par(x, y)", "cnt(x, y) :- par(x, y)",
+])
+def test_frontend_solves_unrewritten_a_predicate_of_another_arity(
+    frontend, definition, monkeypatch
+):
+    """
+    ``cnt`` is used with one argument and defined with two: magic sets
+    declined it with an IndexError, or the chase of its rewrite failed
+    with an AttributeError. It is solved as it is without magic sets.
+    """
+    def solve():
+        nl = frontend()
+        nl.add_tuple_set([("a", "b"), ("b", "c")], name="par")
+        return nl.execute_datalog_program(
+            f"{definition}\nans(x) :- par('a', x), cnt(x)"
+        ).as_pandas_dataframe().values.tolist()
+
+    def refuse(*args, **kwargs):
+        raise InvalidMagicSetError()
+
+    rewritten = solve()
+    monkeypatch.setattr(query_resolution_datalog, "magic_rewrite", refuse)
+    monkeypatch.setattr(probabilistic_frontend, "magic_rewrite", refuse)
+    assert rewritten == solve()
 
 
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
