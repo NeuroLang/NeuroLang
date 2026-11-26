@@ -737,6 +737,65 @@ Constants a deterministic atom excludes
    :math:`\exists l` being pushed onto :math:`S(t, l)` alone, the
    comparison is not moved into it.
 
+Tuples deterministic atoms select disjointly
+   Before shattering, the atoms of a tuple-independent relation :math:`R`
+   in several atoms of the query are replaced by atoms of new relations,
+   one per set of tuples of :math:`R` they select, when these sets are
+   pairwise disjoint
+   (:func:`~neurolang.probabilistic.dalvi_suciu_lift.rename_disjoint_restrictions`).
+   The *restriction* of an atom :math:`R(u_1, \ldots, u_k)` gives, for
+   each position :math:`i`, the set :math:`V_i` of the values allowed
+   there: :math:`\{c\}` for a constant :math:`u_i = c`; for a variable
+   :math:`u_i = v`, the values at :math:`v`'s position of the tuples, with
+   its constants, of every positive deterministic atom :math:`D(\ldots,
+   v, \ldots)` in the scope of the atom, a conjunct of a conjunction with
+   a formula containing the atom, :math:`v` not quantified between them;
+   all the values otherwise
+   (:class:`~neurolang.probabilistic.dalvi_suciu_lift.DisjointRestrictions`).
+   The atom then becomes the atom :math:`R_V(u_1, \ldots, u_k)` of the
+   relation of the tuples of :math:`R` with a value of :math:`V_i` at each
+   position :math:`i`, with their probabilities, computed on the data at
+   planning time. This is done for a relation when its atoms have at
+   least two restrictions, one of them by a deterministic atom, and any
+   two restrictions allow disjoint sets of values at some position, so
+   that the tuples they select are disjoint; otherwise, as when an atom
+   of the relation is restricted by no deterministic atom, its atoms are
+   left as they are. The values of a deterministic atom are those of each
+   of its columns separately, which is sound but may miss a disjointness
+   that only their combination shows. In the union
+
+   .. math::
+
+      \exists x, y\, R(x) \land S(x, y) \land D_1(y) \;\lor\;
+      \exists x, y\, S(x, y) \land T(y) \land D_2(y),
+
+   the query :math:`H_1` of Dalvi and Suciu, #P-hard, with deterministic
+   :math:`D_1` and :math:`D_2`, the atoms of :math:`S` have the
+   restrictions :math:`D_1` and :math:`D_2` at :math:`y`'s position. When
+   no value is in both, the union is
+
+   .. math::
+
+      \exists x, y\, R(x) \land S_{D_1}(x, y) \land D_1(y) \;\lor\;
+      \exists x, y\, S_{D_2}(x, y) \land T(y) \land D_2(y),
+
+   two disjuncts without a probabilistic relation in common, lifted by
+   independent disjunction; otherwise it is declined, as before. In
+
+   .. math::
+
+      \exists g, d_1, d_2\, \mathit{target}(X, g) \land
+      \mathit{te}(d_1, g, \mathit{AD}) \land
+      \mathit{organ}(d_1, \mathit{brain}) \land
+      \mathit{te}(d_2, g, \mathit{AD}) \land
+      \mathit{organ}(d_2, \mathit{blood}),
+
+   with a single organ per dataset, the atoms of :math:`\mathit{te}`
+   become atoms of :math:`\mathit{te}` on the datasets of the brain and
+   of the blood, and the self-join is gone; with a dataset of both
+   organs, the query is lifted as it is, by the separator :math:`g`. The
+   proof is in `Correctness of the plans`_.
+
 
 Planning non-repeating queries
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2082,6 +2141,48 @@ Deterministic atoms of a separator variable
    probabilistic relation, and no tuple in common: they are independent
    by Lemma 1, and :math:`P[\exists z\, Q(z)] = 1 - \prod_a (1 -
    P[Q(a)])`, as for the other separator variables.
+
+Tuples deterministic atoms select disjointly
+   *Equivalence.* Let :math:`R(\bar u)` be an atom of the query in the
+   scope of the positive deterministic atoms :math:`D_1, \ldots, D_m`, and
+   :math:`V` its restriction. For a valuation :math:`\theta` of the
+   variables free at the atom which satisfies the conjunctions of
+   :math:`D_1, \ldots, D_m`, in a world: each :math:`D_j\theta` is a tuple
+   of :math:`D_j`, the same in every world, with the constants of
+   :math:`D_j`'s atom, so the value :math:`\theta(v)` of a variable
+   :math:`v` of :math:`R(\bar u)` at a position of :math:`D_j`'s atom is
+   in the values of that column of these tuples, and a constant of
+   :math:`R(\bar u)` is its value: :math:`\bar u\theta` has a value of
+   :math:`V_i` at each position :math:`i`, and :math:`R(\bar u)\theta`
+   holds if and only if :math:`R_V(\bar u)\theta` does, :math:`R_V`
+   holding the tuples of :math:`R` with these values. For a valuation
+   that does not satisfy them, the conjunction of the :math:`D_j` with the
+   formula containing the atom is false whichever the atom's value. In
+   both cases the formula is unchanged by replacing :math:`R(\bar u)` by
+   :math:`R_V(\bar u)`, whether the atom is negated, in a disjunction or
+   under quantifiers within that formula, since the replacement holds
+   for every value of the variables quantified inside it; :math:`v` is
+   not quantified between the atom and :math:`D_j`
+   (``DisjointRestrictions.quantifier``), so :math:`v` is the same
+   variable in both. Replacing every atom, the query is equivalent in
+   every world, and its probability is the same.
+
+   *Independence.* :math:`R_V` and :math:`R_W` are relations of tuples of
+   :math:`R` with their random variables. When :math:`V` and :math:`W`
+   allow disjoint sets of values at a position :math:`i`, no tuple has a
+   value of both at :math:`i`, so the two relations have no tuple, and no
+   random variable, in common, and are independent tuple-independent
+   relations, by Lemma 1. Every atom of :math:`R` is replaced, so no atom
+   of :math:`R` is left to share tuples with them; atoms with the same
+   restriction are of the same relation, a self-join the rules then see.
+   The rules that follow treat different relations as independent,
+   which these are.
+
+   *Polynomial time.* For a query with :math:`n` atoms, the restrictions
+   are the values of at most :math:`n` columns of deterministic relations,
+   and their pairwise disjointness is checked in :math:`O(n^2)`
+   intersections of sets of values of the data; each new relation is a
+   selection of :math:`R`, linear in its size.
 
 Declined unions
    Declining a query is sound: it is then solved by weighted model

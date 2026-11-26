@@ -285,41 +285,53 @@ def _ranked_relation(symbol, arity, ranked, pattern, symbol_table):
     """The relation of the tuples of `symbol` whose values at the
     positions `ranked` are in the order `pattern`, with the other
     positions first and then one position per rank, in increasing order.
-
-    It is computed on the data, keeping the probability of each tuple,
-    and wrapped as the relation of `symbol` is."""
-    entry = symbol_table[symbol]
-    offset = int(isinstance(entry, ProbabilisticFactSet))
-    relation = entry
-    if isinstance(entry, (ProbabilisticFactSet, DeterministicFactSet)):
-        relation = symbol_table[entry.relation]
+    """
     conditions = []
     for (i, rank_i), (j, rank_j) in product(
         zip(ranked, pattern), repeat=2
     ):
         if i < j:
             conditions.append((
-                i + offset, j + offset,
+                i, j,
                 operator.eq if rank_i == rank_j else
                 operator.lt if rank_i < rank_j else operator.gt
             ))
-    columns = tuple(range(offset)) + tuple(
-        i + offset for i in range(arity) if i not in ranked
-    ) + tuple(
-        ranked[pattern.index(rank)] + offset
-        for rank in range(len(set(pattern)))
+    columns = tuple(i for i in range(arity) if i not in ranked) + tuple(
+        ranked[pattern.index(rank)] for rank in range(len(set(pattern)))
     )
-    value = relation.value.selection(
-        lambda t: all(op(t[i], t[j]) for i, j, op in conditions)
-    ).projection(*columns)
+    return selected_relation(
+        symbol,
+        lambda value, offset: value.selection(lambda t: all(
+            op(t[i + offset], t[j + offset]) for i, j, op in conditions
+        )),
+        columns, symbol_table
+    )
+
+
+def selected_relation(symbol, select, columns, symbol_table):
+    """The relation of the tuples of `symbol` that `select` selects, with
+    their values at the positions `columns` of `symbol`'s atoms.
+
+    `select`, given the set of the relation's tuples and the offset of
+    the positions of the atoms in them, 1 after a probability column,
+    gives the set of the tuples selected. It is computed on the data,
+    each tuple keeping its probability, and wrapped as the relation of
+    `symbol` is."""
+    entry = symbol_table[symbol]
+    offset = int(isinstance(entry, ProbabilisticFactSet))
+    relation = entry
+    if isinstance(entry, (ProbabilisticFactSet, DeterministicFactSet)):
+        relation = symbol_table[entry.relation]
+    columns = tuple(range(offset)) + tuple(c + offset for c in columns)
+    value = select(relation.value, offset).projection(*columns)
     types = typing.get_args(typing.get_args(relation.type)[0])
-    ranked_relation = Constant[
+    selected = Constant[
         typing.AbstractSet[typing.Tuple[tuple(types[c] for c in columns)]]
     ](value, verify_type=False)
     if relation is entry:
-        return ranked_relation
+        return selected
     fresh = Symbol.fresh()
-    symbol_table[fresh] = ranked_relation
+    symbol_table[fresh] = selected
     if isinstance(entry, ProbabilisticFactSet):
         return ProbabilisticFactSet(fresh, entry.probability_column)
     return DeterministicFactSet(fresh)
