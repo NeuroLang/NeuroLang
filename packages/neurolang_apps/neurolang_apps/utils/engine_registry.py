@@ -2159,13 +2159,18 @@ def _phase_text_embeddings(
 def _predicate_texts(nl, source):
     """Read ``{id: (title, text)}`` from engine predicates of the form
     ``p(id, text)``: ``predicate`` gives the texts, the optional
-    ``title_predicate`` the titles."""
-    def column(name):
-        return {str(row[0]): row[1] for row in nl.symbols[name].value}
+    ``title_predicate`` the titles. A predicate of more columns,
+    ``cognitive_task(task, name, description)``, names the column of its
+    texts, ``text_column`` (1 by default), and may name that of their
+    titles, ``title_column``."""
+    def column(name, at=1):
+        return {str(row[0]): row[at] for row in nl.symbols[name].value}
 
-    texts = column(source["predicate"])
+    texts = column(source["predicate"], source.get("text_column", 1))
     titles = column(source["title_predicate"]) if (
         "title_predicate" in source
+    ) else column(source["predicate"], source["title_column"]) if (
+        "title_column" in source
     ) else {}
     return {
         key: (titles.get(key, ""), text) for key, text in texts.items()

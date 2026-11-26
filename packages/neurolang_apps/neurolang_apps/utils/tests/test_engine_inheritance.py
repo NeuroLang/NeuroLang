@@ -340,12 +340,24 @@ RELATIONS = {
     "destrieux_tian_functional_connectivity":
         ("destrieux_tian_label", "correlation", "destrieux", 148),
 }
+# IBC's functional connectivity by condition: (label sort, atlas
+# predicate, number of cortical regions)
+IBC_RELATIONS = {
+    "ibc_schaefer400_tian_functional_connectivity":
+        ("schaefer400_tian_label", "schaefer400", 400),
+    "ibc_destrieux_tian_functional_connectivity":
+        ("destrieux_tian_label", "destrieux", 148),
+}
+IBC_CONDITIONS = {
+    "rest", "raiders", "good_bad_ugly", "monkey_kingdom", "le_petit_prince",
+    "clips", "archi", "hcp", "language", "tasks"}
 
 
 def test_the_connectivity_is_four_relations_of_cortex_and_subcortex():
-    """The connectivity engines have the four relations, structural and
-    functional over Schaefer 400 + Tian and Destrieux + Tian, and no
-    other; their descriptions tell them apart and name the subcortex."""
+    """The connectivity engines have the four relations of the HCP,
+    structural and functional over Schaefer 400 + Tian and Destrieux +
+    Tian, and IBC's two by condition, and no other; their descriptions
+    tell them apart and name the subcortex."""
     from neurolang_apps.utils.engine_registry import (
         get_acknowledgements, get_predicates)
 
@@ -354,10 +366,10 @@ def test_the_connectivity_is_four_relations_of_cortex_and_subcortex():
         kind = engine.split("_")[0]
         assert {r for r in cfg["relations"]
                 if r.endswith("_connectivity")} == {
-            r for r in RELATIONS if f"_{kind}_" in r}
+            r for r in {**RELATIONS, **IBC_RELATIONS} if f"_{kind}_" in r}
     predicates = get_predicates("neurosynth")
     connectivity = {p for p in predicates if p.endswith("_connectivity")}
-    assert connectivity == set(RELATIONS)
+    assert connectivity == set(RELATIONS) | set(IBC_RELATIONS)
     for name, (label, value, atlas, _) in RELATIONS.items():
         assert [a["sort"] for a in predicates[name]["arguments"]] == \
             [label, label, value]
@@ -380,6 +392,18 @@ def test_the_connectivity_is_four_relations_of_cortex_and_subcortex():
                 "10.1016/j.neuroimage.2013.05.039",  # HCP resting state
                 "10.1038/s41593-020-00711-6"):  # Tian
         assert any(doi in t for t in texts), doi
+    for name, (label, atlas, _) in IBC_RELATIONS.items():
+        assert [a["sort"] for a in predicates[name]["arguments"]] == \
+            ["condition", label, label, "correlation"]
+        text = " ".join(predicates[name]["description"].split())
+        assert "Individual Brain Charting" in text and "Tian" in text
+        assert f"{atlas}(l, r)" in text and "background" in text
+        entry = get_engine_config("neurosynth")["relations"][name]
+        assert "/-/raw/v2.5/tsv/ibc_" in entry["file"] and entry["md5"]
+    assert any("10.1038/sdata.2018.105" in t for t in texts)  # IBC
+    sort = " ".join(get_engine_config("functional_connectivity")["sorts"][
+        "condition"]["description"].split())
+    assert all(f"'{c}'" in sort for c in IBC_CONDITIONS)
     # the connectivity engines share the atlas of 400, others do not load it
     assert "schaefer400" in get_predicates("functional_connectivity")
     assert "schaefer400" not in get_predicates("tracts")
@@ -408,6 +432,26 @@ def test_the_connectivity_files_are_every_pair_of_engine_regions(
     swapped = table.set_index(["region2", "region1"])[column]
     swapped.index.names = both.index.names
     assert both.sort_index().equals(swapped.sort_index())
+
+
+@pytest.mark.network
+@pytest.mark.parametrize("relation", list(IBC_RELATIONS))
+def test_the_ibc_files_are_every_pair_of_engine_regions_by_condition(
+    relation, tmp_path
+):
+    _, _, cortex = IBC_RELATIONS[relation]
+    table = _fetched(relation, tmp_path)
+    assert list(table.columns) == ["condition", "region1", "region2", "r"]
+    assert set(table.condition) == IBC_CONDITIONS
+    assert table.r.between(-1, 1).all() and table.r.notna().all()
+    assert (table.region1 != table.region2).all()
+    for condition, rows in table.groupby("condition"):
+        regions = set(rows.region1)
+        assert len(regions) == cortex + 32, condition
+        both = rows.set_index(["region1", "region2"]).r
+        swapped = rows.set_index(["region2", "region1"]).r
+        swapped.index.names = both.index.names
+        assert both.sort_index().equals(swapped.sort_index()), condition
 
 
 def test_the_destrieux_and_tian_regions_have_their_full_names():
@@ -582,3 +626,53 @@ def test_view_draws_the_regions_of_a_connectivity_result(
     )
     assert saved.regions == 2 and saved.outside == 0
     assert set(saved.image.get_fdata().ravel()) == {0.0, 5.0, 10.0}
+
+
+def test_an_embedding_source_may_name_its_text_and_title_columns():
+    """cognitive_task(task, name, description): the texts embedded are
+    the descriptions, their titles the names."""
+    from types import SimpleNamespace
+
+    from neurolang_apps.utils import engine_registry
+
+    nl = SimpleNamespace(symbols={"cognitive_task": SimpleNamespace(value=[
+        ("trm_1", "n-back task", "Remember the item n back.")])})
+    assert engine_registry._predicate_texts(nl, {
+        "predicate": "cognitive_task", "text_column": 2,
+        "title_column": 1}) == {
+        "trm_1": ("n-back task", "Remember the item n back.")}
+
+
+def test_the_ibc_tasks_are_described_tagged_and_embedded():
+    """The tasks of IBC's conditions, their descriptions and Cognitive
+    Atlas concepts, the descriptions embedded (ibc_task_similarity), and
+    on the meta-analysis engines the Cognitive Atlas tasks embedded too
+    (cognitive_task_similarity), to link the two."""
+    from neurolang_apps.utils.engine_registry import get_predicates
+
+    arguments = {
+        "ibc_task": ["condition", "ibc_task"],
+        "ibc_task_description": ["ibc_task", "ibc_task_description"],
+        "ibc_task_concept": ["ibc_task", "cogat_term"],
+        "ibc_task_similarity": ["query", "ibc_task", "similarity"],
+    }
+    for engine in ("functional_connectivity", "neurosynth", "neurostore"):
+        predicates = get_predicates(engine)
+        for name, sorts in arguments.items():
+            assert [a["sort"] for a in predicates[name]["arguments"]] == \
+                sorts, (engine, name)
+        cfg = get_engine_config(engine)
+        entry = cfg["text_embeddings"]["ibc_task_descriptions"]
+        assert entry["ids_from"] == "ibc_task_description"
+        assert "ibc_task_text_similarity(q, t)" in cfg["datalog_init"]
+    for name in ("ibc_task", "ibc_task_description", "ibc_task_concept"):
+        entry = get_engine_config("neurosynth")["relations"][name]
+        assert "/-/raw/v2.5/tsv/" in entry["file"] and entry["md5"], name
+    cfg = get_engine_config("neurosynth")
+    assert cfg["text_embeddings"]["cognitive_tasks"]["source"] == {
+        "predicate": "cognitive_task", "text_column": 2, "title_column": 1}
+    assert [a["sort"] for a in get_predicates("neurosynth")[
+        "cognitive_task_similarity"]["arguments"]] == \
+        ["query", "task", "similarity"]
+    assert "cognitive_tasks" not in get_engine_config(
+        "functional_connectivity").get("text_embeddings", {})

@@ -88,12 +88,14 @@ def resample_nearest(labels: np.ndarray, affine: np.ndarray, shape,
     return out.reshape(shape)
 
 
-def combine_labels(cortex: np.ndarray, subcortex: np.ndarray) -> np.ndarray:
-    """The labels of the cortical parcels (1 to 400) and of Tian's regions
-    (1 to 32, numbered 401 to 432), on the same grid; Tian's where both."""
+def combine_labels(cortex: np.ndarray, subcortex: np.ndarray,
+                   offset: int = N_CORTEX) -> np.ndarray:
+    """The labels of the cortical parcels (1 to *offset*, 400) and of
+    Tian's regions (1 to 32, numbered from *offset* + 1), on the same
+    grid; Tian's where both."""
     combined = cortex.astype(np.uint16)
     inside = subcortex > 0
-    combined[inside] = subcortex[inside].astype(np.uint16) + N_CORTEX
+    combined[inside] = subcortex[inside].astype(np.uint16) + offset
     return combined
 
 

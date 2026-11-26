@@ -80,6 +80,30 @@ done; wait
    the engines' tables (two parcels, a parcel and a Tian region, two Tian
    regions) and the gradients.
 
+## Functional, by condition (IBC)
+
+The Individual Brain Charting dataset (CC0): 12 or 13 subjects at rest,
+watching movies and doing over 80 tasks, its preprocessed runs in MNI
+space (on Margaret, `/data/parietal/store2/data/ibc`: `derivatives` and
+the TRs of `sourcedata`). The conditions are the table `CONDITIONS` of
+`ibc.py`: rest, each movie, groups of task protocols, and every other
+task.
+
+1. `python -m hcp_connectivity ibc WORK IBC_DIR RUNS --task I --tasks N`
+   (`ibc.sbatch`, a Slurm array sharing the runs): for each run, the time
+   series averaged within the regions of Schaefer 400 + Tian and
+   Destrieux + Tian (WORK/atlases), cleaned of the motion and its
+   derivatives, five tCompCor components, a 0.01 Hz high-pass and, for a
+   task, its events convolved with the HRF (background connectivity);
+   their correlations, Fisher z (`RUNS/<subject>/<condition>__<run>.npz`).
+2. `python -m hcp_connectivity combine ibc WORK RUNS DATASET`: z
+   averaged over a subject's runs of a condition, then over the subjects
+   having it, its correlation
+   (`parquet/ibc_<atlas>_functional_mean_<condition>.parquet`), the
+   subjects and runs of each condition (`ibc_functional_counts.tsv`) and
+   the engines' tables (`tsv/ibc_<atlas>_tian_functional_connectivity
+   .tsv.gz`: condition, region1, region2, r).
+
 ## Population tractogram (the subcortex, a stop-gap, superseded)
 
 Superseded in the engines by the subjects' own tractography (below,

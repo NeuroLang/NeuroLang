@@ -427,14 +427,17 @@ engines:
   functional_connectivity:
     extends: connectivity_atlases
     description: >
-      Resting-state functional connectivity from fMRI: the correlation of
-      the spontaneous activity of two regions at rest over 964 subjects of
+      Functional connectivity from fMRI: the correlation of the
+      spontaneous activity of two regions at rest over 964 subjects of
       the Human Connectome Project, between the regions of the cortex and
       the subcortex of two atlases: the 400 Schaefer parcels and Tian's 32
       subcortical regions (schaefer400_tian_functional_connectivity), and
       the 148 Destrieux parcels and Tian's regions
-      (destrieux_tian_functional_connectivity), with the atlases of the
-      MNI brain. Functional, not structural.
+      (destrieux_tian_functional_connectivity); and by condition (rest,
+      movies, tasks) over the 12 or 13 subjects of the Individual Brain
+      Charting dataset (ibc_schaefer400_tian_functional_connectivity,
+      ibc_destrieux_tian_functional_connectivity); with the atlases of
+      the MNI brain. Functional, not structural.
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith, t_pvalue, fdr_threshold]
@@ -478,12 +481,88 @@ engines:
         that support the NIH Blueprint for Neuroscience Research; and by
         the McDonnell Center for Systems Neuroscience at Washington
         University.
+      - >-
+        Functional connectivity by condition
+        (ibc_schaefer400_tian_functional_connectivity,
+        ibc_destrieux_tian_functional_connectivity): the Individual Brain
+        Charting (IBC) dataset, 12 or 13 subjects scanned at rest, watching
+        movies and doing over 80 tasks (CC0), computed by NeuroLang
+        (tools/hcp_connectivity/ibc.py; the dataset:
+        https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity) as
+        follows. For each run of IBC's preprocessed fMRI (MNI space,
+        1.5 mm): the time series averaged within each region (the cortical
+        parcels of the atlas, Tian's subcortical regions), cleaned of six
+        motion parameters and their derivatives, five tCompCor components,
+        a 0.01 Hz high-pass and, for a task, its events convolved with the
+        SPM HRF (the background connectivity, not the task's
+        co-activation); the Pearson correlation of each pair of regions (a
+        full correlation, not a partial one); its Fisher z, averaged over
+        the subject's runs of a condition, then over the subjects, and
+        turned back into a correlation (tanh). Pinho AL et al. Individual
+        Brain Charting, a high-resolution fMRI dataset for cognitive
+        mapping. Sci Data 5:180105 (2018). doi:10.1038/sdata.2018.105.
+        Pinho AL et al. Individual Brain Charting dataset extension, second
+        release of high-resolution fMRI data for cognitive mapping. Sci
+        Data 7:353 (2020). doi:10.1038/s41597-020-00670-4. Pinho AL et al.
+        Individual Brain Charting dataset extension, third release for
+        movie watching and retinotopy data. Sci Data 11:590 (2024).
+        doi:10.1038/s41597-024-03390-1. Ponce AF, Aggarwal H et al.
+        Individual Brain Charting: fifth release of high-resolution fMRI
+        data for cognitive mapping. Sci Data 13:596 (2026).
+        doi:10.1038/s41597-026-06869-1.
+    # IBC's tasks embedded, for free-text queries (ibc_task_similarity)
+    text_embeddings:
+      ibc_task_descriptions:
+        ids_from: ibc_task_description
+        source:
+          predicate: ibc_task_description
+        model: allenai/specter2_base
+        document_adapter: allenai/specter2
+        query_adapter: allenai/specter2_adhoc_query
+        function: ibc_task_text_similarity
+        description: >-
+          ibc_task_text_similarity(query, task) returns the cosine
+          similarity between a free-text query and the description of an
+          IBC task, embedded with SPECTER2.
+    datalog_init: |
+      ibc_task_similarity(q, t, v) :- ibc_task_description(t, d) & (v == ibc_task_text_similarity(q, t))
     sorts:
       correlation:
         columns: [r]
         type: float
         description: >-
-          a Pearson correlation of resting-state fMRI time series, -1 to 1
+          a Pearson correlation of fMRI time series, -1 to 1
+      ibc_task:
+        columns: [task]
+        type: str
+        description: "a task of the Individual Brain Charting dataset, as 'HcpWm'"
+      ibc_task_description:
+        columns: [description]
+        type: str
+        description: "the description of a task of the Individual Brain Charting dataset"
+      query:
+        columns: [query]
+        type: str
+        description: "a free-text query"
+      similarity:
+        columns: [similarity]
+        type: float
+        description: "a cosine similarity between text embeddings"
+      cogat_term:
+        columns: [term]
+        type: str
+        description: "a Cognitive Atlas label, in lower case"
+      condition:
+        columns: [condition]
+        type: str
+        description: >-
+          the state of the IBC subjects during their fMRI runs: 'rest'; a
+          movie, 'raiders' (Raiders of the Lost Ark), 'good_bad_ugly' (The
+          Good, the Bad and the Ugly), 'monkey_kingdom', 'clips' (short
+          video clips), 'le_petit_prince' (listening to the audiobook); a
+          group of tasks, 'archi' (the ARCHI localizers), 'hcp' (the HCP
+          tasks), 'language' (reading and listening tasks), 'tasks' (every
+          other task)
     predicates:
       schaefer400_tian_functional_connectivity:
         description: >-
@@ -514,6 +593,77 @@ engines:
           (destrieux(l, r)) or a Tian region (tian(t, r)). Functional, not
           structural nor the co-activation of task studies
         arguments:
+          - destrieux_tian_label
+          - destrieux_tian_label
+          - correlation
+      ibc_schaefer400_tian_functional_connectivity:
+        description: >-
+          Functional connectivity by condition, at rest, watching movies
+          or doing tasks, between two regions of the Schaefer 400 parcels
+          (17 networks) and Tian's 32 subcortical regions: the Pearson
+          correlation r (-1 to 1; full, not partial) of their fMRI
+          activity in the condition c, over the 12 or 13 subjects of the
+          Individual Brain Charting dataset (the tanh of the mean of their
+          Fisher z; .credits), every pair of distinct regions both ways
+          round, for each condition. In a task, the activity the task
+          evokes is regressed out first: the connectivity is that of the
+          background activity, not the co-activation by the task. A region
+          is a parcel (schaefer400(l, r)) or a Tian region (tian(t, r)).
+          Few subjects: the 964-subject HCP rest is
+          schaefer400_tian_functional_connectivity
+        arguments:
+          - condition
+          - schaefer400_tian_label
+          - schaefer400_tian_label
+          - correlation
+      ibc_task:
+        description: >-
+          The IBC tasks whose runs make each condition of the functional
+          connectivity by condition (ibc_*_functional_connectivity): a
+          condition and a task ('rest' and 'RestingState', 'hcp' and
+          'HcpWm')
+        arguments:
+          - condition
+          - ibc_task
+      ibc_task_description:
+        description: >-
+          The description of an IBC task, as its authors wrote it: what
+          the subjects see and do, and its references
+        arguments:
+          - ibc_task
+          - ibc_task_description
+      ibc_task_concept:
+        description: >-
+          The concepts of the Cognitive Atlas that the contrasts of an IBC
+          task are tagged with by its authors (the cognitive components
+          they probe), as the labels of cogat_term, in lower case:
+          'response execution', 'theory of mind'
+        arguments:
+          - ibc_task
+          - cogat_term
+      ibc_task_similarity:
+        description: >-
+          Cosine similarity of the description of an IBC task to a
+          free-text query, embedded with SPECTER2; the first query embeds
+          the descriptions and needs ``pip install "neurolang[embeddings]"``
+        arguments:
+          - query
+          - ibc_task
+          - similarity
+      ibc_destrieux_tian_functional_connectivity:
+        description: >-
+          Functional connectivity by condition, at rest, watching movies
+          or doing tasks, between two regions of the 148 Destrieux parcels
+          and Tian's 32 subcortical regions: the Pearson correlation r (-1
+          to 1; full, not partial) of their fMRI activity in the condition
+          c, over the 12 or 13 subjects of the Individual Brain Charting
+          dataset (.credits), every pair of distinct regions both ways
+          round, for each condition; in a task, of the background activity,
+          the evoked one regressed out. A region is a Destrieux parcel
+          (destrieux(l, r)) or a Tian region (tian(t, r)). The 964-subject
+          HCP rest is destrieux_tian_functional_connectivity
+        arguments:
+          - condition
           - destrieux_tian_label
           - destrieux_tian_label
           - correlation
@@ -585,6 +735,7 @@ engines:
       uniformity(t, i, j, k, u) :- p_a_given_t(t, i, j, k, pat) & p_any_voxel_given_t(t, pbar) & (u == pat / pbar)
       ratios(t, i, j, k, lift, relative_risk, uniformity) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & p_term(t, pt) & p_any_voxel_given_t(t, pbar) & (lift == pat / pa) & (relative_risk == pat * (1 - pt) / (pa - pat * pt)) & (uniformity == pat / pbar)
       study_similarity(q, s, v) :- study(s) & (v == query_similarity(q, s)) & (v > 0)
+      cognitive_task_similarity(q, t, v) :- cognitive_task(t, n, d) & (v == cognitive_task_text_similarity(q, t))
       similar_study(q, s) :- study(s) & (v == query_similarity(q, s)) & (c == query_similarity_cutoff(q)) & (v >= c)
       p_similar(q, PROB) :- similar_study(q, s) & selected_study(s)
       p_a_given_similar(q, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (similar_study(q, s) & selected_study(s))
@@ -674,6 +825,23 @@ engines:
         prefixes:
           cogat: http://www.cognitiveatlas.org/ontology/cogat.owl#
     text_embeddings:
+      # The tasks of the Cognitive Atlas (cognitive_task), their
+      # descriptions, for free-text queries and to link IBC's tasks to them
+      cognitive_tasks:
+        ids_from: cognitive_task
+        source:
+          predicate: cognitive_task
+          text_column: 2
+          title_column: 1
+        model: allenai/specter2_base
+        document_adapter: allenai/specter2
+        query_adapter: allenai/specter2_adhoc_query
+        function: cognitive_task_text_similarity
+        description: >-
+          cognitive_task_text_similarity(query, task) returns the cosine
+          similarity between a free-text query and the name and
+          description of a task of the Cognitive Atlas, embedded with
+          SPECTER2.
       study_abstracts:
         ids_from: study
         # The titles and abstracts of the engine (study_abstract).
@@ -760,18 +928,10 @@ engines:
         type: int
         space: voxel
         description: "a voxel of the MNI template grid, in 3D"
-      query:
-        columns: [query]
-        type: str
-        description: "a free-text query"
       text:
         columns: [text]
         type: str
         description: "the title or abstract of a study"
-      similarity:
-        columns: [similarity]
-        type: float
-        description: "a cosine similarity between text embeddings"
       lift:
         columns: [lift]
         type: float
@@ -784,10 +944,6 @@ engines:
         columns: [uniformity]
         type: float
         description: "a uniformity ratio P(A_v | T) / P(A_V | T), 1 under uniformity"
-      cogat_term:
-        columns: [term]
-        type: str
-        description: "a Cognitive Atlas label, in lower case"
       cogat_class:
         columns: [iri]
         type: str
@@ -983,6 +1139,16 @@ engines:
         probability: true
         arguments:
           - voxel
+      cognitive_task_similarity:
+        description: >-
+          Cosine similarity of the name and description of a task of the
+          Cognitive Atlas to a free-text query, embedded with SPECTER2; the
+          query may be the description of an IBC task
+          (ibc_task_description), to find its tasks of the Cognitive Atlas
+        arguments:
+          - query
+          - task
+          - similarity
       study_similarity:
         description: >-
           Cosine similarity of the title and abstract of a study to a
