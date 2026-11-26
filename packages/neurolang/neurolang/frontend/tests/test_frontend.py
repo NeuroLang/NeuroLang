@@ -33,7 +33,7 @@ def test_symbol_management():
     assert sym.expression.type is int
 
     sym_ = neurolang.new_symbol(type_=(float, int))
-    assert sym_.expression.type is Tuple[float, int]
+    assert sym_.expression.type == Tuple[float, int]
     assert sym.expression.name != sym_.expression.name
 
     a = neurolang.new_symbol(int, name="a")

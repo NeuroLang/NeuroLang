@@ -41,3 +41,17 @@ def offline_publications():
         monkeypatch.setattr(text_embeddings, "_post", offline)
         monkeypatch.setattr(neurostore, "_fetch_json", offline)
         yield
+
+
+@pytest.fixture
+def forking():
+    """Skip the test where the system refuses to fork (no memory left)."""
+    import os
+
+    try:
+        pid = os.fork()
+    except (AttributeError, OSError) as exc:
+        pytest.skip(f"cannot fork: {exc}")
+    if pid == 0:
+        os._exit(0)
+    os.waitpid(pid, 0)

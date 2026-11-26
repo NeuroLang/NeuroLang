@@ -143,7 +143,7 @@ def test_load_neurosynth_study_ids(mock_fetch_study_metadata, metadata):
     )
 
     symbol = nl.load_neurosynth_study_ids(data_dir, convert_study_ids=True)
-    assert nl[symbol.symbol_name].type is AbstractSet[Tuple[StudyID]]
+    assert nl[symbol.symbol_name].type == AbstractSet[Tuple[StudyID]]
 
 
 @patch("neurolang.frontend.query_resolution.get_ns_term_study_associations")
@@ -166,7 +166,7 @@ def test_load_neurosynth_term_study_associations(
         data_dir, convert_study_ids=True
     )
     assert (
-        nl[symbol.symbol_name].type is AbstractSet[Tuple[StudyID, str, float]]
+        nl[symbol.symbol_name].type == AbstractSet[Tuple[StudyID, str, float]]
     )
 
 
