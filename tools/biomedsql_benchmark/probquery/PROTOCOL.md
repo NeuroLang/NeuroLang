@@ -131,3 +131,39 @@ At the user's choice, the second model of amendment 3 is **Qwen3.6-27B** instead
 release, served with vLLM on 1 hopper GPU. Qwen 3.6 has no larger open-weight model. Everything else in amendment 3 is unchanged (parsers,
 thinking on, context, `max_tokens`, temperature, step cap, questions, readings, descriptive comparison between the models). Results go to
 `results/qwen36-27b/`. No answer from either Qwen model existed when this was written.
+
+## Amendment 5, before any run it describes (2026-11-26): declarativeness after the engine fixes, and a guidance arm
+**Why.** In the Sonnet run, S2 was right on 142 of 143 questions. But 14 questions hit a lifting refusal and ended hybrid or hand-coded (`lifting_gaps.md`).
+The fixes for those refusals are now in NeuroLang master (#1414–#1418). The Qwen3.6-27B S2 misses were not refusals but translation errors (a dropped
+"given", a wrong quantifier scope) and probabilities combined by hand. These runs measure how the answers are reached, not only whether they are right.
+
+**Classification of a final answer** (`classify_queries.py`, written before the runs; applied to old and new answers alike):
+- **declarative**: the final program has exactly one top-level probability construct answering the question (`PROB[...]`, or `EXPECT[...]` / a
+  `COUNT` threshold where available), and no arithmetic on probabilities: no arithmetic builtin (`+ - * /`, `log`, `exp`, `AGGREGATE` over a
+  probability) applied to a variable bound by a probability construct, and no numeric literal standing for a probability;
+- **hybrid**: probability constructs whose values are combined by arithmetic or aggregation;
+- **hand-coded**: no probability construct, or probabilities written as constants;
+- **no answer**.
+The rule is mechanical. 20 answers are also classified by hand, and their agreement with the script is reported.
+
+**Run A, engine only.**
+- Sonnet 5.5 S2 on NeuroLang master at the commit recorded with the results (with #1414–#1418), guidance and prompts unchanged, 143 scored
+  questions, through OpenRouter as before. Results in `results/sonnet-master/`.
+- *Primary:* the share of declarative answers, against the original Sonnet S2 run, paired by question, interval resampling templates; also
+  restricted to the 14 questions that hit a refusal.
+- *Secondary:* accuracy against the original run.
+
+**Run B, guidance.**
+- S2 with the Datalog guidance extended by three rules: "write the whole question as one `PROB[...]` query; use `//` for 'given' or 'conditional on';
+  never combine probabilities by arithmetic or hard-code a probability". If `EXPECT` (#1419) and `PROB[COUNT(x) θ k | ...]` (#1424) are merged
+  before the run, the guidance also gives their syntax in one line each, and the run records it.
+- For both Sonnet 5.5 (OpenRouter) and Qwen3.6-27B (vLLM on Margaret, settings of amendment 4), on master at the recorded commit. Results in
+  `results/<model>-guidance/`.
+- *Primary:* the declarative share and accuracy, against run A for Sonnet and against the original Qwen S2 run for Qwen, paired by question,
+  intervals resampling templates.
+- *Specific prediction:* the P6a "given" questions, all 5 scored wrong by Qwen S2, are answered with `//` and correctly.
+
+**Fixed now.**
+- No new questions, gold, schema or uncertainty text.
+- S0 and S1 are not rerun (they do not use the engine).
+- Every run and every reading is reported, whichever way it comes out.
