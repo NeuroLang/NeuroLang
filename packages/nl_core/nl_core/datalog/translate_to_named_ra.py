@@ -397,7 +397,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @staticmethod
     def natural_join(formulas):
-        return join_in_chunks(formulas)
+        return join_in_chunks(formulas, nary=True)
 
     @staticmethod
     def join_on_computed_columns(sources, targets, new_columns):

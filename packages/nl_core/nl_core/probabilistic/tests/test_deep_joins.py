@@ -5,9 +5,10 @@ optimise and solve them recurse on, one level per join.
 """
 from typing import AbstractSet
 
+from nl_expr.expression_walker import expression_iterator
 from nl_expr.expressions import Constant, Symbol
 from nl_expr.logic import Conjunction
-from ...relational_algebra import NaturalJoin
+from ...relational_algebra import NaryNaturalJoin, NaturalJoin
 from ...relational_algebra.optimisers import JOIN_CHUNK, join_in_chunks
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import dalvi_suciu_lift
@@ -56,3 +57,28 @@ def test_plan_optimiser_walks_a_join_of_many_operands():
     join = join_in_chunks(operands)
 
     assert RAQueryOptimiser().walk(join) == join
+
+
+def test_plan_of_independent_atoms_on_distinct_variables_is_a_shallow_tree():
+    """The independent join of components sharing no column is a product
+    whatever its tree: a tree of chunks, not the chain as deep as they are
+    many. It has no n-ary join, which the solver of the plans does not
+    take."""
+    relations = [Symbol(f"R{i}") for i in range(100)]
+    symbol_table = {
+        relation: ProbabilisticFactSet(Symbol.fresh(), "p")
+        for relation in relations
+    }
+    plan = dalvi_suciu_lift.dalvi_suciu_lift(
+        Conjunction(tuple(
+            relation(Symbol(f"x{i}")) for i, relation in enumerate(relations)
+        )),
+        symbol_table
+    )
+
+    assert dalvi_suciu_lift.is_pure_lifted_plan(plan)
+    assert _join_depth(plan) < 4 * JOIN_CHUNK
+    assert not any(
+        isinstance(node, NaryNaturalJoin) for _, node in expression_iterator(plan)
+    )
+    assert RAQueryOptimiser().walk(plan) is not None

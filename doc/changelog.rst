@@ -421,6 +421,18 @@ Unreleased
   before (``join_in_chunks``); fewer operands, and a chain whose operands share
   none with the one before, are joined as before.
 
+- The joins of hundreds of atoms that share nothing with the atom before them
+  are no longer as deep as the atoms are many either: a rule body of such
+  atoms (independent atoms, a centre joined to leaves that share columns with
+  it only) is one n-ary join of its runs of atoms, and the independent join of
+  the plans of components sharing no column is a tree of chunks; both used to
+  fail with a ``RecursionError`` at about 330 atoms and 100 components. The
+  other unions and joins of plans of ``dalvi_suciu_lift`` are built the same
+  way. The columns of an n-ary join, and every ``OrderedSet``, are built
+  without comparing their elements one by one, which took time quadratic in
+  the number of columns of a join of hundreds of relations (a join of 200
+  atoms that took 5.3 s now takes 3.9 s).
+
 - The choice facts of one predicate, ``0.3 ^ choice('a'). 0.7 ^ choice('b').``
   (the example of the tutorial, 10.6), are the alternatives of one choice,
   as the ``::`` facts of a predicate are one relation; the second one used to
