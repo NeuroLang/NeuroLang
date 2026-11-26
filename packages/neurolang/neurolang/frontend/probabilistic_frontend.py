@@ -70,6 +70,7 @@ from nl_expr.expression_walker import (
     ExpressionBasicEvaluator,
     ReplaceExpressionWalker,
     TypedSymbolTableMixin,
+    expression_iterator,
 )
 from nl_expr.expressions import Constant
 from nl_expr.logic import Conjunction, Implication, Union, Symbol
@@ -79,7 +80,9 @@ from nl_core.probabilistic import (
     small_dichotomy_theorem_based_solver,
 )
 from nl_core.probabilistic.cplogic.program import CPLogicMixin
-from nl_core.probabilistic.expressions import PROB, Condition
+from nl_core.probabilistic.expressions import (
+    PROB, Condition, Expectation, expectation,
+)
 from .resampling import (
     ResampledProgram,
     relation_sums,
@@ -712,6 +715,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             return self._execute_probabilistic_head_query(
                 head, predicate, show_rewritten=show_rewritten,
                 dry_run=dry_run, show_ra=show_ra,
+            )
+        if any(
+            isinstance(sub, Expectation)
+            for _, sub in expression_iterator(predicate.expression)
+        ):
+            # an expectation, which only a rule rewrites
+            return self._execute_query_computing_terms(
+                head, predicate, show_rewritten, dry_run, show_ra
             )
         query_pred_symb = predicate.expression.functor
         query_pred_args = predicate.expression.args
@@ -1672,6 +1683,67 @@ class NeurolangPDL(QueryBuilderDatalog):
         for program in programs.values():
             self.program_ir.walk(Union(program.rules))
         return rule
+
+    def expect(
+        self,
+        function: Any,
+        event: fe.Expression,
+        result: fe.Expression,
+        known: Optional[fe.Expression] = None,
+        normalised: bool = False,
+    ) -> fe.Expression:
+        """
+        The expected value *result* of *function* summed over the answers
+        of the probabilistic *event*, as a conjunct of a rule's body:
+        ``EXPECT[function | event // known] = result`` of the Datalog
+        syntax, ``EXPECT_NORM`` when *normalised*.
+
+        The variables of *event* that occur elsewhere in the rule, in its
+        head or in another atom, are grouped, one expectation per group;
+        the others are summed. Unlike the text form, the head is the one
+        written: *result* does not join it.
+
+        Parameters
+        ----------
+        function : Any
+            deterministic expression of the variables of *event* (an
+            expression of the query builder), or a constant
+        event : fe.Expression
+            the probabilistic query: atoms and comparisons joined by ``&``,
+            ``|`` and ``~``, with ``nl.exists`` for a variable that is not
+            summed
+        result : fe.Expression
+            the symbol bound to the expected value
+        known : Optional[fe.Expression], optional
+            what is known, ``event // known`` of ``PROB``, by default None
+        normalised : bool, optional
+            divide by the sum of the probabilities of the answers
+
+        Returns
+        -------
+        fe.Expression
+            a body formula
+
+        Examples
+        --------
+        >>> nl = NeurolangPDL()
+        >>> _ = nl.add_probabilistic_choice_from_tuples(
+        ...     [(0.2, 1), (0.3, 2), (0.5, 4)], name="roll"
+        ... )
+        >>> with nl.scope as e:
+        ...     e.expected[e.m] = nl.expect(e.x, e.roll[e.x], e.m)
+        ...     nl.solve_all()["expected"].as_pandas_dataframe().round(3)
+             m
+        0  2.8
+        """
+        node = expectation(
+            function.expression if isinstance(function, fe.Expression)
+            else ir.Constant(function),
+            event.expression, result.expression,
+            None if known is None else known.expression, normalised,
+        )
+        # a rule body is a conjunction, which the engine rewrites
+        return fe.Expression(self, Conjunction((node,)))
 
     def add_uniform_probabilistic_choice_over_set(
         self,

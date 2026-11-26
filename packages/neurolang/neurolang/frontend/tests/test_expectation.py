@@ -555,3 +555,199 @@ def test_the_printer_shows_the_expectation():
     printed = DatalogPrettyPrinter().walk(rule)
     assert "EXPECT_NORM[x | " in printed and "// " in printed
     assert printed.endswith("= e")
+
+
+# The query builder: NeurolangPDL.expect builds the same expectation.
+
+def _engine_with_groups():
+    nl = _engine()
+    nl.add_tuple_set([("a",), ("b",)], name="groups")
+    return nl
+
+
+def _python_rows(build, name="q"):
+    nl = _engine_with_groups()
+    with nl.scope as e:
+        build(nl, e)
+        return _engine_rows(nl, name)
+
+
+def _same_as_text(program, build):
+    """The expectation of each group of the builder's rule, which is that
+    of the program's rule."""
+    nl = _engine_with_groups()
+    nl.execute_datalog_program(program)
+    text = {row[:-1]: row[-1] for row in _engine_rows(nl)}
+    python = {row[:-1]: row[-1] for row in _python_rows(build)}
+    _assert_close(python, text)
+    return python
+
+
+def test_python_a_choice():
+    found = _same_as_text(
+        "q(e) :- EXPECT[x | roll(x)] = e",
+        lambda nl, e: e.q.__setitem__((e.e,), nl.expect(e.x, e.roll[e.x], e.e)),
+    )
+    _assert_close(
+        found, _expectation(lambda c, w: [((), c["roll"])], lambda g, x: x)
+    )
+
+
+def test_python_grouping_and_an_expression_of_x():
+    found = _same_as_text(
+        "q(g, e) :- EXPECT[x * 3 | item(g, x)] = e",
+        lambda nl, e: e.q.__setitem__(
+            (e.g, e.e), nl.expect(e.x * 3, e.item[e.g, e.x], e.e)
+        ),
+    )
+    _assert_close(found, _expectation(_items, lambda g, x: x * 3))
+
+
+def test_python_a_constant_function_counts_the_answers():
+    found = _same_as_text(
+        "q(e) :- EXPECT[1 | item(g, x)] = e",
+        lambda nl, e: e.q.__setitem__((e.e,), nl.expect(1, e.item[e.g, e.x], e.e)),
+    )
+    assert found[()] == pytest.approx(sum(FACTS["item"].values()))
+
+
+def test_python_a_group_bound_outside_the_event():
+    found = _same_as_text(
+        "q(g, e) :- groups(g), EXPECT[x | item(g, x)] = e",
+        lambda nl, e: e.q.__setitem__(
+            (e.g, e.e), e.groups[e.g] & nl.expect(e.x, e.item[e.g, e.x], e.e)
+        ),
+    )
+    _assert_close(found, _expectation(_items, lambda g, x: x))
+
+
+def test_python_a_compound_event_of_atoms_and_a_comparison():
+    found = _same_as_text(
+        "q(e) :- EXPECT[x | roll(x), link(x, y), flag(x), (x > 1)] = e",
+        lambda nl, e: e.q.__setitem__(
+            (e.e,),
+            nl.expect(
+                e.x, e.roll[e.x] & e.link[e.x, e.y] & e.flag[e.x] & (e.x > 1),
+                e.e,
+            ),
+        ),
+    )
+
+    def answers(c, w):
+        x = c["roll"]
+        return [((), x) for (v, y) in LINK
+                if v == x and x > 1 and ("flag", (x,)) in w]
+
+    _assert_close(found, _expectation(answers, lambda g, x: x))
+
+
+def test_python_normalised():
+    found = _same_as_text(
+        "q(r, e) :- EXPECT_NORM[w | sel(s), act(s, r), size(s, w)] = e",
+        lambda nl, e: e.q.__setitem__(
+            (e.r, e.e),
+            nl.expect(
+                e.w, e.sel[e.s] & e.act[e.s, e.r] & e.size[e.s, e.w], e.e,
+                normalised=True,
+            ),
+        ),
+    )
+    size = dict(SIZE)
+    _assert_close(
+        found,
+        _expectation(_selected_act, lambda g, s: size[s], normalised=True),
+    )
+
+
+def test_python_knowing():
+    found = _same_as_text(
+        "q(r, e) :- EXPECT[w | sel(s), act(s, r), size(s, w) "
+        "// (sel(t), act(t, 'r1'))] = e",
+        lambda nl, e: e.q.__setitem__(
+            (e.r, e.e),
+            nl.expect(
+                e.w, e.sel[e.s] & e.act[e.s, e.r] & e.size[e.s, e.w], e.e,
+                known=e.sel[e.t] & e.act[e.t, "r1"],
+            ),
+        ),
+    )
+    size = dict(SIZE)
+    _assert_close(
+        found,
+        _expectation(
+            _selected_act, lambda g, s: size[s],
+            knowing=lambda c, w: ("act", (c["sel"], "r1")) in w,
+        ),
+    )
+
+
+def test_python_the_head_is_the_one_written():
+    """Unlike the text form, the result does not join the head."""
+    rows = _python_rows(
+        lambda nl, e: e.q.__setitem__(
+            (e.y,), nl.expect(e.x, e.roll[e.x], e.m) & (e.y == e.m * 10)
+        )
+    )
+    assert rows == [pytest.approx((28.0,))]
+
+
+def test_python_an_expectation_in_a_query():
+    nl = _engine()
+    with nl.scope as e:
+        result = nl.query((e.m,), nl.expect(e.x, e.roll[e.x], e.m))
+    assert [tuple(r) for r in result] == [pytest.approx((2.8,))]
+
+
+def test_python_an_expectation_in_a_query_with_groups():
+    nl = _engine_with_groups()
+    with nl.scope as e:
+        result = nl.query(
+            (e.g, e.m),
+            e.groups[e.g] & nl.expect(e.x, e.item[e.g, e.x], e.m),
+        )
+    found = {row[:-1]: row[-1] for row in map(tuple, result)}
+    _assert_close(found, _expectation(_items, lambda g, x: x))
+
+
+def test_python_an_event_with_exists_a_disjunction_or_a_negation():
+    """The builder's quantifier, disjunction and negation in the event
+    give what the text syntax gives, on the benchmark's tables and on the
+    rolls."""
+    nl = _benchmark_engine()
+    with nl.scope as e:
+        e.q[e.s] = nl.expect(
+            1,
+            e.drug_target["d1", e.u] & nl.exists(
+                e.d,
+                e.test_evidence[e.d, e.u, "PD"] & e.dataset_reliable[e.d],
+            ),
+            e.s,
+        )
+        [(python,)] = _engine_rows(nl)
+    assert python == pytest.approx(_benchmark_value(
+        "ans(s) :- EXPECT[1 | drug_target('d1', u), exists(d; "
+        "test_evidence(d, u, 'PD'), dataset_reliable(d))] = s"
+    ))
+    for text, event in (
+        ("roll(x) | flag(x)", lambda e: e.roll[e.x] | e.flag[e.x]),
+        ("roll(x), ~flag(x)", lambda e: e.roll[e.x] & ~e.flag[e.x]),
+    ):
+        _same_as_text(
+            f"q(m) :- EXPECT[x | {text}] = m",
+            lambda nl, e: e.q.__setitem__(
+                (e.m,), nl.expect(e.x, event(e), e.m)
+            ),
+        )
+
+
+def test_python_refusals():
+    nl = _engine()
+    with nl.scope as e:
+        with pytest.raises(NeuroLangException, match="'z'"):
+            e.q[e.e] = nl.expect(e.x + e.z, e.roll[e.x], e.e)
+        with pytest.raises(NeuroLangException, match="has none"):
+            e.q[e.e] = nl.expect(1, e.roll[2], e.e)
+        with pytest.raises(NeuroLangException, match="EXPECT"):
+            e.q[e.g, e.e] = e.groups[e.g] & ~nl.expect(
+                e.x, e.roll[e.x], e.e
+            )

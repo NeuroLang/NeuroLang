@@ -23,12 +23,13 @@ from nl_expr.expressions import (
 from nl_expr.exceptions import NeuroLangFrontendException, ParserError
 from nl_expr.expression_pattern_matching import add_match
 from nl_expr.expression_walker import PatternWalker
-from nl_expr.logic import TRUE, Disjunction, ExistentialPredicate
+from nl_expr.logic import Disjunction, ExistentialPredicate
 from nl_expr.logic.expression_processing import extract_logic_free_variables
 from nl_core.probabilistic.expressions import (
     PROB,
     Condition,
     Expectation,
+    expectation,
     ProbabilisticChoice,
     ProbabilisticFact,
 )
@@ -935,17 +936,11 @@ class DatalogTransformer(Transformer):
         # EXPECT[f | event // known] = e → [f, OR, event, SEP, known, e],
         # SEP and known None without "//"
         f, _, event, _, known, result = ast
-        return Expectation(
-            f, event, TRUE if known is None else known, Constant(False),
-            result,
-        )
+        return expectation(f, event, result, known)
 
     def expect_norm_body_predicate(self, ast):
         f, _, event, _, known, result = ast
-        return Expectation(
-            f, event, TRUE if known is None else known, Constant(True),
-            result,
-        )
+        return expectation(f, event, result, known, normalised=True)
 
     def resample_body_predicate(self, ast):
         # RESAMPLE[boot](pred(x)) = b → ast = [boot, pred(x), b]

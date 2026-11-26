@@ -568,7 +568,9 @@ builtin functions; a relation, probabilistic or not, called in ``f``
 (``EXPECT[score(x) | a(x)]`` with ``score`` a relation) is refused when the
 program is solved, with an error that says that a relation cannot be called
 inside an expression. For the value of a relation write it in the event,
-``EXPECT[v | a(x), score(x, v)]``.
+``EXPECT[v | a(x), score(x, v)]``. From Python, ``nl.expect(f, a, e)``
+builds the same expectation (:doc:`tutorial_python`); the head of its rule
+is the one written, the result does not join it.
 
 **Conditioning.** ``//`` conditions as in ``PROB``: for each
 :math:`(g, x)`,

@@ -1,5 +1,7 @@
-from nl_expr.expressions import Definition, FunctionApplication, Symbol
-from nl_expr.logic import BinaryLogicOperator, LogicOperator
+from nl_expr.expressions import (
+    Constant, Definition, FunctionApplication, Symbol,
+)
+from nl_expr.logic import TRUE, BinaryLogicOperator, LogicOperator
 
 PROB = Symbol("PROB")
 
@@ -42,6 +44,18 @@ class Expectation(LogicOperator):
             "_NORM" if self.normalised.value else "", self.function,
             self.event, self.known, self.result,
         )
+
+
+def expectation(function, event, result, known=None, normalised=False):
+    """
+    The ``Expectation`` of *function* over *event*, knowing *known* if
+    given, bound to *result*: what the parser and the query builder
+    (:meth:`NeurolangPDL.expect`) both build.
+    """
+    return Expectation(
+        function, event, TRUE if known is None else known,
+        Constant(normalised), result,
+    )
 
 
 class ProbabilisticPredicate(Definition):

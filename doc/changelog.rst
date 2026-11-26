@@ -24,7 +24,8 @@ Unreleased
   :math:`\sum_x f(g, x)\,P[a(g, x)]` per group :math:`g` (``//`` conditions
   as in ``PROB``; ``EXPECT_NORM`` divides by :math:`\sum_x P[a(g, x)]`). It
   is sugar for a ``PROB`` rule and an aggregation, solved by the lifted
-  solvers; the query assistant's bank has two examples of it. A rule that
+  solvers; the query assistant's bank has two examples of it, and
+  ``NeurolangPDL.expect(f, event, result)`` builds it from Python. A rule that
   calls a relation inside an expression now fails with an error that says so.
 
 - Brain viewer: the streamlines of a result with one other column, such

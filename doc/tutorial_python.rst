@@ -505,6 +505,21 @@ and queried:
 text syntax; ``with nl.scope as e:`` writes rules that are forgotten at the
 end of the block.
 
+``nl.expect(f, event, result)`` is the ``EXPECT[f | event] = result`` of the
+text syntax (:doc:`tutorial_datalog`, 5.5), a conjunct of a rule's body, with
+``known=`` for ``//`` and ``normalised=True`` for ``EXPECT_NORM``. The head
+of the rule is the one you write:
+
+    >>> nl = NeurolangPDL()
+    >>> _ = nl.add_probabilistic_choice_from_tuples(
+    ...     [(0.2, 1), (0.3, 2), (0.5, 4)], name="roll"
+    ... )
+    >>> with nl.scope as e:
+    ...     res = nl.query((e.m,), nl.expect(e.x, e.roll[e.x], e.m))
+    >>> print(res)
+         m
+    0  2.8
+
 Functions of your own
 .....................
 
