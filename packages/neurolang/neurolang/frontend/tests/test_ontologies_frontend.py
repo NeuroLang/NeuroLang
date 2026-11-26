@@ -1215,3 +1215,126 @@ def test_rdf_type_in_a_rule_of_the_program_names_the_class():
         "heads_a_unit(x) :- exists(y, k; ex:headOf(x, y), rdf:type(y, k), "
         "rdfs:label(k, 'unit'))\nans(x) :- heads_a_unit(x)"
     )) == {("http://ex.org/Juan",), ("Ana",)}
+
+
+FIRST_ONTOLOGY = """
+@prefix ex: <http://example.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+ex:Employee a owl:Class ; rdfs:label "Employee" .
+ex:Manager a owl:Class ; rdfs:label "Manager" ;
+    rdfs:subClassOf ex:Employee , [
+        a owl:Restriction ; owl:onProperty ex:manages ;
+        owl:someValuesFrom ex:Employee ] .
+ex:m1 a ex:Manager ; ex:name "Bob" .
+"""
+
+SECOND_ONTOLOGY = """
+@prefix ex: <http://example.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+ex:Intern a owl:Class ; rdfs:label "Intern" ;
+    rdfs:subClassOf ex:Employee , [
+        a owl:Restriction ; owl:onProperty ex:mentor ;
+        owl:someValuesFrom ex:Manager ] .
+ex:i1 a ex:Intern ; ex:name "Ann" .
+"""
+
+TWO_ONTOLOGY_QUERIES = {
+    "employees": "ans(e) :- Employee(e)",
+    "names": "ans(n) :- Employee(e), name(e, n)",
+    "managers": "ans(e) :- Manager(e), manages(e, x)",
+    "mentored": "ans(e) :- mentor(e, m), manages(m, x)",
+}
+
+
+def _two_ontology_answers(nl, individuals):
+    if individuals:
+        return {
+            key: set(nl.execute_datalog_program(query))
+            for key, query in TWO_ONTOLOGY_QUERIES.items()
+        }
+    # Without individuals, the labels of the classes are those of the
+    # connector symbol.
+    with nl.scope as e:
+        e.labels[e.label] = nl.connector_symbol(e.entity, e.label)
+        return {
+            "labels": {
+                row[0] for row in nl.query((e.label,), e.labels(e.label))
+            }
+        }
+
+
+EXPECTED_ANSWERS = {
+    True: {
+        "employees": {
+            ("http://example.org/m1",), ("http://example.org/i1",)
+        },
+        "names": {("Bob",), ("Ann",)},
+        "managers": {("http://example.org/m1",)},
+        "mentored": {("http://example.org/i1",)},
+    },
+    False: {"labels": {"employee", "manager", "intern"}},
+}
+
+
+@pytest.mark.parametrize("individuals", [False, True])
+def test_ontologies_loaded_one_after_the_other_add_up(individuals):
+    """Each ontology a program loads adds its constraints, facts and
+    labels to those of the ontologies it loaded before, as if they had
+    been loaded together."""
+    together = NeurolangPDL()
+    together.load_ontology(
+        [io.StringIO(FIRST_ONTOLOGY), io.StringIO(SECOND_ONTOLOGY)],
+        format=["turtle", "turtle"], individuals=individuals,
+    )
+    assert (
+        _two_ontology_answers(together, individuals)
+        == EXPECTED_ANSWERS[individuals]
+    )
+    one_after_the_other = NeurolangPDL()
+    for ontology in (FIRST_ONTOLOGY, SECOND_ONTOLOGY):
+        one_after_the_other.load_ontology(
+            io.StringIO(ontology), format="turtle", individuals=individuals
+        )
+    assert (
+        _two_ontology_answers(one_after_the_other, individuals)
+        == EXPECTED_ANSWERS[individuals]
+    )
+
+
+
+def test_an_ontology_loaded_in_a_scope_goes_with_it():
+    """An ontology loaded in a scope, as in a session of the REPL, is
+    gone, constraints and all, when the scope is popped; loaded again,
+    it answers as the first time."""
+    nl = NeurolangPDL()
+    nl.load_ontology(
+        io.StringIO(FIRST_ONTOLOGY), format="turtle", individuals=True
+    )
+
+    def state():
+        # mentor, of the second ontology only, is not a predicate of the
+        # first.
+        return (
+            {
+                key: set(nl.execute_datalog_program(query))
+                for key, query in TWO_ONTOLOGY_QUERIES.items()
+                if key != "mentored"
+            },
+            dict(nl.program_ir.get_constraints()),
+            nl.program_ir.existential_rules,
+            nl.ontology_predicates,
+        )
+
+    before = state()
+    for _ in range(2):
+        nl.program_ir.push_scope()
+        nl.load_ontology(
+            io.StringIO(SECOND_ONTOLOGY), format="turtle", individuals=True
+        )
+        assert _two_ontology_answers(nl, True) == EXPECTED_ANSWERS[True]
+        nl.program_ir.pop_scope()
+        assert state() == before
