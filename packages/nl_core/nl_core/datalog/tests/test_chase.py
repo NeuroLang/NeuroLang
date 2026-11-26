@@ -1061,9 +1061,7 @@ def test_predicate_with_wrong_number_of_arguments(
 
     with raises(WrongArgumentsInPredicateError) as error:
         chase.chase_step(instance, datalog_program.formulas[-1])
-    message = str(error.value)
-    assert "`Q` has 2 columns" in message
-    assert f"used with {used} " in message
+    assert str(error.value) == f"`Q` has 2 columns but is used with {used}"
 
 
 def test_predicate_with_the_arity_of_its_relation(named_ra_chase_class):

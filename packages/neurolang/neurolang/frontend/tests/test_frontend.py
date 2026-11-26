@@ -259,13 +259,13 @@ def _pair_engine(engine_class):
 @pytest.mark.parametrize(
     "program, predicate, used",
     [
-        ("ans(x) :- p(x)", "p", "1 argument"),
-        ("ans(x) :- p(x, y, z)", "p", "3 arguments"),
-        ("ans() :- p()", "p", "0 arguments"),
-        ("q(x) :- p(x)\nans(x) :- q(x)", "p", "1 argument"),
-        ("q(x, y) :- p(x, y)\nans(x) :- q(x)", "q", "1 argument"),
-        ("q(x, y) :- p(x, y)\nans(x) :- q(x, y, z)", "q", "3 arguments"),
-        ("ans(x) :- p(x, y), ~p(x)", "p", "1 argument"),
+        ("ans(x) :- p(x)", "p", 1),
+        ("ans(x) :- p(x, y, z)", "p", 3),
+        ("ans() :- p()", "p", 0),
+        ("q(x) :- p(x)\nans(x) :- q(x)", "p", 1),
+        ("q(x, y) :- p(x, y)\nans(x) :- q(x)", "q", 1),
+        ("q(x, y) :- p(x, y)\nans(x) :- q(x, y, z)", "q", 3),
+        ("ans(x) :- p(x, y), ~p(x)", "p", 1),
     ],
 )
 def test_predicate_with_wrong_number_of_arguments(
@@ -278,9 +278,12 @@ def test_predicate_with_wrong_number_of_arguments(
     neurolang = _pair_engine(engine_class)
     with pytest.raises(WrongArgumentsInPredicateError) as error:
         neurolang.execute_datalog_program(program)
-    assert f"`{predicate}` has 2 columns but is used with {used}" in str(
-        error.value
+    assert str(error.value) == (
+        f"`{predicate}` has 2 columns but is used with {used}"
     )
+    assert (error.value.predicate, error.value.arity) == (predicate, 2)
+    # the suggestions are those of SQUALL; this is not SQUALL
+    assert "noun" not in error.value.suggestion
 
 
 @pytest.mark.parametrize("engine_class", ENGINES)

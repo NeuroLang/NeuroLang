@@ -1959,6 +1959,22 @@ class TestSortHints:
             "write reports(study_id, i, j, k)"
         ]
 
+    def test_datalog_notes_of_the_arity_error_of_the_chase(self):
+        """The error of a Datalog rule names the predicate it is about."""
+        from nl_core.datalog.range_restriction import check_predicate_arity
+        from neurolang_apps.utils.sort_hints import sort_notes
+
+        with pytest.raises(NeuroLangException) as error:
+            check_predicate_arity("reports", 4, 2)
+        notes = sort_notes(
+            error.value, "ans(s) :- reports(s, i), voxel(i, j, k)",
+            "neurosynth", squall=False,
+        )
+        assert notes == [
+            "note: reports relates study(study_id) to voxel(i, j, k): "
+            "write reports(study_id, i, j, k)"
+        ]
+
     def test_no_notes_without_engine(self):
         from neurolang_apps.utils.sort_hints import sort_notes
 
