@@ -50,6 +50,7 @@ from nl_core.datalog.expression_processing import (
     reachable_code,
 )
 from nl_core.datalog.magic_sets import magic_rewrite
+from nl_core.datalog.pretty_printer import DatalogPrettyPrinter
 from nl_core.datalog.negation import DatalogProgramNegationMixin
 from nl_core.datalog.ontologies_parser import OntologyParser
 from nl_core.datalog.ontologies_rewriter import (
@@ -73,7 +74,10 @@ from nl_expr.expression_walker import (
 )
 from nl_expr.expressions import Constant
 from nl_expr.logic import Conjunction, Implication, Union, Symbol
-from nl_expr.logic.expression_processing import extract_logic_free_variables
+from nl_expr.logic.expression_processing import (
+    extract_logic_atoms,
+    extract_logic_free_variables,
+)
 from nl_core.probabilistic import (
     dalvi_suciu_lift,
     small_dichotomy_theorem_based_solver,
@@ -714,9 +718,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         query_pred_symb = predicate.expression.functor
         query_pred_args = predicate.expression.args
         if is_probabilistic_predicate_symbol(query_pred_symb, self.program_ir):
-            raise UnsupportedQueryError(
-                "Queries on probabilistic predicates are not supported"
-            )
+            raise self._probabilistic_query_error(predicate.expression)
 
         # The probabilistic query path (below) assumes the predicate functor
         # maps to a rule entry (Union.formulas) in the program_ir symbol
@@ -908,10 +910,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                     getattr(body.expression, "functor", None),
                     self.program_ir
                 ):
-                    raise UnsupportedQueryError(
-                        "Queries on probabilistic predicates are not "
-                        "supported"
-                    )
+                    raise self._probabilistic_query_error(body.expression)
                 fresh = self.new_symbol()
                 self._declare_query(fresh(*head), body)
                 variables = tuple(self.new_symbol() for _ in head)
@@ -979,6 +978,49 @@ class NeurolangPDL(QueryBuilderDatalog):
                 # Left to the base implementation, which reports it.
                 return False
         return bool(idbs.get("probabilistic", Union(tuple())).formulas)
+
+    def _probabilistic_query_error(self, atom):
+        """
+        Return the error of a query on the probabilistic predicate of
+        ``atom``, naming the probabilistic predicates the query uses
+        outside PROB[...] and writing, from the query's atoms, the
+        PROB[...] queries to use instead.
+
+        ``atom`` is the queried atom, or that of the fresh rule the query
+        is solved through, whose body has the atoms of the query.
+        """
+        body = atom
+        entry = self.program_ir.symbol_table.get(atom.functor, None)
+        if atom.functor.is_fresh and hasattr(entry, "formulas"):
+            body = entry.formulas[0].antecedent
+        atoms = [
+            a for a in extract_logic_atoms(body)
+            if is_probabilistic_predicate_symbol(a.functor, self.program_ir)
+        ] or [atom]
+        names = list(dict.fromkeys(a.functor.name for a in atoms))
+        one = len(names) == 1
+        queries = list(filter(None, (_prob_query((a,)) for a in atoms)))
+        message = (
+            "Queries on probabilistic predicates are not supported: "
+            f"{', '.join(names)} {'is' if one else 'are'} probabilistic. "
+        )
+        if queries:
+            message += (
+                f"To list {'its' if one else 'their'} tuples with their "
+                f"probabilities, write {' or '.join(queries)}; to"
+            )
+        else:
+            message += "To"
+        message += (
+            f" use {'it' if one else 'them'} in a condition, put the whole "
+            "condition inside PROB[...]"
+        )
+        condition = _prob_query(
+            body.formulas if isinstance(body, Conjunction) else ()
+        )
+        if condition:
+            message += f", as in {condition}"
+        return UnsupportedQueryError(message + ".")
 
     def _execute_query_through_rule(
         self, head, predicate, show_rewritten, dry_run, show_ra
@@ -1743,6 +1785,37 @@ class NeurolangPDL(QueryBuilderDatalog):
             ra_set.projection_to_unnamed(*projections.keys())
         )
         return fe.Symbol(self, name)
+
+
+def _prob_query(atoms):
+    """
+    Return the query ``ans(x, ..., p) :- PROB[atoms] = p`` of the free
+    variables ``x, ...`` of ``atoms`` in Datalog, or None if it cannot be
+    written: no atoms, or atoms not of named predicates over variables and
+    constants of the query.
+    """
+    printable = all(
+        isinstance(a, ir.FunctionApplication)
+        and isinstance(a.functor, ir.Symbol) and not a.functor.is_fresh
+        and all(
+            isinstance(arg, ir.Constant)
+            or (isinstance(arg, ir.Symbol) and not arg.is_fresh)
+            for arg in a.args
+        )
+        for a in atoms
+    )
+    if not atoms or not printable:
+        return None
+    printer = DatalogPrettyPrinter()
+    variables = list(dict.fromkeys(
+        arg.name for a in atoms for arg in a.args
+        if isinstance(arg, ir.Symbol)
+    ))
+    p = "probability" if "p" in variables else "p"
+    return (
+        f"`ans({', '.join(variables + [p])}) :- "
+        f"PROB[{', '.join(printer.walk(a) for a in atoms)}] = {p}`"
+    )
 
 
 def _has_probability(head) -> bool:
