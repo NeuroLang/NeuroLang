@@ -22,7 +22,10 @@ from ..expression_processing import (
     check_probabilistic_choice_set_probabilities_sum_to_one,
     get_within_language_prob_query_prob_term,
     group_probabilistic_facts_by_pred_symb,
+    is_probabilistic_choice_fact,
     is_within_language_prob_query,
+    probabilistic_fact_tuples,
+    union_contains_probabilistic_choice_facts,
     union_contains_probabilistic_facts,
 )
 from ..expressions import Condition, ProbabilisticFact, ProbabilisticChoice, ProbabilisticPredicate
@@ -205,6 +208,23 @@ class CPLogicMixin(PatternWalker):
                 )
             else:
                 self.walk(list(pfacts)[0])
+        self.walk(Union(other_expressions))
+
+    @add_match(Union, union_contains_probabilistic_choice_facts)
+    def union_with_probabilistic_choice_facts(self, code):
+        """The choice facts of a predicate are the alternatives of one
+        choice, ``0.3 ^ P(a). 0.7 ^ P(b).``, as the tuples of
+        ``add_probabilistic_choice_from_tuples``."""
+        choices, other_expressions = group_probabilistic_facts_by_pred_symb(
+            code, is_probabilistic_choice_fact
+        )
+        for pred_symb, facts in choices.items():
+            if len(facts) > 1:
+                self.add_probabilistic_choice_from_tuples(
+                    pred_symb, probabilistic_fact_tuples(facts)
+                )
+            else:
+                self.walk(facts[0])
         self.walk(Union(other_expressions))
 
     def _register_prob_pred_symb_set_symb(self, pred_symb, set_symb):
