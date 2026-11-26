@@ -16,7 +16,7 @@ jobs:
         uv pip install pytest-timeout pytest-cov
     - name: Run all the tests with coverage, up to the first failure
       run: >-
-        uv run --no-sync python -m pytest packages --timeout=600 -x
+        uv run --no-sync python -m pytest packages --timeout=600 -x -rs
         --cov=nl_expr --cov=nl_core --cov=neurolang --cov=neurolang_apps
         --cov-report=term
       timeout-minutes: 45
