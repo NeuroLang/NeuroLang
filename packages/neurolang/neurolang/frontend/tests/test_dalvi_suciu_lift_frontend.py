@@ -1114,3 +1114,237 @@ def test_self_join_through_a_constant_a_deterministic_atom_excludes(
     assert result.keys() == expected.keys()
     for key, value in expected.items():
         assert result[key] == pytest.approx(value)
+
+
+def _by_enumeration(probabilistic, satisfies):
+    """The probability that a world of the tuple-independent relations
+    *probabilistic*, a mapping of their names to tuples whose first value
+    is the probability, satisfies *satisfies*, a function of the mapping
+    of the names to the tuples of the world."""
+    import itertools
+
+    facts = [
+        (name, t) for name, tuples in probabilistic.items() for t in tuples
+    ]
+    probability = 0.
+    for world in itertools.product([False, True], repeat=len(facts)):
+        weight = 1.
+        tuples = {name: set() for name in probabilistic}
+        for present, (name, (p, *t)) in zip(world, facts):
+            weight *= p if present else 1 - p
+            if present:
+                tuples[name].add(tuple(t))
+        if satisfies(tuples):
+            probability += weight
+    return probability
+
+
+def _solve(program, probabilistic, deterministic, solvers):
+    """The probabilities of *program*'s Boolean ``ans``."""
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    for name, tuples in probabilistic.items():
+        nl.add_probabilistic_facts_from_tuples(tuples, name=name)
+    for name, tuples in deterministic.items():
+        nl.add_tuple_set(tuples, name=name)
+    return [p for p, in nl.execute_datalog_program(program)]
+
+
+@pytest.fixture
+def renamed(monkeypatch):
+    """Whether `rename_disjoint_restrictions` rewrote the queries lifted,
+    appended to a list."""
+    rename = dalvi_suciu_lift.rename_disjoint_restrictions
+    result = []
+
+    def recorded(query, symbol_table):
+        renamed_query = rename(query, symbol_table)
+        result.append(renamed_query is not query)
+        return renamed_query
+
+    monkeypatch.setattr(
+        dalvi_suciu_lift, "rename_disjoint_restrictions", recorded
+    )
+    return result
+
+
+TE = [
+    (.8, "b1", "G1", "AD"), (.3, "b2", "G1", "AD"), (.6, "l1", "G1", "AD"),
+    (.5, "b1", "G2", "AD"), (.7, "l2", "G2", "AD"), (.4, "l1", "G2", "PD"),
+    (.9, "b2", "G2", "PD"),
+]
+ORGAN = [("b1", "brain"), ("b2", "brain"), ("l1", "blood"), ("l2", "blood")]
+DETERMINISTIC = dict(
+    organ=ORGAN, target=[("X", "G1"), ("X", "G2")],
+    adult=[("b1",), ("l1",), ("l2",)],
+)
+
+
+def _evidence_in(world, organ, gene, organ_name, adult=False):
+    """Whether *world* has evidence for AD of *gene* in a dataset of
+    *organ_name*, and of an adult."""
+    return any(
+        g == gene and s == "AD" and (d, organ_name) in organ
+        and (not adult or (d,) in DETERMINISTIC["adult"])
+        for d, g, s in world["te"]
+    )
+
+
+def _brain_and_blood(adult=False, organ=ORGAN):
+    def satisfies(world):
+        return any(
+            _evidence_in(world, organ, g, "brain", adult)
+            and _evidence_in(world, organ, g, "blood")
+            for g in ("G1", "G2")
+        )
+    return satisfies
+
+
+def test_separator_with_a_deterministic_relation_in_two_atoms():
+    """
+    ``organ`` in two atoms, without the separator ``g``: deterministic,
+    its atoms need no position of ``g`` for the subqueries of two values
+    of ``g`` to be independent, and ``g`` separates the query.
+    """
+    organ = dict(ORGAN)
+    probabilistic = {
+        "te_brain": [t for t in TE if organ[t[1]] == "brain"],
+        "te_blood": [t for t in TE if organ[t[1]] == "blood"],
+    }
+    program = (
+        "ans(PROB) :- target('X', g), te_brain(d1, g, 'AD'),"
+        " organ(d1, 'brain'), te_blood(d2, g, 'AD'), organ(d2, 'blood')"
+    )
+
+    def satisfies(world):
+        return any(
+            any(t[1:] == (g, "AD") for t in world["te_brain"]) and
+            any(t[1:] == (g, "AD") for t in world["te_blood"])
+            for g in ("G1", "G2")
+        )
+
+    result = _solve(program, probabilistic, DETERMINISTIC, LIFTED_ONLY)
+    assert result == [
+        pytest.approx(_by_enumeration(probabilistic, satisfies))
+    ]
+
+
+@pytest.mark.parametrize("program, adult", [
+    (
+        "both(g) :- te(d1, g, 'AD'), organ(d1, 'brain'),"
+        " te(d2, g, 'AD'), organ(d2, 'blood')\n"
+        "ans(PROB) :- target('X', g), both(g)",
+        False,
+    ),
+    (   # with the constants of the drug and the disease, as in P4d
+        "ans(PROB) :- target('X', g), te(d1, g, 'AD'), organ(d1, 'brain'),"
+        " te(d2, g, 'AD'), organ(d2, 'blood')",
+        False,
+    ),
+    (   # restricted by two deterministic atoms
+        "ans(PROB) :- target('X', g), te(d1, g, 'AD'), organ(d1, 'brain'),"
+        " adult(d1), te(d2, g, 'AD'), organ(d2, 'blood')",
+        True,
+    ),
+])
+def test_self_join_on_tuples_disjoint_deterministic_atoms_select(
+    program, adult, renamed
+):
+    """
+    ``te(d1, g, 'AD') ∧ organ(d1, 'brain') ∧ te(d2, g, 'AD') ∧ organ(d2,
+    'blood')``: a dataset having a single organ, the atoms of ``te``
+    select disjoint sets of tuples, renamed as relations without the
+    self-join, lifted with the probability of the enumeration of the
+    worlds.
+    """
+    result = _solve(program, {"te": TE}, DETERMINISTIC, LIFTED_ONLY)
+    assert result == [pytest.approx(
+        _by_enumeration({"te": TE}, _brain_and_blood(adult))
+    )]
+    assert renamed == [True]
+
+
+def test_self_join_on_tuples_overlapping_deterministic_atoms_select(
+    renamed
+):
+    """A dataset of the brain and of the blood: the tuples the atoms of
+    ``te`` select overlap, and are not renamed; the query is lifted by
+    the separator ``g`` and inclusion–exclusion."""
+    program = (
+        "ans(PROB) :- target('X', g), te(d1, g, 'AD'), organ(d1, 'brain'),"
+        " te(d2, g, 'AD'), organ(d2, 'blood')"
+    )
+    organ = ORGAN + [("b1", "blood")]
+    result = _solve(
+        program, {"te": TE}, dict(DETERMINISTIC, organ=organ), LIFTED_ONLY
+    )
+    assert result == [pytest.approx(
+        _by_enumeration({"te": TE}, _brain_and_blood(organ=organ))
+    )]
+    assert renamed == [False]
+
+
+def test_self_join_with_an_atom_no_deterministic_atom_selects(renamed):
+    """A third atom of ``te``, on any dataset: its tuples overlap those of
+    the other two, none is renamed, and the query is declined."""
+    program = (
+        "ans(PROB) :- target('X', g), te(d1, g, 'AD'), organ(d1, 'brain'),"
+        " te(d2, g, 'AD'), organ(d2, 'blood'), te(d3, g, s), (s != 'AD')"
+    )
+
+    def satisfies(world):
+        return any(
+            _evidence_in(world, ORGAN, g, "brain")
+            and _evidence_in(world, ORGAN, g, "blood")
+            and any(t[1] == g and t[2] != "AD" for t in world["te"])
+            for g in ("G1", "G2")
+        )
+
+    with pytest.raises(dalvi_suciu_lift.NonLiftableException):
+        _solve(program, {"te": TE}, DETERMINISTIC, LIFTED_ONLY)
+    assert not any(renamed)
+    result = _solve(program, {"te": TE}, DETERMINISTIC, {})
+    expected = _by_enumeration({"te": TE}, satisfies)
+    assert result == [pytest.approx(expected)]
+
+
+@pytest.mark.parametrize("d2, lifted", [
+    ([(20,)], True),            # D1 and D2 disjoint
+    ([(10,), (20,)], False),    # both with 10
+])
+def test_union_with_disjoint_restrictions_of_a_relation(d2, lifted, renamed):
+    """
+    ``R(x) ∧ S(x, y) ∧ D1(y)  ∨  S(x, y) ∧ T(y) ∧ D2(y)``, the #P-hard
+    union ``H1`` with deterministic ``D1`` and ``D2``: disjoint, the atoms
+    of ``S`` select disjoint tuples, relations of a union of independent
+    queries, lifted; otherwise it is declined.
+    """
+    probabilistic = {
+        "R": [(.5, 1), (.6, 2)],
+        "S": [(.7, 1, 10), (.4, 1, 20), (.3, 2, 10), (.8, 2, 20)],
+        "T": [(.9, 10), (.2, 20)],
+    }
+    deterministic = {"D1": [(10,)], "D2": d2}
+    program = (
+        "q() :- R(x), S(x, y), D1(y)\n"
+        "q() :- S(x, y), T(y), D2(y)\n"
+        "ans(PROB) :- q()"
+    )
+
+    def satisfies(world):
+        return any(
+            (x,) in world["R"] and (y,) in deterministic["D1"] or
+            (y,) in world["T"] and (y,) in deterministic["D2"]
+            for x, y in world["S"]
+        )
+
+    expected = _by_enumeration(probabilistic, satisfies)
+    if lifted:
+        result = _solve(program, probabilistic, deterministic, LIFTED_ONLY)
+    else:
+        with pytest.raises(dalvi_suciu_lift.NonLiftableException):
+            _solve(program, probabilistic, deterministic, LIFTED_ONLY)
+        result = _solve(program, probabilistic, deterministic, {})
+    assert result == [pytest.approx(expected)]
+    assert renamed[0] is lifted
