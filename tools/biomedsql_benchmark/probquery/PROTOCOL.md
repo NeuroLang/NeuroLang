@@ -142,6 +142,8 @@ The fixes for those refusals are now in NeuroLang master (#1414–#1418). The Qw
   `COUNT` threshold where available), and no arithmetic on probabilities: no arithmetic builtin (`+ - * /`, `log`, `exp`, `AGGREGATE` over a
   probability) applied to a variable bound by a probability construct, and no numeric literal standing for a probability;
 - **hybrid**: probability constructs whose values are combined by arithmetic or aggregation;
+- **hand-grounded**: otherwise declarative, but quoting a constant (a gene, a dataset) that the question does not mention, i.e. entities
+  found by inspecting the data and written into the query (added to the classifier before any run of this amendment);
 - **hand-coded**: no probability construct, or probabilities written as constants;
 - **no answer**.
 The rule is mechanical. 20 answers are also classified by hand, and their agreement with the script is reported.

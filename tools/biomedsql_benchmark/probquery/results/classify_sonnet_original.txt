@@ -1,0 +1,1 @@
+results/S2.jsonl: 143 answers  declarative 112 (78%)  hand-grounded 8 (6%)  hybrid 22 (15%)  hand-coded 1 (1%)  none 0 (0%)
