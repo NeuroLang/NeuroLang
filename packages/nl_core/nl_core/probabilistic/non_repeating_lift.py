@@ -94,7 +94,7 @@ def non_repeating_plan(formula, symbol_table):
     """
     if not (
         any(isinstance(e, Negation) for _, e in expression_iterator(formula))
-        and _is_non_repeating(formula, symbol_table)
+        and is_non_repeating(formula, symbol_table)
     ):
         return None
     normalised = NormaliseNonRepeatingQuery().walk(standardise_apart(formula))
@@ -372,7 +372,7 @@ def _connected_groups(formulas, variables):
     return [group for group, _ in groups]
 
 
-def _is_non_repeating(formula, symbol_table):
+def is_non_repeating(formula, symbol_table):
     """Whether no probabilistic relation occurs twice in `formula`, the
     occurrences of an atom being counted, not the distinct atoms: R(x)
     and ¬R(x) are two occurrences of R."""

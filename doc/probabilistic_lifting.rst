@@ -248,6 +248,9 @@ Shattering constants
    of a new relation holding the tuples of :math:`R` selected on that
    constant, so that the remaining atoms of :math:`R` refer to disjoint sets
    of tuples [Dalvi2012]_ (:mod:`neurolang.probabilistic.shattering`).
+   The constants of a query with a negation are also shattered before the
+   planner of non-repeating queries, and so before the unate check (see
+   `Planning non-repeating queries`_).
 
 Ranking
    The query must be *ranked*: there is an order on the bound variables
@@ -671,7 +674,9 @@ Checks
    occurring only positively or only negatively.
    The negations and comparisons of `Negations and comparisons sharing
    relations`_ are exempt from this check, as their rules check each
-   query they lift. Turning the option off disables these soundness
+   query they lift, and so are the queries with a negation that are
+   non-repeating once their constants are shattered, planned before it
+   (see `Planning non-repeating queries`_). Turning the option off disables these soundness
    checks: the rules are then applied to queries for which they are not
    proved, and can give wrong probabilities instead of declining the query
    to weighted model counting.
@@ -861,6 +866,33 @@ only:
 
 Deterministic relations do not count as repetitions, and do not need to
 have the projected variable.
+
+A query in which a tuple-independent relation occurs more than once is
+first shattered on its constants, as by the Dalvi–Suciu algorithm (see
+"Shattering constants" in `The Dalvi–Suciu algorithm`_), and then planned
+if it has become non-repeating. Shattering thus applies before the
+non-repeating test, and before the unate check of the Dalvi–Suciu
+algorithm, which the planned query does not reach. Atoms of a relation
+with different constants at the same position become atoms of different
+relations. With ``test_evidence``, :math:`T`, tuple-independent and
+``drug_target``, :math:`D`, deterministic, the query
+
+.. code-block:: neurolang
+
+   pd_hit() :- drug_target('Tirofiban Hydrochloride', g), test_evidence(d, g, 'PD')
+   ad_hit() :- drug_target('Tirofiban Hydrochloride', g), test_evidence(d, g, 'AD')
+   good() :- pd_hit(), ~ad_hit()
+
+flattens to :math:`\exists g, d\, (D(\mathit{tir}, g) \land T(d, g, PD)) \land
+\lnot\exists g', d'\, (D(\mathit{tir}, g') \land T(d', g', AD))`, which repeats
+:math:`T` positively and negated, and was declined as not unate. Shattered,
+it is :math:`\exists g, d\, (D(\mathit{tir}, g) \land T_{PD}(d, g)) \land
+\lnot\exists g', d'\, (D(\mathit{tir}, g') \land T_{AD}(d', g'))`, non-repeating,
+and planned as :math:`P[\mathit{pd\_hit}]\,(1 - P[\mathit{ad\_hit}])`.
+The same constant in both atoms, as with ``'PD'`` for two drugs sharing a
+gene, leaves the relation repeated, and the query to the next rules. The
+choices are not shattered, as in the Dalvi–Suciu algorithm, and a query
+repeating a choice stays repeating.
 
 In Datalog, the rules of a predicate share their head variables, so the
 negation of a predicate defined by several rules always has disjuncts with
@@ -1791,7 +1823,7 @@ Join order
 Non-repeating queries
    :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
    applies only if no probabilistic relation, fact or choice, occurs
-   twice in the query (``_is_non_repeating``), the occurrences of an atom
+   twice in the query (``is_non_repeating``), the occurrences of an atom
    being counted: :math:`R(x) \land \lnot R(x)` has two occurrences of
    :math:`R`, which are not independent. Its rewrites add no atom,
    so this holds for every subformula planned, and by Lemma 1 two
@@ -1839,6 +1871,25 @@ Non-repeating queries
      Otherwise no plan is given;
    * deterministic relations are the same in every world, so they neither
      count as repetitions nor need to have :math:`v`.
+
+   * *shattering*: a query repeating a tuple-independent relation is
+     first shattered on its constants (``shatter_constants``, in
+     ``_non_repeating_query_plan``). Shattering is an equivalence: the
+     atom :math:`R(\bar u)` with the constant :math:`a` at position
+     :math:`i` is true in a world exactly when the atom of
+     :math:`R_{i=a} = \sigma_{i=a}(R)` without that position is, and an
+     atom with a variable there is the disjunction of the atoms of the
+     cells of the partition of :math:`R` by those constants, as in
+     `Comparisons with a constant`_ below. The cells are disjoint sets of
+     tuples of :math:`R`, each keeping its probability, so that, :math:`R`
+     being tuple-independent, the shattered relations are
+     tuple-independent and pairwise independent (Lemma 1). Atoms of
+     :math:`R` with different constants at a position, as
+     :math:`T(d, g, PD)` and :math:`\lnot T(d', g', AD)`, become atoms of
+     different relations, the query may become non-repeating, and the
+     cases above then apply to it. Atoms with the same constant, or one
+     with a variable at that position, still share a cell, which is
+     counted as a repetition, and the query is left to the next rules.
 
    Each recursive call is on a smaller formula: a part of a conjunction,
    negation or disjunction, or a group with one quantifier less. Pushing

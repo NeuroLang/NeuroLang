@@ -118,6 +118,7 @@ from .query_resolution import (
     lift_solve_marg_query
 )
 from .non_repeating_lift import (
+    is_non_repeating,
     non_repeating_plan,
     select_comparisons
 )
@@ -339,6 +340,11 @@ def _non_repeating_query_plan(
     """Plan of a non-repeating query with negations, see
     `non_repeating_plan`, with its symbol table and the query planned,
     or None if the query is not such a hierarchical query.
+
+    A query with a negation repeating a tuple-independent relation, as in
+    `R(x, 'a') ∧ ¬∃y R(y, 'b')`, is planned with its constants shattered
+    first: atoms selecting different constants at a position become atoms
+    of disjoint relations, and the query may become non-repeating.
     """
     antecedent = flat_query.antecedent
     if isinstance(antecedent, Conjunction):
@@ -359,10 +365,15 @@ def _non_repeating_query_plan(
         arg for arg in unified_query.consequent.args
         if isinstance(arg, Symbol)
     }
-    plan = non_repeating_plan(
-        add_existentials_except(unified_query.antecedent, head_variables),
-        symbol_table
+    formula = add_existentials_except(
+        unified_query.antecedent, head_variables
     )
+    if any(
+        isinstance(e, Negation) for _, e in expression_iterator(formula)
+    ) and not is_non_repeating(formula, symbol_table):
+        formula = shatter_constants(formula, symbol_table)
+        unified_query = Implication(unified_query.consequent, formula)
+    plan = non_repeating_plan(formula, symbol_table)
     if plan is None:
         return None
     return plan, symbol_table, unified_query
