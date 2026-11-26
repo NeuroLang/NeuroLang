@@ -486,9 +486,10 @@ rewritten to, see below).
 The separator of ``f`` and ``a`` is ``|``, which is a disjunction inside
 ``a`` (``EXPECT[f | a | b]`` is the expectation over ``a`` or ``b``).
 
-The variables of ``a`` that occur elsewhere in the rule (in its head or in
-another atom of its body) are its *grouping variables* :math:`g`; the others,
-:math:`x`, can be several variables and are the ones summed:
+The variables of ``a`` that occur elsewhere in the rule (in its head or as
+an argument of another positive atom of its body) are its *grouping
+variables* :math:`g`; the others, :math:`x`, can be several variables and
+are the ones summed:
 
 .. math::
 
@@ -584,13 +585,12 @@ the expected sum over the answers of ``a`` knowing ``c``:
 A variable that ``c`` shares with ``a`` is a variable of the answer, and
 it is the event of each :math:`(g, x)` that conditions its own term, as in
 ``PROB``; a variable of ``c`` that ``a`` does not have is projected,
-unless it occurs elsewhere in the rule, where it is a grouping variable
-(``ans(r, e) :- EXPECT[w | sel(s), size(s, w) // sel(t), act(t, r)] = e``
-has one expectation per ``r``). To
-know an event about the same random outcome without tying the values,
-name the variables of ``c`` apart: in ``EXPECT[1 | active(l, s) //
-close('fear', t)]`` the study ``s`` of the answers is the chosen study and
-``close('fear', t)`` says that the chosen study is close to fear, so the
+unless it occurs elsewhere in the rule as above, where it is a grouping
+variable (``ans(r, e) :- EXPECT[w | sel(s), size(s, w) // sel(t), act(t,
+r)] = e`` has one expectation per ``r``). To know an event about the
+same random outcome without tying the values, name the variables of
+``c`` apart: in ``EXPECT[1 | active(l, s) // close('fear', t)]`` the
+study ``s`` of the answers is the chosen study and ``close('fear', t)`` says that the chosen study is close to fear, so the
 expectation is the expected number of regions that the chosen study
 activates, knowing it is close to fear.
 

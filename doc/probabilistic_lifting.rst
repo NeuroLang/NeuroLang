@@ -28,8 +28,9 @@ plans`_, its proof.
    plans, so an ``EXPECT`` is refused exactly when that ``PROB`` rule is.
    Every variable of ``a`` is an answer variable of the rule, so it can be
    planned where ``PROB[a] = p``, which marginalises the :math:`x`, is
-   not: ``EXPECT[1 | r(x), s(x, y), t(y)] = e`` is solved, while
-   ``PROB[r(x), s(x, y), t(y)] = p`` is refused.
+   not: with ``r``, ``s`` and ``t`` probabilistic facts,
+   ``EXPECT[1 | r(x), s(x, y), t(y)] = e`` is solved by the lifted
+   solvers, while ``PROB[r(x), s(x, y), t(y)] = p`` is refused.
 
 Solvers and their order
 -----------------------
