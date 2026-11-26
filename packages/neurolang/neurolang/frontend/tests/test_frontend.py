@@ -33,7 +33,7 @@ def test_symbol_management():
     assert sym.expression.type is int
 
     sym_ = neurolang.new_symbol(type_=(float, int))
-    assert sym_.expression.type is Tuple[float, int]
+    assert sym_.expression.type == Tuple[float, int]
     assert sym.expression.name != sym_.expression.name
 
     a = neurolang.new_symbol(int, name="a")
@@ -116,8 +116,8 @@ def test_add_set():
     s = neurolang.add_tuple_set(range(10), int)
     res = neurolang[s]
 
-    assert s.type is AbstractSet[int]
-    assert res.type is AbstractSet[int]
+    assert s.type == AbstractSet[int]
+    assert res.type == AbstractSet[int]
     assert res.value == frozenset((i,) for i in range(10))
     assert isinstance(repr(res), str)
 
@@ -125,8 +125,8 @@ def test_add_set():
     s = neurolang.add_tuple_set(v, (str, int))
     res = neurolang[s]
 
-    assert s.type is AbstractSet[Tuple[str, int]]
-    assert res.type is AbstractSet[Tuple[str, int]]
+    assert s.type == AbstractSet[Tuple[str, int]]
+    assert res.type == AbstractSet[Tuple[str, int]]
     assert res.value == v
     assert isinstance(repr(res), str)
 
@@ -134,8 +134,8 @@ def test_add_set():
     s = neurolang.add_tuple_set(v)
     res = neurolang[s]
 
-    assert s.type is AbstractSet[Tuple[int, str, float]]
-    assert res.type is AbstractSet[Tuple[int, str, float]]
+    assert s.type == AbstractSet[Tuple[int, str, float]]
+    assert res.type == AbstractSet[Tuple[int, str, float]]
     assert res.value == set(v.itertuples(index=False))
     assert isinstance(repr(res), str)
 
@@ -146,16 +146,16 @@ def test_add_set_neurolangdl():
     s = neurolang.add_tuple_set(range(10), int)
     res = neurolang[s]
 
-    assert s.type is AbstractSet[int]
-    assert res.type is AbstractSet[int]
+    assert s.type == AbstractSet[int]
+    assert res.type == AbstractSet[int]
     assert res.value == frozenset((i,) for i in range(10))
 
     v = frozenset(zip(("a", "b", "c"), range(3)))
     s = neurolang.add_tuple_set(v, (str, int))
     res = neurolang[s]
 
-    assert s.type is AbstractSet[Tuple[str, int]]
-    assert res.type is AbstractSet[Tuple[str, int]]
+    assert s.type == AbstractSet[Tuple[str, int]]
+    assert res.type == AbstractSet[Tuple[str, int]]
     assert res.value == v
 
 
@@ -1660,7 +1660,7 @@ def test_neurosynth_region(mock_ns_regions):
     res = neurolang[s]
     mock_ns_regions.assert_called()
 
-    assert res.type is AbstractSet[Tuple[ExplicitVBR]]
+    assert res.type == AbstractSet[Tuple[ExplicitVBR]]
     assert res.value == frozenset((t,) for t in mock_ns_regions.return_value)
 
 

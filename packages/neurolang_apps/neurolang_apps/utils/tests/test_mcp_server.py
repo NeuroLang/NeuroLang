@@ -673,13 +673,15 @@ def test_stop_queries_stops_a_running_query(monkeypatch):
             validation._in_child(lambda: time.sleep(30), 60, None)
         except validation.QueryStopped:
             raised.append(True)
+        except BaseException as error:  # say why no query is running
+            raised.append(repr(error))
 
     thread = threading.Thread(target=run)
     start = time.monotonic()
     thread.start()
     while not validation._RUNNING and time.monotonic() - start < 10:
         time.sleep(0.05)
-    assert validation.stop_queries() == 1
+    assert validation.stop_queries() == 1, (raised, thread.is_alive())
     thread.join(10)
     assert raised == [True] and time.monotonic() - start < 10
     assert not validation._RUNNING and not validation._STOPPED

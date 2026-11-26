@@ -56,23 +56,23 @@ def test_add_uniform_probabilistic_choice_set():
     prob_set = nl.add_uniform_probabilistic_choice_over_set(prob, "prob")
     res = nl[prob_set]
 
-    assert prob_set.type is AbstractSet[Tuple[float, int]]
-    assert res.type is AbstractSet[Tuple[float, int]]
+    assert prob_set.type == AbstractSet[Tuple[float, int]]
+    assert res.type == AbstractSet[Tuple[float, int]]
     assert res.value == frozenset((1 / len(prob), a) for a in range(10))
 
     d = [("a",), ("b",), ("c",), ("d",)]
     data = nl.add_uniform_probabilistic_choice_over_set(d, name="data")
     res_d = nl[data]
 
-    assert data.type is AbstractSet[Tuple[float, str]]
-    assert res_d.type is AbstractSet[Tuple[float, str]]
+    assert data.type == AbstractSet[Tuple[float, str]]
+    assert res_d.type == AbstractSet[Tuple[float, str]]
 
     d = pd.DataFrame([("a",), ("b",), ("c",), ("d",)], columns=["ids"])
     data2 = nl.add_uniform_probabilistic_choice_over_set(d, name="data2")
     res_d2 = nl[data]
 
-    assert data2.type is AbstractSet[Tuple[float, str]]
-    assert res_d2.type is AbstractSet[Tuple[float, str]]
+    assert data2.type == AbstractSet[Tuple[float, str]]
+    assert res_d2.type == AbstractSet[Tuple[float, str]]
 
 
 def test_probabilistic_tuples_from_a_dataframe():
@@ -83,8 +83,8 @@ def test_probabilistic_tuples_from_a_dataframe():
     choice = nl.add_probabilistic_choice_from_tuples(
         pd.DataFrame({"p": [0.4, 0.6], "x": ["a", "b"]}), name="choice"
     )
-    assert facts.type is AbstractSet[Tuple[float, str]]
-    assert choice.type is AbstractSet[Tuple[float, str]]
+    assert facts.type == AbstractSet[Tuple[float, str]]
+    assert choice.type == AbstractSet[Tuple[float, str]]
     with nl.scope:
         nl.execute_datalog_program("q(x, p) :- PROB[facts(x) & choice(x)] = p")
         result = nl.solve_all()["q"].as_pandas_dataframe()
