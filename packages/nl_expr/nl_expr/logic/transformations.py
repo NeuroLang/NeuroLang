@@ -1060,7 +1060,7 @@ class PushExistentialsDownConjunctionsMixin(PatternWalker):
             expression = self.walk(
                 ExistentialPredicate(outer_var, new_body)
             )
-        else:
+        elif self._moves_into_matrix(outer_var, expression.body):
             inner_var = expression.body.head
             inner_body = expression.body.body
             swapped_body = ExistentialPredicate(
@@ -1072,6 +1072,20 @@ class PushExistentialsDownConjunctionsMixin(PatternWalker):
                     ExistentialPredicate(inner_var, new_body)
                 )
         return expression
+
+    def _moves_into_matrix(self, variable, chain):
+        """
+        Whether ∃variable moves into the formula ψ under the existentials
+        of `chain` = ∃y₁ … ∃yₖ ψ, which none of them moves into: walking
+        ∃variable ψ changes it. Otherwise swapping ∃variable through the
+        chain changes nothing, and trying each of the k swaps, each
+        trying the swaps of the chain below, takes 2ᵏ walks.
+        """
+        matrix = chain
+        while isinstance(matrix, ExistentialPredicate):
+            matrix = matrix.body
+        quantified = ExistentialPredicate(variable, matrix)
+        return self.walk(quantified) != quantified
 
 
 class PushExistentialsDownMixin(

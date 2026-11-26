@@ -280,9 +280,10 @@ class ChaseNamedRelationalAlgebraMixin:
                     cont = len(new_antecedent_preds) > 1
                     new_antecedent = Conjunction(new_antecedent_preds)
                     rule = Implication(rule.consequent, new_antecedent)
-                    rule = ReplaceSymbolWalker(
-                        {equality.args[0]: equality.args[1]}
-                    ).walk(rule)
+                    if equality.args[0] != equality.args[1]:
+                        rule = ReplaceSymbolWalker(
+                            {equality.args[0]: equality.args[1]}
+                        ).walk(rule)
         return rule
 
     @staticmethod

@@ -9,7 +9,7 @@ import operator
 import pytest
 
 from ...datalog.expression_processing import flatten_query
-from nl_expr.exceptions import NonLiftableException
+from nl_expr.exceptions import NonLiftableException, UnsupportedSolverError
 from nl_expr.expression_walker import expression_iterator
 from nl_expr.expressions import Constant, Symbol
 from nl_expr.logic import Conjunction, Implication, Negation, Union
@@ -542,6 +542,125 @@ def test_at_least_k_not_lifted(variables, comparisons):
     )
     with pytest.raises(NonLiftableException):
         dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+EVIDENCE = {
+    (0.5, "brain1", "G", "D"), (0.4, "brain2", "G", "D"),
+    (0.3, "blood1", "G", "D"), (0.6, "blood2", "G", "D"),
+    (0.7, "other1", "G", "D"), (0.2, "blood1", "H", "D"),
+    (0.9, "brain1", "G", "E"),
+}
+ORGANS = {
+    ("brain1", "brain"), ("brain2", "brain"), ("blood1", "blood"),
+    ("blood2", "blood"), ("other1", "liver"),
+}
+
+
+def _evidence_in_an_organ_or_at_least(k, organ, organs=ORGANS):
+    """q() :- E(d, G, D), O(d, organ) and q() :- at least k values of d
+    with E(d, G, D), against the possible worlds."""
+    G, D = Constant("G"), Constant("D")
+    ds = Symbol.fresh(), Symbol.fresh(), Symbol.fresh()
+    filtered = E(x, G, D) if organ is None else Conjunction(
+        (E(x, G, D), M(x, Constant(organ)))
+    )
+    check(
+        {E: EVIDENCE}, {M: organs},
+        [
+            Implication(A(), filtered),
+            Implication(B(), Conjunction(
+                tuple(E(d, G, D) for d in ds[:k]) +
+                tuple(NE(*p) for p in itertools.combinations(ds[:k], 2))
+            )),
+            Implication(Q(), A()),
+            Implication(Q(), B()),
+        ],
+        Implication(ans(), Q()),
+        lambda db: {()} if (
+            any((d, organ) in db[M] or organ is None
+                for d, g, s in db[E] if (g, s) == ("G", "D")) or
+            sum((g, s) == ("G", "D") for _, g, s in db[E]) >= k
+        ) else set(),
+    )
+
+
+@pytest.mark.parametrize("k", [2, 3])
+@pytest.mark.parametrize("organ", ["brain", "blood", "kidney", None])
+def test_evidence_in_an_organ_or_at_least_k(k, organ):
+    """In a brain dataset, or in at least k datasets: A ∨ Q_k ≡ A ∨
+    Q_k on the datasets outside the brain, an organ of no dataset, or
+    without the organ, Q_k implying A."""
+    _evidence_in_an_organ_or_at_least(k, organ)
+
+
+def test_evidence_in_an_organ_of_every_dataset_or_at_least_two():
+    """The organ of every dataset: Q_k on no tuple."""
+    _evidence_in_an_organ_or_at_least(
+        2, "brain", {(d, "brain") for d, _ in ORGANS}
+    )
+
+
+def test_evidence_in_a_validated_blood_dataset_or_at_least_two():
+    """A filter of two atoms, M(x, blood) ∧ W(x)."""
+    G, D = Constant("G"), Constant("D")
+    validated = {("blood1",), ("brain1",)}
+    check(
+        {E: EVIDENCE}, {M: ORGANS, W: validated},
+        [
+            Implication(A(), Conjunction(
+                (E(x, G, D), M(x, Constant("blood")), W(x))
+            )),
+            Implication(B(), Conjunction((E(y, G, D), E(z, G, D), NE(y, z)))),
+            Implication(Q(), A()),
+            Implication(Q(), B()),
+        ],
+        Implication(ans(), Q()),
+        lambda db: {()} if (
+            any((d, "blood") in db[M] and (d,) in db[W]
+                for d, g, s in db[E] if (g, s) == ("G", "D")) or
+            sum((g, s) == ("G", "D") for _, g, s in db[E]) >= 2
+        ) else set(),
+    )
+
+
+def test_evidence_in_the_brain_or_at_least_two_per_gene():
+    """The same per gene g, with y < z."""
+    g, D = Symbol("g"), Constant("D")
+    check(
+        {E: EVIDENCE}, {M: ORGANS},
+        [
+            Implication(A(g), Conjunction(
+                (E(x, g, D), M(x, Constant("brain")))
+            )),
+            Implication(B(g), Conjunction((E(y, g, D), E(z, g, D), LT(y, z)))),
+            Implication(Q(g), A(g)),
+            Implication(Q(g), B(g)),
+        ],
+        Implication(ans(g), Q(g)),
+        lambda db: {
+            (a,) for _, a, s in db[E] if s == "D" and (
+                any((d, "brain") in db[M]
+                    for d, b, t in db[E] if (b, t) == (a, "D")) or
+                sum((b, t) == (a, "D") for _, b, t in db[E]) >= 2
+            )
+        },
+    )
+
+
+def test_at_least_with_another_atom_of_the_relation_not_rewritten():
+    """A third disjunct on E: the tuples outside the organ are not
+    independent of it, the disjunction is not rewritten."""
+    G, D = Constant("G"), Constant("D")
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(E, EVIDENCE)
+    cpl.add_extensional_predicate_from_tuples(M, ORGANS)
+    cpl.walk(Union((
+        Implication(Q(), Conjunction((E(x, G, D), M(x, Constant("brain"))))),
+        Implication(Q(), Conjunction((E(y, G, D), E(z, G, D), NE(y, z)))),
+        Implication(Q(), E(Constant("blood1"), G, D)),
+    )))
+    with pytest.raises((NonLiftableException, UnsupportedSolverError)):
+        dalvi_suciu_lift.solve_succ_query(Implication(ans(), Q()), cpl)
 
 
 def test_plan_uses_difference_for_independent_negation():

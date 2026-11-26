@@ -120,6 +120,42 @@ def test_push_existentials_down_keeps_only_the_negations_of_its_variable():
     ))
 
 
+def test_push_existentials_down_a_long_chain_in_polynomial_walks():
+    """
+    ∃v₁ … ∃v₂₂ ∃X (P(X) ∧ Q(v₁, …, v₂₂, X)), as a rule body with a wide
+    atom whose other columns are existential: each vᵢ moves to Q(…), X
+    stays. Trying every swap of the chain of the vᵢ, stuck on Q(…), took
+    2²² walks.
+    """
+    class CountingPushExistentialsDown(PushExistentialsDown):
+        walks = 0
+
+        def walk(self, expression):
+            type(self).walks += 1
+            if type(self).walks > 100000:
+                raise RecursionError("exponential walk")
+            return super().walk(expression)
+
+    variables = tuple(Symbol(f"v{i}") for i in range(22))
+    for chain in (variables + (X,), (X,) + variables):
+        exp = Conjunction((P(X), Q(*variables, X)))
+        for variable in reversed(chain):
+            exp = ExistentialPredicate(variable, exp)
+        CountingPushExistentialsDown.walks = 0
+
+        res = CountingPushExistentialsDown().walk(exp)
+
+        q_chain = Q(*variables, X)
+        for variable in reversed(variables):
+            q_chain = ExistentialPredicate(variable, q_chain)
+        assert res == ExistentialPredicate(
+            X, Conjunction((P(X), q_chain))
+        ) or res == ExistentialPredicate(
+            X, Conjunction((q_chain, P(X)))
+        )
+        assert CountingPushExistentialsDown.walks < 100000
+
+
 def test_push_universals_down():
     exp = UniversalPredicate(
         X,

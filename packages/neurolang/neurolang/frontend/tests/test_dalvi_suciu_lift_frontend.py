@@ -1348,3 +1348,65 @@ def test_union_with_disjoint_restrictions_of_a_relation(d2, lifted, renamed):
         result = _solve(program, probabilistic, deterministic, {})
     assert result == [pytest.approx(expected)]
     assert renamed[0] is lifted
+
+
+TIROFIBAN = "'Tirofiban Hydrochloride'"
+
+
+@pytest.mark.parametrize("program", [
+    # Disjoint constants, a negated nullary rule.
+    f"pd_hit() :- drug_target({TIROFIBAN}, g), test_evidence(d, g, 'PD')\n"
+    f"ad_hit() :- drug_target({TIROFIBAN}, g), test_evidence(d, g, 'AD')\n"
+    "nad() :- ~ad_hit()\n"
+    "both() :- pd_hit(), nad()\n"
+    "ans(probability) :- PROB[both()] = probability",
+    f"pd_ev() :- drug_target({TIROFIBAN}, g), test_evidence(d, g, 'PD')\n"
+    f"ad_ev() :- drug_target({TIROFIBAN}, g), test_evidence(d, g, 'AD')\n"
+    "good() :- pd_ev(), ~ad_ev()\n"
+    "ans(probability) :- PROB[good()] = probability",
+    # A constant at another position too.
+    f"pd_ev() :- drug_target({TIROFIBAN}, g), test_evidence(1, g, 'PD')\n"
+    f"ad_ev() :- drug_target({TIROFIBAN}, g), test_evidence(d, g, 'AD')\n"
+    "good() :- pd_ev(), ~ad_ev()\n"
+    "ans(probability) :- PROB[good()] = probability",
+    # The same constant, the drugs sharing a gene: the atoms are not
+    # disjoint.
+    f"pd_ev() :- drug_target({TIROFIBAN}, g), test_evidence(d, g, 'PD')\n"
+    "ad_ev() :- drug_target('Aspirin', g), test_evidence(d, g, 'PD')\n"
+    "good() :- pd_ev(), ~ad_ev()\n"
+    "ans(probability) :- PROB[good()] = probability",
+])
+def test_negated_atoms_of_a_relation_selected_by_different_constants(
+    program
+):
+    """
+    ``test_evidence`` positive and negated, with 'PD' in one atom and 'AD'
+    in the other, raised NotUnateException: the non-repeating planner ran
+    before shattering. Shattered on the constants, the atoms are of
+    disjoint, independent relations, and the query is planned as
+    P[pd] (1 - P[ad]). With the same constant, the atoms can be the same
+    tuples. Each has the probability of weighted model counting.
+    """
+    from .. import NeurolangPDL
+    from .. import probabilistic_frontend as pf
+
+    wmc = dict(
+        probabilistic_solvers=(pf.wmc_solve_succ_query,),
+        probabilistic_marg_solvers=(pf.wmc_solve_marg_query,),
+    )
+
+    def solve(solvers):
+        nl = NeurolangPDL(**solvers)
+        nl.add_probabilistic_facts_from_tuples([
+            (.3, 1, "g1", "PD"), (.6, 2, "g1", "AD"), (.5, 1, "g2", "AD"),
+            (.4, 2, "g2", "PD"), (.7, 3, "g3", "AD"), (.2, 1, "g1", "AD"),
+            (.45, 1, "g3", "PD"),
+        ], name="test_evidence")
+        nl.add_tuple_set([
+            ("Tirofiban Hydrochloride", "g1"),
+            ("Tirofiban Hydrochloride", "g2"),
+            ("Aspirin", "g3"), ("Aspirin", "g2"),
+        ], name="drug_target")
+        return [p for p, in nl.execute_datalog_program(program)]
+
+    assert solve(LIFTED_ONLY) == pytest.approx(solve(wmc))

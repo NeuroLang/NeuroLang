@@ -265,6 +265,9 @@ Shattering constants
    of a new relation holding the tuples of :math:`R` selected on that
    constant, so that the remaining atoms of :math:`R` refer to disjoint sets
    of tuples [Dalvi2012]_ (:mod:`neurolang.probabilistic.shattering`).
+   The constants of a query with a negation are also shattered before the
+   planner of non-repeating queries, and so before the unate check (see
+   `Planning non-repeating queries`_).
 
 Ranking
    The query must be *ranked*: there is an order on the bound variables
@@ -490,6 +493,32 @@ Flattening
    The rules the query depends on are unfolded into its body, giving a
    union of conjunctive queries in disjunctive normal form.
 
+Constants of the query
+   A rule is unfolded with the most general unifier of its head and the
+   query's atom, so that a constant of the query, as in
+   ``PROB[ind('a')]``, replaces the head variable in the whole body: the
+   selection of the constant is pushed into the body, and the plan is
+   that of the body for this constant, not of the rule for all values
+   selected afterwards (``FlattenQueryInNonRecursiveUCQ``). A comparison
+   of the body becomes then one of two constants, as
+   :math:`d = \mathtt{a}` or :math:`d = d` for :math:`d = \mathtt{a}`,
+   which is evaluated: a true one is removed, a false one makes the body
+   false, and the rule gives no answer
+   (``FlattenQueryInNonRecursiveUCQ.comparison_of_constants``, the truth
+   values removed by ``SimplifyFlatQuery``).
+
+   The existential quantifiers of the variables of the body out of the
+   head are then pushed down (``PushExistentialsDownConjunctionsMixin``),
+   :math:`\exists y\, (A \land B) \equiv A \land \exists y\, B` for
+   :math:`y` not free in :math:`A`, and
+   :math:`\exists x\, \exists y\, \varphi \equiv
+   \exists y\, \exists x\, \varphi`. An outer quantifier is swapped
+   through a chain :math:`\exists y_1 \dots \exists y_k\, \psi`, none
+   of whose quantifiers moves into :math:`\psi`, only when it moves into
+   :math:`\psi` itself (``_moves_into_matrix``): the number of walks is
+   then polynomial in :math:`k` rather than :math:`2^k`, as for a
+   deterministic atom with twenty columns that only it uses.
+
 Absorption in negations
    Conjuncts asserted outside a negation are removed from it, by the
    absorption law
@@ -688,7 +717,9 @@ Checks
    occurring only positively or only negatively.
    The negations and comparisons of `Negations and comparisons sharing
    relations`_ are exempt from this check, as their rules check each
-   query they lift. Turning the option off disables these soundness
+   query they lift, and so are the queries with a negation that are
+   non-repeating once their constants are shattered, planned before it
+   (see `Planning non-repeating queries`_). Turning the option off disables these soundness
    checks: the rules are then applied to queries for which they are not
    proved, and can give wrong probabilities instead of declining the query
    to weighted model counting.
@@ -878,6 +909,33 @@ only:
 
 Deterministic relations do not count as repetitions, and do not need to
 have the projected variable.
+
+A query in which a tuple-independent relation occurs more than once is
+first shattered on its constants, as by the Dalvi–Suciu algorithm (see
+"Shattering constants" in `The Dalvi–Suciu algorithm`_), and then planned
+if it has become non-repeating. Shattering thus applies before the
+non-repeating test, and before the unate check of the Dalvi–Suciu
+algorithm, which the planned query does not reach. Atoms of a relation
+with different constants at the same position become atoms of different
+relations. With ``test_evidence``, :math:`T`, tuple-independent and
+``drug_target``, :math:`D`, deterministic, the query
+
+.. code-block:: neurolang
+
+   pd_hit() :- drug_target('Tirofiban Hydrochloride', g), test_evidence(d, g, 'PD')
+   ad_hit() :- drug_target('Tirofiban Hydrochloride', g), test_evidence(d, g, 'AD')
+   good() :- pd_hit(), ~ad_hit()
+
+flattens to :math:`\exists g, d\, (D(\mathit{tir}, g) \land T(d, g, PD)) \land
+\lnot\exists g', d'\, (D(\mathit{tir}, g') \land T(d', g', AD))`, which repeats
+:math:`T` positively and negated, and was declined as not unate. Shattered,
+it is :math:`\exists g, d\, (D(\mathit{tir}, g) \land T_{PD}(d, g)) \land
+\lnot\exists g', d'\, (D(\mathit{tir}, g') \land T_{AD}(d', g'))`, non-repeating,
+and planned as :math:`P[\mathit{pd\_hit}]\,(1 - P[\mathit{ad\_hit}])`.
+The same constant in both atoms, as with ``'PD'`` for two drugs sharing a
+gene, leaves the relation repeated, and the query to the next rules. The
+choices are not shattered, as in the Dalvi–Suciu algorithm, and a query
+repeating a choice stays repeating.
 
 In Datalog, the rules of a predicate share their head variables, so the
 negation of a predicate defined by several rules always has disjuncts with
@@ -1363,8 +1421,9 @@ Projection on a variable
       = 1 - \prod_a (1 - p_a) - \sum_a p_a \prod_{b \neq a} (1 - p_b),
 
    computed with ``Subtraction``, the second query being projected
-   exclusively. It is tried last, and only on this shape: other
-   conjuncts, or other quantified variables in the atoms, are declined.
+   exclusively. It is tried after the other projections, and only on
+   this shape: other conjuncts, or other quantified variables in the
+   atoms, are declined.
 
    *At least k.* More generally, the query :math:`Q_k` with :math:`k`
    copies :math:`R(\bar u[x_i/x])` and one strict comparison of each pair
@@ -1406,6 +1465,64 @@ Projection on a variable
    as in :math:`x_1 \neq x_2 \land x_2 \neq x_3`, satisfied by
    :math:`x_1 = x_3`, or with comparisons no order satisfies, as in
    :math:`x_1 < x_2 < x_3 < x_1`, the query is declined.
+
+   *At least k or a filtered value.* In a disjunction, the query
+   :math:`Q_k` above with a disjunct
+   :math:`A = \exists x\, (R(\bar u) \land \varphi(x))`, :math:`\varphi` a
+   conjunction of deterministic atoms whose only variable is :math:`x`,
+   is rewritten before shattering (``AtLeastOutsideAFilter``):
+
+   .. math::
+
+      A \lor Q_k \equiv A \lor Q_k[R'/R], \qquad
+      R'(x, \bar v) := R(\bar u) \land \lnot\varphi(x),
+
+   :math:`\bar v` being the free variables of :math:`R(\bar u)`.
+   :math:`R'` is a fresh tuple-independent relation, the tuples of
+   :math:`R` with the constants of :math:`\bar u` and a value of :math:`x`
+   outside :math:`\varphi`, with their probabilities, defined by a
+   relational algebra expression marked with ``Materialise``, as the
+   deterministic negations are. :math:`A` and :math:`Q_k[R'/R]` then have
+   no probabilistic relation in common, and
+
+   .. math::
+
+      P[A \lor Q_k] = 1 - (1 - P[A])\,(1 - P[Q_k[R'/R]]),
+
+   the independent union of the plan of :math:`A` and of that of
+   ``_at_least_plan`` on :math:`R'`, the shape it lifts, its constants
+   being in :math:`R'`. The independent disjunction of
+   ``dalvi_suciu_lift`` lifts its components with ``dalvi_suciu_lift``,
+   which does not try ``_at_least_plan``; when no other rule lifts a
+   disjunction, ``_independent_disjunction_plan``, tried after the
+   projections, lifts each component with every rule, a component that
+   is a negation being declined as there; the comparisons of a disjunct
+   within its existentials pass the check of the builtins, as those of
+   an existential conjunct do. The rewrite applies
+   when :math:`R` is a tuple-independent relation known as a set, the
+   atom of :math:`A` is that of :math:`Q_k` with :math:`x` renamed, and
+   :math:`R` is in no other atom of the query, which :math:`R'` would make
+   look independent of it. Without :math:`\varphi`, :math:`Q_k` implies
+   :math:`A` and is removed. For instance, evidence for a gene and a
+   disease in a brain dataset, or in at least two datasets,
+
+   .. code-block:: prolog
+
+      brain_ev() :- test_evidence(d, 'G', 'D'), dataset_organ(d, 'brain')
+      two_ev() :- test_evidence(d1, 'G', 'D'), test_evidence(d2, 'G', 'D'),
+          (d1 != d2)
+      q() :- brain_ev()
+      q() :- two_ev()
+
+   is the independent union of the brain datasets and of at least two of
+   the other datasets. Not covered: a filter with another variable, as
+   :math:`M(x, z)` with :math:`z` free or quantified, or with a negation,
+   a disjunct :math:`A` with conjuncts on other probabilistic relations,
+   several filtered disjuncts, a probabilistic choice :math:`R`, and a
+   third atom of :math:`R`, such as a disjunct
+   :math:`R(\text{blood1}, G, D)`. :math:`Q_k` alone with constants,
+   ``two_ev`` above, is still declined: shattering replaces each
+   constant by a quantified variable of the copies.
 
    For instance, the segregation of a term on the selected study,
 
@@ -1531,6 +1648,29 @@ Polynomial time
    one quantifier less, or nothing when the rest is deterministic. The
    order being well founded, the
    construction terminates.
+
+Constants of the query
+   The query :math:`R(\bar a)` of a rule :math:`R(\bar x) \leftarrow
+   \varphi` holds in a world exactly when :math:`\varphi\sigma` does,
+   :math:`\sigma` the most general unifier of :math:`R(\bar x)` and
+   :math:`R(\bar a)`, the rule's other variables being existential: the
+   selection :math:`\bar x = \bar a` applied to the answers of the rule is
+   the body with :math:`\bar a` for :math:`\bar x`, an equivalence for a
+   conjunctive rule, and for each rule of a union. A comparison of
+   constants has the same truth value in every world: a true conjunct is
+   removed, :math:`\top \land \psi \equiv \psi`, and a false one makes
+   the conjunction false in every world, :math:`\bot \land \psi \equiv
+   \bot`, the probability 0 of an answer that is not given. Swapping
+   :math:`\exists x` through the chain
+   :math:`\exists y_1 \dots \exists y_k\, \psi` gives
+   :math:`\exists y_1 \dots \exists y_k \exists x\, \psi`, an
+   equivalence. The chain is left unchanged by the walk, and so is each
+   of its subchains, which the walk of the chain walks first. When the walk
+   leaves :math:`\exists x\, \psi` unchanged, it leaves the swapped
+   :math:`\exists x\, \exists y_2 \dots \exists y_k\, \psi` unchanged,
+   by induction on :math:`k`: its body is an unchanged subchain, and its
+   own swap is that of :math:`\exists x` through a shorter one. Skipping
+   the swap then gives the same formula.
 
 Absorption in negations
    In every world, for every :math:`\theta`: if :math:`A\theta` holds,
@@ -1749,7 +1889,7 @@ Join order
 Non-repeating queries
    :func:`~neurolang.probabilistic.non_repeating_lift.non_repeating_plan`
    applies only if no probabilistic relation, fact or choice, occurs
-   twice in the query (``_is_non_repeating``), the occurrences of an atom
+   twice in the query (``is_non_repeating``), the occurrences of an atom
    being counted: :math:`R(x) \land \lnot R(x)` has two occurrences of
    :math:`R`, which are not independent. Its rewrites add no atom,
    so this holds for every subformula planned, and by Lemma 1 two
@@ -1797,6 +1937,25 @@ Non-repeating queries
      Otherwise no plan is given;
    * deterministic relations are the same in every world, so they neither
      count as repetitions nor need to have :math:`v`.
+
+   * *shattering*: a query repeating a tuple-independent relation is
+     first shattered on its constants (``shatter_constants``, in
+     ``_non_repeating_query_plan``). Shattering is an equivalence: the
+     atom :math:`R(\bar u)` with the constant :math:`a` at position
+     :math:`i` is true in a world exactly when the atom of
+     :math:`R_{i=a} = \sigma_{i=a}(R)` without that position is, and an
+     atom with a variable there is the disjunction of the atoms of the
+     cells of the partition of :math:`R` by those constants, as in
+     `Comparisons with a constant`_ below. The cells are disjoint sets of
+     tuples of :math:`R`, each keeping its probability, so that, :math:`R`
+     being tuple-independent, the shattered relations are
+     tuple-independent and pairwise independent (Lemma 1). Atoms of
+     :math:`R` with different constants at a position, as
+     :math:`T(d, g, PD)` and :math:`\lnot T(d', g', AD)`, become atoms of
+     different relations, the query may become non-repeating, and the
+     cases above then apply to it. Atoms with the same constant, or one
+     with a variable at that position, still share a cell, which is
+     counted as a repetition, and the query is left to the next rules.
 
    Each recursive call is on a smaller formula: a part of a conjunction,
    negation or disjunction, or a group with one quantifier less. Pushing
@@ -2337,6 +2496,39 @@ Projection on a variable
    are exclusive (Lemma 2), and the sum is the disjoint projection. The
    rule recurses on :math:`Q_{k-1}`, with one copy less, down to
    :math:`Q_1`, which it does not match.
+
+   *At least k or a filtered value.* In a world where :math:`R(\bar u)`
+   holds for a value :math:`a` of :math:`x` satisfying :math:`\varphi`,
+   :math:`A` holds, and both sides of the rewrite hold. Otherwise every
+   value of :math:`x` for which :math:`R(\bar u)` holds satisfies
+   :math:`\lnot\varphi`, and so :math:`R'(x, \bar v)`, the free variables
+   being fixed: :math:`R(\bar u)` and :math:`R'(x, \bar v)` hold for the
+   same values, so :math:`Q_k` and :math:`Q_k[R'/R]` agree, and so do both
+   sides. :math:`\varphi` being deterministic, it is the same in every
+   world, and :math:`R'` has, in each world, the tuples of :math:`R`
+   outside :math:`\varphi` present in it, with their probabilities:
+   splitting :math:`R` into :math:`R_\varphi := R \land \varphi` and
+   :math:`R'`, disjoint sets of its independent tuples, gives the same
+   distribution. :math:`A \equiv \exists x\, (R_\varphi(\bar u) \land
+   \varphi(x))` depends on the tuples of :math:`R_\varphi` only, and
+   :math:`Q_k[R'/R]` on those of :math:`R'`, :math:`R` being in no other
+   atom: the two disjuncts are independent (Lemma 1), for each value of
+   the free variables, and the independent union of their plans, each
+   lifted and checked by the rules of this page, is exact. Without
+   :math:`\varphi`, :math:`Q_k` implies :math:`\exists x\, R(\bar u) = A`.
+   The plan of :math:`Q_k[R'/R]` is that of ``_at_least_plan``, in
+   :math:`O(n^k)` time for :math:`k \leq` ``MAX_AT_LEAST``, and
+   :math:`R'` a selection and a difference of :math:`R` and the relations
+   of :math:`\varphi`, in polynomial time.
+   ``_independent_disjunction_plan`` is the independent disjunction
+   above: its components have no probabilistic relation in common, so
+   their events are independent (Lemma 1), and have the free variables
+   of the disjunction (``_union_has_the_same_columns``), so that the
+   independent union of their plans, each pure and lifted by a rule of
+   this page, computes :math:`1 - \prod_i (1 - P[Q_i])` for every
+   answer. Admitting the comparisons of a disjunct within its
+   existentials adds no plan: they are planned, or the query declined,
+   by the rules that lift the disjunct.
 
 Algorithms from the literature
    The rules of `Algorithms from the literature`_ are proved in the papers
