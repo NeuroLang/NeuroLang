@@ -320,9 +320,15 @@ def test_the_embeddings_of_an_engine_are_kept_as_those_of_another(
 ):
     """``kept_as`` reads and saves the embeddings under the other engine's
     directory of the kept data."""
+    from neurolang.utils import engine_registry
+
     seen = []
     monkeypatch.setattr(bundle.shutil, "copytree",
                         lambda src, dst, **kw: seen.append(Path(src)))
+    # What follows the copy is not under test: building the engine (which
+    # export_embeddings survives failing) took minutes.
+    monkeypatch.setattr(engine_registry, "build_engine",
+                        lambda *args, **kw: 1 / 0)
     kept = tmp_path / "kept" / "neurosynth" / "embeddings"
     kept.mkdir(parents=True)
     (tmp_path / "data").mkdir()
