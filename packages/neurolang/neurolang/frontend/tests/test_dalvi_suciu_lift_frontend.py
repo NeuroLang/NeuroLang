@@ -1348,3 +1348,99 @@ def test_union_with_disjoint_restrictions_of_a_relation(d2, lifted, renamed):
         result = _solve(program, probabilistic, deterministic, {})
     assert result == [pytest.approx(expected)]
     assert renamed[0] is lifted
+
+
+TIROFIBAN = "'Tirofiban Hydrochloride'"
+
+
+@pytest.mark.parametrize("program, expected", [
+    # Disjoint constants, a negated nullary rule.
+    (
+        f"pd_hit() :- drug_target({TIROFIBAN}, g), "
+        "test_evidence(d, g, 'PD')\n"
+        f"ad_hit() :- drug_target({TIROFIBAN}, g), "
+        "test_evidence(d, g, 'AD')\n"
+        "nad() :- ~ad_hit()\n"
+        "both() :- pd_hit(), nad()\n"
+        "ans(probability) :- PROB[both()] = probability",
+        lambda hit: hit("Tirofiban Hydrochloride", "PD") and
+        not hit("Tirofiban Hydrochloride", "AD"),
+    ),
+    (
+        f"pd_ev() :- drug_target({TIROFIBAN}, g), "
+        "test_evidence(d, g, 'PD')\n"
+        f"ad_ev() :- drug_target({TIROFIBAN}, g), "
+        "test_evidence(d, g, 'AD')\n"
+        "good() :- pd_ev(), ~ad_ev()\n"
+        "ans(probability) :- PROB[good()] = probability",
+        lambda hit: hit("Tirofiban Hydrochloride", "PD") and
+        not hit("Tirofiban Hydrochloride", "AD"),
+    ),
+    # A constant at another position too.
+    (
+        f"pd_ev() :- drug_target({TIROFIBAN}, g), "
+        "test_evidence(1, g, 'PD')\n"
+        f"ad_ev() :- drug_target({TIROFIBAN}, g), "
+        "test_evidence(d, g, 'AD')\n"
+        "good() :- pd_ev(), ~ad_ev()\n"
+        "ans(probability) :- PROB[good()] = probability",
+        lambda hit: hit("Tirofiban Hydrochloride", "PD", 1) and
+        not hit("Tirofiban Hydrochloride", "AD"),
+    ),
+    # The same constant, the drugs sharing a gene: the atoms are not
+    # disjoint.
+    (
+        f"pd_ev() :- drug_target({TIROFIBAN}, g), "
+        "test_evidence(d, g, 'PD')\n"
+        "ad_ev() :- drug_target('Aspirin', g), test_evidence(d, g, 'PD')\n"
+        "good() :- pd_ev(), ~ad_ev()\n"
+        "ans(probability) :- PROB[good()] = probability",
+        lambda hit: hit("Tirofiban Hydrochloride", "PD") and
+        not hit("Aspirin", "PD"),
+    ),
+])
+def test_negated_atoms_of_a_relation_selected_by_different_constants(
+    program, expected
+):
+    """
+    ``test_evidence`` positive and negated, with 'PD' in one atom and 'AD'
+    in the other, raised NotUnateException: the non-repeating planner ran
+    before shattering. Shattered on the constants, the atoms are of
+    disjoint, independent relations, and the query is planned as
+    P[pd] (1 - P[ad]). With the same constant, the atoms can be the same
+    tuples. Each is checked against the enumeration of the worlds.
+    """
+    import itertools
+
+    from .. import NeurolangPDL
+
+    evidence = [
+        (.3, 1, "g1", "PD"), (.6, 2, "g1", "AD"), (.5, 1, "g2", "AD"),
+        (.4, 2, "g2", "PD"), (.7, 3, "g3", "AD"), (.2, 1, "g1", "AD"),
+        (.45, 1, "g3", "PD"),
+    ]
+    targets = [
+        ("Tirofiban Hydrochloride", "g1"), ("Tirofiban Hydrochloride", "g2"),
+        ("Aspirin", "g3"), ("Aspirin", "g2"),
+    ]
+    probability = 0
+    for world in itertools.product((False, True), repeat=len(evidence)):
+        weight = 1
+        for present, (p, *_) in zip(world, evidence):
+            weight *= p if present else 1 - p
+        facts = [t for present, (_, *t) in zip(world, evidence) if present]
+
+        def hit(drug, disease, study=None):
+            return any(
+                (drug, g) in targets and c == disease and
+                study in (None, d)
+                for d, g, c in facts
+            )
+
+        probability += weight * expected(hit)
+
+    nl = NeurolangPDL(**LIFTED_ONLY)
+    nl.add_probabilistic_facts_from_tuples(evidence, name="test_evidence")
+    nl.add_tuple_set(targets, name="drug_target")
+    result = nl.execute_datalog_program(program)
+    assert [p for p, in result] == [pytest.approx(probability)]
