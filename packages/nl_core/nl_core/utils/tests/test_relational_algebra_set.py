@@ -1,6 +1,10 @@
 from typing import AbstractSet, Tuple
 import pytest
 
+from nl_expr.exceptions import (
+    IncompatibleJoinColumnsError, RelationalAlgebraError,
+)
+
 from ..relational_algebra_set import (
     RelationalAlgebraColumnInt,
     RelationalAlgebraColumnStr,
@@ -1765,3 +1769,52 @@ def test_naturaljoin_cut_by_the_smaller_relation(small, large, monkeypatch):
     )
     assert join(10, 1) == plain
     assert cuts and cut_rows[0] < len(large[1])
+
+
+def _text_and_numbers(ra_module):
+    named = ra_module.NamedRelationalAlgebraFrozenSet
+    return named(("s", "t"), [(0, "a"), (1, "b")]), named(("t",), [(1,), (2,)])
+
+
+@pytest.mark.parametrize("operation", [
+    lambda a, b: a.naturaljoin(b),
+    lambda a, b: b.naturaljoin(a),
+    lambda a, b: a.left_naturaljoin(b),
+    lambda a, b: b.left_naturaljoin(a),
+], ids=["join", "join-reversed", "left", "left-reversed"])
+def test_a_column_of_text_and_one_of_numbers_are_not_compared(
+    ra_module, operation
+):
+    """
+    A text is never equal to a number: the backends refused them with
+    their own errors (pandas' ValueError, polars' SchemaError), now one
+    error of the relational algebra that names the column.
+    """
+    a, b = _text_and_numbers(ra_module)
+    with pytest.raises(IncompatibleJoinColumnsError, match="'t'") as error:
+        operation(a, b)
+    assert isinstance(error.value, RelationalAlgebraError)
+
+
+def test_a_difference_of_text_and_numbers(ra_module):
+    """
+    The named difference of pandas, as its joins, refuses them; polars'
+    keeps every row of the first relation, nothing being equal.
+    """
+    named = ra_module.NamedRelationalAlgebraFrozenSet
+    text = named(("t",), [("a",), ("b",)])
+    numbers = named(("t",), [(1,), (2,)])
+    if ra_module is pandas:
+        with pytest.raises(IncompatibleJoinColumnsError, match="'t'"):
+            text - numbers
+        with pytest.raises(IncompatibleJoinColumnsError, match="'t'"):
+            numbers - text
+    else:
+        assert sorted(text - numbers) == [("a",), ("b",)]
+
+
+def test_columns_of_numbers_of_different_types_are_still_joined(ra_module):
+    named = ra_module.NamedRelationalAlgebraFrozenSet
+    ints = named(("s", "t"), [(0, 1), (1, 2)])
+    floats = named(("t",), [(1.0,), (3.0,)])
+    assert sorted(ints.naturaljoin(floats)) == [(0, 1.0)]

@@ -108,6 +108,23 @@ class ProjectionOverMissingColumnsError(RelationalAlgebraError):
     pass
 
 
+class IncompatibleJoinColumnsError(RelationalAlgebraError):
+    """
+    A column that a join or a difference compares holds text in one
+    relation and numbers in the other: a text never equals a number, and
+    the backends do not compare them.
+    """
+
+    def __init__(self, column, left_type, right_type):
+        super().__init__(
+            f"Cannot compare the column '{column}': it holds text "
+            f"({left_type}) in one relation and numbers ({right_type}) in "
+            "the other, and a text is never equal to a number. Check the "
+            "types of the columns that share this variable (the identifier "
+            "'1' is not the number 1) and convert one of them."
+        )
+
+
 class RelationalAlgebraNotImplementedError(
     RelationalAlgebraError, NotImplementedError
 ):
