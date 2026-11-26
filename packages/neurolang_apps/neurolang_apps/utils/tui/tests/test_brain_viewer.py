@@ -949,13 +949,21 @@ brainViewer.ready.then(function () {
     byBundle: mesh.fiberGroupColormap !== null
   };
   out.drawnColours = near(pixels());
+  // NiiVue dithers each streamline with Math.random() on every rebuild of
+  // the mesh, as a change of colours is: the pixels at the edge of near()
+  // would come and go. Undithered, the drawings to compare are the same.
+  nv.setMeshProperty(mesh.id, 'fiberDither', 0);
+  var undithered = pixels();
+  out.undithered = near(undithered);
   set('streamline-colour', 'direction', 'change');
   out.direction = {
     byBundle: mesh.fiberGroupColormap !== null, legendShown: !legend.hidden,
     colours: near(pixels()), drawn: mesh.indexCount
   };
   set('streamline-colour', 'bundle', 'change');
-  out.back = near(pixels());
+  var back = pixels();
+  out.back = near(back);
+  out.backRedrawn = changes(undithered, back);
   // the number still follows the ranks, whatever the colours
   set('streamline-number', '0');
   out.one = mesh.indexCount;
@@ -984,15 +992,17 @@ def test_the_bundles_in_a_headless_browser(tmp_path):
     assert result["colours"] == ["rgb(255, 0, 255)", "rgb(0, 255, 255)"]
     assert result["groups"] == [[0, 2], [1]] and result["byBundle"]
     # pixels of the colours of the bundles, which no direction of these
-    # streamlines gives, and again when back to bundles
+    # streamlines gives, and the same drawing again when back to bundles
     by_bundle, by_direction = result["drawnColours"], result["direction"]
     for colour in ("magenta", "cyan"):
         assert by_bundle[colour] > 0
+        assert result["undithered"][colour] > 0
         assert by_direction["colours"][colour] == 0
     assert by_direction["byBundle"] is False
     assert by_direction["legendShown"] is False
     assert by_direction["drawn"] == 11
-    assert result["back"] == pytest.approx(by_bundle, rel=0.2)
+    assert result["back"] == result["undithered"]
+    assert result["backRedrawn"] == 0
     assert result["one"] == 4
 
 
