@@ -2564,6 +2564,9 @@ def find_separator_variables(query, symbol_table):
     for var in candidates:
         atom_positions = {}
         for atom in all_atoms:
+            if is_atom_a_deterministic_relation(atom, symbol_table):
+                # True or false in every world, as in Q1(a) as in Q1(b).
+                continue
             functor = atom.functor
             pos_ = {i for i, v in enumerate(atom.args) if v == var}
             if any(

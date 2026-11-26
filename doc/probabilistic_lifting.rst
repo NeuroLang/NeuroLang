@@ -362,6 +362,19 @@ Separator variable
 
       P[\exists z\, Q(z)] = 1 - \prod_a (1 - P[Q(a)]).
 
+   The atoms of a deterministic relation need not have :math:`z`, nor at
+   the same position, in ``find_separator_variables``: a deterministic
+   relation in two atoms, as :math:`\mathit{organ}` in
+
+   .. math::
+
+      \exists g, d_1, d_2\, \mathit{te_{brain}}(d_1, g) \land
+      \mathit{organ}(d_1, \mathit{brain}) \land
+      \mathit{te_{blood}}(d_2, g) \land \mathit{organ}(d_2, \mathit{blood}),
+
+   leaves :math:`g` a separator variable, as it is with two
+   deterministic relations (see `Correctness of the plans`_).
+
    When the plan of the subqueries is not pure, the rules that follow are
    tried on the query as it is. The plan algebra also has ``IndependentProjectionUniversal``, the dual
    projection for a universally quantified separator variable
@@ -2055,6 +2068,20 @@ Separator determined by a functional dependency
    the separator variables, is sound by the same argument for each of
    them; trying the next rules when the plan is not pure is sound as each
    rule is.
+
+Deterministic atoms of a separator variable
+   ``find_separator_variables`` requires :math:`z` in every atom of a
+   probabilistic relation, at the same position in the atoms of each, and
+   nothing of the atoms of deterministic relations. A deterministic atom
+   is the same in every world: for a value :math:`a` of :math:`z`, the
+   tuples of the event :math:`Q(a)` (see the probabilistic model) are
+   those of its probabilistic atoms with :math:`z = a`, its deterministic
+   atoms only restricting the values of the other variables. Two events
+   :math:`Q(a)` and :math:`Q(b)`, :math:`a \neq b`, thus have tuples with
+   :math:`a`, respectively :math:`b`, at the position of :math:`z` in each
+   probabilistic relation, and no tuple in common: they are independent
+   by Lemma 1, and :math:`P[\exists z\, Q(z)] = 1 - \prod_a (1 -
+   P[Q(a)])`, as for the other separator variables.
 
 Declined unions
    Declining a query is sound: it is then solved by weighted model

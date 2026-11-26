@@ -217,6 +217,12 @@ Unreleased
 
 **Performance:**
 
+- Lifted inference: the separator variable of a query need not be in the
+  atoms of a deterministic relation, as ``organ`` in ``te_brain(d1, g),
+  organ(d1, 'brain'), te_blood(d2, g), organ(d2, 'blood')``, which was
+  declined to weighted model counting because ``organ`` is in two atoms
+  without ``g``. See doc/probabilistic_lifting.rst, "Deterministic atoms
+  of a separator variable".
 - Lifted inference: a conjunction implies ``v != c`` when a positive
   deterministic atom of it has ``v`` where none of its tuples has the
   constant ``c`` of an atom of a probabilistic relation at ``v``'s

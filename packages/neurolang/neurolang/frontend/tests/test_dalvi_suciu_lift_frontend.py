@@ -1114,3 +1114,99 @@ def test_self_join_through_a_constant_a_deterministic_atom_excludes(
     assert result.keys() == expected.keys()
     for key, value in expected.items():
         assert result[key] == pytest.approx(value)
+
+
+def _by_enumeration(probabilistic, satisfies):
+    """The probability that a world of the tuple-independent relations
+    *probabilistic*, a mapping of their names to tuples whose first value
+    is the probability, satisfies *satisfies*, a function of the mapping
+    of the names to the tuples of the world."""
+    import itertools
+
+    facts = [
+        (name, t) for name, tuples in probabilistic.items() for t in tuples
+    ]
+    probability = 0.
+    for world in itertools.product([False, True], repeat=len(facts)):
+        weight = 1.
+        tuples = {name: set() for name in probabilistic}
+        for present, (name, (p, *t)) in zip(world, facts):
+            weight *= p if present else 1 - p
+            if present:
+                tuples[name].add(tuple(t))
+        if satisfies(tuples):
+            probability += weight
+    return probability
+
+
+def _solve(program, probabilistic, deterministic, solvers):
+    """The probabilities of *program*'s Boolean ``ans``."""
+    from .. import NeurolangPDL
+
+    nl = NeurolangPDL(**solvers)
+    for name, tuples in probabilistic.items():
+        nl.add_probabilistic_facts_from_tuples(tuples, name=name)
+    for name, tuples in deterministic.items():
+        nl.add_tuple_set(tuples, name=name)
+    return [p for p, in nl.execute_datalog_program(program)]
+
+
+TE = [
+    (.8, "b1", "G1", "AD"), (.3, "b2", "G1", "AD"), (.6, "l1", "G1", "AD"),
+    (.5, "b1", "G2", "AD"), (.7, "l2", "G2", "AD"), (.4, "l1", "G2", "PD"),
+    (.9, "b2", "G2", "PD"),
+]
+ORGAN = [("b1", "brain"), ("b2", "brain"), ("l1", "blood"), ("l2", "blood")]
+DETERMINISTIC = dict(
+    organ=ORGAN, target=[("X", "G1"), ("X", "G2")],
+    adult=[("b1",), ("l1",), ("l2",)],
+)
+
+
+def _evidence_in(world, organ, gene, organ_name, adult=False):
+    """Whether *world* has evidence for AD of *gene* in a dataset of
+    *organ_name*, and of an adult."""
+    return any(
+        g == gene and s == "AD" and (d, organ_name) in organ
+        and (not adult or (d,) in DETERMINISTIC["adult"])
+        for d, g, s in world["te"]
+    )
+
+
+def _brain_and_blood(adult=False, organ=ORGAN):
+    def satisfies(world):
+        return any(
+            _evidence_in(world, organ, g, "brain", adult)
+            and _evidence_in(world, organ, g, "blood")
+            for g in ("G1", "G2")
+        )
+    return satisfies
+
+
+def test_separator_with_a_deterministic_relation_in_two_atoms():
+    """
+    ``organ`` in two atoms, without the separator ``g``: deterministic,
+    its atoms need no position of ``g`` for the subqueries of two values
+    of ``g`` to be independent, and ``g`` separates the query.
+    """
+    organ = dict(ORGAN)
+    probabilistic = {
+        "te_brain": [t for t in TE if organ[t[1]] == "brain"],
+        "te_blood": [t for t in TE if organ[t[1]] == "blood"],
+    }
+    program = (
+        "ans(PROB) :- target('X', g), te_brain(d1, g, 'AD'),"
+        " organ(d1, 'brain'), te_blood(d2, g, 'AD'), organ(d2, 'blood')"
+    )
+
+    def satisfies(world):
+        return any(
+            any(t[1:] == (g, "AD") for t in world["te_brain"]) and
+            any(t[1:] == (g, "AD") for t in world["te_blood"])
+            for g in ("G1", "G2")
+        )
+
+    result = _solve(program, probabilistic, DETERMINISTIC, LIFTED_ONLY)
+    assert result == [
+        pytest.approx(_by_enumeration(probabilistic, satisfies))
+    ]
