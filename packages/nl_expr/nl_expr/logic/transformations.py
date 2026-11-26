@@ -1,3 +1,4 @@
+import itertools
 from ..exceptions import NotInFONegE
 from ..expression_walker import (
     ChainedWalker,
@@ -378,23 +379,34 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
         lambda expression: len(expression.formulas) > 1
     )
     def nary_logic_operator(self, expression):
-        free_variables = extract_logic_free_variables(expression)
-        expression_first = self.walk(expression.formulas[0])
-        bound_variables_first = ExtractBoundVariables().walk(expression_first)
-
-        new_expression_tail = expression.apply(tuple(
-            FreshenVariablesWhenQuantified(
-                free_variables | bound_variables_first
-            ).walk(formula)
-            for formula in expression.formulas[1:]
-        ))
-        new_expression_tail = self.walk(new_expression_tail)
-
-        new_expression = expression.apply(
-            (expression_first,) + new_expression_tail.formulas
+        # Each formula is walked, then the formulas after it are
+        # freshened apart from the free variables of those left and the
+        # bound variables of the formulas walked: a loop, not a recursion
+        # on the formulas left, whose depth would be that of their number.
+        # Freshening leaves the free variables, which are taken once.
+        formulas = expression.formulas
+        free_variables = [None] * len(formulas)
+        free_variables[-1] = extract_logic_free_variables(formulas[-1])
+        for i in range(len(formulas) - 2, -1, -1):
+            free_variables[i] = (
+                extract_logic_free_variables(formulas[i])
+                | free_variables[i + 1]
+            )
+        walked = []
+        rest = list(formulas)
+        while len(rest) > 1:
+            walked.append(self.walk(rest[0]))
+            avoided = (
+                free_variables[len(walked) - 1]
+                | ExtractBoundVariables().walk(walked[-1])
+            )
+            rest = [
+                FreshenVariablesWhenQuantified(avoided).walk(formula)
+                for formula in rest[1:]
+            ]
+        return expression.apply(
+            tuple(walked) + self.walk(expression.apply(tuple(rest))).formulas
         )
-
-        return new_expression
 
     @add_match(Quantifier)
     def quantifier(self, expression):
@@ -508,10 +520,36 @@ class UsedQuantifiers(PatternWalker):
         return {exp} | self.walk(exp.body)
 
 
+def _group_runs(expression):
+    """The formulas of the n-ary *expression* where each maximal run of
+    formulas that are not n-ary (atoms, negations, quantified formulas,
+    which no distribution will turn into the dual connective) is one
+    formula of the type of *expression*: ``a ∧ b ∧ (c ∨ d) ∧ e`` is
+    ``(a ∧ b) ∧ (c ∨ d) ∧ e``. The operation being associative, it is the
+    same expression, with as many formulas as there are n-ary formulas and
+    runs between them.
+    """
+    units = []
+    for is_nary, run in itertools.groupby(
+        expression.formulas, lambda f: isinstance(f, NaryLogicOperator)
+    ):
+        run = tuple(run)
+        units.extend(
+            run if is_nary or len(run) == 1 else [expression.apply(run)]
+        )
+    return tuple(units)
+
+
 class DistributeDisjunctions(LogicExpressionWalker):
-    @add_match(Disjunction, lambda e: len(e.formulas) > 2)
+    @add_match(
+        Disjunction,
+        lambda e: len(e.formulas) > 2
+        and any(isinstance(f, Conjunction) for f in e.formulas),
+    )
     def split(self, expression):
-        head, *rest = expression.formulas
+        head, *rest = _group_runs(expression)
+        if not rest[1:]:
+            return self.walk(Disjunction((head, *rest)))
         rest = self.walk(Disjunction(tuple(rest)))
         new_exp = Disjunction((head, rest))
         return self.walk(new_exp)
@@ -532,9 +570,15 @@ class DistributeDisjunctions(LogicExpressionWalker):
 
 
 class DistributeConjunctions(LogicExpressionWalker):
-    @add_match(Conjunction, lambda e: len(e.formulas) > 2)
+    @add_match(
+        Conjunction,
+        lambda e: len(e.formulas) > 2
+        and any(isinstance(f, Disjunction) for f in e.formulas),
+    )
     def split(self, expression):
-        head, *rest = expression.formulas
+        head, *rest = _group_runs(expression)
+        if not rest[1:]:
+            return self.walk(Conjunction((head, *rest)))
         rest = self.walk(Conjunction(tuple(rest)))
         new_exp = Conjunction((head, rest))
         return self.walk(new_exp)

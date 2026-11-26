@@ -417,6 +417,19 @@ Unreleased
   fail with "Probabilistic choice already defined". Their probabilities must
   sum to 1.
 
+- Probabilistic queries of hundreds of conjuncts, such as a ``PROB`` whose
+  event has 250 comparisons, no longer fail with ``RecursionError`` when
+  they are prepared: the distribution of a conjunction over a disjunction
+  (and of a disjunction over a conjunction), the standardisation of the
+  quantified variables and the selection built by the shattering recursed
+  once per formula. They now loop, and the standardisation takes the free
+  variables of each formula once, not those of the formulas left at each
+  step (150 comparisons: 3.6 s to 1.3 s; 200 atoms of 200 relations on one
+  variable: 28 s to 15 s). A conjunction of about 245 joined relations still
+  exceeds the limit, in the relational algebra optimiser, which walks the
+  chain of joins recursively. The selection of the shattering nests the
+  conditions differently above 16 of them.
+
 - Magic sets: a query of the WMQL bundles ``uf``, ``ilf``, ``af`` or
   ``ec`` on the Disconnectome engines fits in memory again. Since the
   rewrite gave up on cycles of its own (#1391), these bundles were solved
