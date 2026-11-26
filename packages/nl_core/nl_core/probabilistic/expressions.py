@@ -1,8 +1,14 @@
 from nl_expr.expressions import (
-    Constant, Definition, FunctionApplication, Symbol,
+    Constant, Definition, Expression, FunctionApplication, Symbol,
 )
-from nl_expr.expression_walker import expression_iterator
-from nl_expr.logic import TRUE, BinaryLogicOperator, LogicOperator
+from nl_expr.expression_pattern_matching import add_match
+from nl_expr.expression_walker import PatternWalker
+from nl_expr.logic import (
+    TRUE,
+    BinaryLogicOperator,
+    LogicOperator,
+    NaryLogicOperator,
+)
 
 PROB = Symbol("PROB")
 
@@ -59,12 +65,34 @@ def expectation(function, event, result, known=None, normalised=False):
     )
 
 
+class _HasExpectation(PatternWalker):
+    """Walk the logic operators and the arguments of applications, not the
+    contents of constants, which may be large."""
+
+    @add_match(Expectation)
+    def expectation(self, expression):
+        return True
+
+    @add_match(NaryLogicOperator)
+    def nary(self, expression):
+        return any(self.walk(f) for f in expression.formulas)
+
+    @add_match(LogicOperator)
+    def operator(self, expression):
+        return any(self.walk(f) for f in expression.unapply())
+
+    @add_match(FunctionApplication)
+    def application(self, expression):
+        return any(self.walk(arg) for arg in expression.args)
+
+    @add_match(Expression)
+    def atom(self, expression):
+        return False
+
+
 def contains_expectation(expression):
     """Whether *expression* is, or holds, an ``Expectation``."""
-    return any(
-        isinstance(sub, Expectation)
-        for _, sub in expression_iterator(expression)
-    )
+    return _HasExpectation().walk(expression)
 
 
 class ProbabilisticPredicate(Definition):

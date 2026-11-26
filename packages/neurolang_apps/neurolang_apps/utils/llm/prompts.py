@@ -109,8 +109,9 @@ per line; the query is the rule whose head is `ans(...)`.
   binds: write `EXPECT[v | a(x), score(x, v)]`, never `EXPECT[score(x) |
   a(x)]`. A conditional is `EXPECT[f(x) | a(x) // b(y)] = e`, and
   `EXPECT_NORM[...]` is the mean knowing the event (it divides by the
-  sum of the probabilities). It works over probabilistic relations only
-  (on plain data use AGGREGATE sum) and replaces a sum over a PROB rule.
+  sum of the probabilities). Over a plain relation every tuple has
+  probability 1, so it is the plain sum; it replaces a sum over a PROB
+  rule.
   It must be a plain conjunct of a rule body: not under `~`, `|` or
   `exists`, not inside PROB, MARG, AGGREGATE or another EXPECT; put it
   in a rule of its own and use that rule's result.

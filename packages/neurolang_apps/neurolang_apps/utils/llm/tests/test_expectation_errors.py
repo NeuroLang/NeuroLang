@@ -22,7 +22,10 @@ def probabilistic():
     return nl
 
 
-INTERNALS = ("No match for", "Fol2Datalog", "λ", "Internal error", "Symbol{")
+INTERNALS = (
+    "No match for", "Fol2Datalog", "λ", "Internal error", "Symbol{",
+    "Error trying to process rule",
+)
 
 CASES = (
     ("ans(e) :- r(x), ~EXPECT[x | roll(x)] = e", "must be a conjunct"),
