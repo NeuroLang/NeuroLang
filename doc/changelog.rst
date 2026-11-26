@@ -371,6 +371,12 @@ Unreleased
 
 **Bug fixes:**
 
+- The choice facts of one predicate, ``0.3 ^ choice('a'). 0.7 ^ choice('b').``
+  (the example of the tutorial, 10.6), are the alternatives of one choice,
+  as the ``::`` facts of a predicate are one relation; the second one used to
+  fail with "Probabilistic choice already defined". Their probabilities must
+  sum to 1.
+
 - Magic sets: a query of the WMQL bundles ``uf``, ``ilf``, ``af`` or
   ``ec`` on the Disconnectome engines fits in memory again. Since the
   rewrite gave up on cycles of its own (#1391), these bundles were solved
