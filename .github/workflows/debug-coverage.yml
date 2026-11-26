@@ -1,0 +1,22 @@
+name: Debug coverage run
+on:
+  pull_request:
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: astral-sh/setup-uv@v6
+      with:
+        python-version: "3.12"
+        enable-cache: true
+    - name: Install all the packages
+      run: |
+        uv sync --all-packages --extra dev --extra ras-polars --extra tui --extra llm --extra mcp
+        uv pip install pytest-timeout pytest-cov
+    - name: Run all the tests with coverage, up to the first failure
+      run: >-
+        uv run --no-sync python -m pytest packages --timeout=600 -x
+        --cov=nl_expr --cov=nl_core --cov=neurolang --cov=neurolang_apps
+        --cov-report=term
+      timeout-minutes: 45
