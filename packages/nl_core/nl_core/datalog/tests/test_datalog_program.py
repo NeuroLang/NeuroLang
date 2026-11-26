@@ -266,6 +266,26 @@ def test_not_conjunctive():
         dl.walk(Imp_(Q(x, y), R(Q(x))))
 
 
+def test_unbound_head_variable_rejected():
+    dl = Datalog()
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        dl.walk(Imp_(Q(x, y), R(x)))
+    assert exc_info.value.rule == 'Q'
+    assert exc_info.value.variables == ('y',)
+    assert str(exc_info.value).startswith(
+        'In Q: the variable y appears only in `Q(x, y)`'
+    )
+    assert Q not in dl.symbol_table
+
+    dl.walk(Imp_(Q(x, y), Conjunction((R(x), C_(eq)(y, x)))))
+    assert Q in dl.symbol_table
+
+
 def test_unbound_variables_rejected():
     dl = Datalog()
     Q = S_('Q')  # noqa: N806

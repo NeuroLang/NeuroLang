@@ -390,6 +390,11 @@ Unreleased
   as the ``::`` facts of a predicate are one relation; the second one used to
   fail with "Probabilistic choice already defined". Their probabilities must
   sum to 1.
+- A rule or a query with a head variable that does not occur in its body,
+  as ``ans(year, n) :- year_count(y, n)``, raises ``UnboundVariablesError``
+  naming the rule and the variables, in deterministic and probabilistic
+  programs, where a query of a rule of a ``NeurolangPDL`` program raised
+  a ``KeyError``.
 
 - Magic sets: a query of the WMQL bundles ``uf``, ``ilf``, ``af`` or
   ``ec`` on the Disconnectome engines fits in memory again. Since the

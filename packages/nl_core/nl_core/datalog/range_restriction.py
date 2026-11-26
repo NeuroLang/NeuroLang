@@ -34,7 +34,7 @@ _ATOM, _DEFINITION, _FILTER = "atom", "definition", "filter"
 def check_range_restriction(rule, symbol_table=None, query=False):
     """
     Raise an error if a variable of the body of *rule* can never be
-    bound.
+    bound, or a variable of its head does not occur in its body.
 
     The variables of the head of a rule can be bound by the queries using
     it: magic sets give ``x`` the value ``'a'`` in ``A(x, y) :- P(w, y),
@@ -70,6 +70,16 @@ def check_range_restriction(rule, symbol_table=None, query=False):
         if isinstance(application, FunctionApplication):
             _check_function_arguments(application, symbol_table)
     functor = rule.consequent.functor
+    unbound_head = tuple(
+        v for v in extract_logic_free_variables(rule.consequent)
+        if v not in rule.antecedent._symbols
+    )
+    if unbound_head:
+        render = _renderer()
+        raise UnboundVariablesError(
+            None if query else functor.name, tuple(map(render, unbound_head)),
+            (render(rule.consequent),), None, query,
+        )
     if functor.is_fresh and not query:
         return
     error = unbound_variables_error(

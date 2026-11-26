@@ -64,12 +64,6 @@ class DatalogProgramNegationMixin(NegationOfTruthValueMixin):
         check_head_is_a_predicate(original_expression.consequent, consequent)
         self._check_implication(consequent, antecedent)
 
-        consequent_symbols = consequent._symbols - consequent.functor._symbols
-
-        if not consequent_symbols.issubset(antecedent._symbols):
-            raise NeuroLangException(
-                "All variables on the consequent need to be on the antecedent"
-            )
         check_range_restriction(expression, self.symbol_table)
 
         if consequent.functor in self.symbol_table:
