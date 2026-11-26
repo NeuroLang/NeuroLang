@@ -23,6 +23,7 @@ query refused or failing, several rows, no final answer within 25 steps
 recorded but not scored) is no answer.
 """
 
+import os
 import signal
 import time
 
@@ -45,7 +46,20 @@ def language_notes():
     return " ".join(text[start:end].split())
 
 
-GUIDANCE = "\n".join([language_notes(), UNCERTAINTY_DATALOG, ANSWER_DATALOG])
+# Run B of PROTOCOL.md amendment 5: three rules, with PQ_GUIDANCE=v2.
+RULES_V2 = (
+    "Write the whole question as one PROB[...] query: put every condition, "
+    "join and quantifier of the question in the rules under it, and let the "
+    "engine combine the probabilities. For 'given' or 'conditional on', use "
+    "the conditional form PROB[event // condition]. Never combine "
+    "probabilities by arithmetic or aggregation, and never write a "
+    "probability, or an entity you found by looking at the data, as a "
+    "constant: if a query is refused, rewrite the rules, not the arithmetic."
+)
+GUIDANCE = "\n".join(
+    [language_notes(), UNCERTAINTY_DATALOG, ANSWER_DATALOG]
+    + ([RULES_V2] if os.environ.get("PQ_GUIDANCE") == "v2" else [])
+)
 
 
 # A tool call failed when a check or a run of its query failed (a parse,
