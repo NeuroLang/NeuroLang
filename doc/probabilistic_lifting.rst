@@ -19,7 +19,8 @@ plans`_, its proof.
 .. note::
 
    ``EXPECT[f | a] = e`` and ``EXPECT_NORM`` (:doc:`tutorial_datalog`, 5.5)
-   add no strategy and change no plan: the parser rewrites them into one
+   add no strategy and change no plan: the engine rewrites them, as it
+   rewrites a conditional query, into one
    ``PROB`` rule over the event ``a``, ``p(g, x, PROB(g, x)) :- a``, which
    is planned as any other, and an aggregation of ``f`` times its
    probability over the answers. The expectation is

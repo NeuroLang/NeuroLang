@@ -540,14 +540,16 @@ tuples depend on each other. The groups :math:`g` are separate sums, one
 per row of the answer; a group in which no :math:`x` has a positive
 probability has no row, as with ``PROB`` and ``AGGREGATE``.
 
-**Rewriting.** ``EXPECT`` is sugar: the parser rewrites
+**Rewriting.** ``EXPECT`` is sugar: the probabilistic engine rewrites, as it
+rewrites a conditional query, the rule
 
 .. code-block:: neurolang
 
     ans(g, e) :- EXPECT[f(g, x) | a(g, x)] = e
 
 into one ``PROB`` rule, which the lifted solvers plan as any other, and
-one aggregation over its answers,
+one aggregation over its answers (an ``ans`` query reads a rule that holds
+the ``EXPECT``, as it does for an aggregation),
 
 .. code-block:: neurolang
 
@@ -557,9 +559,10 @@ one aggregation over its answers,
 
 The aggregation sums over the rows of the body, which keep :math:`x`, so two
 tuples with the same value of :math:`f \cdot p` both count. Three
-cases are refused when the program is read: ``f`` uses a variable that
-``a`` does not bind (``a`` must range-restrict ``f``), ``a`` has no
-variable to sum, and an ``EXPECT`` is inside an ``AGGREGATE``. ``f`` is
+cases are refused: ``f`` uses a variable that ``a`` does not bind (``a``
+must range-restrict ``f``) and ``a`` has no variable to sum, when the rule
+is added to the program, and an ``EXPECT`` inside an ``AGGREGATE``, when
+the program is read. ``f`` is
 deterministic: it is built of the variables, constants, arithmetic and
 builtin functions; a relation, probabilistic or not, called in ``f``
 (``EXPECT[score(x) | a(x)]`` with ``score`` a relation) is refused when the
@@ -664,12 +667,10 @@ variable and the projected ones are written under an ``exists``:
 
 (``listed`` is the deterministic rule of the drugs of the mesh heading.)
 Without the ``exists`` the sum would be over the triples ``(u, g, d)``, the
-expected number of drug-target-dataset triples with evidence. The two
-programs give the same number on the 24 expected-number questions of the
-benchmark (P7a, P7b, P7c), which are the gold values to 1e-9, and each is
-solved by the lifted solvers alone (``test_expectation.py`` checks, on a
-table of the same schema, that the two programs of P7a agree and that
-P7a and P7b equal the enumeration of the possible worlds).
+expected number of drug-target-dataset triples with evidence. Both
+programs are solved by the lifted solvers alone, and ``test_expectation.py``
+checks, on a table of the same schema, that the two programs of P7a agree
+and that P7a and P7b equal the enumeration of the possible worlds.
 
 **Variance.** The variance is not a further construct. For the
 normalised expectation it is :math:`\mathbb E[f^2] - \mathbb E[f]^2`,
