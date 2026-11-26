@@ -1346,8 +1346,9 @@ Projection on a variable
       = 1 - \prod_a (1 - p_a) - \sum_a p_a \prod_{b \neq a} (1 - p_b),
 
    computed with ``Subtraction``, the second query being projected
-   exclusively. It is tried last, and only on this shape: other
-   conjuncts, or other quantified variables in the atoms, are declined.
+   exclusively. It is tried after the other projections, and only on
+   this shape: other conjuncts, or other quantified variables in the
+   atoms, are declined.
 
    *At least k.* More generally, the query :math:`Q_k` with :math:`k`
    copies :math:`R(\bar u[x_i/x])` and one strict comparison of each pair
@@ -1389,6 +1390,64 @@ Projection on a variable
    as in :math:`x_1 \neq x_2 \land x_2 \neq x_3`, satisfied by
    :math:`x_1 = x_3`, or with comparisons no order satisfies, as in
    :math:`x_1 < x_2 < x_3 < x_1`, the query is declined.
+
+   *At least k or a filtered value.* In a disjunction, the query
+   :math:`Q_k` above with a disjunct
+   :math:`A = \exists x\, (R(\bar u) \land \varphi(x))`, :math:`\varphi` a
+   conjunction of deterministic atoms whose only variable is :math:`x`,
+   is rewritten before shattering (``AtLeastOutsideAFilter``):
+
+   .. math::
+
+      A \lor Q_k \equiv A \lor Q_k[R'/R], \qquad
+      R'(x, \bar v) := R(\bar u) \land \lnot\varphi(x),
+
+   :math:`\bar v` being the free variables of :math:`R(\bar u)`.
+   :math:`R'` is a fresh tuple-independent relation, the tuples of
+   :math:`R` with the constants of :math:`\bar u` and a value of :math:`x`
+   outside :math:`\varphi`, with their probabilities, defined by a
+   relational algebra expression marked with ``Materialise``, as the
+   deterministic negations are. :math:`A` and :math:`Q_k[R'/R]` then have
+   no probabilistic relation in common, and
+
+   .. math::
+
+      P[A \lor Q_k] = 1 - (1 - P[A])\,(1 - P[Q_k[R'/R]]),
+
+   the independent union of the plan of :math:`A` and of that of
+   ``_at_least_plan`` on :math:`R'`, the shape it lifts, its constants
+   being in :math:`R'`. The independent disjunction of
+   ``dalvi_suciu_lift`` lifts its components with ``dalvi_suciu_lift``,
+   which does not try ``_at_least_plan``; when no other rule lifts a
+   disjunction, ``_independent_disjunction_plan``, tried after the
+   projections, lifts each component with every rule, a component that
+   is a negation being declined as there; the comparisons of a disjunct
+   within its existentials pass the check of the builtins, as those of
+   an existential conjunct do. The rewrite applies
+   when :math:`R` is a tuple-independent relation known as a set, the
+   atom of :math:`A` is that of :math:`Q_k` with :math:`x` renamed, and
+   :math:`R` is in no other atom of the query, which :math:`R'` would make
+   look independent of it. Without :math:`\varphi`, :math:`Q_k` implies
+   :math:`A` and is removed. For instance, evidence for a gene and a
+   disease in a brain dataset, or in at least two datasets,
+
+   .. code-block:: prolog
+
+      brain_ev() :- test_evidence(d, 'G', 'D'), dataset_organ(d, 'brain')
+      two_ev() :- test_evidence(d1, 'G', 'D'), test_evidence(d2, 'G', 'D'),
+          (d1 != d2)
+      q() :- brain_ev()
+      q() :- two_ev()
+
+   is the independent union of the brain datasets and of at least two of
+   the other datasets. Not covered: a filter with another variable, as
+   :math:`M(x, z)` with :math:`z` free or quantified, or with a negation,
+   a disjunct :math:`A` with conjuncts on other probabilistic relations,
+   several filtered disjuncts, a probabilistic choice :math:`R`, and a
+   third atom of :math:`R`, such as a disjunct
+   :math:`R(\text{blood1}, G, D)`. :math:`Q_k` alone with constants,
+   ``two_ev`` above, is still declined: shattering replaces each
+   constant by a quantified variable of the copies.
 
    For instance, the segregation of a term on the selected study,
 
@@ -2320,6 +2379,39 @@ Projection on a variable
    are exclusive (Lemma 2), and the sum is the disjoint projection. The
    rule recurses on :math:`Q_{k-1}`, with one copy less, down to
    :math:`Q_1`, which it does not match.
+
+   *At least k or a filtered value.* In a world where :math:`R(\bar u)`
+   holds for a value :math:`a` of :math:`x` satisfying :math:`\varphi`,
+   :math:`A` holds, and both sides of the rewrite hold. Otherwise every
+   value of :math:`x` for which :math:`R(\bar u)` holds satisfies
+   :math:`\lnot\varphi`, and so :math:`R'(x, \bar v)`, the free variables
+   being fixed: :math:`R(\bar u)` and :math:`R'(x, \bar v)` hold for the
+   same values, so :math:`Q_k` and :math:`Q_k[R'/R]` agree, and so do both
+   sides. :math:`\varphi` being deterministic, it is the same in every
+   world, and :math:`R'` has, in each world, the tuples of :math:`R`
+   outside :math:`\varphi` present in it, with their probabilities:
+   splitting :math:`R` into :math:`R_\varphi := R \land \varphi` and
+   :math:`R'`, disjoint sets of its independent tuples, gives the same
+   distribution. :math:`A \equiv \exists x\, (R_\varphi(\bar u) \land
+   \varphi(x))` depends on the tuples of :math:`R_\varphi` only, and
+   :math:`Q_k[R'/R]` on those of :math:`R'`, :math:`R` being in no other
+   atom: the two disjuncts are independent (Lemma 1), for each value of
+   the free variables, and the independent union of their plans, each
+   lifted and checked by the rules of this page, is exact. Without
+   :math:`\varphi`, :math:`Q_k` implies :math:`\exists x\, R(\bar u) = A`.
+   The plan of :math:`Q_k[R'/R]` is that of ``_at_least_plan``, in
+   :math:`O(n^k)` time for :math:`k \leq` ``MAX_AT_LEAST``, and
+   :math:`R'` a selection and a difference of :math:`R` and the relations
+   of :math:`\varphi`, in polynomial time.
+   ``_independent_disjunction_plan`` is the independent disjunction
+   above: its components have no probabilistic relation in common, so
+   their events are independent (Lemma 1), and have the free variables
+   of the disjunction (``_union_has_the_same_columns``), so that the
+   independent union of their plans, each pure and lifted by a rule of
+   this page, computes :math:`1 - \prod_i (1 - P[Q_i])` for every
+   answer. Admitting the comparisons of a disjunct within its
+   existentials adds no plan: they are planned, or the query declined,
+   by the rules that lift the disjunct.
 
 Algorithms from the literature
    The rules of `Algorithms from the literature`_ are proved in the papers

@@ -386,9 +386,9 @@ def _prepare_and_optimise_query(
         deterministic_relations or {}, unified_query.antecedent,
         symbol_table, lambda s, _: DeterministicFactSet(s)
     )
-    ucq = rename_disjoint_restrictions(
-        convert_rule_to_ucq(unified_query), symbol_table
-    )
+    ucq = convert_rule_to_ucq(unified_query)
+    ucq = AtLeastOutsideAFilter(ucq, symbol_table).walk(ucq)
+    ucq = rename_disjoint_restrictions(ucq, symbol_table)
     shattered_query_body = shatter_constants(
         ExcludedConstants(ucq, symbol_table).walk(ucq), symbol_table
     )
@@ -435,12 +435,13 @@ def _fails_the_checks(flat_query, shattered_query, symbol_table):
 
 def _verify_that_the_query_has_no_builtins(shattered_query, cpl_program):
     """Builtins are only allowed as comparisons within existential
-    conjuncts, possibly negated, see `comparison_conjunct_plan`, or as
+    conjuncts or disjuncts, possibly negated, see
+    `comparison_conjunct_plan` and `_independent_disjunction_plan`, or as
     conjuncts, whose variables are free, see
     `_lift_with_dependent_negations`.
     """
     antecedent = RTO.walk(shattered_query.antecedent)
-    if isinstance(antecedent, Conjunction):
+    if isinstance(antecedent, (Conjunction, Disjunction)):
         formulas = antecedent.formulas
     else:
         formulas = (antecedent,)
@@ -669,6 +670,8 @@ def projection_plan(rule, symbol_table):
       and that of `b ≠ a` has not, so the events are mutually exclusive,
       and the plan is the disjoint projection of `lift(∃(X - {v}) φ)`.
 
+    `_at_least_plan` and `_independent_disjunction_plan` are tried last.
+
     Parameters
     ----------
     rule : Implication
@@ -686,7 +689,31 @@ def projection_plan(rule, symbol_table):
         plan = _separator_projection_plan(rule, symbol_table)
     if plan is None:
         plan = _at_least_plan(rule, symbol_table)
+    if plan is None:
+        plan = _independent_disjunction_plan(rule, symbol_table)
     return plan
+
+
+def _independent_disjunction_plan(rule, symbol_table):
+    """Plan for a disjunction whose disjuncts split into components with
+    no probabilistic relation in common, the independent union of the
+    plans of the components, each lifted with every rule, such as
+    `_at_least_plan`, which `dalvi_suciu_lift` does not try."""
+    antecedent = RTO.walk(rule.antecedent)
+    if not (
+        isinstance(antecedent, Disjunction) and
+        _union_has_the_same_columns(antecedent)
+    ):
+        return None
+    components = symbol_connected_components(
+        antecedent, _deterministic_symbols(antecedent, symbol_table)
+    )
+    if len(components) < 2 or any(map(_is_negation, components)):
+        return None
+    plans = _lift_pure(tuple(
+        Implication(rule.consequent, component) for component in components
+    ), symbol_table)
+    return None if plans is None else reduce(rap.Union, plans)
 
 
 def _at_least_plan(rule, symbol_table):
@@ -701,7 +728,40 @@ def _at_least_plan(rule, symbol_table):
     `R(ū[x_1/x]) ∧ … ∧ x_i ≠ x_j ∧ … ∧ ¬∃w (R(ū[w/x]) ∧ w ≠ x_1 ∧ … ∧
     w ≠ x_{k-1})`, which holds, in a world of exactly `k - 1` values, for
     their `(k - 1)!` orders, and in no other world."""
-    variables, body = _existential_variables_and_body(rule.antecedent, True)
+    shape = _at_least_shape(rule.antecedent)
+    if shape is None:
+        return None
+    atom, x, xs = shape
+    xs = xs[:-1]
+    fewer = Conjunction(
+        tuple(ReplaceExpressionWalker({x: y}).walk(atom) for y in xs) +
+        tuple(NE(*p) for p in combinations(xs, 2))
+    )
+    w = Symbol.fresh()
+    exactly = Conjunction(fewer.formulas + (
+        Negation(ExistentialPredicate(w, Conjunction(
+            (ReplaceExpressionWalker({x: w}).walk(atom),) +
+            tuple(NE(w, y) for y in xs)
+        ))),
+    ))
+    plans = _lift_pure((Implication(rule.consequent, add_existentials_except(
+        fewer, extract_logic_free_variables(fewer) - set(xs)
+    )),), symbol_table)
+    exactly_plan = _projected_plan(
+        rule.antecedent, exactly, set(xs), set(), rap.DisjointProjection,
+        symbol_table
+    )
+    if plans is None or exactly_plan is None:
+        return None
+    return rap.Subtraction(plans[0], rap.WeightedNaturalJoin(
+        (exactly_plan,), (Constant[float](1 / factorial(len(xs))),)
+    ))
+
+
+def _at_least_shape(formula):
+    """The atom `R(ū)`, its variable `x` and the variables `x_1, …, x_k`
+    of `formula` if it is the query of `_at_least_plan`, or None."""
+    variables, body = _existential_variables_and_body(formula, True)
     conjuncts = extract_conjuncts(body)
     comparisons = [f for f in conjuncts if is_comparison(f)]
     xs = sorted(variables, key=lambda v: v.name)
@@ -731,30 +791,7 @@ def _at_least_plan(rule, symbol_table):
             for y in ys)
     ):
         return None
-    xs = xs[:-1]
-    fewer = Conjunction(
-        tuple(ReplaceExpressionWalker({x: y}).walk(atom) for y in xs) +
-        tuple(NE(*p) for p in combinations(xs, 2))
-    )
-    w = Symbol.fresh()
-    exactly = Conjunction(fewer.formulas + (
-        Negation(ExistentialPredicate(w, Conjunction(
-            (ReplaceExpressionWalker({x: w}).walk(atom),) +
-            tuple(NE(w, y) for y in xs)
-        ))),
-    ))
-    plans = _lift_pure((Implication(rule.consequent, add_existentials_except(
-        fewer, extract_logic_free_variables(fewer) - set(xs)
-    )),), symbol_table)
-    exactly_plan = _projected_plan(
-        rule.antecedent, exactly, set(xs), set(), rap.DisjointProjection,
-        symbol_table
-    )
-    if plans is None or exactly_plan is None:
-        return None
-    return rap.Subtraction(plans[0], rap.WeightedNaturalJoin(
-        (exactly_plan,), (Constant[float](1 / factorial(len(xs))),)
-    ))
+    return atom, x, xs
 
 
 def _projection_applies(antecedent, symbol_table):
@@ -2659,6 +2696,119 @@ def _determined_variables(variables, clauses, symbol_table):
     return variables
 
 
+class AtLeastOutsideAFilter(ExpressionWalker):
+    """
+    In a disjunction, `Q_k`, at least `k` values of `x` for which `R(ū)`
+    holds, of `_at_least_plan`, with `A = ∃x (R(ū) ∧ φ(x))`, `φ` a
+    conjunction of deterministic atoms whose only variable is `x`, `R`
+    tuple-independent and in no other atom of *query*:
+
+        A ∨ Q_k ≡ A ∨ Q_k[R'/R],   R'(x, v̄) := R(ū) ∧ ¬φ(x),
+
+    `v̄` being the free variables of `R(ū)`: if `R(ū)` holds for a value
+    of `x` satisfying `φ`, `A` holds, otherwise its values are those of
+    `R'`. `R'` is a fresh tuple-independent relation, the tuples of `R`
+    outside `φ`, of which `A` has none: the two disjuncts are
+    independent. Without `φ`, `Q_k` implies `A` and is removed.
+    """
+
+    def __init__(self, query, symbol_table):
+        self.symbol_table = symbol_table
+        self.functors = Counter(
+            atom.functor for atom in extract_logic_atoms(query)
+        )
+
+    @add_match(
+        Disjunction,
+        lambda disjunction: any(
+            _at_least_shape(formula) is not None
+            for formula in disjunction.formulas
+        )
+    )
+    def disjunction(self, disjunction):
+        for at_least, filtered in permutations(disjunction.formulas, 2):
+            rewritten = self._outside_the_filter(at_least, filtered)
+            if rewritten is not at_least:
+                return Disjunction(tuple(
+                    f for f in (
+                        rewritten if f is at_least else f
+                        for f in disjunction.formulas
+                    ) if f is not None
+                ))
+        return disjunction
+
+    def _outside_the_filter(self, at_least, filtered):
+        """`Q_k[R'/R]`, or None if `Q_k` is removed, or `Q_k` itself if
+        the rewrite does not apply."""
+        shape = _at_least_shape(at_least)
+        variables, body = _existential_variables_and_body(filtered, True)
+        if shape is None or len(variables) != 1:
+            return at_least
+        atom, x, xs = shape
+        y, = variables
+        conjuncts = extract_conjuncts(body)
+        filters = tuple(
+            f for f in conjuncts
+            if f != ReplaceExpressionWalker({x: y}).walk(atom)
+        )
+        if not (
+            len(filters) == len(conjuncts) - 1 and
+            all(
+                isinstance(f, FunctionApplication) and
+                is_atom_a_deterministic_relation(f, self.symbol_table) and
+                extract_logic_free_variables(f) <= {y} for f in filters
+            )
+        ):
+            return at_least
+        if not filters:
+            return None
+        if self.functors[atom.functor] != len(xs) + 1:
+            return at_least
+        restricted = self._restricted(atom, x, ReplaceExpressionWalker(
+            {y: x}
+        ).walk(Conjunction(filters)))
+        if restricted is None:
+            return at_least
+        return ReplaceExpressionWalker({
+            ReplaceExpressionWalker({x: v}).walk(atom):
+            ReplaceExpressionWalker({x: v}).walk(restricted)
+            for v in xs
+        }).walk(at_least)
+
+    def _restricted(self, atom, x, filters):
+        """The atom `R'(x, v̄)` of the fresh relation of the tuples of
+        `R(ū)` with their probabilities and `x` outside `filters`, or
+        None if a relation is not known as a set."""
+        entry = self.symbol_table[atom.functor]
+        if not isinstance(entry, ProbabilisticFactSet):
+            return None
+        tuples = self.symbol_table.get(entry.relation)
+        relations = {
+            f.functor: _tuples_of(f, self.symbol_table)
+            for f in filters.formulas
+        }
+        if not (
+            isinstance(tuples, Constant[AbstractSet]) and
+            entry.probability_column == int2columnint_constant(0) and
+            None not in relations.values()
+        ):
+            return None
+        probability, weighted = Symbol.fresh(), Symbol.fresh()
+        relations[weighted] = tuples
+        columns = (x,) + tuple(dict.fromkeys(
+            arg for arg in atom.args if isinstance(arg, Symbol) and arg != x
+        ))
+        relation, functor = Symbol.fresh(), Symbol.fresh()
+        self.symbol_table[relation] = materialised_relation(
+            Conjunction((
+                weighted(probability, *atom.args), Negation(filters)
+            )),
+            (probability,) + columns, relations
+        )
+        self.symbol_table[functor] = ProbabilisticFactSet(
+            relation, int2columnint_constant(0)
+        )
+        return functor(*columns)
 def _deterministic_atoms(formulas, symbol_table):
     """The positive deterministic atoms among *formulas*."""
     return [
