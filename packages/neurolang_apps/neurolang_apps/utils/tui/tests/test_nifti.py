@@ -1687,6 +1687,7 @@ class TestImage:
         nl.add_tuple_set(
             [(10, "pain"), (11, "pain"), (12, "vision")], name="term_in_study"
         )
+        nl.add_tuple_set([("pain", 2), ("vision", 1)], name="term_studies")
         nl.add_uniform_probabilistic_choice_over_set(
             [(10,), (11,), (12,)], name="selected_study"
         )
@@ -1726,7 +1727,7 @@ class TestImage:
         lines = query.splitlines()
         rules = [n for n, line in enumerate(lines)
                  if not line.startswith("%")]
-        assert len(rules) == 6
+        assert len(rules) == 5
         for n in rules:
             assert n > 0 and lines[n - 1].startswith("% "), lines[n]
         assert not any(line.startswith("%%") for line in lines)
