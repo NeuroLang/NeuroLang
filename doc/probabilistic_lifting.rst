@@ -20,13 +20,16 @@ plans`_, its proof.
 
    ``EXPECT[f | a] = e`` and ``EXPECT_NORM`` (:doc:`tutorial_datalog`, 5.5)
    add no strategy and change no plan: the parser rewrites them into one
-   ``PROB`` rule over the event ``a``, which is planned as any other, and an
-   aggregation of ``f`` times its probability over the answers. The
-   expectation is :math:`\sum_x f(g, x)\,P[a(g, x)]` by linearity of the
-   expectation, which needs none of the independence or exclusivity
-   hypotheses of the plans, so a query that the solvers refuse as a
-   ``PROB`` is refused as an ``EXPECT``, and one they plan is planned the
-   same way.
+   ``PROB`` rule over the event ``a``, ``p(g, x, PROB(g, x)) :- a``, which
+   is planned as any other, and an aggregation of ``f`` times its
+   probability over the answers. The expectation is
+   :math:`\sum_x f(g, x)\,P[a(g, x)]` by linearity of the expectation,
+   which needs none of the independence or exclusivity hypotheses of the
+   plans, so an ``EXPECT`` is refused exactly when that ``PROB`` rule is.
+   Every variable of ``a`` is an answer variable of the rule, so it can be
+   planned where ``PROB[a] = p``, which marginalises the :math:`x`, is
+   not: ``EXPECT[1 | r(x), s(x, y), t(y)] = e`` is solved, while
+   ``PROB[r(x), s(x, y), t(y)] = p`` is refused.
 
 Solvers and their order
 -----------------------

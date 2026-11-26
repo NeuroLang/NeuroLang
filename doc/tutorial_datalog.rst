@@ -583,7 +583,10 @@ the expected sum over the answers of ``a`` knowing ``c``:
 
 A variable that ``c`` shares with ``a`` is a variable of the answer, and
 it is the event of each :math:`(g, x)` that conditions its own term, as in
-``PROB``; a variable of ``c`` that ``a`` does not have is projected. To
+``PROB``; a variable of ``c`` that ``a`` does not have is projected,
+unless it occurs elsewhere in the rule, where it is a grouping variable
+(``ans(r, e) :- EXPECT[w | sel(s), size(s, w) // sel(t), act(t, r)] = e``
+has one expectation per ``r``). To
 know an event about the same random outcome without tying the values,
 name the variables of ``c`` apart: in ``EXPECT[1 | active(l, s) //
 close('fear', t)]`` the study ``s`` of the answers is the chosen study and
@@ -664,9 +667,9 @@ Without the ``exists`` the sum would be over the triples ``(u, g, d)``, the
 expected number of drug-target-dataset triples with evidence. The two
 programs give the same number on the 24 expected-number questions of the
 benchmark (P7a, P7b, P7c), which are the gold values to 1e-9, and each is
-solved by the lifted solvers alone (``test_expectation.py`` checks the
-equality, and the enumeration of the possible worlds, on a table of the
-same schema).
+solved by the lifted solvers alone (``test_expectation.py`` checks, on a
+table of the same schema, that the two programs of P7a agree and that
+P7a and P7b equal the enumeration of the possible worlds).
 
 **Variance.** The variance is not a further construct. For the
 normalised expectation it is :math:`\mathbb E[f^2] - \mathbb E[f]^2`,
