@@ -35,6 +35,7 @@ from nl_core.probabilistic.expressions import (
     ProbabilisticFact,
     ProbabilisticChoice,
     ProbabilisticQuery,
+    contains_expectation,
 )
 from nl_expr.type_system import (
     Unknown,
@@ -419,6 +420,25 @@ def delegate_to_next_match(walker, expression, skip_action):
     raise NeuroLangPatternMatchingNoMatch(f"No match for {expression}")
 
 
+class RefuseExpectationMixin(ew.PatternWalker):
+    """
+    Refuse an ``EXPECT`` in the rules of an engine without a
+    probabilistic layer, which has no relation to take an expectation of.
+    """
+
+    @ew.add_match(
+        Implication,
+        lambda implication: contains_expectation(implication.antecedent),
+    )
+    def refuse_expectation(self, implication):
+        raise ForbiddenExpressionError(
+            "EXPECT needs probabilistic relations and this engine has "
+            "none, so an expected value cannot be computed here. For plain "
+            "data sum, count or average a value with AGGREGATE, e.g. "
+            "ans(total) :- AGGREGATE[](item(x, v) @ sum(v)) = total."
+        )
+
+
 class TranslateExpectationMixin(ew.PatternWalker):
     """
     Translate a rule with ``EXPECT[f | a // c] = e`` in its body: the
@@ -479,13 +499,27 @@ class TranslateExpectationMixin(ew.PatternWalker):
         # a group that only what is known has is a group all the same
         variables |= extract_logic_free_variables(known) & outside
         unbound = extract_logic_free_variables(f) - variables
-        if not variables or unbound:
+        if contains_expectation(event) or contains_expectation(known):
             raise ForbiddenExpressionError(
-                "EXPECT sums over the variables of its event, "
-                + (
-                    f"that do not bind {sorted(v.name for v in unbound)} "
-                    f"of {f}" if unbound else "which has none"
-                )
+                "EXPECT cannot be inside the event of another EXPECT, which "
+                "must be a probabilistic query. Compute each EXPECT in a "
+                "rule of its own, m(e) :- EXPECT[x | a(x)] = e, and "
+                "combine their results in a rule that reads them."
+            )
+        if not variables:
+            raise ForbiddenExpressionError(
+                "The event of EXPECT has no variable to sum over: write it "
+                "with the variable of the answers to sum, e.g. "
+                "EXPECT[1 | a(x)] = n, or use PROB[a('c')] = p for the "
+                "probability of a closed event."
+            )
+        if unbound:
+            raise ForbiddenExpressionError(
+                "EXPECT sums f over the answers of its event, so the event "
+                "must bind every variable of f: f uses "
+                f"{', '.join(repr(v.name) for v in sorted(unbound, key=lambda v: v.name))}"
+                ", which the event does not bind. Add an atom that binds "
+                "it to the event, e.g. EXPECT[x + z | a(x), b(x, z)] = e."
             )
         variables = tuple(sorted(variables, key=lambda v: v.name))
         group = tuple(v for v in variables if v in outside)

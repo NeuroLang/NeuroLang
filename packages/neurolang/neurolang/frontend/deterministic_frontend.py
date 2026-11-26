@@ -18,6 +18,7 @@ from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
 from .datalog.squall import StripDimensionTypePredicatesMixin
 from .datalog.sugar import (
+    RefuseExpectationMixin,
     TranslateSSugarToSelectByColumn,
     TranslateSelectByFirstColumn,
     TranslateHeadConstantsToEqualities
@@ -78,6 +79,7 @@ class NeurolangDL(QueryBuilderDatalog):
 
 
 class RegionFrontendDatalogSolver(
+    RefuseExpectationMixin,
     TranslateToLogicWithAggregation,
     StripDimensionTypePredicatesMixin,
     TranslateSSugarToSelectByColumn,

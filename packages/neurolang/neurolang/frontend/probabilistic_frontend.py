@@ -70,7 +70,6 @@ from nl_expr.expression_walker import (
     ExpressionBasicEvaluator,
     ReplaceExpressionWalker,
     TypedSymbolTableMixin,
-    expression_iterator,
 )
 from nl_expr.expressions import Constant
 from nl_expr.logic import Conjunction, Implication, Union, Symbol
@@ -81,7 +80,7 @@ from nl_core.probabilistic import (
 )
 from nl_core.probabilistic.cplogic.program import CPLogicMixin
 from nl_core.probabilistic.expressions import (
-    PROB, Condition, Expectation, expectation,
+    PROB, Condition, contains_expectation, expectation,
 )
 from .resampling import (
     ResampledProgram,
@@ -716,10 +715,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                 head, predicate, show_rewritten=show_rewritten,
                 dry_run=dry_run, show_ra=show_ra,
             )
-        if any(
-            isinstance(sub, Expectation)
-            for _, sub in expression_iterator(predicate.expression)
-        ):
+        if contains_expectation(predicate.expression):
             # an expectation, which only a rule rewrites
             return self._execute_query_computing_terms(
                 head, predicate, show_rewritten, dry_run, show_ra

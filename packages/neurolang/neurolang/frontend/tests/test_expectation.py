@@ -15,7 +15,7 @@ import pytest
 
 from nl_core.probabilistic import dalvi_suciu_lift
 from nl_expr.exceptions import NeuroLangException
-from ...frontend import NeurolangPDL
+from ...frontend import NeurolangDL, NeurolangPDL
 
 # probabilistic choices: name -> {value: probability}
 CHOICES = {
@@ -305,11 +305,12 @@ def test_f_must_use_variables_of_the_event():
         _engine().execute_datalog_program(
             "q(e) :- EXPECT[x + z | roll(x)] = e"
         )
-    assert "z" in str(error.value)
+    assert "bind every variable of f" in str(error.value)
+    assert "'z'" in str(error.value)
 
 
 def test_the_event_needs_a_variable():
-    with pytest.raises(NeuroLangException, match='has none'):
+    with pytest.raises(NeuroLangException, match='no variable to sum over'):
         _engine().execute_datalog_program(
             "q(e) :- EXPECT[1 | roll(2)] = e"
         )
@@ -319,12 +320,12 @@ def test_f_cannot_call_a_relation():
     """A probabilistic relation is not a deterministic function of x."""
     nl = _engine()
     nl.execute_datalog_program("q(e) :- EXPECT[item(x, 1) | roll(x)] = e")
-    with pytest.raises(NeuroLangException, match="relation"):
+    with pytest.raises(NeuroLangException, match="cannot be called inside"):
         nl.solve_all()
 
 
 def test_expect_cannot_be_inside_an_aggregation():
-    with pytest.raises(NeuroLangException, match="AGGREGATE"):
+    with pytest.raises(NeuroLangException, match="inside an AGGREGATE"):
         _engine().execute_datalog_program(
             "q(n) :- AGGREGATE[](EXPECT[x | roll(x)] = m @ sum(m)) = n"
         )
@@ -528,20 +529,36 @@ def test_an_expectation_and_a_probability_in_one_rule(head):
         assert (e, p) == pytest.approx((mean, p_flag))
 
 
-@pytest.mark.parametrize("program", (
-    "q(e) :- ~EXPECT[x | roll(x)] = e",
-    "q(e) :- EXPECT[x | roll(x)] = e | roll(e)",
-    "q(e) :- exists(y; EXPECT[x | roll(x)] = e)",
-    "q(p) :- PROB[EXPECT[x | roll(x)] = e] = p",
-    "q(e) :- EXPECT[x | EXPECT[y | roll(y)] = x] = e",
+@pytest.mark.parametrize("program, phrase", (
+    ("q(e) :- ~EXPECT[x | roll(x)] = e", "must be a conjunct"),
+    ("q(e) :- EXPECT[x | roll(x)] = e | roll(e)", "must be a conjunct"),
+    ("q(n) :- roll(n), exists(e; EXPECT[x | roll(x)] = e)",
+     "must be a conjunct"),
+    ("q(p) :- PROB[EXPECT[x | roll(x)] = e] = p", "inside PROB or MARG"),
+    ("q(p) :- MARG[EXPECT[x | roll(x)] = e] = p", "inside PROB or MARG"),
+    ("q(p) :- PROB[roll(x) // EXPECT[x | roll(x)] = e] = p",
+     "inside PROB or MARG"),
+    ("q(e) :- EXPECT[x | EXPECT[y | roll(y)] = x] = e",
+     "inside the event of another EXPECT"),
+    ("q(e) :- EXPECT[x | roll(x) // EXPECT[y | roll(y)] = x] = e",
+     "inside the event of another EXPECT"),
 ))
-def test_an_expectation_is_a_conjunct_of_a_rule_body(program):
+def test_an_expectation_is_a_conjunct_of_a_rule_body(program, phrase):
     """Under a negation, a disjunction, a quantifier or another PROB or
-    EXPECT it is refused, not read as something else."""
-    with pytest.raises(NeuroLangException):
+    EXPECT it is refused, saying what to write instead."""
+    with pytest.raises(NeuroLangException, match=phrase) as error:
         nl = _engine()
         nl.execute_datalog_program(program)
         nl.solve_all()
+    assert "m(e) :- EXPECT[" in str(error.value)
+
+
+def test_an_expectation_is_refused_by_an_engine_without_probabilities():
+    nl = NeurolangDL()
+    nl.add_tuple_set([(1,), (2,)], name="roll")
+    with pytest.raises(NeuroLangException, match="this engine has none") as e:
+        nl.execute_datalog_program("q(e) :- EXPECT[x | roll(x)] = e")
+    assert "AGGREGATE" in str(e.value)
 
 
 def test_the_printer_shows_the_expectation():
@@ -745,9 +762,9 @@ def test_python_refusals():
     with nl.scope as e:
         with pytest.raises(NeuroLangException, match="'z'"):
             e.q[e.e] = nl.expect(e.x + e.z, e.roll[e.x], e.e)
-        with pytest.raises(NeuroLangException, match="has none"):
+        with pytest.raises(NeuroLangException, match="no variable to sum"):
             e.q[e.e] = nl.expect(1, e.roll[2], e.e)
-        with pytest.raises(NeuroLangException, match="EXPECT"):
+        with pytest.raises(NeuroLangException, match="must be a conjunct"):
             e.q[e.g, e.e] = e.groups[e.g] & ~nl.expect(
                 e.x, e.roll[e.x], e.e
             )

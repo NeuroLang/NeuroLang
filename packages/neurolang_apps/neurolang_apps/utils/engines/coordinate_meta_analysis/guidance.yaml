@@ -48,6 +48,9 @@ assistant_guidance: >
   EXPECT[f | event] = e over rules of yours joining selected_study, never a
   count: EXPECT[1 | active(l, s)] is the expected number of regions that a
   study activates, and EXPECT_NORM[f | event] its mean knowing the event.
+  EXPECT sums over all the variables of its event that are not in the
+  answer: project the others with exists(...); it is a plain conjunct of a
+  rule body, in a rule of its own when it is to be aggregated or negated.
   Voxels and terms listed get their
   probability.  A map of voxels, ans(i, j, k, ...), keeps those of
   the cortex, cortical_mask(i, j, k), unless the question names the

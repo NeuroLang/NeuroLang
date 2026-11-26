@@ -29,6 +29,7 @@ from nl_core.probabilistic.expressions import (
     PROB,
     Condition,
     Expectation,
+    contains_expectation,
     expectation,
     ProbabilisticChoice,
     ProbabilisticFact,
@@ -780,8 +781,10 @@ class DatalogTransformer(Transformer):
             regular, prob_specs = self._extract_special_body_atoms(conjunction)
             if any(isinstance(f, Expectation) for f in regular):
                 raise NeuroLangFrontendException(
-                    "EXPECT cannot be inside an AGGREGATE: aggregate the "
-                    "values of a rule that holds the EXPECT"
+                    "EXPECT cannot be inside an AGGREGATE: compute it in a "
+                    "rule of its own, m(g, e) :- EXPECT[x | a(g, x)] = e, "
+                    "and aggregate that rule: "
+                    "AGGREGATE[g](m(g, e) @ sum(e)) = n."
                 )
             # Separate MARG specs (which need desugaring) from PROB specs
             # (which stay as markers in the conjunction body).
@@ -916,6 +919,16 @@ class DatalogTransformer(Transformer):
             return rv
         return None
 
+    @staticmethod
+    def _refuse_expectation_in_prob(*events):
+        if any(e is not None and contains_expectation(e) for e in events):
+            raise NeuroLangFrontendException(
+                "EXPECT cannot be inside PROB or MARG, which take a "
+                "probabilistic event: compute the expectation in a rule of "
+                "its own, m(e) :- EXPECT[x | a(x)] = e, and use m in the "
+                "rule."
+            )
+
     def prob_body_predicate(self, ast):
         # PROB[pred] = var              → ast = [predicate, argument] (2 elements)
         # PROB[pred // body] = var      → ast = [predicate, SEP_token, body, argument] (4)
@@ -927,6 +940,7 @@ class DatalogTransformer(Transformer):
             pred = ast[0]
             cond_body = None
             result_var = ast[1]
+        self._refuse_expectation_in_prob(pred, cond_body)
         return FunctionApplication(
             Symbol("__PROB__"),
             (pred, cond_body, result_var)
@@ -949,6 +963,7 @@ class DatalogTransformer(Transformer):
     def marg_body_predicate(self, ast):
         # MARG[pred] = var              → ast = [conjunction, argument] (2 elements)
         # MARG[pred // body] = var      → ast = [conjunction, SEP_token, body, argument] (4)
+        self._refuse_expectation_in_prob(ast[0], *ast[2:3])
         if len(ast) == 4:
             pred = ast[0]
             cond_body = ast[2]

@@ -3,13 +3,18 @@ from nl_core.datalog.negation import is_conjunctive_negation
 from nl_expr.expression_walker import (
     ExpressionWalker, PatternWalker, add_match,
 )
+from nl_expr.exceptions import ForbiddenExpressionError
 from nl_expr.expressions import ExpressionBlock, NeuroLangException, Symbol
-from nl_expr.logic import Implication, ExistentialPredicate
+from nl_expr.logic import Conjunction, Implication, ExistentialPredicate
 from nl_core.datalog.horn_clauses import (
     Fol2DatalogTranslationException,
     fol_query_to_datalog_program,
 )
-from nl_core.probabilistic.expressions import Condition
+from nl_core.probabilistic.expressions import (
+    Condition,
+    Expectation,
+    contains_expectation,
+)
 
 
 class ProbFol2DatalogMixin(PatternWalker):
@@ -64,6 +69,26 @@ class ProbFol2DatalogMixin(PatternWalker):
         if results:
             return ExpressionBlock([main_impl] + results)
         return main_impl
+
+    @add_match(
+        Implication,
+        lambda imp: any(
+            contains_expectation(formula)
+            and not isinstance(formula, Expectation)
+            for formula in (
+                imp.antecedent.formulas
+                if isinstance(imp.antecedent, Conjunction)
+                else (imp.antecedent,)
+            )
+        ),
+    )
+    def refuse_misplaced_expectation(self, imp):
+        raise ForbiddenExpressionError(
+            "EXPECT must be a conjunct of a rule body: it cannot be under "
+            "a negation, a disjunction or an exists. Compute it in a rule "
+            "of its own, m(e) :- EXPECT[x | a(x)] = e, and use m in the "
+            "other rule."
+        )
 
     @add_match(
         Implication,

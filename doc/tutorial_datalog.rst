@@ -558,17 +558,22 @@ the ``EXPECT``, as it does for an aggregation),
     ans(g, e) :- ex(g, e)
 
 The aggregation sums over the rows of the body, which keep :math:`x`, so two
-tuples with the same value of :math:`f \cdot p` both count. Three
-cases are refused: ``f`` uses a variable that ``a`` does not bind (``a``
-must range-restrict ``f``) and ``a`` has no variable to sum, when the rule
-is added to the program, and an ``EXPECT`` inside an ``AGGREGATE``, when
-the program is read. ``f`` is
-deterministic: it is built of the variables, constants, arithmetic and
-builtin functions; a relation, probabilistic or not, called in ``f``
-(``EXPECT[score(x) | a(x)]`` with ``score`` a relation) is refused when the
-program is solved, with an error that says that a relation cannot be called
-inside an expression. For the value of a relation write it in the event,
-``EXPECT[v | a(x), score(x, v)]``. From Python, ``nl.expect(f, a, e)``
+tuples with the same value of :math:`f \cdot p` both count. An ``EXPECT``
+that cannot be rewritten is refused with an error that says what to write
+instead: ``f`` uses a variable that ``a`` does not bind (``a`` must
+range-restrict ``f``), ``a`` has no variable to sum, an ``EXPECT`` is not a
+conjunct of a rule body (under ``~``, ``|`` or ``exists``) or is inside
+``PROB``, ``MARG``, ``AGGREGATE`` or the event of another ``EXPECT`` (write
+it in a rule of its own and use that rule's result), or the engine has no
+probabilistic layer (``NeurolangDL``: sum with ``AGGREGATE`` instead). The
+one inside ``PROB``, ``MARG`` or ``AGGREGATE`` is refused when the program
+is read, the others when the rule is added. ``f`` is deterministic: it is
+built of the variables, constants,
+arithmetic and builtin functions; a relation, probabilistic or not, called
+in ``f`` (``EXPECT[score(x) | a(x)]`` with ``score`` a relation) is refused
+when the program is solved, with an error that says that a relation cannot
+be called inside an expression. For the value of a relation write it in the
+event, ``EXPECT[v | a(x), score(x, v)]``. From Python, ``nl.expect(f, a, e)``
 builds the same expectation (:doc:`tutorial_python`); the head of its rule
 is the one written, the result does not join it.
 

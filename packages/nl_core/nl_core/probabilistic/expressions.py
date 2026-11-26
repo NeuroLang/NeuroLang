@@ -1,6 +1,7 @@
 from nl_expr.expressions import (
     Constant, Definition, FunctionApplication, Symbol,
 )
+from nl_expr.expression_walker import expression_iterator
 from nl_expr.logic import TRUE, BinaryLogicOperator, LogicOperator
 
 PROB = Symbol("PROB")
@@ -55,6 +56,14 @@ def expectation(function, event, result, known=None, normalised=False):
     return Expectation(
         function, event, TRUE if known is None else known,
         Constant(normalised), result,
+    )
+
+
+def contains_expectation(expression):
+    """Whether *expression* is, or holds, an ``Expectation``."""
+    return any(
+        isinstance(sub, Expectation)
+        for _, sub in expression_iterator(expression)
     )
 
 
