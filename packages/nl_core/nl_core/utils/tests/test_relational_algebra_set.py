@@ -1765,3 +1765,47 @@ def test_naturaljoin_cut_by_the_smaller_relation(small, large, monkeypatch):
     )
     assert join(10, 1) == plain
     assert cuts and cut_rows[0] < len(large[1])
+
+
+def test_a_view_dropping_duplicates_drops_them_from_its_origin():
+    """A set made from another sharing its rows (a view, or the named
+    set of a stored one), when it drops its duplicates, leaves the
+    origin with the same rows, without them: the next set made from the
+    origin does not drop them again. The origin's hash and equality are
+    unchanged."""
+    import pandas as pd
+
+    from ..relational_algebra_set import pandas as backend
+
+    rows = pd.DataFrame([(1, "a"), (2, "b"), (1, "a"), (3, "c"), (2, "b")])
+    origin = backend.RelationalAlgebraFrozenSet(rows)
+    expected = backend.RelationalAlgebraFrozenSet(rows.drop_duplicates())
+    expected_hash = hash(expected)
+    assert origin.might_have_duplicates
+    named = backend.NamedRelationalAlgebraFrozenSet(("x", "y"), origin)
+    assert len(named) == 3
+    assert not origin.might_have_duplicates
+    assert len(origin._container) == 3
+    assert origin == expected and hash(origin) == expected_hash
+    again = backend.NamedRelationalAlgebraFrozenSet(("x", "y"), origin)
+    assert not again.might_have_duplicates
+    view = backend.RelationalAlgebraFrozenSet.create_view_from(
+        backend.RelationalAlgebraFrozenSet(rows)
+    )
+    assert len(view) == 3  # its origin is gone: nothing to update
+
+
+def test_a_view_of_changed_rows_leaves_its_origin():
+    """A set whose origin's rows changed since it was made does not
+    update it when it drops its duplicates."""
+    import pandas as pd
+
+    from ..relational_algebra_set import pandas as backend
+
+    rows = pd.DataFrame([(1, "a"), (1, "a"), (2, "b")])
+    origin = backend.RelationalAlgebraFrozenSet(rows)
+    named = backend.NamedRelationalAlgebraFrozenSet(("x", "y"), origin)
+    origin._container = pd.DataFrame([(5, "e"), (5, "e")])
+    assert len(named) == 2
+    assert origin.might_have_duplicates
+    assert len(origin._container) == 2
