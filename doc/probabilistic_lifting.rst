@@ -751,7 +751,7 @@ Tuples deterministic atoms select disjointly
    v, \ldots)` in the scope of the atom, a conjunct of a conjunction with
    a formula containing the atom, :math:`v` not quantified between them;
    all the values otherwise
-   (:class:`~neurolang.probabilistic.dalvi_suciu_lift.DisjointRestrictions`).
+   (:class:`~neurolang.probabilistic.dalvi_suciu_lift.AtomsInScope`).
    The atom then becomes the atom :math:`R_V(u_1, \ldots, u_k)` of the
    relation of the tuples of :math:`R` with a value of :math:`V_i` at each
    position :math:`i`, with their probabilities, computed on the data at
@@ -2163,7 +2163,7 @@ Tuples deterministic atoms select disjointly
    under quantifiers within that formula, since the replacement holds
    for every value of the variables quantified inside it; :math:`v` is
    not quantified between the atom and :math:`D_j`
-   (``DisjointRestrictions.quantifier``), so :math:`v` is the same
+   (``AtomsInScope.quantifier``), so :math:`v` is the same
    variable in both. Replacing every atom, the query is equivalent in
    every world, and its probability is the same.
 
