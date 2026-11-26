@@ -2032,3 +2032,12 @@ def _left_deep_depth(expression):
             to_visit.append((node.relation_left, level + 1))
             to_visit.append((node.relation_right, level + 1))
     return depth
+
+
+def test_join_in_chunks_keeps_the_chain_of_operands_of_unknown_columns():
+    """The columns of a symbol are not known: operands that may share
+    columns are not taken for independent, and joined in chunks."""
+    operands = [Symbol[AbstractSet](f"R{i}") for i in range(40)]
+    result = join_in_chunks(operands)
+
+    assert _left_deep_operands(result) == operands
