@@ -221,6 +221,21 @@ def _function(functor, symbol_table):
     return None
 
 
+def check_predicate_arity(predicate, columns, used):
+    """
+    Raise `WrongArgumentsInPredicateError` if the relation *predicate*,
+    which has *columns* columns, is used with *used* arguments.
+
+    A relation with no columns, which is empty or has none, is not checked.
+    """
+    if columns and columns != used:
+        raise WrongArgumentsInPredicateError(
+            f"`{predicate}` has {columns} "
+            f"{'column' if columns == 1 else 'columns'} but is used with "
+            f"{used} {'argument' if used == 1 else 'arguments'}"
+        )
+
+
 def _check_function_arguments(application, symbol_table):
     """
     Raise `WrongArgumentsInPredicateError` if *application* applies a

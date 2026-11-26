@@ -31,6 +31,7 @@ from nl_core.datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from nl_core.datalog.chase import Chase
+from nl_core.datalog.range_restriction import check_predicate_arity
 from nl_core.datalog.constraints_representation import (
     DatalogConstraintsProgram,
     RightImplication,
@@ -1407,6 +1408,9 @@ class NeurolangPDL(QueryBuilderDatalog):
             )
         query_solution = solution[pred_symb].value.unwrap()
         query_row_type = solution[pred_symb].value.row_type
+        check_predicate_arity(
+            pred_symb.name, query_solution.arity, len(pred_args)
+        )
         constant_selection = {
             i: c.value for i, c in enumerate(pred_args)
             if isinstance(c, ir.Constant)
