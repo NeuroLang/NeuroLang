@@ -164,10 +164,8 @@ prob_body_predicate : "PROB" "[" bracketed_conjunction "]" "=" argument
 // of the event, EXPECT[f | event // knowing] = e conditioned as PROB is;
 // EXPECT_NORM divides by the sum of their probabilities. The "|" after f is
 // that of a disjunction in the event.
-expect_body_predicate : "EXPECT" "[" argument OR_SYMBOL bracketed_conjunction "]" "=" argument
-                      | "EXPECT" "[" argument OR_SYMBOL bracketed_conjunction PROB_SEP bracketed_conjunction "]" "=" argument
-expect_norm_body_predicate : "EXPECT_NORM" "[" argument OR_SYMBOL bracketed_conjunction "]" "=" argument
-                           | "EXPECT_NORM" "[" argument OR_SYMBOL bracketed_conjunction PROB_SEP bracketed_conjunction "]" "=" argument
+expect_body_predicate : "EXPECT" "[" argument OR_SYMBOL bracketed_conjunction [PROB_SEP bracketed_conjunction] "]" "=" argument
+expect_norm_body_predicate : "EXPECT_NORM" "[" argument OR_SYMBOL bracketed_conjunction [PROB_SEP bracketed_conjunction] "]" "=" argument
 
 // Inside PROB[...] and MARG[...], a formula may be in parentheses, as in
 // a rule's condition: PROB[(a(x), (x < y)) // (b(x), c(x))] = p
@@ -495,7 +493,7 @@ class DatalogTransformer(Transformer):
 
     @staticmethod
     def _extract_special_body_atoms(conjunction):
-        """Separate __PROB__, __MARG__ and __EXPECT__ marker atoms from regular atoms.
+        """Separate __PROB__, __MARG__ and __EXPECT__ markers from the atoms.
 
         Returns (regular_formulas, prob_specs) where each prob_spec is
         a tuple of (marker_name, args).
@@ -506,7 +504,9 @@ class DatalogTransformer(Transformer):
         for f in formulas:
             if (isinstance(f, FunctionApplication)
                     and isinstance(f.functor, Symbol)
-                    and f.functor.name in ("__PROB__", "__MARG__", "__EXPECT__")):
+                    and f.functor.name in (
+                        "__PROB__", "__MARG__", "__EXPECT__"
+                    )):
                 prob_specs.append((f.functor.name, f.args))
             else:
                 regular.append(f)
@@ -657,13 +657,14 @@ class DatalogTransformer(Transformer):
 
         for spec in prob_specs:
             if spec[0] == "__EXPECT__":
+                result_var = spec[1][-1]
                 rules, atom = self._expect_rules(
-                    *spec[1], outside_var_set - {spec[1][-1]}
+                    *spec[1], outside_var_set - {result_var}
                 )
                 fresh_rules += rules
                 query_body_atoms.append(atom)
-                if spec[1][-1] not in head_args:
-                    head_args.append(spec[1][-1])
+                if result_var not in head_args:
+                    head_args.append(result_var)
                 continue
             # --- unpack spec ---
             if isinstance(spec, tuple) and len(spec) == 2 and isinstance(spec[0], str):
@@ -776,65 +777,51 @@ class DatalogTransformer(Transformer):
             pa(g, x, PROB(g, x)) :- event
             ex(g, sum(v)) :- pa(g, x, p), (v == (f * p))
 
-        and for the normalised one the sum of f * p over the sum of p.
+        and for the normalised one the sum of f * p over that of p, both
+        aggregated by one rule.
         Returns the rules and the atom ``ex(g, result_var)`` for the body.
         """
         variables = extract_logic_free_variables(event)
         if known is not None:
             # a group that only what is known has is a group all the same
             variables |= extract_logic_free_variables(known) & outside
-        unbound = extract_logic_free_variables(f) - variables
-        if not variables or unbound:
+        if not variables:
             raise NeuroLangFrontendException(
-                "EXPECT sums over the variables of its event, "
-                + (
-                    "which has none"
-                    if not variables
-                    else f"that do not bind {sorted(v.name for v in unbound)}"
-                    f" of {f}"
-                )
+                "EXPECT sums over the variables of its event, which has none"
+            )
+        unbound = extract_logic_free_variables(f) - variables
+        if unbound:
+            raise NeuroLangFrontendException(
+                "EXPECT sums over the variables of its event, that do not "
+                f"bind {sorted(v.name for v in unbound)} of {f}"
             )
         variables = tuple(sorted(variables, key=lambda v: v.name))
         group = tuple(v for v in variables if v in outside)
         pa, ex, p, v = (Symbol.fresh() for _ in range(4))
         body = event if known is None else Condition(event, known)
-        rules = [
-            Implication(
-                pa(*variables, FunctionApplication(PROB, variables)),
-                body if isinstance(body, Conjunction | Disjunction | Condition)
-                else Conjunction((body,)),
-            )
-        ]
+        rules = [Implication(
+            pa(*variables, FunctionApplication(PROB, variables)), body
+        )]
         weighted = Conjunction((
             pa(*variables, p), Constant(eq)(v, Constant(mul)(f, p))
         ))
-        sum_ = Symbol("sum")
-        if not normalised.value:
-            rules.append(
+        total = AggregationApplication(Symbol("sum"), (v,))
+        if not normalised:
+            rules.append(Implication(ex(*group, total), weighted))
+        else:
+            sums, n, d = Symbol.fresh(), Symbol.fresh(), Symbol.fresh()
+            weight = AggregationApplication(Symbol("sum"), (p,))
+            rules += [
+                Implication(sums(*group, total, weight), weighted),
                 Implication(
-                    ex(*group, AggregationApplication(sum_, (v,))), weighted
-                )
-            )
-            return rules, ex(*group, result_var)
-        num, den = Symbol.fresh(), Symbol.fresh()
-        n, d = Symbol.fresh(), Symbol.fresh()
-        rules += [
-            Implication(
-                num(*group, AggregationApplication(sum_, (v,))), weighted
-            ),
-            Implication(
-                den(*group, AggregationApplication(sum_, (p,))),
-                Conjunction((pa(*variables, p),)),
-            ),
-            Implication(
-                ex(*group, result_var),
-                Conjunction((
-                    num(*group, n), den(*group, d),
-                    Constant(gt)(d, Constant(0.)),
-                    Constant(eq)(result_var, Constant(truediv)(n, d)),
-                )),
-            ),
-        ]
+                    ex(*group, result_var),
+                    Conjunction((
+                        sums(*group, n, d),
+                        Constant(gt)(d, Constant(0.)),
+                        Constant(eq)(result_var, Constant(truediv)(n, d)),
+                    )),
+                ),
+            ]
         return rules, ex(*group, result_var)
 
     def _build_aggregate_rule(self, head, group_vars, conjunction, agg_fn_call, result_var):
@@ -999,12 +986,11 @@ class DatalogTransformer(Transformer):
 
     @staticmethod
     def _expect_marker(normalised, ast):
-        # EXPECT[f | event] = e           → [f, OR, event, e]
-        # EXPECT[f | event // known] = e  → [f, OR, event, SEP, known, e]
-        known = ast[4] if len(ast) == 6 else None
+        # EXPECT[f | event // known] = e → [f, OR, event, SEP, known, e],
+        # SEP and known None without "//"
+        f, _, event, _, known, result_var = ast
         return FunctionApplication(
-            Symbol("__EXPECT__"),
-            (Constant(normalised), ast[0], ast[2], known, ast[-1]),
+            Symbol("__EXPECT__"), (normalised, f, event, known, result_var)
         )
 
     def expect_body_predicate(self, ast):
