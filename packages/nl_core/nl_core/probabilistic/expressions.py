@@ -1,5 +1,5 @@
 from nl_expr.expressions import Definition, FunctionApplication, Symbol
-from nl_expr.logic import BinaryLogicOperator
+from nl_expr.logic import BinaryLogicOperator, LogicOperator
 
 PROB = Symbol("PROB")
 
@@ -16,6 +16,32 @@ class Condition(ProbabilisticBinaryLogicOperator):
 
     def __repr__(self):
         return f"[{self.conditioned} | {self.conditioning}]"
+
+
+class Expectation(LogicOperator):
+    """
+    ``EXPECT[function | event // known] = result`` in the body of a rule:
+    the expected value of *function* summed over the answers of *event*,
+    knowing *known* (``TRUE`` for none); *normalised*, a boolean constant,
+    for ``EXPECT_NORM``.
+    """
+
+    def __init__(self, function, event, known, normalised, result):
+        self.function = function
+        self.event = event
+        self.known = known
+        self.normalised = normalised
+        self.result = result
+        self._symbols = (
+            function._symbols | event._symbols | known._symbols
+            | result._symbols
+        )
+
+    def __repr__(self):
+        return "EXPECT{}[{} | {} // {}] = {}".format(
+            "_NORM" if self.normalised.value else "", self.function,
+            self.event, self.known, self.result,
+        )
 
 
 class ProbabilisticPredicate(Definition):

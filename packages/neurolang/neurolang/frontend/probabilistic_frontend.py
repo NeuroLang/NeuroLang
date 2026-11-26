@@ -119,6 +119,7 @@ from ..commands import CommandsMixin
 from nl_core.datalog.basic_representation import UnionOfConjunctiveQueries
 from . import query_resolution_expressions as fe
 from .datalog.sugar import (
+    TranslateExpectationMixin,
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
 )
@@ -186,6 +187,7 @@ def instance_lru_cache(key_fn, maxsize=128):
 
 
 class RegionFrontendCPLogicSolver(
+    TranslateExpectationMixin,
     EqualitySymbolLeftHandSideNormaliseMixin,
     InlineEqualityConstantsMixin,
     TranslateProbabilisticQueryMixin,

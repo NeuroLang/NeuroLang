@@ -456,3 +456,51 @@ def test_a_disjunctive_event():
             lambda g, x: x,
         ),
     )
+
+
+def test_a_group_bound_by_an_equality_is_a_group():
+    """g is an argument of the comparison, so a group: the same as 'a'."""
+    assert _solve(
+        "q(e) :- EXPECT[x | item(g, x)] = e, (g == 'a')"
+    ) == pytest.approx(_solve("q(e) :- EXPECT[x | item('a', x)] = e"))
+
+
+def test_the_expectation_in_a_query():
+    """A query body cannot hold an EXPECT: ans reads a rule that does."""
+    [(value,)] = _engine().execute_datalog_program(
+        "ans(e) :- EXPECT[x | roll(x)] = e"
+    ).as_pandas_dataframe().values.tolist()
+    assert value == pytest.approx(2.8)
+    # and the expectation joins the head when it is not in it
+    [(ten_times, mean)] = _engine().execute_datalog_program(
+        "ans(v) :- EXPECT[x | roll(x)] = m, (v == (m * 10))"
+    ).as_pandas_dataframe().values.tolist()
+    assert (ten_times, mean) == pytest.approx((28.0, 2.8))
+
+
+def test_the_expectations_of_named_queries():
+    answers = _engine().execute_datalog_program(
+        "ans[mean](e) :- EXPECT[x | roll(x)] = e\n"
+        "ans[above](e) :- EXPECT[x | roll(x), (x > 1)] = e\n"
+        "ans[above_norm](e) :- EXPECT_NORM[x | roll(x), (x > 1)] = e"
+    )
+    found = {
+        name: answer.as_pandas_dataframe().values.item()
+        for name, answer in answers.items()
+    }
+    assert found == pytest.approx(
+        {"mean": 2.8, "above": 2.6, "above_norm": 3.25}
+    )
+
+
+def test_the_parsed_rule_is_a_rule_for_the_other_consumers():
+    """The rewriting happens in the engine: the parser gives the rule with
+    its EXPECT, whose atoms are those of its event."""
+    from nl_core.datalog.expression_processing import extract_logic_atoms
+
+    from ..datalog.standard_syntax import parser
+
+    [rule] = parser("q(e) :- EXPECT[x | roll(x), flag(x)] = e").formulas
+    assert {a.functor.name for a in extract_logic_atoms(rule.antecedent)} == {
+        "roll", "flag"
+    }
