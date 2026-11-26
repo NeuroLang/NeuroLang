@@ -5,8 +5,9 @@ import io
 import re
 
 import pytest
-from typing import Callable
-from nl_expr.logic import Implication
+from typing import AbstractSet, Callable, Tuple
+from nl_core.datalog.wrapped_collections import WrappedRelationalAlgebraSet
+from nl_expr.logic import Conjunction, Implication
 
 from nl_expr.exceptions import NeuroLangException
 from nl_expr.expressions import Constant, Symbol
@@ -1215,3 +1216,82 @@ def test_rdf_type_in_a_rule_of_the_program_names_the_class():
         "heads_a_unit(x) :- exists(y, k; ex:headOf(x, y), rdf:type(y, k), "
         "rdfs:label(k, 'unit'))\nans(x) :- heads_a_unit(x)"
     )) == {("http://ex.org/Juan",), ("Ana",)}
+
+
+def test_a_rule_reading_a_constant_relation_is_rewritten():
+    """A rule whose body reads a constant relation of strings goes through
+    the rewriting of the ontology's constraints, in a deterministic and in
+    a probabilistic query."""
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <owl:Class rdf:ID="Dean">
+            <rdfs:subClassOf rdf:resource="#Person" />
+        </owl:Class>
+    </rdf:RDF>'''
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+    nl.add_tuple_set(
+        [("ann", "xterm"), ("bob", "yterm"), ("cid", "zterm")], name="label"
+    )
+    nl.add_tuple_set([("ann",), ("cid",)], name="Person")
+    nl.add_tuple_set([("xterm",), ("yterm",)], name="selected")
+    terms = Constant[AbstractSet[Tuple[str]]](
+        WrappedRelationalAlgebraSet(
+            [("xterm",), ("zterm",)] + [(f"term{i}",) for i in range(20)]
+        ),
+        verify_type=False,
+    )
+    label, person, r = Symbol("label"), Symbol("Person"), Symbol("r")
+    a, t = Symbol("a"), Symbol("t")
+    nl.program_ir.walk(Implication(
+        r(a, t), Conjunction((label(a, t), person(a), terms(t)))
+    ))
+
+    with nl.scope as e:
+        e.ans[e.a] = e.r[e.a, e.t]
+        res = nl.query((e.a,), e.ans[e.a])
+    assert set(res) == {("ann",), ("cid",)}
+
+    with nl.scope as e:
+        e.p[e.a, e.PROB[e.a]] = e.r[e.a, e.t] // e.selected[e.t]
+        res = nl.query((e.a, e.q), e.p[e.a, e.q])
+    assert set(res) == {("ann", 1.0)}
+
+
+def test_rules_reading_two_constant_relations_are_rewritten_apart():
+    """Two rules differing in the middle rows of a constant relation, the
+    same in its printed form, are two rewritings: the second query does
+    not get the first one's."""
+    owl = '''<?xml version="1.0"?>
+    <rdf:RDF xmlns="http://www.w3.org/2002/07/owl#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+        <owl:Class rdf:ID="Dean">
+            <rdfs:subClassOf rdf:resource="#Person" />
+        </owl:Class>
+    </rdf:RDF>'''
+    nl = NeurolangPDL()
+    nl.load_ontology(io.StringIO(owl))
+    nl.add_tuple_set([(f"p{i}", f"t{i}") for i in range(100)], name="label")
+    nl.add_tuple_set([(f"p{i}",) for i in range(100)], name="Person")
+    label, person, r = Symbol("label"), Symbol("Person"), Symbol("r")
+    a, t = Symbol("a"), Symbol("t")
+    for left_out in ("p50", "p51"):
+        terms = Constant[AbstractSet[Tuple[str]]](
+            WrappedRelationalAlgebraSet([
+                (f"t{i}",) for i in range(100) if f"p{i}" != left_out
+            ]),
+            verify_type=False,
+        )
+        with nl.scope:
+            nl.program_ir.walk(Implication(
+                r(a, t), Conjunction((label(a, t), person(a), terms(t)))
+            ))
+            with nl.scope as e:
+                e.ans[e.a] = e.r[e.a, e.t]
+                res = {x for x, in nl.query((e.a,), e.ans[e.a])}
+        assert left_out not in res and len(res) == 99

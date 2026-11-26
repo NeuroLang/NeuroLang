@@ -404,6 +404,18 @@ Unreleased
   alone, which rarely has a cycle of its own: ``uf(x, "left")`` takes 7 s
   and 0.4 GB, against 12.5 s and 0.65 GB before #1391; ``af`` 14 s
   against 50 s; ``slf_i`` 0.2 GB against 0.5 GB on master.
+- A rule reading a constant relation of strings, as
+  ``C(term)`` with ``C`` a ``Constant[AbstractSet]``, failed in the
+  rewriting of an ontology's constraints with a ``KeyError``: the hash of
+  a relation of the pandas backend was that of the addresses of its
+  strings, new objects at each read of a pyarrow column, and so changed
+  between two calls, and equal relations hashed apart. It is now that of
+  their values, whatever the order of the rows, in the pandas and polars
+  backends; caches and sets of rules holding relations find them again.
+  The rewritings of a program are cached by its rules, not their printed
+  form, which shows a relation of more than 60 rows in part: two rules
+  reading relations differing in their middle rows got the same rewriting,
+  and the second query the first one's answers.
 
 - AI assistant: an answer given when the ReAct agent ran out of steps,
   the last query that gave rows, says so: its summary reads *Out of steps:

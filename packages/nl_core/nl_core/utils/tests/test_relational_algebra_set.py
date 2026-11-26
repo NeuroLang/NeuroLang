@@ -1765,3 +1765,28 @@ def test_naturaljoin_cut_by_the_smaller_relation(small, large, monkeypatch):
     )
     assert join(10, 1) == plain
     assert cuts and cut_rows[0] < len(large[1])
+
+
+def test_hash_of_equal_sets_is_equal(ra_module):
+    """Equal sets hash alike, whatever the order of their rows, and a
+    set's hash is the same at each call: it is of the values, not of the
+    objects holding them."""
+    rows = [(f"term{i}" * 2, i) for i in range(20)]
+    first = ra_module.RelationalAlgebraFrozenSet(rows)
+    second = ra_module.RelationalAlgebraFrozenSet(
+        [("".join(s), i) for s, i in reversed(rows)]
+    )
+    assert first == second
+    assert hash(first) == hash(second)
+    held = [str(i) * 3 for i in range(1000)]
+    assert hash(first) == hash(first)
+    assert held
+
+    empty = ra_module.RelationalAlgebraFrozenSet()
+    assert empty == ra_module.RelationalAlgebraFrozenSet([]) == (
+        first - first
+    )
+    assert hash(empty) == hash(first - first)
+    assert hash(ra_module.RelationalAlgebraFrozenSet.dee()) == hash(
+        ra_module.RelationalAlgebraFrozenSet.dee()
+    )
