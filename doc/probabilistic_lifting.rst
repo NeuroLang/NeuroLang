@@ -476,6 +476,32 @@ Flattening
    The rules the query depends on are unfolded into its body, giving a
    union of conjunctive queries in disjunctive normal form.
 
+Constants of the query
+   A rule is unfolded with the most general unifier of its head and the
+   query's atom, so that a constant of the query, as in
+   ``PROB[ind('a')]``, replaces the head variable in the whole body: the
+   selection of the constant is pushed into the body, and the plan is
+   that of the body for this constant, not of the rule for all values
+   selected afterwards (``FlattenQueryInNonRecursiveUCQ``). A comparison
+   of the body becomes then one of two constants, as
+   :math:`d = \mathtt{a}` or :math:`d = d` for :math:`d = \mathtt{a}`,
+   which is evaluated: a true one is removed, a false one makes the body
+   false, and the rule gives no answer
+   (``FlattenQueryInNonRecursiveUCQ.comparison_of_constants``, the truth
+   values removed by ``SimplifyFlatQuery``).
+
+   The existential quantifiers of the variables of the body out of the
+   head are then pushed down (``PushExistentialsDownConjunctionsMixin``),
+   :math:`\exists y\, (A \land B) \equiv A \land \exists y\, B` for
+   :math:`y` not free in :math:`A`, and
+   :math:`\exists x\, \exists y\, \varphi \equiv
+   \exists y\, \exists x\, \varphi`. An outer quantifier is swapped
+   through a chain :math:`\exists y_1 \dots \exists y_k\, \psi`, none
+   of whose quantifiers moves into :math:`\psi`, only when it moves into
+   :math:`\psi` itself (``_moves_into_matrix``): the number of walks is
+   then polynomial in :math:`k` rather than :math:`2^k`, as for a
+   deterministic atom with twenty columns that only it uses.
+
 Absorption in negations
    Conjuncts asserted outside a negation are removed from it, by the
    absorption law
@@ -1605,6 +1631,29 @@ Polynomial time
    one quantifier less, or nothing when the rest is deterministic. The
    order being well founded, the
    construction terminates.
+
+Constants of the query
+   The query :math:`R(\bar a)` of a rule :math:`R(\bar x) \leftarrow
+   \varphi` holds in a world exactly when :math:`\varphi\sigma` does,
+   :math:`\sigma` the most general unifier of :math:`R(\bar x)` and
+   :math:`R(\bar a)`, the rule's other variables being existential: the
+   selection :math:`\bar x = \bar a` applied to the answers of the rule is
+   the body with :math:`\bar a` for :math:`\bar x`, an equivalence for a
+   conjunctive rule, and for each rule of a union. A comparison of
+   constants has the same truth value in every world: a true conjunct is
+   removed, :math:`\top \land \psi \equiv \psi`, and a false one makes
+   the conjunction false in every world, :math:`\bot \land \psi \equiv
+   \bot`, the probability 0 of an answer that is not given. Swapping
+   :math:`\exists x` through the chain
+   :math:`\exists y_1 \dots \exists y_k\, \psi` gives
+   :math:`\exists y_1 \dots \exists y_k \exists x\, \psi`, an
+   equivalence. The chain is left unchanged by the walk, and so is each
+   of its subchains, which the walk of the chain walks first. When the walk
+   leaves :math:`\exists x\, \psi` unchanged, it leaves the swapped
+   :math:`\exists x\, \exists y_2 \dots \exists y_k\, \psi` unchanged,
+   by induction on :math:`k`: its body is an unchanged subchain, and its
+   own swap is that of :math:`\exists x` through a shorter one. Skipping
+   the swap then gives the same formula.
 
 Absorption in negations
    In every world, for every :math:`\theta`: if :math:`A\theta` holds,

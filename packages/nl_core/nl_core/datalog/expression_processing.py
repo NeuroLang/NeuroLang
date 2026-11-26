@@ -52,6 +52,7 @@ from nl_expr.logic.transformations import (
     GuaranteeConjunction,
     LogicExpressionWalker,
     RemoveTrivialOperations,
+    SimplifyTruthValuesMixin,
 )
 from nl_expr.logic.unification import most_general_unifier
 from nl_expr.utils.orderedset import OrderedSet
@@ -59,6 +60,10 @@ from .exceptions import AggregatedVariableReplacedByConstantError
 from .expressions import AggregationApplication, TranslateToLogic
 
 EQ = Constant(operator.eq)
+COMPARISONS = (
+    operator.eq, operator.ne, operator.lt, operator.le, operator.gt,
+    operator.ge
+)
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -877,7 +882,7 @@ def flatten_query(query, program):
         )
     try:
         res = FlattenQueryInNonRecursiveUCQ(program).walk(query)
-        res = RemoveTrivialOperations().walk(res)
+        res = SimplifyFlatQuery().walk(res)
         if not isinstance(res, Constant):
             return GuaranteeConjunction().walk(res)
     except RecursionError:
@@ -887,6 +892,11 @@ def flatten_query(query, program):
     except NeuroLangPatternMatchingNoMatch:
         raise UnsupportedProgramError("Expression not supported.")
     return res
+
+
+class SimplifyFlatQuery(SimplifyTruthValuesMixin, RemoveTrivialOperations):
+    """`RemoveTrivialOperations`, also removing the truth values the
+    comparisons of constants give, ⊤ ∧ φ ≡ φ, ⊥ ∧ φ ≡ ⊥, ⊥ ∨ φ ≡ φ."""
 
 
 class FlattenQueryInNonRecursiveUCQ(PatternWalker):
@@ -924,6 +934,17 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
                 exp = self.walk(exp)
             cqs.append(exp)
         return maybe_disjunct(cqs)
+
+    @add_match(
+        FunctionApplication(Constant, (Constant, Constant)),
+        lambda comparison: comparison.functor.value in COMPARISONS
+    )
+    def comparison_of_constants(self, comparison):
+        """A comparison of constants, as `x = 'a'` with the query's `'a'`
+        for the head variable `x`, is true or false."""
+        left, right = comparison.args
+        return TRUE if comparison.functor.value(left.value, right.value) \
+            else FALSE
 
     @add_match(FunctionApplication(Constant, ...))
     def builtin_application(self, fa):

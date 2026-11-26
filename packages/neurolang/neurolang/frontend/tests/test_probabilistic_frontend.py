@@ -3173,3 +3173,124 @@ def test_choice_facts_must_sum_to_one():
         nl.execute_datalog_program(
             "0.3 ^ choice('a').\n0.3 ^ choice('b')."
         )
+
+
+def _indications():
+    """`succeeds(d, m)` probabilistic and `indication(k, d, m)`
+    deterministic: m3 has no indication, m4 no probability, and the
+    indication (a, m2) has two rows."""
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.5, "a", "m1"), (0.4, "a", "m2"), (0.2, "a", "m3"),
+         (0.3, "b", "m1")],
+        name="succeeds",
+    )
+    nl.add_tuple_set(
+        [("x", "a", "m1"), ("y", "a", "m2"), ("y2", "a", "m2"),
+         ("z", "b", "m1"), ("w", "a", "m4")],
+        name="indication",
+    )
+    return nl
+
+
+@pytest.mark.parametrize("comparison, expected", [
+    ("(d == 'a')", {(0.7,)}),
+    ("('a' == d)", {(0.7,)}),
+    ("(d == d)", {(0.7,)}),
+    ("(d != 'b')", {(0.7,)}),
+    ("(d == 'b')", set()),
+    ("(d != 'a')", set()),
+])
+def test_comparison_of_the_head_constant_in_a_probabilistic_rule(
+    comparison, expected
+):
+    """
+    The constant of `PROB[ind('a')]` substituted for `d` turns the
+    comparison into one of two constants, as `'a' == 'a'`, which is
+    true and dropped, or false, and the rule then gives nothing, as for
+    a drug without indications. P(ind(a)) = 1 - (1 - 0.5)(1 - 0.4).
+    """
+    nl = _indications()
+    res = nl.execute_datalog_program(
+        "ind(d) :- succeeds(d, m), indication(k, d, m), " + comparison +
+        "\nans(p) :- PROB[ind('a')] = p"
+    )
+    assert {
+        tuple(round(v, 6) for v in row) for row in res.to_unnamed()
+    } == expected
+
+
+@pytest.mark.parametrize("drug, expected", [("a", 0.7), ("b", 0.3)])
+def test_comparison_of_the_head_constant_in_a_union(drug, expected):
+    """The rule whose comparison is false for the query's constant is a
+    false disjunct, removed; the other gives the probability."""
+    nl = _indications()
+    res = nl.execute_datalog_program(
+        "ind(d) :- succeeds(d, m), indication(k, d, m), (d == 'a')\n"
+        "ind(d) :- succeeds(d, m), (d == 'b')\n"
+        f"ans(p) :- PROB[ind('{drug}')] = p"
+    )
+    (p,), = res.to_unnamed()
+    assert p == pytest.approx(expected)
+
+
+def test_equality_of_a_variable_with_itself_in_a_deterministic_rule():
+    """`d == d` is true: substituting d for d in the rule looped."""
+    nl = _indications()
+    res = nl.execute_datalog_program(
+        "ind(d, k) :- indication(k, d, m), (d == d)\nans(k) :- ind('a', k)"
+    )
+    assert set(res.to_unnamed()) == {("w",), ("x",), ("y",), ("y2",)}
+
+
+def test_head_constant_of_a_rule_with_a_wide_deterministic_atom():
+    """
+    `ind(d) :- succeeds(d, m), indication(c₁, …, c₁₀, d, m, c₁₁, …, c₂₀)`
+    queried as `PROB[ind('a')]`: the 20 existential columns of the
+    deterministic atom made pushing the existentials down take 2²⁰
+    walks. The probability is that of the unbound query's row for 'a'
+    and that of the possible worlds where ind('a') holds.
+    """
+    facts = [
+        (0.5, "a", "m1"), (0.4, "a", "m2"), (0.2, "a", "m3"),
+        (0.3, "b", "m1"),
+    ]
+    indications = [("a", "m1"), ("a", "m2"), ("a", "m2"), ("b", "m1"),
+                   ("a", "m4")]
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(facts, name="succeeds")
+    nl.add_tuple_set(
+        [
+            tuple(f"{i}c{j}" for j in range(10)) + (d, m) +
+            tuple(f"{i}e{j}" for j in range(10))
+            for i, (d, m) in enumerate(indications)
+        ],
+        name="indication",
+    )
+    columns = ", ".join(f"c{j}" for j in range(10))
+    extra = ", ".join(f"e{j}" for j in range(10))
+    rule = (
+        f"ind(d) :- succeeds(d, m), indication({columns}, d, m, {extra})\n"
+    )
+    with nl.scope:
+        bound = nl.execute_datalog_program(
+            rule + "ans(p) :- PROB[ind('a')] = p"
+        )
+    unbound = nl.execute_datalog_program(
+        rule + "ans(d, p) :- PROB[ind(d)] = p"
+    )
+    brute_force = 0.
+    for world in itertools.product((True, False), repeat=len(facts)):
+        weight = np.prod([
+            p if true else 1 - p for true, (p, _, _) in zip(world, facts)
+        ])
+        if any(
+            true and (d, m) in indications and d == "a"
+            for true, (_, d, m) in zip(world, facts)
+        ):
+            brute_force += weight
+    (p_bound,), = bound.to_unnamed()
+    unbound_row = dict(unbound.to_unnamed())
+    assert p_bound == pytest.approx(brute_force)
+    assert unbound_row["a"] == pytest.approx(brute_force)
+    assert unbound_row["b"] == pytest.approx(0.3)
