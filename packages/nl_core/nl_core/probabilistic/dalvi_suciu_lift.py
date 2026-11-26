@@ -118,7 +118,7 @@ from .query_resolution import (
     lift_solve_marg_query
 )
 from .non_repeating_lift import (
-    _is_non_repeating,
+    is_non_repeating,
     non_repeating_plan,
     select_comparisons
 )
@@ -370,7 +370,7 @@ def _non_repeating_query_plan(
     )
     if any(
         isinstance(e, Negation) for _, e in expression_iterator(formula)
-    ) and not _is_non_repeating(formula, symbol_table):
+    ) and not is_non_repeating(formula, symbol_table):
         formula = shatter_constants(formula, symbol_table)
         unified_query = Implication(unified_query.consequent, formula)
     plan = non_repeating_plan(formula, symbol_table)
