@@ -95,7 +95,7 @@ jobs:
     - name: Install ${{ matrix.dist }} and the packages it depends on
       run: |
         uv sync --package ${{ matrix.dist }} ${{ matrix.extras }}
-        uv pip install pytest-timeout
+        uv pip install pytest-timeout pytest-xdist pytest-cov
 
     # Tests run on every core of the runner (pytest-xdist); on a push to
     # master, those of the first Python version also collect their
