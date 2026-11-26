@@ -14,7 +14,11 @@ from nl_expr.logic import (
     Union,
 )
 from ..basic_representation import DatalogProgram
-from ..expression_processing import extract_logic_predicates, flatten_query
+from ..expression_processing import (
+    extract_logic_free_variables,
+    extract_logic_predicates,
+    flatten_query,
+)
 
 
 @pytest.fixture
@@ -260,3 +264,44 @@ def test_flatten_renames_apart_a_repeated_head_variable():
         formula.functor == EQ and formula.args[0] == formula.args[1]
         for formula in result.formulas
     )
+
+
+@pytest.mark.parametrize("comparison, satisfiable", [
+    (EQ(x, a), True),
+    (EQ(x, x), True),
+    (EQ(a, x), True),
+    (EQ(x, b), False),
+    (Constant(operator.ne)(x, a), False),
+    (Constant(operator.ne)(x, b), True),
+])
+def test_flatten_evaluates_comparisons_of_constants(comparison, satisfiable):
+    """
+    The constant of the query `R(a)` substituted for the head variable of
+    `R(x) :- P(x, y), Q(y), comparison` turns `x = a` and `x = x` into
+    `a = a`, true and dropped, and `x = b` into `a = b`, false.
+    """
+    program = TestDatalogProgram()
+    program.walk(Implication(R(x), Conjunction((P(x, y), Q(y), comparison))))
+    flat = flatten_query(R(a), program)
+    if not satisfiable:
+        assert flat == FALSE
+    else:
+        assert len(flat.formulas) == 2
+        p_atom, = (f for f in flat.formulas if f.functor == P)
+        assert p_atom.args[0] == a
+        assert any(f.functor == Q for f in flat.formulas)
+
+
+def test_flatten_binds_the_head_variable_to_the_query_constant():
+    """
+    The query `R(a)` of `R(x) :- P(x, y), Q(z, x, y)` is the body with `a`
+    for `x`, in every atom: the selection of the constant is pushed into
+    the body, ∃y (P(a, y) ∧ ∃z Q(z, a, y)), not applied to `R` computed
+    for all `x`.
+    """
+    program = TestDatalogProgram()
+    program.walk(Implication(R(x), Conjunction((P(x, y), Q(z, x, y)))))
+    flat = flatten_query(R(a), program)
+    assert len(flat.formulas) == 2
+    assert all(a in formula.args for formula in flat.formulas)
+    assert x not in extract_logic_free_variables(flat)
