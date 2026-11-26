@@ -1,6 +1,7 @@
 from pytest import raises
 
 from operator import eq
+from types import SimpleNamespace
 import typing
 
 import numpy as np
@@ -20,6 +21,10 @@ from nl_expr.logic import (
     Union,
 )
 from .. import DatalogProgram, Fact
+from ..constraints_representation import (
+    DatalogConstraintsMixin,
+    RightImplication,
+)
 from ..expression_processing import (
     TranslateToDatalogSemantics,
     is_conjunctive_expression,
@@ -773,3 +778,96 @@ def test_inline_equality_constants_keeps_the_equalities_it_cannot_inline():
         Conjunction((q(y), EQ(x, a), Negation(q(x)))),
     ):
         assert walker.walk(Imp_(p(x), body)) == Imp_(p(x), body)
+
+
+class _Constraint:
+    """A constraint whose body tells when it is read."""
+
+    def __init__(self, consequent, antecedent, reads):
+        self.consequent = consequent
+        self._antecedent = antecedent
+        self._reads = reads
+
+    @property
+    def antecedent(self):
+        self._reads.append(self.consequent)
+        return self._antecedent
+
+
+def _program_with_constraints(rules, constraints):
+    """Return a Datalog program of *rules* and the *constraints*."""
+    datalog = Datalog()
+    datalog.walk(DT.walk(B_(rules)))
+
+    all_constraints = SimpleNamespace(formulas=tuple(constraints))
+    datalog.constraints = lambda: all_constraints
+    datalog.existential_rules = {}
+    return datalog
+
+
+def test_dependency_matrix_reads_the_constraints_only_when_needed():
+    """
+    The bodies of the constraints (the 10,399 axioms of the Cognitive
+    Atlas) are read only for a predicate found nowhere else, which only
+    a constraint's body mentions: it is an empty relation, not a symbol
+    not found.
+    """
+    Q, R, S, Z, P = (S_(n) for n in "QRSZP")  # noqa: N806
+    x = S_('x')
+    reads = []
+    constraint = _Constraint(P(x), Z(x), reads)
+    rules = [Fact(Q(C_(0))), Imp_(R(x), Q(x)), Imp_(S(x), R(x))]
+    datalog = _program_with_constraints(rules, [constraint])
+    idb_symbols, _ = dependency_matrix(datalog)
+    assert idb_symbols == (R, S)
+    assert reads == []
+
+    datalog = _program_with_constraints(
+        rules + [Imp_(S(x), Z(x))], [constraint]
+    )
+    idb_symbols, _ = dependency_matrix(datalog)
+    assert idb_symbols == (R, S)
+    assert reads == [P(x)]
+    dependency_matrix(datalog)
+    assert reads == [P(x)]
+
+    with raises(SymbolNotFoundError):
+        dependency_matrix(_program_with_constraints(
+            rules + [Imp_(S(x), S_('W')(x))], [constraint]
+        ))
+
+
+class DatalogWithConstraints(DatalogConstraintsMixin, Datalog):
+    pass
+
+
+def test_dependency_matrix_sees_the_constraints_added():
+    """
+    The predicates of the constraints, kept between the dependency
+    matrices of a program, are those of its constraints at each call:
+    one added since is known, in its head or only in its body, as is the
+    head of an existential rule added in place.
+    """
+    Q, R, P, W, Z, V = (S_(n) for n in "QRPWZV")  # noqa: N806
+    x = S_('x')
+    datalog = DatalogWithConstraints()
+    datalog.add_existential_rules({})
+    datalog.walk(DT.walk(B_([Fact(Q(C_(0))), Imp_(R(x), Q(x))])))
+    datalog.walk(RightImplication(Q(x), P(x)))
+    assert dependency_matrix(datalog)[0] == (R,)
+
+    datalog.walk(DT.walk(B_([Imp_(R(x), W(x)), Imp_(R(x), Z(x))])))
+    with raises(SymbolNotFoundError):
+        dependency_matrix(datalog)
+
+    datalog.walk(RightImplication(Q(x), W(x)))
+    datalog.walk(RightImplication(Z(x), P(x)))
+    idb_symbols, matrix = dependency_matrix(datalog)
+    assert idb_symbols == (R,)
+    assert matrix.sum() == 0
+
+    datalog.walk(DT.walk(B_([Imp_(R(x), V(x))])))
+    with raises(SymbolNotFoundError):
+        dependency_matrix(datalog)
+    datalog.existential_rules[V(x)] = []
+    assert dependency_matrix(datalog)[0] == (R,)

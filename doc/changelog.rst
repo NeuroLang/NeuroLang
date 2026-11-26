@@ -901,6 +901,19 @@ v0.1a23 (2026-11-15)
 
 **Performance:**
 
+* The dependency matrix the chase asks for at each stratum, and for each
+  chase it tries, reads the bodies of the constraints of an ontology (the
+  10,399 axioms of the Cognitive Atlas) only for a predicate found nowhere
+  else, and keeps the predicates of the constraints and of the existential
+  rules on the program until they change, rather than collecting them at
+  every call: under the profiler, ``lift('pain')`` on neurostore spends
+  0.3 s in its 11 dependency matrices instead of 3.1 s, and the queries
+  on neurosynth 0.3 s instead of 2.3 to 3.4 s.  Run again in the same
+  process, ``lift('pain')`` takes 4.7 s instead of 5.9 s, decoding an
+  image on neurosynth 2.2 s instead of 2.8 s, a query of the Cognitive
+  Atlas 1.6 s instead of 2.3 s; the bank of neurosynth's queries 264 s
+  instead of 339 s, with the same answers.
+
 * Assistant: the two requests that check an answer (its translation back
   into English and the judgement of it) start with the same message, the
   engine and its predicates, which the Anthropic provider now caches as a
