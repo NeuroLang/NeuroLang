@@ -1807,10 +1807,9 @@ def _prob_query(atoms):
     if not atoms or not printable:
         return None
     printer = DatalogPrettyPrinter()
-    variables = list(dict.fromkeys(
-        arg.name for a in atoms for arg in a.args
-        if isinstance(arg, ir.Symbol)
-    ))
+    variables = [
+        v.name for v in extract_logic_free_variables(Conjunction(tuple(atoms)))
+    ]
     p = "probability" if "p" in variables else "p"
     return (
         f"`ans({', '.join(variables + [p])}) :- "
