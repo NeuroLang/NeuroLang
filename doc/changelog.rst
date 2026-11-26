@@ -417,6 +417,14 @@ Unreleased
   fail with "Probabilistic choice already defined". Their probabilities must
   sum to 1.
 
+- ``PROB[exists(y; s(x, y), t(y))] = p`` (an existential over a conjunction,
+  several variables, a disjunction) was dropped by the parser, the rule
+  becoming ``q(p) :- True``, and ``MARG[s(x, y)] = p`` of a single atom
+  failed or, with a group, lost it. They give the probability of their
+  event, which the tests check against the enumeration of the possible
+  worlds; a ``PROB`` or ``MARG`` whose event the parser cannot classify is
+  now an error, not skipped.
+
 - Magic sets: a query of the WMQL bundles ``uf``, ``ilf``, ``af`` or
   ``ec`` on the Disconnectome engines fits in memory again. Since the
   rewrite gave up on cycles of its own (#1391), these bundles were solved
