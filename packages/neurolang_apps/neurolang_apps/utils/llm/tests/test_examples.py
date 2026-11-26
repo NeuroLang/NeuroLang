@@ -105,6 +105,22 @@ def test_bank_answers_name_their_columns(engine):
     assert not short, "\n".join(short)
 
 
+def test_the_expectation_examples_parse_to_lifted_rules():
+    """The examples of EXPECT are written in the syntax the parser reads."""
+    from neurolang.frontend.datalog.standard_syntax import parser
+
+    expectations = [
+        example for example in load_examples("neurosynth")
+        if "EXPECT" in (example.query("datalog") or "")
+    ]
+    assert len(expectations) >= 2
+    for example in expectations:
+        program = parser(example.query("datalog").replace(
+            "{kernel_radius_mm}", "6"
+        ))
+        assert program is not None, example.question
+
+
 def test_engines_without_bank():
     assert load_examples("") == []
     assert load_examples("no-such-engine") == []

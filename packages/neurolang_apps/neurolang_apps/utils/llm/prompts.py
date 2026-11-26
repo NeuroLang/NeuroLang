@@ -99,6 +99,14 @@ per line; the query is the rule whose head is `ans(...)`.
   `PROB[a(x) // b(x)] = p`; a probability can be compared like any value:
   `ans(term, bayes_factor) :- bayes_factor(term, bayes_factor),
   (bayes_factor > 3.16)`.
+- An expected number or value over a probabilistic relation:
+  `ans(n) :- EXPECT[1 | term_association(s, t)] = n` sums the value
+  before the bar over the answers of the event, each weighted by its
+  probability (the sum is over all the variables of the event that are
+  not in the answer; project the others with `exists(d; ...)`), a
+  conditional `EXPECT[f(x) | a(x) // b(y)] = e`, and `EXPECT_NORM[...]`
+  for the mean knowing the event (it divides by the sum of the
+  probabilities). It replaces a sum over a PROB rule.
 - Distances: `(euclidean(i, j, k, 74, 130, 52) < 6)` keeps the points
   within 6 of a point; between the points of two relations it is fast
   only when both are stored relations, not rules.

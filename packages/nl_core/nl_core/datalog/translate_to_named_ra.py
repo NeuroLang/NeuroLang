@@ -208,6 +208,13 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             in_set = Selection(in_set, criterium)
 
         in_set = Projection(in_set, projections)
+        for arg in named_args:
+            if not isinstance(arg, Symbol):
+                raise ForbiddenExpressionError(
+                    "An expression calls a relation or a function that is "
+                    "not a builtin: a relation holds values, it cannot be "
+                    "called inside an expression"
+                )
         column_names = tuple(
             Constant[ColumnStr](ColumnStr(arg.name), verify_type=False)
             for arg in named_args

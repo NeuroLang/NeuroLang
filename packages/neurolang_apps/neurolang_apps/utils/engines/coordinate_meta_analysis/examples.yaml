@@ -1010,3 +1010,24 @@ assistant_examples:
       p_image(PROB) :- image_hit(s) & selected_study(s)
       term_studies(t, count(s)) :- term_in_study(s, t)
       ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
+
+  # An expected number or an expected value over the choice of a study:
+  # EXPECT[f | event] = e sums f over the answers of the event, each
+  # weighted by its probability (the probability of PROB); the variables
+  # of the event that are not in the answer are those summed, as the
+  # study s and the term t here. A count of the answers of a choice is
+  # not a count of AGGREGATE: no study is certain to be chosen. EXPECT_NORM
+  # divides by the sum of the probabilities (the mean knowing the event).
+  - question: How many terms does a study mention on average?
+    datalog: |-
+      term_association(s, t) :- mentions(s, t), selected_study(s)
+      ans(expected_terms) :- EXPECT[1 | term_association(s, t)] = expected_terms
+
+  # The event conditioned, // knowing: the variables of what is known are
+  # named apart (t, not s) so that the study of the event is the study
+  # chosen, whose closeness to the topic is known.
+  - question: How many gyri and sulci does a study about fear activate on average?
+    datalog: |-
+      active(l, s) :- destrieux_activated(l, s), selected_study(s)
+      close(q, s) :- similar_study(q, s), selected_study(s)
+      ans(expected_regions) :- EXPECT[1 | active(l, s) // close('fear', t)] = expected_regions
