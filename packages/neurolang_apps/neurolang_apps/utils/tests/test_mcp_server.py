@@ -681,7 +681,11 @@ def test_stop_queries_stops_a_running_query(monkeypatch):
     thread.start()
     while not validation._RUNNING and time.monotonic() - start < 10:
         time.sleep(0.05)
-    assert validation.stop_queries() == 1, (raised, thread.is_alive())
+    import sys
+    import traceback
+
+    where = traceback.format_stack(sys._current_frames().get(thread.ident))
+    assert validation.stop_queries() == 1, (raised, "".join(where))
     thread.join(10)
     assert raised == [True] and time.monotonic() - start < 10
     assert not validation._RUNNING and not validation._STOPPED
