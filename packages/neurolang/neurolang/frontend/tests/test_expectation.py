@@ -504,3 +504,54 @@ def test_the_parsed_rule_is_a_rule_for_the_other_consumers():
     assert {a.functor.name for a in extract_logic_atoms(rule.antecedent)} == {
         "roll", "flag"
     }
+
+
+@pytest.mark.parametrize("head", ("q(g, e, p)", "ans(g, e)"))
+def test_an_expectation_and_a_probability_in_one_rule(head):
+    """The expectation and the probability both join the head."""
+    program = (
+        f"{head} :- EXPECT[x | item(g, x)] = e, PROB[flag(y)] = p"
+    )
+    nl = _engine()
+    if head.startswith("q"):
+        nl.execute_datalog_program(program)
+        rows = _engine_rows(nl)
+    else:
+        rows = [
+            tuple(r) for r in nl.execute_datalog_program(program)
+            .as_pandas_dataframe().itertuples(index=False)
+        ]
+    p_flag = 1 - (1 - 0.6) * (1 - 0.3) * (1 - 0.5)
+    expected = _expectation(_items, lambda g, x: x)
+    assert [row[0] for row in sorted(rows)] == [g for (g,) in sorted(expected)]
+    for (_, e, p), (group, mean) in zip(sorted(rows), sorted(expected.items())):
+        assert (e, p) == pytest.approx((mean, p_flag))
+
+
+@pytest.mark.parametrize("program", (
+    "q(e) :- ~EXPECT[x | roll(x)] = e",
+    "q(e) :- EXPECT[x | roll(x)] = e | roll(e)",
+    "q(e) :- exists(y; EXPECT[x | roll(x)] = e)",
+    "q(p) :- PROB[EXPECT[x | roll(x)] = e] = p",
+    "q(e) :- EXPECT[x | EXPECT[y | roll(y)] = x] = e",
+))
+def test_an_expectation_is_a_conjunct_of_a_rule_body(program):
+    """Under a negation, a disjunction, a quantifier or another PROB or
+    EXPECT it is refused, not read as something else."""
+    with pytest.raises(NeuroLangException):
+        nl = _engine()
+        nl.execute_datalog_program(program)
+        nl.solve_all()
+
+
+def test_the_printer_shows_the_expectation():
+    from nl_core.datalog.pretty_printer import DatalogPrettyPrinter
+
+    from ..datalog.standard_syntax import parser
+
+    [rule] = parser(
+        "q(e) :- EXPECT_NORM[x | roll(x) // flag(y)] = e"
+    ).formulas
+    printed = DatalogPrettyPrinter().walk(rule)
+    assert "EXPECT_NORM[x | " in printed and "// " in printed
+    assert printed.endswith("= e")

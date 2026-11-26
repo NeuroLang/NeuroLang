@@ -22,13 +22,14 @@ from nl_expr.expressions import (
 from .expressions import Implication
 from .magic_sets import AdornedSymbol
 from nl_expr.logic import (
+    TRUE,
     Conjunction,
     Disjunction,
     Negation,
     ExistentialPredicate,
     UniversalPredicate,
 )
-from ..probabilistic.expressions import Condition
+from ..probabilistic.expressions import Condition, Expectation
 
 # Binary operators that should be printed infix.
 # Maps operator function → display symbol.
@@ -175,6 +176,16 @@ class DatalogPrettyPrinter(PatternWalker):
             f"({self.walk(f)})"
             if isinstance(f, (Conjunction, Disjunction)) else self.walk(f)
             for f in (expr.conditioned, expr.conditioning)
+        )
+
+    @add_match(Expectation)
+    def format_expectation(self, expr: Expectation) -> str:
+        event = self.walk(expr.event)
+        if expr.known != TRUE:
+            event += f" // {self.walk(expr.known)}"
+        return "EXPECT{}[{} | {}] = {}".format(
+            "_NORM" if expr.normalised.value else "", self.walk(expr.function),
+            event, self.walk(expr.result),
         )
 
     @add_match(ExpressionBlock)

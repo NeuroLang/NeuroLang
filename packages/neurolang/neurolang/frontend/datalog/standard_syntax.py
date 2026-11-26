@@ -526,10 +526,11 @@ class DatalogTransformer(Transformer):
             expectations = [
                 f for f in body_or_cond.formulas if isinstance(f, Expectation)
             ]
-            # the expectations join the head, as the probability of PROB
-            head = head.functor(*head.args, *(
-                e.result for e in expectations if e.result not in head.args
-            ))
+            if expectations:
+                # the expectations join the head, as the probability of PROB
+                head = head.functor(*head.args, *(
+                    e.result for e in expectations if e.result not in head.args
+                ))
             regular, prob_specs = self._extract_special_body_atoms(
                 body_or_cond
             )
@@ -566,19 +567,21 @@ class DatalogTransformer(Transformer):
         main = formulas[-1]
         if not isinstance(main, Implication):
             return result
-        if any(
+        aggregation = any(
             isinstance(arg, AggregationApplication)
             for arg in main.consequent.args
-        ) or any(
+        )
+        if aggregation or any(
             isinstance(f, Expectation)
             for f in getattr(main.antecedent, "formulas", ())
         ):
+            answer = head if aggregation else main.consequent
             fresh_pred_sym = Symbol.fresh()
             formulas[-1] = Implication(
                 fresh_pred_sym(*main.consequent.args), main.antecedent
             )
             formulas.append(
-                Query(head, Conjunction((fresh_pred_sym(*head.args),)))
+                Query(answer, Conjunction((fresh_pred_sym(*answer.args),)))
             )
         else:
             formulas[-1] = Query(main.consequent, main.antecedent)
