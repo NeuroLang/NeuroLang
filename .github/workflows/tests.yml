@@ -103,7 +103,7 @@ jobs:
     - name: Run the tests of ${{ matrix.package }}
       env:
         COVERAGE_FILE: .coverage.${{ matrix.package }}
-        COVERAGE: ${{ github.event_name == 'push' && matrix.python == '3.12' && 'yes' || '' }}
+        COVERAGE: ${{ github.event_name != 'nope' && matrix.python == '3.12' && 'yes' || '' }}
       run: >-
         uv run --no-sync python -m pytest packages/${{ matrix.package }}
         -n auto --tb=short --timeout=600 -ra
@@ -116,7 +116,7 @@ jobs:
       timeout-minutes: 10
 
     - name: Keep the coverage of ${{ matrix.package }}
-      if: github.event_name == 'push' && matrix.python == '3.12'
+      if: github.event_name != 'nope' && matrix.python == '3.12'
       uses: actions/upload-artifact@v4
       with:
         name: coverage-${{ matrix.package }}
@@ -127,7 +127,7 @@ jobs:
   # process runs the tests of all the packages.
   coverage:
     needs: test
-    if: github.event_name == 'push'
+    if: github.event_name != 'nope'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -156,6 +156,7 @@ jobs:
     # The badge has its branch: the benchmarks' dashboard is deployed to
     # gh-pages with keep_files false.
     - name: Publish badge to the badges branch
+      if: github.event_name == 'push'
       uses: peaceiris/actions-gh-pages@v4
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
