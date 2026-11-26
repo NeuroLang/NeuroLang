@@ -289,6 +289,52 @@ assistant_examples:
       p_co_active(l1, l2, p0) :- PROB[co_active(l1, l2, s)] = p0
       ans(region_1, region_2, lift) :- (region_1 < region_2), cogat_definition('fear', d), p_co_active_given_close(d, region_1, region_2, p), p_co_active(region_1, region_2, p0), (lift == p / p0)
 
+  # A graph of concepts: an edge per pair, concept_1 < concept_2, weighted
+  # by how close their studies are, by text (the lift of the studies
+  # closest to both definitions) or by activation (the correlation,
+  # across the regions, of the lifts of their activations). The
+  # definitions are bound in close itself: a rule of two texts,
+  # close(t1, s), close(t2, s), does not get them from the answer.
+  - question: Draw a graph of the kinds of memory of the Cognitive Atlas by the similarity of the abstracts of their studies
+    datalog: |-
+      node(t, d) :- cogat_term(c, 'memory'), cogat_subclass_of(x, c), cogat_term(x, t), cogat_definition(t, d)
+      close(t, s) :- node(t, d), similar_study(d, s), selected_study(s)
+      p_close(t, PROB) :- close(t, s)
+      p_both(t1, t2, PROB) :- close(t1, s), close(t2, s)
+      ans(concept_1, concept_2, lift) :- p_both(concept_1, concept_2, p), (concept_1 < concept_2), p_close(concept_1, p1), p_close(concept_2, p2), (lift == p / (p1 * p2))
+
+  - question: Draw a graph of the kinds of memory of the Cognitive Atlas by the co-activations of their studies
+    datalog: |-
+      node(t, d) :- cogat_term(c, 'memory'), cogat_subclass_of(x, c), cogat_term(x, t), cogat_definition(t, d)
+      active(l, s) :- schaefer400_activated(l, s), selected_study(s)
+      close(t, s) :- node(t, d), similar_study(d, s), selected_study(s)
+      p_active_given_close(t, l, PROB) :- active(l, s) // close(t, s)
+      p_active(l, PROB) :- active(l, s)
+      activation_lift(t, l, x) :- p_active_given_close(t, l, p), p_active(l, p0), (x == p / p0)
+      moments(t, mean(x), std(x)) :- activation_lift(t, l, x)
+      z(t, l, z) :- activation_lift(t, l, x), moments(t, m, sd), (z == (x - m) / sd)
+      correlation(t1, t2, mean(x)) :- z(t1, l, a), z(t2, l, b), (t1 < t2), (x == a * b)
+      ans(concept_1, concept_2, correlation) :- correlation(concept_1, concept_2, correlation)
+
+  # The ontology of the Cognitive Atlas as a tree: an edge per concept and
+  # the concept it is a kind of, its direct superclass (rdfs:subClassOf to
+  # a class, not to a restriction), by their labels. The root, the class
+  # of the concepts (a subclass of skos:Concept), has no label: it is
+  # named Concept, and its children are those with kinds of their own
+  # (most of its 451 have none).
+  - question: Show the Cognitive Atlas ontology as a tree, which concept is a kind of which
+    datalog: |-
+      has_kinds(y) :- rdfs:subClassOf(x, y), cogat_term(x, c), cogat_term(y, p)
+      kind_of(concept, parent) :- rdfs:subClassOf(x, y), startswith('http', y), cogat_term(x, concept), cogat_term(y, parent)
+      kind_of(concept, parent) :- rdfs:subClassOf(x, y), rdfs:subClassOf(y, <http://www.w3.org/2004/02/skos/core#Concept>), has_kinds(x), cogat_term(x, concept), (parent == 'Concept')
+      ans(concept, parent) :- kind_of(concept, parent)
+
+  - question: Show the part of the Cognitive Atlas ontology under memory
+    datalog: |-
+      under(c) :- cogat_term(c, 'memory')
+      under(x) :- cogat_term(c, 'memory'), cogat_subclass_of(x, c)
+      ans(concept, parent) :- under(x), rdfs:subClassOf(x, y), under(y), cogat_term(x, concept), cogat_term(y, parent)
+
   - question: Which cortical regions are co-activated with the left amygdala?
     datalog: |-
       amygdala(s) :- tian_activated('lAMY lh', s)
