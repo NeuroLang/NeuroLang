@@ -31,6 +31,16 @@ def test_text_and_numbers_are_not_joined(frontend, program):
 
 
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
+def test_the_message_says_the_same_in_both_orders(frontend):
+    messages = set()
+    for program in ("ans(t) :- m(s, t), u(t)", "ans(t) :- u(t), m(s, t)"):
+        with pytest.raises(IncompatibleJoinColumnsError) as error:
+            _engine(frontend).execute_datalog_program(program)
+        messages.add(str(error.value).split(" (types")[0])
+    assert len(messages) == 1
+
+
+@pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])
 def test_numbers_of_different_types_are_joined(frontend):
     nl = _engine(frontend)
     nl.add_tuple_set([(1, 5)], name="n")

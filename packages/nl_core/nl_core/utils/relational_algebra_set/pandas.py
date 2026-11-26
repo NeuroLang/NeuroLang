@@ -450,7 +450,12 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return output
 
     def _check_joinable(self, other, on):
-        """Raise if a column of *on* is text in one set, numbers in the other."""
+        """
+        Raise if a column of *on* is text in one set, numbers in the other:
+        pandas' merge does not compare the types when a set is empty.
+        """
+        if self.is_empty() or other.is_empty():
+            return
         for col in on:
             s_dtype = self._container[col].dtype
             o_dtype = other._container[col].dtype

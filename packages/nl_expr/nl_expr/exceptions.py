@@ -115,13 +115,14 @@ class IncompatibleJoinColumnsError(RelationalAlgebraError):
     the backends do not compare them.
     """
 
-    def __init__(self, column, left_type, right_type):
+    def __init__(self, column, type_a, type_b):
         super().__init__(
-            f"Cannot compare the column '{column}': it holds text "
-            f"({left_type}) in one relation and numbers ({right_type}) in "
-            "the other, and a text is never equal to a number. Check the "
-            "types of the columns that share this variable (the identifier "
-            "'1' is not the number 1) and convert one of them."
+            f"Cannot compare the column '{column}': one relation holds text "
+            f"and the other numbers (types {type_a} and {type_b}), and a "
+            "text is never equal to a number. Check the types of the "
+            "columns that share this variable (the identifier '1' is not "
+            "the number 1): the data of one of them may need to be loaded "
+            "as the other type."
         )
 
 
