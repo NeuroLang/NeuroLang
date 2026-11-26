@@ -920,7 +920,7 @@ def test_prob_body_conditional_with_filter():
 # ── New syntax: MARG body predicate ──────────────────────────────────────────
 
 def test_marg_body_simple():
-    """ans(x, p):-MARG[pred(x)]=p → fresh rule + query with conjunction-wrapped pred."""
+    """ans(x, p):-MARG[pred(x)]=p is the PROB of pred(x), by x."""
     ans = Symbol("ans")
     pred = Symbol("pred")
     x = Symbol("x")
@@ -932,12 +932,12 @@ def test_marg_body_simple():
 
     expected = Union((
         Implication(
-            fresh(FunctionApplication(PROB, (Conjunction((pred(x),)),))),
+            fresh(x, FunctionApplication(PROB, (x,))),
             Conjunction((pred(x),)),
         ),
         Query(
             ans(x, p),
-            Conjunction((fresh(p),)),
+            Conjunction((fresh(x, p),)),
         ),
     ))
     assert res == expected

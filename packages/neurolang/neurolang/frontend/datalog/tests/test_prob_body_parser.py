@@ -11,7 +11,11 @@ from lark import Tree, Token
 
 from nl_core.datalog import Conjunction, Fact, Implication, Union
 from nl_core.datalog.expressions import AggregationApplication
-from nl_expr.exceptions import UnexpectedCharactersError, UnexpectedTokenError
+from nl_expr.exceptions import (
+    NeuroLangFrontendException,
+    UnexpectedCharactersError,
+    UnexpectedTokenError,
+)
 from nl_expr.expressions import (
     Command,
     Constant,
@@ -25,7 +29,7 @@ from neurolang.frontend.datalog.tests.test_squall_parser import (
     ConditionAwareLogicWeakEquivalence,
     EQ,
 )
-from nl_expr.logic import Negation
+from nl_expr.logic import ExistentialPredicate, Negation
 from nl_core.probabilistic.expressions import (
     Condition,
     PROB,
@@ -160,13 +164,14 @@ def _parse(code):
 
 
 def test_marg_single_predicate():
-    """MARG with single predicate — hits _build_prob_rule MARG single branch."""
+    """MARG with a single predicate and no outside variable is the PROB
+    of the predicate."""
     result = _parse("derived(p) :- MARG[pc1(s)] = p.")
 
     expected = Union(
         (
             Implication(
-                Symbol("fresh_00000000")(PROB(Conjunction((pc1_(s_),)))),
+                Symbol("fresh_00000000")(PROB()),
                 Conjunction((pc1_(s_),)),
             ),
             Implication(derived_(p_), Conjunction((Symbol("fresh_00000000")(p_),))),
@@ -1469,24 +1474,21 @@ def test_add_prob_arg_to_conjunction_non_fa_non_conj():
 
 
 def test_classify_prob_predicate_negation_non_fa():
-    """_classify_prob_predicate with Negation whose inner formula is not a
-    FunctionApplication returns None (line 467)."""
-    from nl_expr.logic import Negation
-
+    """A negation of what is not an atom is classified by its free
+    variables, as any other formula."""
     neg = Negation(Constant(True))
     result = DatalogTransformer._classify_prob_predicate(neg)
-    assert result is None
+    assert result == ((), neg, False)
 
 
 def test_classify_prob_predicate_existential_non_fa_body():
-    """_classify_prob_predicate with ExistentialPredicate whose body attribute
-    is not a FunctionApplication returns None (line 475)."""
-    from nl_expr.logic import ExistentialPredicate
-
-    ep = ExistentialPredicate(Symbol("x"), Symbol("P")(Symbol("x")))
-    ep.__dict__["body"] = Constant(True)
+    """An existential over what is not an atom is classified by its free
+    variables: the bound one is not among them."""
+    body = Conjunction((Symbol("P")(Symbol("x"), Symbol("y")),
+                        Symbol("Q")(Symbol("y"))))
+    ep = ExistentialPredicate(Symbol("y"), body)
     result = DatalogTransformer._classify_prob_predicate(ep)
-    assert result is None
+    assert result == ((Symbol("x"),), ep, False)
 
 
 def test_classify_prob_predicate_unknown_type():
@@ -1658,3 +1660,24 @@ def test_marg_body_predicate_conditional():
     """marg_body_predicate conditional form (4-element ast, lines 795-802)."""
     result = _parse("ans(p) :- MARG[P(x) // Q(x)] = p.")
     assert isinstance(result, (Union, Implication))
+
+
+def test_an_event_that_cannot_be_classified_is_refused():
+    """A PROB or MARG over what the parser cannot classify is not dropped."""
+    t = DatalogTransformer()
+    head = Symbol("q")(Symbol("p"))
+    for marker in ("__PROB__", "__MARG__"):
+        spec = FunctionApplication(
+            Symbol(marker), (Symbol("event"), None, Symbol("p"))
+        )
+        with pytest.raises(NeuroLangFrontendException, match="event"):
+            t.rule([head, ":-", Conjunction((spec,))])
+
+
+@pytest.mark.parametrize("keyword", ["PROB", "MARG"])
+def test_an_existential_over_a_conjunction_is_kept(keyword):
+    result = _parse(
+        f"q(x, p) :- {keyword}[exists(y; s(x, y), t(y))] = p"
+    )
+    fresh_rule, main_rule = result.formulas
+    assert isinstance(fresh_rule.antecedent.formulas[0], ExistentialPredicate)

@@ -594,25 +594,14 @@ class DatalogTransformer(Transformer):
         """Extract (prob_vars, subject, is_marg) from a PROB/MARG spec predicate.
 
         Returns a tuple ``(prob_vars, subject, is_marg)`` or *None* for
-        unsupported predicate types (which are silently skipped).
+        unsupported predicate types.
         """
         if isinstance(pred, FunctionApplication):
             return pred.args, pred, False
         elif isinstance(pred, (Conjunction, Disjunction)):
             return (), pred, True
-        elif isinstance(pred, Negation):
-            inner = pred.formula
-            if isinstance(inner, FunctionApplication):
-                return inner.args, pred, False
-            return None
-        elif isinstance(pred, ExistentialPredicate):
-            body = getattr(pred, 'body', None)
-            if isinstance(body, FunctionApplication):
-                prob_vars = tuple(
-                    v for v in body.args if v != pred.head
-                )
-                return prob_vars, pred, False
-            return None
+        elif isinstance(pred, (Negation, ExistentialPredicate)):
+            return tuple(extract_logic_free_variables(pred)), pred, False
         return None
 
     @staticmethod
@@ -697,7 +686,9 @@ class DatalogTransformer(Transformer):
                 inner = pred.formulas[0]
             classified = self._classify_prob_predicate(inner)
             if classified is None:
-                continue
+                raise NeuroLangFrontendException(
+                    f"PROB and MARG cannot be applied to {inner}"
+                )
 
             _, subject, _ = classified
             is_marg = marker_name == "__MARG__"
@@ -715,31 +706,6 @@ class DatalogTransformer(Transformer):
             elif is_marg and self._is_compound(subject):
                 prob_vars = self._prob_vars_from_conjunction(subject, outside_connect)
                 fresh_body = subject
-            elif is_marg:
-                prob_vars = self._filter_prob_vars_outside(
-                    classified[0], outside_connect
-                )
-                formulas = (
-                    subject.formulas
-                    if isinstance(subject, Conjunction)
-                    else (subject,)
-                )
-                fresh_body = Conjunction(formulas)
-                if not prob_vars or not body_formulas:
-                    # No outside-connecting vars or no regular body atoms
-                    # alongside this MARG — PROB wraps the full conjunction.
-                    fresh_head = fresh_pred_sym(
-                        FunctionApplication(
-                            PROB, (Conjunction(formulas),)
-                        )
-                    )
-                    query_body_atoms.append(fresh_pred_sym(result_var))
-                    fresh_rules.append(
-                        Implication(fresh_head, fresh_body)
-                    )
-                    if result_var not in head_args:
-                        head_args.append(result_var)
-                    continue
             elif self._is_compound(subject):
                 prob_vars = self._prob_vars_from_conjunction(subject, outside_connect)
                 fresh_body = subject

@@ -469,6 +469,10 @@ This computes :math:`P(\exists s.\ \mathtt{selected\_study}(s) \land
 
     ans(r, p) :- MARG[active_region(r) // mentioned_term('face')] = p.
 
+The event of ``PROB`` and ``MARG`` may hold an ``exists`` over a conjunction
+or a disjunction, ``PROB[exists(s; selected_study(s), mentions(s, t))] = p``;
+the variables it binds are projected, the others are those of the answer.
+
 5.4 SUCC — Success Probability
 -------------------------------
 
