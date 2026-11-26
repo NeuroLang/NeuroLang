@@ -23,6 +23,7 @@ from nl_core.probabilistic import (
     small_dichotomy_theorem_based_solver,
 )
 from nl_core.probabilistic.exceptions import (
+    DistributionDoesNotSumToOneError,
     ForbiddenConditionalQueryNonConjunctive,
     RepeatedTuplesInProbabilisticRelationError,
     UnsupportedSolverError,
@@ -999,6 +1000,47 @@ def test_forbidden_query_on_probabilistic_predicate():
         with nl.scope as e:
             e.Q[e.x] = A[e.x] & B[e.x] & A["b"]
             nl.query((e.x,), e.Q[e.x])
+
+
+@pytest.mark.parametrize("query, condition", [
+    (
+        "ans(d, o) :- test_evidence(d, 'ZSCAN12', 'AD'), dataset_organ(d, o)",
+        "ans(d, o, p) :- PROB[test_evidence(d, 'ZSCAN12', 'AD'), "
+        "dataset_organ(d, o)] = p",
+    ),
+    (
+        "ans[a](d) :- test_evidence(d, 'ZSCAN12', 'AD')\n"
+        "ans[b](d, o) :- dataset_organ(d, o)",
+        None,
+    ),
+])
+def test_query_on_probabilistic_predicate_error_writes_its_prob_query(
+    query, condition
+):
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [(0.3, "d1", "ZSCAN12", "AD"), (0.6, "d2", "ZSCAN12", "AD")],
+        name="test_evidence",
+    )
+    nl.add_tuple_set([("d1", "brain"), ("d2", "liver")], name="dataset_organ")
+    with pytest.raises(UnsupportedQueryError) as error:
+        nl.execute_datalog_program(query)
+    message = str(error.value)
+    assert "test_evidence is probabilistic" in message
+    assert "put the whole condition inside PROB[...]" in message
+    queries = message.split("`")[1::2]
+    assert queries[0] == (
+        "ans(d, p) :- PROB[test_evidence(d, 'ZSCAN12', 'AD')] = p"
+    )
+    assert queries[1:] == ([condition] if condition else [])
+    expected = {("d1", 0.3), ("d2", 0.6)}
+    rows = nl.execute_datalog_program(queries[0]).as_pandas_dataframe()
+    assert set(rows.itertuples(index=False)) == expected
+    if condition:
+        rows = nl.execute_datalog_program(condition).as_pandas_dataframe()
+        assert set(rows.itertuples(index=False)) == {
+            ("d1", "brain", 0.3), ("d2", "liver", 0.6)
+        }
 
 
 def test_empty_boolean_query_result():
@@ -3068,3 +3110,66 @@ def test_exists_in_the_rule_of_the_query(query, without):
         expected = set(nl.execute_datalog_program(without))
     assert expected
     assert set(nl.execute_datalog_program(query)) == expected
+
+
+CHOICE_FACTS = {"a": 0.3, "b": 0.5, "c": 0.2}
+FACT_PROBABILITIES = {"a": 0.6, "c": 0.4}
+
+
+@pytest.mark.parametrize("facts", (
+    "0.3 ^ choice('a').\n0.7 ^ choice('b').",
+    "0.3 ^ choice('a').\n0.5 ^ choice('b').\n0.2 ^ choice('c')."
+))
+def test_choice_facts_of_one_predicate(facts):
+    """Facts ``p ^ choice(v)`` are the alternatives of one choice."""
+    nl = NeurolangPDL()
+    nl.execute_datalog_program(
+        facts + "\nq(x, p) :- PROB[choice(x)] = p"
+    )
+    found = dict(
+        tuple(r) for r in nl.solve_all()["q"].as_pandas_dataframe().values
+    )
+    expected = {
+        v: float(p) for p, v in (
+            (f.split(" ^ ")[0], f.split("'")[1]) for f in facts.split("\n")
+        )
+    }
+    assert found == pytest.approx(expected)
+
+
+def test_choice_facts_against_the_possible_worlds():
+    """P[choice(x) and f(x)] with a choice given by facts and independent
+    facts, by the lifted solvers, against the enumeration of the worlds."""
+    nl = NeurolangPDL(
+        probabilistic_solvers=(dalvi_suciu_lift.solve_succ_query,),
+        probabilistic_marg_solvers=(dalvi_suciu_lift.solve_marg_query,),
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [(p, v) for v, p in FACT_PROBABILITIES.items()], name="f"
+    )
+    nl.execute_datalog_program(
+        "\n".join(f"{p} ^ choice('{v}')." for v, p in CHOICE_FACTS.items())
+        + "\nq(x, p) :- PROB[choice(x), f(x)] = p"
+    )
+    found = {
+        r[0]: r[1] for r in nl.solve_all()["q"].as_pandas_dataframe().values
+    }
+    expected = {}
+    for chosen, p_choice in CHOICE_FACTS.items():
+        for present in itertools.product((False, True), repeat=2):
+            world = dict(zip(FACT_PROBABILITIES, present))
+            p = p_choice
+            for v, is_present in world.items():
+                q = FACT_PROBABILITIES[v]
+                p *= q if is_present else 1 - q
+            if world.get(chosen):
+                expected[chosen] = expected.get(chosen, 0) + p
+    assert found == pytest.approx(expected)
+
+
+def test_choice_facts_must_sum_to_one():
+    nl = NeurolangPDL()
+    with pytest.raises(DistributionDoesNotSumToOneError):
+        nl.execute_datalog_program(
+            "0.3 ^ choice('a').\n0.3 ^ choice('b')."
+        )

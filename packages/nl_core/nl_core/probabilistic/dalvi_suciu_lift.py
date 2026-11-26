@@ -124,6 +124,7 @@ from .non_repeating_lift import (
 from .ranking import (
     partially_rank_query,
     rank_query,
+    selected_relation,
     verify_that_the_query_is_ranked
 )
 from .shattering import EQ, GT, LT, NE, shatter_constants
@@ -385,7 +386,9 @@ def _prepare_and_optimise_query(
         deterministic_relations or {}, unified_query.antecedent,
         symbol_table, lambda s, _: DeterministicFactSet(s)
     )
-    ucq = convert_rule_to_ucq(unified_query)
+    ucq = rename_disjoint_restrictions(
+        convert_rule_to_ucq(unified_query), symbol_table
+    )
     shattered_query_body = shatter_constants(
         ExcludedConstants(ucq, symbol_table).walk(ucq), symbol_table
     )
@@ -2564,6 +2567,9 @@ def find_separator_variables(query, symbol_table):
     for var in candidates:
         atom_positions = {}
         for atom in all_atoms:
+            if is_atom_a_deterministic_relation(atom, symbol_table):
+                # True or false in every world, as in Q1(a) as in Q1(b).
+                continue
             functor = atom.functor
             pos_ = {i for i, v in enumerate(atom.args) if v == var}
             if any(
@@ -2653,6 +2659,32 @@ def _determined_variables(variables, clauses, symbol_table):
     return variables
 
 
+def _deterministic_atoms(formulas, symbol_table):
+    """The positive deterministic atoms among *formulas*."""
+    return [
+        f for f in formulas
+        if isinstance(f, FunctionApplication)
+        and is_atom_a_deterministic_relation(f, symbol_table)
+    ]
+
+
+def _allowed_values(atom, position, symbol_table, cache):
+    """The values at *position* of the tuples of the deterministic
+    *atom*'s relation with its constants, as a set, kept in *cache*."""
+    if (atom, position) not in cache:
+        relation = _deterministic_relation(atom, symbol_table)
+        values = frozenset()
+        if not relation.is_empty():
+            # Its columns may be unknown, and its atom is false.
+            data = relation.as_pandas_dataframe()
+            for i, arg in enumerate(atom.args):
+                if isinstance(arg, Constant):
+                    data = data[data.iloc[:, i] == arg.value]
+            values = frozenset(data.iloc[:, position].unique())
+        cache[atom, position] = values
+    return cache[atom, position]
+
+
 class ExcludedConstants(ExpressionWalker):
     """
     In a conjunction, ``v ≠ c`` for a variable ``v`` at a position of a
@@ -2677,7 +2709,7 @@ class ExcludedConstants(ExpressionWalker):
                         self.constants.setdefault(
                             (atom.functor, i), set()
                         ).add(arg)
-        self._columns = {}
+        self._values = {}
 
     @add_match(FunctionApplication)
     def atom(self, atom):
@@ -2689,11 +2721,7 @@ class ExcludedConstants(ExpressionWalker):
         if not self.constants:
             return conjunction
         formulas = tuple(self.walk(f) for f in conjunction.formulas)
-        deterministic = [
-            f for f in formulas
-            if isinstance(f, FunctionApplication)
-            and is_atom_a_deterministic_relation(f, self.symbol_table)
-        ]
+        deterministic = _deterministic_atoms(formulas, self.symbol_table)
         excluded = {}
         for atom in formulas:
             if not isinstance(atom, FunctionApplication):
@@ -2701,7 +2729,9 @@ class ExcludedConstants(ExpressionWalker):
             for i, arg in enumerate(atom.args):
                 for constant in self.constants.get((atom.functor, i), ()):
                     if isinstance(arg, Symbol) and any(
-                        self._absent(d, j, constant)
+                        constant.value not in _allowed_values(
+                            d, j, self.symbol_table, self._values
+                        )
                         for d in deterministic
                         for j, other in enumerate(d.args) if other == arg
                     ):
@@ -2712,18 +2742,157 @@ class ExcludedConstants(ExpressionWalker):
             return conjunction
         return Conjunction(formulas + excluded)
 
-    def _absent(self, atom, position, constant):
-        """Whether no tuple of *atom*'s relation has *constant* at
-        *position*."""
-        key = (atom.functor, position)
-        if key not in self._columns:
-            relation = _deterministic_relation(atom, self.symbol_table)
-            self._columns[key] = None if relation.is_empty() else set(
-                relation.as_pandas_dataframe().iloc[:, position].unique()
-            )
-        values = self._columns[key]
-        return values is not None and constant.value not in values
 
+class AtomsInScope(ExpressionWalker):
+    """
+    *query* with each atom ``A`` of a relation (a symbol) replaced by
+    ``rewrite(A, scope)``, *scope* being the positive deterministic atoms
+    of the conjunctions with a formula containing ``A``, without those
+    with a variable quantified between them and ``A``.
+    """
+
+    def __init__(self, symbol_table, rewrite):
+        self.symbol_table = symbol_table
+        self.rewrite = rewrite
+        self._scope = ()
+
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        scope = self._scope
+        self._scope += tuple(
+            _deterministic_atoms(conjunction.formulas, self.symbol_table)
+        )
+        formulas = tuple(self.walk(f) for f in conjunction.formulas)
+        self._scope = scope
+        if all(f is g for f, g in zip(formulas, conjunction.formulas)):
+            return conjunction
+        return Conjunction(formulas)
+
+    @add_match(Quantifier)
+    def quantifier(self, quantifier):
+        scope = self._scope
+        self._scope = tuple(
+            d for d in scope if quantifier.head not in d.args
+        )
+        body = self.walk(quantifier.body)
+        self._scope = scope
+        if body is quantifier.body:
+            return quantifier
+        return quantifier.apply(quantifier.head, body)
+
+    @add_match(FunctionApplication(Symbol, ...))
+    def atom(self, atom):
+        return self.rewrite(atom, self._scope)
+
+
+def _restriction(atom, scope, symbol_table, cache):
+    """The *restriction* of an atom ``R(..., v, ...)`` of a
+    tuple-independent relation is the set of the values allowed at each of
+    its positions: its constant, or the values of the positive
+    deterministic atoms ``D(..., v, ...)`` of its *scope* (`AtomsInScope`)
+    at ``v``'s position in their tuples with their constants. In the
+    scope, the atom only holds for tuples of ``R`` with these values
+    (``te(d1, g)`` with ``organ(d1, 'brain')``: those of the datasets of
+    the brain). Returns the restriction, a dict from position to values,
+    and whether a deterministic atom restricts it."""
+    restriction = {
+        i: frozenset((arg.value,))
+        for i, arg in enumerate(atom.args) if isinstance(arg, Constant)
+    }
+    deterministic = False
+    for d in scope:
+        for (i, arg), (j, other) in product(
+            enumerate(atom.args), enumerate(d.args)
+        ):
+            if isinstance(arg, Symbol) and arg == other:
+                values = _allowed_values(d, j, symbol_table, cache)
+                restriction[i] = restriction.get(i, values) & values
+                deterministic = True
+    return restriction, deterministic
+
+
+def rename_disjoint_restrictions(query, symbol_table):
+    """
+    *query* with each atom of a tuple-independent relation ``R`` replaced
+    by an atom of the relation of the tuples of ``R`` its restriction
+    selects (`_restriction`), when the atoms of ``R`` have several
+    restrictions, a deterministic atom restricting one, and any two of
+    them allow disjoint sets of values at a position, selecting disjoint
+    sets of tuples: the relations are then independent, and the query
+    equivalent (``te(d1, g) ∧ organ(d1, 'brain') ∧ te(d2, g) ∧ organ(d2,
+    'blood')``, a dataset having one organ, is ``te_brain(d1, g) ∧
+    organ(d1, 'brain') ∧ te_blood(d2, g) ∧ organ(d2, 'blood')``, without
+    the self-join). The relations are added to *symbol_table*.
+    """
+    # The columns of the deterministic atoms are read only for the
+    # relations with several atoms.
+    occurrences = Counter(
+        atom.functor for _, atom in expression_iterator(query)
+        if isinstance(atom, FunctionApplication)
+        and isinstance(atom.functor, Symbol)
+        and is_atom_a_probabilistic_fact_relation(atom, symbol_table)
+    )
+    functors = {f for f, n in occurrences.items() if n > 1}
+    if not functors:
+        return query
+    cache, restrictions, renamed = {}, {}, {}
+
+    def visit(atom, scope):
+        """Records the restriction of the atom, with its relation's arity
+        and whether a deterministic atom restricts it, and renames it."""
+        if atom.functor not in functors:
+            return atom
+        restriction, deterministic = _restriction(
+            atom, scope, symbol_table, cache
+        )
+        key = (atom.functor, tuple(sorted(restriction.items())))
+        restrictions[key] = (
+            len(atom.args),
+            deterministic or restrictions.get(key, (0, False))[1]
+        )
+        return renamed[key](*atom.args) if key in renamed else atom
+
+    AtomsInScope(symbol_table, visit).walk(query)
+    by_relation = {}
+    for (functor, restriction), (arity, deterministic) in (
+        restrictions.items()
+    ):
+        by_relation.setdefault(functor, []).append(
+            (restriction, arity, deterministic)
+        )
+    for functor, group in by_relation.items():
+        if len(group) < 2 or not any(r[2] for r in group):
+            continue
+        if not all(
+            _allow_disjoint_values(first, second)
+            for (first, _, _), (second, _, _) in combinations(group, 2)
+        ):
+            continue
+        for restriction, arity, _ in group:
+            symbol = Symbol.fresh()
+            symbol_table[symbol] = selected_relation(
+                functor,
+                lambda value, offset, restriction=restriction: (
+                    value.selection({
+                        i + offset: values.__contains__
+                        for i, values in restriction
+                    })
+                ),
+                range(arity), symbol_table
+            )
+            renamed[functor, restriction] = symbol
+    if not renamed:
+        return query
+    return AtomsInScope(symbol_table, visit).walk(query)
+
+
+def _allow_disjoint_values(first, second):
+    """Whether the restrictions *first* and *second* allow disjoint sets
+    of values at a position."""
+    second = dict(second)
+    return any(
+        values.isdisjoint(second[i]) for i, values in first if i in second
+    )
 
 def _deterministic_relation(atom, symbol_table):
     """The tuples of the deterministic *atom*'s relation."""

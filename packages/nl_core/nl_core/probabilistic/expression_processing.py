@@ -55,7 +55,13 @@ from nl_expr.logic.transformations import (
 from ..relational_algebra import Projection, RelationalAlgebraSolver
 from nl_expr.utils.orderedset import OrderedSet
 from .exceptions import DistributionDoesNotSumToOneError
-from .expressions import PROB, ProbabilisticPredicate, ProbabilisticFact, ProbabilisticQuery
+from .expressions import (
+    PROB,
+    ProbabilisticChoice,
+    ProbabilisticPredicate,
+    ProbabilisticFact,
+    ProbabilisticQuery,
+)
 
 
 def is_probabilistic_fact(expression):
@@ -85,6 +91,16 @@ def is_probabilistic_fact(expression):
     )
 
 
+def is_probabilistic_choice_fact(expression):
+    """Whether the expression is a choice ``p ^ P(c1, ..., cn)``."""
+    return (
+        isinstance(expression, Implication)
+        and isinstance(expression.consequent, ProbabilisticChoice)
+        and isinstance(expression.consequent.body, FunctionApplication)
+        and expression.antecedent == TRUE
+    )
+
+
 def is_query_based_probpredicate(expression):
     return (
         isinstance(expression, Implication)
@@ -93,11 +109,13 @@ def is_query_based_probpredicate(expression):
     )
 
 
-def group_probabilistic_facts_by_pred_symb(union):
+def group_probabilistic_facts_by_pred_symb(
+    union, is_fact=is_probabilistic_fact
+):
     probfacts = collections.defaultdict(list)
     non_probfacts = list()
     for expression in union.formulas:
-        if is_probabilistic_fact(expression):
+        if is_fact(expression):
             probfacts[expression.consequent.body.functor].append(expression)
         else:
             non_probfacts.append(expression)
@@ -111,8 +129,8 @@ def const_or_symb_as_python_type(exp):
         return exp.name
 
 
-def build_probabilistic_fact_set(pred_symb, pfacts):
-    iterable = [
+def probabilistic_fact_tuples(pfacts):
+    return [
         (const_or_symb_as_python_type(pf.consequent.probability),)
         + tuple(
             const_or_symb_as_python_type(arg)
@@ -120,6 +138,10 @@ def build_probabilistic_fact_set(pred_symb, pfacts):
         )
         for pf in pfacts
     ]
+
+
+def build_probabilistic_fact_set(pred_symb, pfacts):
+    iterable = probabilistic_fact_tuples(pfacts)
     ras = WrappedRelationalAlgebraSet(iterable)
     return Constant[AbstractSet[ras.row_type]](
         ras, auto_infer_type=False, verify_type=False
@@ -205,6 +227,10 @@ def add_to_union(union, to_add):
 
 def union_contains_probabilistic_facts(union):
     return any(is_probabilistic_fact(exp) for exp in union.formulas)
+
+
+def union_contains_probabilistic_choice_facts(union):
+    return any(is_probabilistic_choice_fact(exp) for exp in union.formulas)
 
 
 def separate_deterministic_probabilistic_code(

@@ -226,6 +226,20 @@ Unreleased
 
 **Performance:**
 
+- Lifted inference: the separator variable of a query need not be in the
+  atoms of a deterministic relation, as ``organ`` in ``te_brain(d1, g),
+  organ(d1, 'brain'), te_blood(d2, g), organ(d2, 'blood')``, which was
+  declined to weighted model counting because ``organ`` is in two atoms
+  without ``g``. See doc/probabilistic_lifting.rst, "Deterministic atoms
+  of a separator variable".
+- Lifted inference: the atoms of a tuple-independent relation selecting,
+  by the deterministic atoms in their scope, disjoint sets of its tuples
+  are atoms of new relations of these tuples
+  (``rename_disjoint_restrictions``), without the self-join: the union
+  ``R(x), S(x, y), D1(y)`` or ``S(x, y), T(y), D2(y)``, with ``D1`` and
+  ``D2`` deterministic and disjoint, is lifted. See
+  doc/probabilistic_lifting.rst, "Tuples deterministic atoms select
+  disjointly".
 - Lifted inference: a conjunction implies ``v != c`` when a positive
   deterministic atom of it has ``v`` where none of its tuples has the
   constant ``c`` of an atom of a probabilistic relation at ``v``'s
@@ -379,6 +393,12 @@ Unreleased
   ``VERSION`` is 2, so caches kept by earlier versions are found again once.
 
 **Bug fixes:**
+
+- The choice facts of one predicate, ``0.3 ^ choice('a'). 0.7 ^ choice('b').``
+  (the example of the tutorial, 10.6), are the alternatives of one choice,
+  as the ``::`` facts of a predicate are one relation; the second one used to
+  fail with "Probabilistic choice already defined". Their probabilities must
+  sum to 1.
 
 - Magic sets: a query of the WMQL bundles ``uf``, ``ilf``, ``af`` or
   ``ec`` on the Disconnectome engines fits in memory again. Since the

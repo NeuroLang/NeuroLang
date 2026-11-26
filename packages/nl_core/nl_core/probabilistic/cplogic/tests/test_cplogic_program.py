@@ -21,6 +21,7 @@ from ...exceptions import (
 from ...expressions import (
     PROB,
     Condition,
+    ProbabilisticChoice,
     ProbabilisticFact,
     ProbabilisticQuery,
 )
@@ -222,6 +223,48 @@ def test_add_probchoice_does_not_sum_to_one():
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
+
+
+def _choice_facts(*facts):
+    return Union(tuple(
+        Implication(ProbabilisticChoice(Constant(p), P(Constant(v))), TRUE)
+        for p, v in facts
+    ))
+
+
+def test_choice_facts_of_a_predicate_are_one_choice():
+    cpl = CPLogicProgram()
+    cpl.walk(_choice_facts((0.2, "a"), (0.3, "b"), (0.5, "c")))
+    assert cpl.pchoice_pred_symbs == {P}
+    expected = CPLogicProgram()
+    expected.add_probabilistic_choice_from_tuples(
+        P, {(0.2, "a"), (0.3, "b"), (0.5, "c")}
+    )
+    assert cpl.symbol_table[P].value == expected.symbol_table[P].value
+
+
+def test_choice_facts_do_not_sum_to_one():
+    with pytest.raises(DistributionDoesNotSumToOneError):
+        CPLogicProgram().walk(_choice_facts((0.2, "a"), (0.3, "b")))
+
+
+def test_choice_facts_and_a_choice_rule_of_one_predicate():
+    rule = Implication(ProbabilisticChoice(Constant(0.5), P(x)), Q(x))
+    cpl = CPLogicProgram()
+    cpl.walk(_choice_facts((0.4, "a"), (0.6, "b")))
+    with pytest.raises(ForbiddenDisjunctionError):
+        cpl.walk(rule)
+    cpl = CPLogicProgram()
+    cpl.walk(rule)
+    with pytest.raises(ForbiddenDisjunctionError):
+        cpl.walk(_choice_facts((0.4, "a"), (0.6, "b")))
+
+
+def test_choice_facts_defined_twice():
+    cpl = CPLogicProgram()
+    cpl.walk(_choice_facts((0.4, "a"), (0.6, "b")))
+    with pytest.raises(ForbiddenDisjunctionError):
+        cpl.walk(_choice_facts((0.4, "a"), (0.6, "b")))
 
 
 def test_within_language_succ_query():
