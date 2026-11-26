@@ -36,6 +36,7 @@ from ..relational_algebra import (
     Union,
     get_expression_columns
 )
+from ..relational_algebra.optimisers import join_in_chunks
 from ..relational_algebra.relational_algebra import str2columnstr_constant
 from nl_expr.type_system import is_leq_informative
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
@@ -396,10 +397,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @staticmethod
     def natural_join(formulas):
-        output = formulas[0]
-        for formula in formulas[1:]:
-            output = NaturalJoin(output, formula)
-        return output
+        return join_in_chunks(formulas)
 
     @staticmethod
     def join_on_computed_columns(sources, targets, new_columns):

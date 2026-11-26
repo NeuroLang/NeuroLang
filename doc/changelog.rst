@@ -411,6 +411,16 @@ Unreleased
   row is not compared (as pandas did), and the comparison ``(t == 1)`` of a
   text is still false.
 
+- The joins of a conjunction of hundreds of atoms are no longer a tree as deep
+  as they are many, which the walkers that optimise and solve a plan recurse
+  on one level per join: the optimiser of the plans of a probabilistic query
+  failed with a ``RecursionError`` at about 250 joined relations. The
+  translation of a rule body to relational algebra, the greedy ordering of the
+  joins of the plans and the independent join of the lifted plans join in
+  chunks of 16 operands where the operands each share a column with the one
+  before (``join_in_chunks``); fewer operands, and a chain whose operands share
+  none with the one before, are joined as before.
+
 - The choice facts of one predicate, ``0.3 ^ choice('a'). 0.7 ^ choice('b').``
   (the example of the tutorial, 10.6), are the alternatives of one choice,
   as the ``::`` facts of a predicate are one relation; the second one used to
@@ -425,9 +435,7 @@ Unreleased
   once per formula. They now loop, and the standardisation takes the free
   variables of each formula once, not those of the formulas left at each
   step (150 comparisons: 3.6 s to 1.3 s; 200 atoms of 200 relations on one
-  variable: 28 s to 15 s). A conjunction of about 245 joined relations still
-  exceeds the limit, in the relational algebra optimiser, which walks the
-  chain of joins recursively. The selection of the shattering nests the
+  variable: 28 s to 15 s). The selection of the shattering nests the
   conditions differently above 16 of them.
 
 - Magic sets: a query of the WMQL bundles ``uf``, ``ilf``, ``af`` or
