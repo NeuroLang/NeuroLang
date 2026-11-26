@@ -102,6 +102,17 @@ def test_equality_constant_symbol():
     assert res == expected_result
 
 
+def test_a_relation_called_inside_an_expression_is_refused():
+    """``S(x, 1)`` is the atom of a relation, not a value to multiply."""
+    x, v, p = S_("x"), S_("v"), S_("p")
+    R1, R2 = S_("R1"), S_("R2")
+    body = Conjunction(
+        (R1(x, p), EQ(v, C_(mul)(R2(x, C_(1)), p)))
+    )
+    with pytest.raises(exceptions.ForbiddenExpressionError, match="relation"):
+        TranslateToNamedRA().walk(body)
+
+
 def test_equality_symbols():
     x = S_("x")
     y = S_("y")

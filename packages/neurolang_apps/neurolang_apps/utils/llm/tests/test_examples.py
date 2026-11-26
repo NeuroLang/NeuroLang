@@ -105,20 +105,16 @@ def test_bank_answers_name_their_columns(engine):
     assert not short, "\n".join(short)
 
 
-def test_the_expectation_examples_parse():
-    """The examples of EXPECT are written in the syntax the parser reads."""
+@pytest.mark.parametrize("engine", BANK_ENGINES)
+def test_bank_queries_parse(engine):
+    """Every Datalog example is written in the syntax the parser reads (the
+    engine-level check below needs the data of the engines)."""
     from neurolang.frontend.datalog.standard_syntax import parser
 
-    expectations = [
-        example for example in load_examples("neurosynth")
-        if "EXPECT" in (example.query("datalog") or "")
-    ]
-    assert len(expectations) >= 2
-    for example in expectations:
-        program = parser(example.query("datalog").replace(
-            "{kernel_radius_mm}", "6"
-        ))
-        assert program is not None, example.question
+    for example in load_examples(engine):
+        query = example.query("datalog")
+        if query:
+            parser(query.replace("{kernel_radius_mm}", "6"))
 
 
 def test_engines_without_bank():
