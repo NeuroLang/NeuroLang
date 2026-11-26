@@ -17,6 +17,8 @@ const DATALOG = "tutorial_datalog.html";
 // explains them (a test checks the headings exist).
 export const TOPICS = {
   PROB: ["PROB[query] = p is the probability of a query over a probabilistic choice", `${DATALOG}#prob-marginal-probability`],
+  EXPECT: ["EXPECT[f | event] = e is the expected value of f summed over the answers of a probabilistic event", `${DATALOG}#expect-expected-values`],
+  EXPECT_NORM: ["EXPECT_NORM[f | event] = e is that expected value divided by the sum of the probabilities of the answers", `${DATALOG}#expect-expected-values`],
   MARG: ["MARG[query] = p is the marginal probability of a conjunction", `${DATALOG}#marg-marginal-probability-of-a-conjunction`],
   SUCC: ["SUCC is the success probability of a query", `${DATALOG}#succ-success-probability`],
   AGGREGATE: ["AGGREGATE[group](body @ f(x)) = r summarises x with count, sum, mean, percentile…", `${DATALOG}#aggregation`],

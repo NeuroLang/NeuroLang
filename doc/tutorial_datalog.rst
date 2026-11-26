@@ -480,8 +480,9 @@ Use ``PROB`` instead.
 ``EXPECT[f | a] = e`` binds ``e`` to the expected value of ``f`` summed over
 the tuples of the probabilistic query ``a``. ``f`` is any deterministic
 expression of the variables of ``a`` (arithmetic, a function such as
-``log(w)``, a constant); ``a`` is a conjunction, possibly with a comparison,
-a negation or an ``exists``, over probabilistic and deterministic relations.
+``log(w)``, a constant); ``a`` is a query over probabilistic and deterministic relations, as the
+argument of ``PROB`` (the lifted solvers plan it as the ``PROB`` rule it is
+rewritten to, see below).
 The separator of ``f`` and ``a`` is ``|``, which is a disjunction inside
 ``a`` (``EXPECT[f | a | b]`` is the expectation over ``a`` or ``b``).
 
@@ -494,9 +495,12 @@ another atom of its body) are its *grouping variables* :math:`g`; the others,
     \mathbb{E}[f(g, x) \mid a(g, x)] \;=\; \sum_{x} f(g, x)\,
     P[a(g, x)]
 
-with one row per value of :math:`g`. As in ``PROB``, a variable of ``a``
-that is not to be summed is written under an ``exists`` (``EXPECT[w | exists(y;
-a(x, y)), score(x, w)]`` sums over the :math:`x` alone).
+with one row per value of :math:`g`. This differs from ``PROB``, which
+marginalises the variables of its argument that occur nowhere else in the
+rule: ``EXPECT`` sums them. A variable that is not to be summed is
+written under an ``exists`` (``EXPECT[w | exists(y; a(x, y)), score(x, w)]``
+sums over the :math:`x` alone). The result variable joins the head of the
+rule, as the probability of ``PROB`` does.
 
 .. nl-repl::
 
@@ -512,7 +516,7 @@ studies of their number of terms. The sum is over the pairs
 
 .. nl-repl::
 
-    ans(r, n) :- EXPECT[1 | selected_study(s), mentions(s, t), activates(s, r)] = n
+    ans(r, n) :- EXPECT[1 | selected_study(s), mentions(s, t), destrieux_activated(r, s)] = n
 
 **Why it is right.** Let :math:`S_g(W) = \{x : W \models a(g, x)\}` be the
 random set of answers of ``a`` in a possible world :math:`W`, and
@@ -551,11 +555,16 @@ one aggregation over its answers,
     ans(g, e) :- ex(g, e)
 
 The aggregation sums over the rows of the body, which keep :math:`x`, so two
-tuples with the same value of :math:`f \cdot p` both count. An error is
-raised when ``f`` uses a variable that ``a`` does not bind (``a`` must
-range-restrict ``f``), when ``f`` holds a probabilistic expression
-(``PROB``, ``EXPECT``, an aggregation), or when ``a`` is not an event
-(a bare comparison, without a relation to bind its variables).
+tuples with the same value of :math:`f \cdot p` both count. Three
+cases are refused when the program is read: ``f`` uses a variable that
+``a`` does not bind (``a`` must range-restrict ``f``), ``a`` has no
+variable to sum, and an ``EXPECT`` is inside an ``AGGREGATE``. ``f`` is
+deterministic: it is built of the variables, constants, arithmetic and
+builtin functions; a relation, probabilistic or not, called in ``f``
+(``EXPECT[score(x) | a(x)]`` with ``score`` a relation) is refused when the
+program is solved, with an error that says that a relation cannot be called
+inside an expression. For the value of a relation write it in the event,
+``EXPECT[v | a(x), score(x, v)]``.
 
 **Conditioning.** ``//`` conditions as in ``PROB``: for each
 :math:`(g, x)`,
@@ -570,7 +579,7 @@ the expected sum over the answers of ``a`` knowing ``c``:
 
 .. nl-repl::
 
-    ans(r, n) :- EXPECT[1 | selected_study(s), activates(s, r) // mentioned_term('face')] = n
+    ans(r, n) :- EXPECT[1 | selected_study(s), destrieux_activated(r, s) // selected_study(u), mentions(u, 'face')] = n
 
 A variable that ``c`` shares with ``a`` is a variable of the answer, and
 it is the event of each :math:`(g, x)` that conditions its own term, as in

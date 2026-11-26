@@ -421,3 +421,34 @@ def test_without_exists_the_sum_is_over_all_the_variables():
         0.5 + 0.4 + 0.3  # (d1, g1, e1) (d1, g1, e2) (d1, g2, e1)
         + 0.3            # (d2, g2, e1)
     )
+
+
+def test_a_group_that_is_only_in_what_is_known():
+    """r is in the head and in `knowing` only: one expectation per r."""
+    found = _solve(
+        "q(r, e) :- EXPECT[w | sel(s), size(s, w) // (sel(t), act(t, r))] = e"
+    )
+    size = dict(SIZE)
+    total, p_known = defaultdict(float), defaultdict(float)
+    for p, chosen, world in _worlds():
+        for r in ("r1", "r2"):
+            if ("act", (chosen["sel"], r)) in world:
+                p_known[r] += p
+                total[r] += p * size[chosen["sel"]]
+    _assert_close(found, {(r,): total[r] / p_known[r] for r in total})
+
+
+def test_a_disjunctive_event():
+    """x is rolled or flagged: the events are not exclusive."""
+    found = _solve("q(e) :- EXPECT[x | roll(x) | flag(x)] = e")
+    _assert_close(
+        found,
+        _expectation(
+            lambda c, w: [
+                ((), x) for x in sorted(
+                    {c["roll"]} | {t[0] for n, t in w if n == "flag"}
+                )
+            ],
+            lambda g, x: x,
+        ),
+    )

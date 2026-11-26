@@ -771,7 +771,7 @@ class DatalogTransformer(Transformer):
         grouping ones g and the others x, it is the sum over x of f * p, p
         the probability, conditional on *known*, of the answer (g, x) of
         the event (the variables of *known* that the event does not have
-        are marginalised)::
+        are marginalised, unless they are grouping ones)::
 
             pa(g, x, PROB(g, x)) :- event
             ex(g, sum(v)) :- pa(g, x, p), (v == (f * p))
@@ -780,6 +780,9 @@ class DatalogTransformer(Transformer):
         Returns the rules and the atom ``ex(g, result_var)`` for the body.
         """
         variables = extract_logic_free_variables(event)
+        if known is not None:
+            # a group that only what is known has is a group all the same
+            variables |= extract_logic_free_variables(known) & outside
         unbound = extract_logic_free_variables(f) - variables
         if not variables or unbound:
             raise NeuroLangFrontendException(

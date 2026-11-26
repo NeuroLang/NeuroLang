@@ -105,7 +105,7 @@ def test_bank_answers_name_their_columns(engine):
     assert not short, "\n".join(short)
 
 
-def test_the_expectation_examples_parse_to_lifted_rules():
+def test_the_expectation_examples_parse():
     """The examples of EXPECT are written in the syntax the parser reads."""
     from neurolang.frontend.datalog.standard_syntax import parser
 

@@ -43,7 +43,12 @@ assistant_guidance: >
   :- active(l, s), and (lift == p / p0) in the answer, ans(region,
   lift); or its Bayes factor, P(topic | active) / P(topic | not
   active), when the question asks for evidence or reverse inference,
-  as the decoding examples do.  Voxels and terms listed get their
+  as the decoding examples do.  A question asking for an expected number or
+  value (how many ... on average, the mean of a value over the studies) is
+  EXPECT[f | event] = e over rules of yours joining selected_study, never a
+  count: EXPECT[1 | active(l, s)] is the expected number of regions that a
+  study activates, and EXPECT_NORM[f | event] its mean knowing the event.
+  Voxels and terms listed get their
   probability.  A map of voxels, ans(i, j, k, ...), keeps those of
   the cortex, cortical_mask(i, j, k), unless the question names the
   subcortex, the brainstem, the cerebellum or the whole brain: few

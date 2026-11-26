@@ -27,7 +27,8 @@ _TOKEN = re.compile(
 
 # The keywords of the Datalog grammar.
 DATALOG_KEYWORDS = frozenset({
-    "AGGREGATE", "EXISTS", "MARG", "PROB", "SUCC", "ans", "exists",
+    "AGGREGATE", "EXISTS", "EXPECT", "EXPECT_NORM", "MARG", "PROB", "SUCC",
+    "ans", "exists",
     "False", "True", "lambda", "st",
 })
 
