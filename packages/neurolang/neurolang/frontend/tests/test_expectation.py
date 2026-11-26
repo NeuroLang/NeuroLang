@@ -93,10 +93,9 @@ def _worlds():
 
 
 def _expectation(answers, f, knowing=None, normalised=False):
-    """Σ_w P(w) Σ_{answer in answers(w)} f(answer) by group (the first
-    element of the answer when `by_group`); conditioned on the worlds where
-    `knowing` holds; the normalised divides by the Σ of the probabilities
-    of the answers."""
+    """Σ_w P(w) Σ_{(group, x) in answers(w)} f(group, x) by group;
+    conditioned on the worlds where `knowing` holds; the normalised divides
+    by the Σ of the probabilities of the answers."""
     total, weight, p_known = defaultdict(float), defaultdict(float), 0.
     for p, chosen, world in _worlds():
         if knowing is not None and not knowing(chosen, world):
@@ -119,6 +118,12 @@ def _assert_close(found, expected):
 
 def _items(chosen, world):
     return [t for (n, t) in world if n == "item"]
+
+
+def _selected_act(chosen, world):
+    """(r, s): the selected study s is active in r."""
+    s = chosen["sel"]
+    return [(r, s) for r in ("r1", "r2") if ("act", (s, r)) in world]
 
 
 def test_a_choice_is_the_expected_value_of_the_chosen_one():
@@ -232,14 +237,9 @@ def test_a_join_of_a_choice_and_independent_tuples_by_group():
         "q(r, e) :- EXPECT[w | sel(s), act(s, r), size(s, w)] = e"
     )
     size = dict(SIZE)
-
-    def answers(c, w):
-        s = c["sel"]
-        return [(r, s) for r in ("r1", "r2") if ("act", (s, r)) in w]
-
     _assert_close(
         found,
-        _expectation(answers, lambda g, s: size[s]),
+        _expectation(_selected_act, lambda g, s: size[s]),
     )
 
 
@@ -248,14 +248,9 @@ def test_normalised_by_group_is_the_weighted_mean():
         "q(r, e) :- EXPECT_NORM[w | sel(s), act(s, r), size(s, w)] = e"
     )
     size = dict(SIZE)
-
-    def answers(c, w):
-        s = c["sel"]
-        return [(r, s) for r in ("r1", "r2") if ("act", (s, r)) in w]
-
     _assert_close(
         found,
-        _expectation(answers, lambda g, s: size[s], normalised=True),
+        _expectation(_selected_act, lambda g, s: size[s], normalised=True),
     )
 
 
@@ -266,15 +261,12 @@ def test_conditioning_is_that_of_prob():
     )
     size = dict(SIZE)
 
-    def answers(c, w):
-        s = c["sel"]
-        return [(r, s) for r in ("r1", "r2") if ("act", (s, r)) in w]
-
     def knowing(c, w):
         return ("act", (c["sel"], "r1")) in w
 
     _assert_close(
-        found, _expectation(answers, lambda g, s: size[s], knowing=knowing)
+        found,
+        _expectation(_selected_act, lambda g, s: size[s], knowing=knowing),
     )
 
 
