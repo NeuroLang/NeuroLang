@@ -152,6 +152,18 @@ def test_the_normalised_expectation_is_the_value_knowing_the_event():
     assert found[()] == pytest.approx((0.6 + 2.0) / 0.8)
 
 
+def test_normalised_counts_answers_with_the_same_value_and_weight():
+    """x = 1 and x = 2 have the same f and the same p: both are summed in
+    the numerator and in the denominator."""
+    nl = _engine()
+    nl.add_tuple_set([(1, 7.0), (2, 7.0), (3, 2.0)], name="weight")
+    nl.execute_datalog_program(
+        "q(e) :- EXPECT_NORM[w | item('a', x), weight(x, w)] = e"
+    )
+    [(found,)] = _engine_rows(nl)
+    assert found == pytest.approx((.5 * 7 + .5 * 7 + .8 * 2) / (.5 + .5 + .8))
+
+
 def test_independent_tuples_give_the_expected_sum_over_the_random_set():
     found = _solve("q(e) :- EXPECT[x * x | exists(g; item(g, x))] = e")
     # the probability of each x is that of ∃g item(g, x)
