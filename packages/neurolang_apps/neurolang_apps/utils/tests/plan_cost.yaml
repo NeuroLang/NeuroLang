@@ -1,9 +1,7 @@
 # The budgets of the plans of test_plan_cost.py: a query fails when one of
 # its costs is more than factor x its baseline + slack. The baselines are
 # rewritten by running the test with NEUROLANG_UPDATE_PLAN_COST=1
-# (doc/contributing.rst); those of the cases marked xfail, known
-# regressions, are set by hand: those of af, ec, ilf and uf are their
-# costs at c775ff60 (#1386), before #1391 solved them without magic sets.
+# (doc/contributing.rst).
 # slack is in rows (or calls), for the small counts: the studies are 300,
 # the streamlines 316.
 factor: 2.0

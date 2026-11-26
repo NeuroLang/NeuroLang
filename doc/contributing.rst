@@ -118,10 +118,8 @@ change makes a query cost more on purpose, rewrite the baselines:
        packages/neurolang_apps/neurolang_apps/utils/tests/test_plan_cost.py
 
 Then commit ``plan_cost.yaml``. The pull request shows the change of its
-baselines, for the reviewers to accept or refuse. The rewrite keeps the
-baselines of the cases marked ``xfail``, known regressions whose
-baselines are set by hand. Run it without ``-n`` (pytest-xdist): each
-test rewrites the file.
+baselines, for the reviewers to accept or refuse. Run it without ``-n``
+(pytest-xdist): each test rewrites the file.
 
 
 Building the Documentation

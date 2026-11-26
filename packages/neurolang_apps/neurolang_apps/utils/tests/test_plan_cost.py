@@ -61,14 +61,6 @@ class OverBudget(AssertionError):
     """A cost of a query is above its budget."""
 
 
-# The fix of the bundles' magic sets, broken by #1391 (f5b4820b)
-TRACT_FIX = pytest.mark.xfail(
-    raises=OverBudget, strict=True,
-    reason="#1391 solves the bundles without magic sets: "
-    "fix/magic-sets-tract-regression",
-)
-
-
 def synthetic_studies(rng):
     """Peaks, terms and metadata of ``N_STUDIES`` studies."""
     ids = np.arange(1, N_STUDIES + 1)
@@ -265,7 +257,6 @@ CASES = {
 BUNDLES = ["uf", "ilf", "af", "ec", "slf_i", "cst"]
 CASES.update(
     {bundle: f'ans(x) :- {bundle}(x, "left")' for bundle in BUNDLES})
-MARKS = {bundle: TRACT_FIX for bundle in ["uf", "ilf", "af", "ec"]}
 
 
 def read_budgets():
@@ -283,16 +274,12 @@ def write_baseline(name, cost):
         sort_keys=False))
 
 
-@pytest.mark.parametrize("name", [
-    pytest.param(name, marks=MARKS.get(name, ())) for name in CASES
-])
-def test_the_plan_cost_is_within_its_budget(engine, name, request):
+@pytest.mark.parametrize("name", list(CASES))
+def test_the_plan_cost_is_within_its_budget(engine, name):
     with measured(engine) as cost:
         result = engine.execute_datalog_program(CASES[name])
     print(f"{name}: {cost}, {len(result)} rows")
     if UPDATE:
-        if request.node.get_closest_marker("xfail"):
-            pytest.skip("the baseline of a known regression, set by hand")
         write_baseline(name, cost)
         return
     budgets = read_budgets()
