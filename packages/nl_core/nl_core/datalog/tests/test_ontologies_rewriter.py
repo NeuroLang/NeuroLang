@@ -544,6 +544,17 @@ def test_chase_rules():
     assert copy.antecedent.functor == Unit
 
 
+def valued(rewritings):
+    """The ``rewritings`` without an atom over a fresh predicate."""
+    return {
+        r for r in rewritings
+        if all(
+            not a.functor.is_fresh
+            for a in extract_logic_atoms(r.antecedent)
+        )
+    }
+
+
 def test_rewritings_with_a_blocked_atom_without_values_are_left_out():
     """With ``K_i ⊑ ∃m.W_i`` and ``W_i ⊑ CC``, ``m(s, c), CC(c)`` gives
     ``aux_i(s, c), aux_j(z, c)``, never rewritten for ``i ≠ j`` as ``c``
@@ -569,15 +580,6 @@ def test_rewritings_with_a_blocked_atom_without_values_are_left_out():
     holds = frozenset(Symbol(f"K{i}") for i in range(4))
     constraints = constraints_that_can_hold(constraints, holds)
 
-    def valued(rewritings):
-        return {
-            r for r in rewritings
-            if all(
-                not a.functor.is_fresh
-                for a in extract_logic_atoms(r.antecedent)
-            )
-        }
-
     full = OntologyRewriter(query, constraints, chased=True).Xrewrite()
     pruned = OntologyRewriter(
         query, constraints, chased=True, holds=holds
@@ -593,7 +595,11 @@ def test_a_dead_rewriting_is_not_built(monkeypatch):
     """The rewriting steps that give a query ``_dead`` drops, as
     ``aux_i(s, c), aux_j(z, c)`` above, are told before they are built:
     fewer are built, and the rewritings are the same, variable names
-    included."""
+    included.  The one-step test of :meth:`_surely_dead` is left out, as
+    it drops these steps first."""
+    monkeypatch.setattr(
+        OntologyRewriter, "_surely_dead", lambda self, q, S, sigma: False
+    )
     ttl = """
     @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -640,10 +646,13 @@ def test_a_dead_rewriting_is_not_built(monkeypatch):
 
 def test_a_step_surely_dead_is_not_tested_for_applicability(monkeypatch):
     """With ``K_i ⊑ ∃m.W_i`` and ``W_i ⊑ CC``, rewriting ``m(s, c)`` of
-    ``m(s, c), CC(c)`` with ``aux_j(x, y) → m(x, y)`` puts the shared
-    ``c`` in the position of ``aux_j`` with no values: told from the
-    constraint alone, before unifying anything.  Fewer steps reach the
-    test of applicability, and the rewritings are the same."""
+    ``m(s, c), W_i(c)`` with ``aux_j(x, y) → m(x, y)``, ``j ≠ i``, puts the
+    shared ``c`` in the position of ``aux_j`` with no values: told from the
+    constraint alone, before unifying anything.  So is rewriting it in
+    ``m(s, c), CC(c)``: no single step moves the ``c`` of ``CC(c)`` there,
+    and the step waits until ``CC(c)`` is rewritten into ``W_j(c)``.
+    Fewer steps reach the test of applicability, fewer rewritings are
+    explored, and those over predicates with values are the same."""
     ttl = """
     @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -684,5 +693,6 @@ def test_a_step_surely_dead_is_not_tested_for_applicability(monkeypatch):
         OntologyRewriter, "_surely_dead", lambda self, q, S, sigma: False
     )
     unchecked, more = rewrite()
-    assert checked == unchecked
+    assert valued(checked) == valued(unchecked)
+    assert len(checked) < len(unchecked)
     assert fewer < more
