@@ -95,10 +95,19 @@ jobs:
     - name: Install ${{ matrix.dist }} and the packages it depends on
       run: |
         uv sync --package ${{ matrix.dist }} ${{ matrix.extras }}
-        uv pip install pytest-timeout
+        uv pip install pytest-timeout pytest-xdist pytest-cov
 
+    # Tests run on every core of the runner (pytest-xdist); on a push to
+    # master, those of the first Python version also collect their
+    # package's coverage, which the coverage job combines.
     - name: Run the tests of ${{ matrix.package }}
-      run: uv run --no-sync python -m pytest packages/${{ matrix.package }} -v --tb=short --timeout=600
+      env:
+        COVERAGE_FILE: .coverage.${{ matrix.package }}
+        COVERAGE: ${{ github.event_name == 'push' && matrix.python == '3.12' && 'yes' || '' }}
+      run: >-
+        uv run --no-sync python -m pytest packages/${{ matrix.package }}
+        -n auto --tb=short --timeout=600 -ra
+        ${COVERAGE:+--cov=${{ matrix.package }}}
       timeout-minutes: 30
 
     - name: Run the examples of the documentation's Python page
@@ -106,7 +115,18 @@ jobs:
       run: uv run --no-sync python -m pytest doc/tutorial_python.rst --doctest-glob=tutorial_python.rst -v --tb=short
       timeout-minutes: 10
 
+    - name: Keep the coverage of ${{ matrix.package }}
+      if: github.event_name == 'push' && matrix.python == '3.12'
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-${{ matrix.package }}
+        path: .coverage.${{ matrix.package }}
+        include-hidden-files: true
+
+  # The coverage of each package, collected by its test job, combined: no
+  # process runs the tests of all the packages.
   coverage:
+    needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -115,39 +135,23 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
-    - name: Set up uv and Python
+    - name: Set up uv
       uses: astral-sh/setup-uv@v6
+
+    - name: Get the coverage of the packages
+      uses: actions/download-artifact@v4
       with:
-        python-version: "3.12"
-        enable-cache: true
+        pattern: coverage-*
+        merge-multiple: true
 
-    - name: Cache downloaded atlases and datasets
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/neurolang_data
-          ~/nilearn_data
-        key: datasets-${{ runner.os }}-v1
-
-    - name: Install all the packages
+    - name: Combine the coverage and make the badge
       run: |
-        uv sync --all-packages --extra dev --extra ras-polars --extra tui --extra llm --extra mcp
-        uv pip install pytest-timeout pytest-cov "genbadge[coverage]"
-
-    - name: Run all the tests with coverage
-      run: >-
-        uv run --no-sync python -m pytest packages --timeout=600
-        --cov=nl_expr --cov=nl_core --cov=neurolang --cov=neurolang_apps
-        --cov-report=xml --cov-report=term
-      timeout-minutes: 45
-
-    - name: Generate coverage badge
-      run: |
+        uvx coverage combine .coverage.*
+        uvx coverage xml
+        uvx coverage report
         mkdir -p badges
-        uv run --no-sync genbadge coverage -o badges/coverage.svg -i coverage.xml
+        uvx --from "genbadge[coverage]" genbadge coverage -o badges/coverage.svg -i coverage.xml
 
     # The badge has its branch: the benchmarks' dashboard is deployed to
     # gh-pages with keep_files false.

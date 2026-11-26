@@ -394,7 +394,11 @@ class TestSaveErrors:
         tiny._nl.add_tuple_set([(9, 9, 9), (1, 1, 1)], name="far")
         img = _saved(tiny, tmp_path, "ans(i, j, k) :- far(i, j, k)")
         assert np.count_nonzero(np.asanyarray(img.dataobj)) == 1
-        assert "1 row outside the template grid" in _output(tiny)
+        # the console wraps after the path, whose length is the temporary
+        # directory's (longer under pytest-xdist)
+        assert "1 row outside the template grid" in " ".join(
+            _output(tiny).split()
+        )
 
 
 class TestUnits:

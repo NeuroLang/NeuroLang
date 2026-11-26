@@ -658,7 +658,7 @@ def test_a_cancelled_call_stops_the_query_it_runs(monkeypatch):
     assert freed.wait(1)
 
 
-def test_stop_queries_stops_a_running_query(monkeypatch):
+def test_stop_queries_stops_a_running_query(forking, monkeypatch):
     import threading
     import time
 
