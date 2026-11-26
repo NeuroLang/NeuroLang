@@ -428,16 +428,28 @@ def _in_child(function, timeout, memory_mb):
     (QueryTooLarge), so that a runaway query cannot bring the parent
     down. Without fork, or when the system refuses it (a parent too
     large to copy where the memory is not overcommitted), *function* runs
-    in a thread with *timeout* only.
+    in a thread with *timeout* only, which stops it only when it runs
+    Python code, not in a long call to pandas or numpy.
+
+    On macOS, numpy's BLAS, Accelerate, crashes a forked child once the
+    parent has run it with several threads: the child keeps it to its
+    own thread (``BLASSetThreading``, macOS 15 and later). Before macOS
+    15, where numpy loaded before ``neurolang_apps`` could keep
+    Accelerate to one thread (``VECLIB_MAXIMUM_THREADS``), *function*
+    runs in a thread. The setting is the thread's: a thread *function*
+    starts in the child would still crash it on a matrix product.
     """
     if sys.platform == "emscripten" or not hasattr(os, "fork"):
         return _with_timeout(function, timeout)
     import neurolang_apps
 
+    blas_threading = None
     if not neurolang_apps.BLAS_FORK_SAFE and _accelerate():
-        # numpy loaded before neurolang_apps could keep Accelerate to one
-        # thread: a matrix product would crash the child.
-        return _with_timeout(function, timeout)
+        # Looked up here: a child of a multi-threaded process may hang
+        # loading a library.
+        blas_threading = _accelerate_threading()
+        if blas_threading is None:
+            return _with_timeout(function, timeout)
     embeddings = sys.modules.get("neurolang_apps.utils.text_embeddings")
     if embeddings is not None:
         # Load the text encoders here: a child process may not (macOS).
@@ -458,6 +470,8 @@ def _in_child(function, timeout, memory_mb):
         return _with_timeout(function, timeout)
     if pid == 0:  # the child
         os.close(read)
+        if blas_threading is not None:
+            blas_threading(_BLAS_THREADING_SINGLE_THREADED)
         try:
             payload = ("value", function())
         except BaseException as exc:
@@ -511,6 +525,35 @@ def _in_child(function, timeout, memory_mb):
     if kind == "error":
         raise value
     return value
+
+
+# BLAS_THREADING_SINGLE_THREADED of Accelerate's vecLib/thread_api.h.
+_BLAS_THREADING_SINGLE_THREADED = 1
+
+
+def _accelerate_threading():
+    """
+    Return Accelerate's ``BLASSetThreading``, with which the thread
+    calling it runs BLAS and LAPACK alone, or None where Accelerate does
+    not have it (before macOS 15) or refuses the setting, as tried in
+    the calling thread, whose setting is restored.
+    """
+    try:
+        accelerate = ctypes.CDLL(
+            "/System/Library/Frameworks/Accelerate.framework/Accelerate"
+        )
+        function, current = (
+            accelerate.BLASSetThreading, accelerate.BLASGetThreading
+        )
+    except (OSError, AttributeError):
+        return None
+    function.argtypes = [ctypes.c_uint]
+    function.restype = ctypes.c_int
+    current.restype = ctypes.c_uint
+    before = current()
+    supported = function(_BLAS_THREADING_SINGLE_THREADED) == 0
+    function(before)
+    return function if supported else None
 
 
 def _accelerate() -> bool:

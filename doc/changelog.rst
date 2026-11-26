@@ -404,6 +404,19 @@ Unreleased
   alone, which rarely has a cycle of its own: ``uf(x, "left")`` takes 7 s
   and 0.4 GB, against 12.5 s and 0.65 GB before #1391; ``af`` 14 s
   against 50 s; ``slf_i`` 0.2 GB against 0.5 GB on master.
+- AI assistant: an answer given when the ReAct agent ran out of steps,
+  the last query that gave rows, says so: its summary reads *Out of steps:
+  no final answer after N steps*, as a warning on the web page and in
+  yellow in the terminal, where it read as a final answer.
+
+- AI assistant, macOS: a query the agent runs is stopped at its time
+  limit (``query_timeout``, 30 s) where numpy loaded before
+  ``neurolang_apps``, as in a script or a notebook: it ran in a thread,
+  which the limit cannot stop during a call to pandas or numpy, so that
+  runs hung. The query runs in a forked child, which keeps numpy's BLAS,
+  Accelerate, to its own thread (``BLASSetThreading``, macOS 15 and
+  later) so as not to crash on a matrix product; before macOS 15, it
+  still runs in a thread (set ``VECLIB_MAXIMUM_THREADS=1``).
 
 - AI assistant: an answer given when the ReAct agent ran out of steps,
   the last query that gave rows, says so: its summary reads *Out of steps:
