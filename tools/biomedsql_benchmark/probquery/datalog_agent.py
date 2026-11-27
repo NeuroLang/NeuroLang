@@ -55,6 +55,9 @@ RULES_V2 = (
     "probabilities by arithmetic or aggregation, and never write a "
     "probability, or an entity you found by looking at the data, as a "
     "constant: if a query is refused, rewrite the rules, not the arithmetic."
+    " For an expected value, write EXPECT[f | event] = e, the expected value "
+    "of f summed over the answers of the event; EXPECT[1 | event] = n is the "
+    "expected number of answers."
 )
 GUIDANCE = "\n".join(
     [language_notes(), UNCERTAINTY_DATALOG, ANSWER_DATALOG]

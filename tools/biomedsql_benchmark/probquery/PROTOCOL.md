@@ -169,3 +169,7 @@ The rule is mechanical. 20 answers are also classified by hand, and their agreem
 - No new questions, gold, schema or uncertainty text.
 - S0 and S1 are not rerun (they do not use the engine).
 - Every run and every reading is reported, whichever way it comes out.
+
+**Run B, recorded before the run (2026-11-27).** `EXPECT` (#1419) is merged (master 07793ce14); `PROB[COUNT(x) θ k | ...]` (#1424) is not, so the
+guidance gives the `EXPECT` syntax only (one sentence appended to `RULES_V2` in `datalog_agent.py`). The NeuroLang commit of each run is written
+in its log.
