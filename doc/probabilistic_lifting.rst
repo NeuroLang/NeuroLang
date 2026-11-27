@@ -1404,56 +1404,41 @@ Projection on a variable
    comparison kept within an existential with a negation sharing its
    variable, :math:`S(x, y) \land \lnot W(x, y) \land T(z) \land y < z`.
 
-   *At least two.* The query
-   :math:`\exists x\, \exists y\, (R(\bar u) \land R(\bar u[y/x]) \land
-   x \neq y)`, :math:`x` being the only quantified variable of
-   :math:`R(\bar u)`, or with :math:`x < y` or :math:`x > y`, equivalent by
-   the symmetry in :math:`x` and :math:`y`, holds when :math:`R(\bar u)`
-   holds for at least two values of :math:`x`, a ``HAVING COUNT(*) >= 2``
-   query of Ré and Suciu [Re2009]_. It is the complement, within
-   :math:`\exists x\, R(\bar u)`, of exactly one value
-   (``_at_least_plan``):
+   *At least k.* Let :math:`\psi(x, Y)` be a conjunction of atoms and
+   comparisons whose quantified variables are :math:`x` and variables
+   :math:`Y` of its own, with :math:`x` a separator of :math:`\exists x\,
+   \exists Y\, \psi` (the projection on :math:`x` that
+   ``_separator_projection_plan`` plans), and :math:`A` the conjuncts
+   without quantified variables that share no relation with :math:`\psi`.
+   The query :math:`Q_k` with :math:`k` copies :math:`\psi(x_i, Y_i)`, the
+   same conjuncts up to the renaming of :math:`x` and :math:`Y`
+   (``_copies_by_quantified_variable``: the copies are the components of
+   the quantified variables connected by the conjuncts, matched by the
+   permutations of at most four variables :math:`Y`), :math:`A`, and one
+   strict comparison of each pair :math:`x_i, x_j`, :math:`\neq`,
+   :math:`<` or :math:`>`, satisfied by some order of :math:`x_1, \dots,
+   x_k`, holds when :math:`\exists Y\, \psi(a, Y)` holds for at least
+   :math:`k` values :math:`a` of :math:`x`: it is the aggregation-free
+   rewriting of ``HAVING COUNT(*) >= k`` [Re2009]_ (for :math:`k = 2`,
+   :math:`R(\bar u) \land R(\bar u[y/x]) \land x \neq y`, at least two
+   tuples). Writing :math:`p_a = P[\exists Y\, \psi(a, Y)]`, the
+   probability is :math:`P[A]` times the Poisson-binomial tail
 
    .. math::
 
-      P[Q] = P[\exists x\, R(\bar u)] - P[\exists x\, (R(\bar u) \land
-      \lnot\exists w\, (R(\bar u[w/x]) \land w \neq x))]
-      = 1 - \prod_a (1 - p_a) - \sum_a p_a \prod_{b \neq a} (1 - p_b),
+      P[Q_k] = P[A]\; T_{n,k}, \quad
+      T_{i,j} = (1 - p_i)\, T_{i-1,j} + p_i\, T_{i-1,j-1}, \quad
+      T_{i,0} = 1, \; T_{0,j} = 0 \; (j > 0),
 
-   computed with ``Subtraction``, the second query being projected
-   exclusively. It is tried after the other projections, and only on
-   this shape: other conjuncts, or other quantified variables in the
-   atoms, are declined.
-
-   *At least k.* More generally, the query :math:`Q_k` with :math:`k`
-   copies :math:`R(\bar u[x_i/x])` and one strict comparison of each pair
-   :math:`x_i, x_j`, :math:`\neq`, :math:`<` or :math:`>`, satisfied by
-   some order of :math:`x_1, \dots, x_k`, holds when :math:`R(\bar u)`
-   holds for at least :math:`k` values of :math:`x`, ``HAVING COUNT(*) >=
-   k`` [Re2009]_. It is the complement, within at least :math:`k - 1`
-   values, the query :math:`Q_{k-1}` of :math:`k - 1` copies and pairwise
-   :math:`\neq`, of exactly :math:`k - 1` values (``_at_least_plan``):
-
-   .. math::
-
-      P[Q_k] = P[Q_{k-1}] - \frac{1}{(k-1)!} \sum_{a_1, \dots, a_{k-1}}
-      P[E(a_1, \dots, a_{k-1})], \quad
-      E(\bar x) = \textstyle\bigwedge_i R(\bar u[x_i/x]) \land
-      \bigwedge_{i < j} x_i \neq x_j \land
-      \lnot\exists w\, (R(\bar u[w/x]) \land \bigwedge_i w \neq x_i),
-
-   with :math:`Q_1 = \exists x\, R(\bar u)`, so that :math:`k = 2` is the
-   formula above. The sum is the projection on :math:`x_1, \dots,
-   x_{k-1}` of the plan of :math:`E`, which the comparison rule lifts once
-   they are free, summing like the disjoint projection, scaled by
-   ``WeightedNaturalJoin``; :math:`Q_{k-1}` is lifted by the same rule.
-   The plan computes, for a relation of :math:`n` tuples, a row for each
-   :math:`k - 1` values and a projection over the :math:`n` tuples, in
-   :math:`O(n^k)` time, rather than the :math:`O(nk)` of the dynamic
-   programme of the Poisson-binomial distribution; :math:`k` is thus at
-   most ``MAX_AT_LEAST``, 4 (at :math:`k = 4`, 50 tuples take about 40
-   seconds, model counting more than 300). For instance, at least three
-   studies mentioning a term,
+   computed by ``ThresholdProjection`` in :math:`O(nk)` time for the
+   :math:`n` values :math:`a` of the plan of :math:`\exists Y\,
+   \psi(x, Y)` with :math:`x` free (``_at_least_plan``), grouped by the
+   free variables, the join with the plan of :math:`A` being that of the
+   separator projection, with only :math:`x` as a candidate separator
+   (a variable of :math:`Y` may separate :math:`\psi` too, as :math:`y` of
+   :math:`R(x, y)`, and is not the one counted). It replaces a recursion on
+   :math:`k` of :math:`O(n^k)` time, which limited :math:`k` to 4. For
+   instance, at least three studies mentioning a term,
 
    .. math::
 
@@ -1461,10 +1446,22 @@ Projection on a variable
       t) \land \mathrm{mentions}(s_2, t) \land \mathrm{mentions}(s_3, t)
       \land s_1 \neq s_2 \land s_2 \neq s_3 \land s_1 \neq s_3),
 
-   is lifted for each term :math:`t`. Without a comparison of each pair,
-   as in :math:`x_1 \neq x_2 \land x_2 \neq x_3`, satisfied by
+   is lifted for each term :math:`t`, and so is at least five, or at
+   least a hundred, in time linear in the number of studies; so are
+   :math:`\mathrm{mentions}(s, t) \land D(t, s)` with :math:`D`
+   deterministic, :math:`\mathrm{mentions}(s, \text{`pain'})`, whose
+   constant shattering makes a variable of :math:`Y`, and
+   :math:`\exists y\, S(x, y)`. The query is declined, and left to the
+   other solvers, when :math:`x` is not a separator, as in :math:`R(x)
+   \land S(x, y) \land T(y)`, where the events of two values share
+   :math:`T`; when the copies differ; and without a comparison of each
+   pair, as in :math:`x_1 \neq x_2 \land x_2 \neq x_3`, satisfied by
    :math:`x_1 = x_3`, or with comparisons no order satisfies, as in
-   :math:`x_1 < x_2 < x_3 < x_1`, the query is declined.
+   :math:`x_1 < x_2 < x_3 < x_1`. The query language writes it
+   ``PROB[COUNT(x) >= k | a(x)] = p`` (:doc:`tutorial_datalog`, 5.2.1),
+   and the other comparisons of the count as the complements :math:`1 -
+   P[Q_k]`, :math:`P[Q_k] - P[Q_{k+1}]`, of at least :math:`k` and
+   :math:`k + 1`.
 
    *At least k or a filtered value.* In a disjunction, the query
    :math:`Q_k` above with a disjunct
@@ -2454,48 +2451,42 @@ Projection on a variable
    \exists y\, B` for :math:`y` not free in :math:`A`, whichever
    conjuncts it keeps.
 
-   *At least two.* :math:`Q` holds in a world exactly when
-   :math:`R(\bar u[a/x])` holds for at least two values :math:`a`: given
-   two, :math:`a < b`, the values :math:`x = a, y = b` satisfy
-   :math:`x < y` and :math:`x \neq y`, and :math:`x = b, y = a` satisfy
-   :math:`x > y`, the free variables, the only other ones of the atoms,
-   being fixed; conversely each comparison makes the two values different.
-   :math:`Q` is thus
-   :math:`\exists x\, R(\bar u)` without the worlds where exactly one
-   value holds, which the second query describes, and which imply
-   :math:`\exists x\, R(\bar u)`. Hence
-   :math:`P[Q] = P[\exists x\, R(\bar u)] - P[\text{exactly one}]`, which
-   ``Subtraction`` computes, each plan being lifted, and checked, by the
-   rules of this page.
-
-   *At least k.* Take a world, the free variables being fixed. If
-   :math:`R(\bar u[a/x])` holds for :math:`k` values :math:`a_1, \dots,
-   a_k`, distinct, give the :math:`i`-th least of them to the
+   *At least k.* Take a world, the free variables being fixed, and let
+   :math:`V` be the set of values :math:`a` for which :math:`\exists Y\,
+   \psi(a, Y)` holds in it. :math:`A` does not depend on :math:`x`. If :math:`|V| \ge k`,
+   give the :math:`i`-th least of :math:`k` values of :math:`V` to the
    :math:`i`-th variable of an order satisfying the comparisons: each
    :math:`<` and :math:`>` holds, the order of the values being total, as
    for the order comparisons above, and each :math:`\neq`, the values
-   being distinct, so :math:`Q_k` holds. Conversely, the comparison of
-   each pair makes the :math:`k` values different. :math:`Q_k` thus holds
-   when :math:`R(\bar u)` holds for at least :math:`k` values, and
-   :math:`Q_{k-1}`, of pairwise :math:`\neq`, which needs no order, when
-   it holds for at least :math:`k - 1`; their difference is the worlds
-   where it holds for exactly :math:`k - 1` values, which imply
-   :math:`Q_{k-1}`, so :math:`P[Q_k] = P[Q_{k-1}] - P[\text{exactly } k -
-   1]`, which ``Subtraction`` computes. In a world where :math:`R(\bar
-   u)` holds for exactly :math:`k - 1` values, :math:`E(\bar a)` holds
-   for the :math:`(k - 1)!` orders :math:`\bar a` of these values, the
-   copies and the inequalities holding and the negated conjunct, no other
-   value holding; in any other world, it holds for none, as the
-   inequalities make :math:`k - 1` values hold and the negated conjunct no
-   other. By linearity of expectation, :math:`\sum_{\bar a}
-   P[E(\bar a)]`, the expected number of tuples :math:`\bar a` for which
-   :math:`E` holds, is :math:`(k - 1)!\, P[\text{exactly } k - 1]`; the
-   projection sums the probabilities of the plan of :math:`E`, each
-   lifted, and ``WeightedNaturalJoin`` multiplies the sum by
-   :math:`1 / (k - 1)!`. For :math:`k = 2` the events of different values
-   are exclusive (Lemma 2), and the sum is the disjoint projection. The
-   rule recurses on :math:`Q_{k-1}`, with one copy less, down to
-   :math:`Q_1`, which it does not match.
+   being distinct, so :math:`Q_k` holds with :math:`A`. Conversely, the
+   comparison of each pair makes the :math:`k` values distinct, so
+   :math:`Q_k \land A` holds only if :math:`A` holds and
+   :math:`|V| \ge k`. Hence :math:`P[Q_k] = P[A \land |V| \ge k]`. :math:`A`
+   shares no probabilistic relation with :math:`\psi`, so the atoms of
+   :math:`A` and those of :math:`\psi` are different tuples and, by
+   Lemma 1, the events :math:`A` and :math:`|V| \ge k` are independent: the
+   probability is the product. The separator :math:`x` is in every
+   probabilistic atom of :math:`\exists Y\, \psi`, at a common position for the
+   atoms of a relation, and none is of a choice (``_separates``), so the atoms for
+   two values :math:`a \neq b` of :math:`x` are different tuples of
+   tuple-independent relations: the events :math:`\exists Y\, \psi(a, Y)`,
+   :math:`\exists Y\, \psi(b, Y)`, ... are independent (Lemma 1), with
+   probabilities :math:`p_a`, those of the plan of :math:`\exists Y\, \psi`
+   with :math:`x` free, the other variables being fixed. :math:`|V|` is then the sum of independent indicators of
+   probabilities :math:`p_1, \dots, p_n`, and :math:`T_{i,j} =
+   P[\text{at least } j \text{ of the first } i \text{ hold}]` satisfies, by
+   conditioning on the :math:`i`-th, :math:`T_{i,j} = p_i T_{i-1,j-1} +
+   (1 - p_i) T_{i-1,j}`, with :math:`T_{i,0} = 1` and :math:`T_{0,j} = 0`
+   for :math:`j > 0`.
+   :math:`T_{n,k}` is :math:`P[|V| \ge k]`. ``ThresholdProjection``
+   evaluates it per group of the free variables, in :math:`O(nk)`;
+   ``NaturalJoin`` multiplies it by the plan of :math:`A`. The conditions
+   of the rule, the checks of the code, are exactly the hypotheses of the
+   proof: the separator (independence of the values), the disjointness
+   of :math:`A` (independence of :math:`A`), the copies being the same
+   up to renaming (every value of :math:`x` has the same event, whose
+   probabilities :math:`p_a` the one plan gives), and one comparison of
+   each pair satisfied by an order (distinct values).
 
    *At least k or a filtered value.* In a world where :math:`R(\bar u)`
    holds for a value :math:`a` of :math:`x` satisfying :math:`\varphi`,
@@ -2517,8 +2508,7 @@ Projection on a variable
    lifted and checked by the rules of this page, is exact. Without
    :math:`\varphi`, :math:`Q_k` implies :math:`\exists x\, R(\bar u) = A`.
    The plan of :math:`Q_k[R'/R]` is that of ``_at_least_plan``, in
-   :math:`O(n^k)` time for :math:`k \leq` ``MAX_AT_LEAST``, and
-   :math:`R'` a selection and a difference of :math:`R` and the relations
+   :math:`O(nk)` time, and :math:`R'` a selection and a difference of :math:`R` and the relations
    of :math:`\varphi`, in polynomial time.
    ``_independent_disjunction_plan`` is the independent disjunction
    above: its components have no probabilistic relation in common, so
