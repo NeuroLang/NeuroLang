@@ -1482,3 +1482,53 @@ def test_a_column_is_a_function_of_others(
     )
     relation = NamedRelationalAlgebraFrozenSet(("x", "y"), rows)
     assert dalvi_suciu_lift._is_function(relation, ("x",), "y") is expected
+
+
+def _declined_in_at_most(monkeypatch, calls, query, cpl_program):
+    """Whether the algorithm declines the query in at most `calls` calls,
+    stopping it when it makes more."""
+    count = []
+    lift = dalvi_suciu_lift.dalvi_suciu_lift
+
+    def counting(*args, **kwargs):
+        count.append(1)
+        assert len(count) <= calls, "the lifting calls are not linear"
+        return lift(*args, **kwargs)
+
+    monkeypatch.setattr(dalvi_suciu_lift, "dalvi_suciu_lift", counting)
+    with pytest.raises(NonLiftableException):
+        dalvi_suciu_lift.solve_succ_query(query, cpl_program)
+
+
+@pytest.mark.parametrize("cores, atoms", [(1, 0), (1, 5), (1, 10), (3, 4)])
+def test_independent_components_apart_when_one_is_not_liftable(
+    monkeypatch, cores, atoms
+):
+    """
+    ∃x, y R(x) ∧ S(x, y) ∧ T(y), which is #P-hard, with independent atoms
+    ∃z U_i(z) and other cores on other relations: the components are
+    lifted apart, a number of times linear in their number, and not the
+    2^(clauses) subsets that inclusion–exclusion enumerates. The query
+    stays declined: a component that is not liftable makes it so.
+    """
+    cpl_program = CPLogicProgram()
+    x, y, z = Symbol("x"), Symbol("y"), Symbol("z")
+    conjuncts = []
+    for k in range(cores):
+        R, S, T = (Symbol(f"{n}{k}") for n in "RST")
+        cpl_program.add_probabilistic_facts_from_tuples(R, [(0.5, 1)])
+        cpl_program.add_probabilistic_facts_from_tuples(
+            S, [(0.4, 1, 1), (0.4, 1, 2)]
+        )
+        cpl_program.add_probabilistic_facts_from_tuples(T, [(0.6, 1)])
+        conjuncts += [R(x), S(x, y), T(y)]
+        x, y = Symbol.fresh(), Symbol.fresh()
+    for i in range(atoms):
+        U = Symbol(f"U{i}")
+        cpl_program.add_probabilistic_facts_from_tuples(U, [(0.3, 1)])
+        conjuncts.append(U(z))
+        z = Symbol.fresh()
+    query = Implication(Symbol("ans")(), Conjunction(tuple(conjuncts)))
+    _declined_in_at_most(
+        monkeypatch, 4 * (cores + atoms) + 4, query, cpl_program
+    )
