@@ -1,4 +1,5 @@
 import collections
+import functools
 import itertools
 import operator
 
@@ -326,17 +327,24 @@ class ShatterEqualities(ExpressionWalker):
         return set_conditions
 
 
+MAX_NESTED_CONDITIONS = 16
+
+
 class RelationalAlgebraSelectionConjunction(ExpressionWalker):
     @add_match(Selection(..., Conjunction))
     def selection_conjunction(self, expression):
         and_ = Constant(operator.and_)
-        formulas = expression.formula.formulas
-        new_formula = formulas[0]
-        for f in formulas[1:]:
-            new_formula = and_(new_formula, f)
+        formulas = list(expression.formula.formulas)
+        # Folded by chunks, the condition not being as deep as it has
+        # formulas, which the solvers walk recursively.
+        while len(formulas) > MAX_NESTED_CONDITIONS:
+            formulas = [
+                functools.reduce(and_, formulas[i:i + MAX_NESTED_CONDITIONS])
+                for i in range(0, len(formulas), MAX_NESTED_CONDITIONS)
+            ]
         return Selection(
             expression.relation,
-            new_formula
+            functools.reduce(and_, formulas)
         )
 
 

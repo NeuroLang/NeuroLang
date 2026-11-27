@@ -14,7 +14,12 @@ from ...relational_algebra.optimisers import (
     RelationalAlgebraOptimiser
 )
 from ...relational_algebra.relational_algebra import RelationalAlgebraSolver
-from ..shattering import sets_per_symbol, shatter_constants
+from ..shattering import (
+    MAX_NESTED_CONDITIONS,
+    RelationalAlgebraSelectionConjunction,
+    sets_per_symbol,
+    shatter_constants
+)
 
 RAO = RelationalAlgebraOptimiser()
 
@@ -291,3 +296,45 @@ def test_shatter_order_comparison_outside_an_existential(R4):
         TranslateToNamedRA().walk(res)
     )
     assert ra_sol == shattered_sol
+
+
+def _depth(condition):
+    return 1 + max(
+        (_depth(arg) for arg in condition.args
+         if hasattr(arg, "args") and arg.args),
+        default=0,
+    )
+
+
+def test_selection_conjunction_is_nested_on_the_left_when_small():
+    conditions = tuple(
+        EQ(Constant(i, verify_type=False), Constant(i)) for i in range(3)
+    )
+    and_ = Constant(operator.and_)
+    selection = RelationalAlgebraSelectionConjunction().walk(
+        Selection(P, Conjunction(conditions))
+    )
+    assert selection.formula == and_(
+        and_(conditions[0], conditions[1]), conditions[2]
+    )
+
+
+def test_selection_conjunction_of_many_conditions_is_not_as_deep():
+    n = 1000
+    conditions = tuple(
+        EQ(Constant(i, verify_type=False), Constant(i)) for i in range(n)
+    )
+    selection = RelationalAlgebraSelectionConjunction().walk(
+        Selection(P, Conjunction(conditions))
+    )
+    assert _depth(selection.formula) < 4 * MAX_NESTED_CONDITIONS
+    # every condition is in it, in order
+    leaves = []
+    stack = [selection.formula]
+    while stack:
+        e = stack.pop()
+        if e.functor == Constant(operator.and_):
+            stack.extend(reversed(e.args))
+        else:
+            leaves.append(e)
+    assert leaves == list(conditions)

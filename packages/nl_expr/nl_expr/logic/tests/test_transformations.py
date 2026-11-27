@@ -8,9 +8,15 @@ from .. import (
     Negation,
     UniversalPredicate
 )
+from ...expression_walker import ChainedWalker
 from ..transformations import (
     AbsorbAssertedConjuncts,
     AbsorbAssertedConjunctsInNegations,
+    CollapseConjunctions,
+    CollapseDisjunctions,
+    DesambiguateQuantifiedVariables,
+    DistributeConjunctions,
+    DistributeDisjunctions,
     LogicExpressionWalker,
     PushExistentialsDown,
     PushUniversalsDown,
@@ -391,3 +397,88 @@ def test_simplify_truth_values():
     ) == FALSE
     assert stv.walk(Conjunction((TRUE, TRUE))) == TRUE
     assert stv.walk(Conjunction((P(X), Q(Y)))) == Conjunction((P(X), Q(Y)))
+
+
+# A formula of this many conjuncts used to exceed the recursion limit
+MANY = 1000
+
+
+_DNF = ChainedWalker(
+    DistributeConjunctions, CollapseDisjunctions, CollapseConjunctions
+)
+_CNF = ChainedWalker(
+    DistributeDisjunctions, CollapseConjunctions, CollapseDisjunctions
+)
+
+
+def _atoms(n, symbol=P):
+    return tuple(symbol(Symbol(f"x{i}")) for i in range(n))
+
+
+def test_distributions_of_many_formulas_without_a_dual_are_flat():
+    atoms = _atoms(MANY)
+    conjunction = Conjunction(atoms)
+    disjunction = Disjunction(atoms)
+    assert DistributeConjunctions().walk(conjunction) == conjunction
+    assert DistributeDisjunctions().walk(disjunction) == disjunction
+
+
+def test_conjunction_of_many_formulas_distributed_on_a_disjunction():
+    atoms = _atoms(MANY)
+    exp = Conjunction(atoms[:MANY // 2] + (Disjunction((Q(X), R(X))),)
+                      + atoms[MANY // 2:])
+    res = _DNF.walk(exp)
+    assert res == Disjunction(tuple(
+        Conjunction(atoms[:MANY // 2] + (d,) + atoms[MANY // 2:])
+        for d in (Q(X), R(X))
+    ))
+
+
+def test_disjunction_of_many_formulas_distributed_on_a_conjunction():
+    atoms = _atoms(MANY)
+    exp = Disjunction(atoms[:MANY // 2] + (Conjunction((Q(X), R(X))),)
+                      + atoms[MANY // 2:])
+    res = _CNF.walk(exp)
+    assert res == Conjunction(tuple(
+        Disjunction(atoms[:MANY // 2] + (c,) + atoms[MANY // 2:])
+        for c in (Q(X), R(X))
+    ))
+
+
+def test_grouped_runs_keep_the_order_of_the_distribution():
+    """(a ∧ b) ∧ (c ∨ d) ∧ e ∧ (f ∨ g) as the formula folded on the right."""
+    a, b, e = P(X), P(Y), P(Z)
+    c, d, f, g = Q(X), Q(Y), R(X), R(Y)
+    exp = Conjunction((a, b, Disjunction((c, d)), e, Disjunction((f, g))))
+    res = _DNF.walk(exp)
+    assert res == Disjunction(tuple(
+        Conjunction((a, b, x, e, y)) for y in (f, g) for x in (c, d)
+    ))
+
+
+def test_grouped_runs_do_not_hide_what_becomes_a_conjunction():
+    """A formula of a run that is walked into the dual is distributed
+    before the run is paired with the rest: the clauses are in the order
+    the formulas are folded on the right."""
+    c1, c2, a, s, t, u = (
+        Symbol(n)(X) for n in ("C1", "C2", "A", "S", "T", "U")
+    )
+    exp = Disjunction((
+        Conjunction((c1, c2)), a, Disjunction((s, Conjunction((t, u))))
+    ))
+    res = _CNF.walk(exp)
+    assert res == Conjunction(tuple(
+        Disjunction((c, a, s, d)) for d in (t, u) for c in (c1, c2)
+    ))
+
+
+def test_standardising_many_quantified_conjuncts():
+    exp = Conjunction(tuple(
+        ExistentialPredicate(X, P(X)) for _ in range(400)
+    ))
+    res = DesambiguateQuantifiedVariables().walk(exp)
+    heads = [formula.head for formula in res.formulas]
+    assert len(set(heads)) == 400
+    assert all(
+        formula.body == P(formula.head) for formula in res.formulas
+    )
