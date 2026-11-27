@@ -52,6 +52,16 @@ jobs:
       - name: Install the packages and the doc dependencies
         run: uv sync --all-packages --extra doc
 
+      # The gallery's examples download atlases through nilearn (the
+      # Destrieux atlas from www.nitrc.org): kept between builds, so that an
+      # outage of a site does not fail them once they were downloaded.
+      - name: Restore the datasets of the examples
+        uses: actions/cache@v4
+        with:
+          path: ~/nilearn_data
+          key: nilearn-data-${{ hashFiles('examples/**/*.py') }}
+          restore-keys: nilearn-data-
+
       - name: Build HTML documentation
         run: uv run --no-sync make -C doc html SPHINXOPTS="--keep-going"
 
