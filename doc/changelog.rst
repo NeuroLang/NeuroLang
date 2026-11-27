@@ -457,6 +457,18 @@ Unreleased
   must have the same arity". An empty relation has no known arity and is not
   checked.
 
+- Lifted inference: a query with a component that is not liftable and
+  independent components, as ``R(x), S(x, y), T(y)`` with ``n`` atoms
+  ``U_i(z_i)`` on other relations, took a time exponential in ``n`` to be
+  declined (``n = 8``: 264 s), on the lifted solvers and before weighted
+  model counting on the default ones: the lifting enumerated the subsets of
+  the clauses of the query; so did atoms of the answer variable of the
+  core, ``U_i(w, z_i)``. The components that do not need each other to
+  bind their free variables are now lifted apart (``n = 10``: 0.6 s).
+  Queries whose independent component has an answer variable of its own,
+  as ``h(z) :- C(x, y), R(x), T(z)`` with the choice ``C`` in a union, are
+  lifted where they were declined.
+
 - The choice facts of one predicate, ``0.3 ^ choice('a'). 0.7 ^ choice('b').``
   (the example of the tutorial, 10.6), are the alternatives of one choice,
   as the ``::`` facts of a predicate are one relation; the second one used to
