@@ -1653,9 +1653,23 @@ def dalvi_suciu_lift(rule, symbol_table):
             connected_components, rap.NaturalJoin, symbol_table,
             negative_operation=rap.Difference
         )
-        # Otherwise the rules below are tried on the query as it is.
         if is_pure_lifted_plan(plan):
             return plan
+        # Otherwise the rules below are tried on the query as it is,
+        # but apart on the components that do not depend on each other.
+        groups = components_sharing_free_variables(connected_components)
+        if len(groups) > 1:
+            return components_plan(
+                [
+                    Conjunction(tuple(chain.from_iterable(
+                        connected_components[i].formulas
+                        for i in sorted(group)
+                    )))
+                    for group in groups
+                ],
+                rap.NaturalJoin, symbol_table,
+                negative_operation=rap.Difference
+            )
 
     rule_dnf = convert_ucq_to_ccq(rule, transformation='DNF')
     connected_components = symbol_connected_components(
@@ -3341,6 +3355,27 @@ def components_plan(
         ]
         output = join_in_chunks(complemented_negative_formulas, operation)
     return output
+
+
+def components_sharing_free_variables(components):
+    """The sets of indices of the `components` that depend on each other
+    for their plans: those that share free variables, when one has a union
+    whose disjuncts have different columns, which another component binds.
+    The others are independent for each value of the free variables."""
+    free_variables = [extract_logic_free_variables(c) for c in components]
+    needs_others = [
+        not all(map(_union_has_the_same_columns, c.formulas))
+        for c in components
+    ]
+    adjacency = np.array([
+        [
+            i != j and (needs_others[i] or needs_others[j])
+            and not free_variables[i].isdisjoint(free_variables[j])
+            for j in range(len(components))
+        ]
+        for i in range(len(components))
+    ], dtype=float)
+    return connected_components(adjacency)
 
 
 def _have_the_same_free_variables(formulas):

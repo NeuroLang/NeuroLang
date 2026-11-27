@@ -979,6 +979,41 @@ Independent negation
    Olteanu study the converse, for queries with negation without repeated
    relations [Fink2014]_ [Fink2016]_.
 
+Independent components apart
+   The conjunctive normal form of a query is split into components that
+   have no probabilistic relation in common, and the plans of the
+   components are joined (the independent join of [Dalvi2012]_). When some
+   component is not lifted, the rules below are tried on the query as it
+   is, which they need when a component binds the variables of another,
+   as :math:`C(x, y)` the tuples of the disjunction :math:`R(x) \lor
+   T(y)`, whose disjuncts have different columns, and so no plan (see
+   "Unions of plans with the same columns" below). They are tried apart on
+   the *groups* of components that depend on each other: two components do
+   when they share free variables and one has a union whose disjuncts have
+   different columns (``_union_has_the_same_columns``), which the other
+   binds, directly or through others. The groups are independent for each
+   value of the free variables, which they may share:
+
+   .. math::
+
+      P[(Q_1 \land \dots \land Q_m)\theta] = \prod_i P[Q_i\theta],
+
+   which the join of their plans on these variables computes. A query with
+   a single group is tried as it is. The inclusion–exclusion of a
+   conjunction is exponential in the number of its clauses: with
+   :math:`n` independent atoms :math:`U_i(z_i)`, or :math:`U_i(w, z_i)`
+   with an answer variable :math:`w` that the core has, next to a query
+   that is not liftable, such as :math:`R(x) \land S(x, y) \land T(y)`,
+   it enumerated the subsets of the :math:`n + 1` clauses before declining,
+   ``dalvi_suciu_lift`` being called 1, 11, 30, 180 and 966 times for
+   :math:`n` = 0, 1, 2, 4 and 6, and now :math:`4n + 3` times. The answers
+   :math:`z` of the union of
+   :math:`h(z) \leftarrow C(x, y) \land R(x) \land T(z)` and
+   :math:`h(z) \leftarrow C(y, x) \land T(x) \land T(z)`, with :math:`C` a
+   probabilistic choice, were declined because the component of
+   :math:`z` kept the rules from the union of the choice: they are lifted.
+   The proof is in `Correctness of the plans`_.
+
 Disjoint separator
    The counterpart, for probabilistic choices, of the separator variable
    (:func:`~neurolang.probabilistic.dalvi_suciu_lift.disjoint_separator`).
@@ -2376,6 +2411,51 @@ Tuples deterministic atoms select disjointly
    and their pairwise disjointness is checked in :math:`O(n^2)`
    intersections of sets of values of the data; each new relation is a
    selection of :math:`R`, linear in its size.
+
+Independent components apart
+   The components of the conjunctive normal form have no probabilistic
+   relation in common, and deterministic relations are the same in every
+   world, so for every :math:`\theta` the events of the components are
+   determined by disjoint sets of independent random variables, and are
+   mutually independent by Lemma 1, whether the components share free
+   variables or not. Let :math:`G_1, \dots, G_m` be the classes of the
+   components for the transitive closure of the relation "depend on each
+   other" of `NeuroLang's additions`_, and :math:`\theta` a value of all the
+   free variables. The conjunction of the components of :math:`G_i` is an
+   event of the variables of its components alone, so by Lemma 1
+   :math:`P[(G_1 \land \dots \land G_m)\theta] = \prod_i
+   P[G_i\theta]`, which the join of the plans of the groups on the free
+   variables that they share computes row by row, each :math:`G_i` lifted
+   by the rules being sound; a :math:`\theta` absent from the plan of a
+   group has :math:`P[G_i\theta] = 0`, and the product is 0, as the join
+   gives. A negated component is a group alone, as its clause is not a
+   disjunction; ``Difference`` of the join of the plans of the others by
+   its plan is independent negation, the range restriction of the rules,
+   checked when they are declared, binding its free variables in a
+   positive component. The soundness of the rules applied to a group is
+   that of the rules, for a query of fewer clauses.
+
+   *Termination.* With a single group nothing changes. With several, each
+   group has fewer components than the query, so the construction
+   terminates by the number of clauses.
+
+   *Polynomial time.* The query is split into at most as many groups as
+   components, and each component is lifted at most twice by each call
+   that splits the query, alone and in its group: the calls to
+   ``dalvi_suciu_lift`` are linear in the number of components, and not
+   the powerset of their clauses that inclusion–exclusion enumerates when
+   the rules are tried on the whole query.
+
+   *Completeness is not claimed.* The rules tried on a group see fewer
+   atoms than on the whole query. In the Dalvi–Suciu algorithm the
+   independent join already lifts the components apart [Dalvi2012]_, and the
+   tests of the lifted solvers, which include queries whose components bind
+   each other's free variables, give the same probabilities as before; a
+   corpus of the queries of these tests conjoined with independent atoms,
+   and of their variants with atoms of an answer variable, gives the same
+   outcome as before, but for the queries with an independent component
+   that was declined, and is lifted
+   (``test_independent_components_with_a_free_variable``).
 
 Declined unions
    Declining a query is sound: it is then solved by weighted model
