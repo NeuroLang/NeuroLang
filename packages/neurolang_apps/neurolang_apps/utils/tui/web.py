@@ -216,6 +216,9 @@ class Reply:
     graph: str = ""
     tokens: dict = field(default_factory=dict)
     uploads: dict = field(default_factory=dict)
+    # the files of the results ``.view`` drew, for the brain tab: the
+    # ``title`` of each and what :meth:`WebRepl._downloads_of` tells
+    downloads: List[dict] = field(default_factory=list)
 
 
 class Download(NamedTuple):
@@ -229,6 +232,18 @@ class Download(NamedTuple):
 # The files of a result: the separator of its text formats, the type of each.
 TEXT_FORMATS = {"csv": (",", "text/csv"), "tsv": ("\t", "text/tab-separated-values")}
 NIFTI_MIME = "application/gzip"
+# The files of what the viewer draws of a result (nifti.block_file): the
+# extension and type of each, and its name in the menus.
+FILE_KINDS = {
+    "trk": ("trk", "application/octet-stream"),
+    "network": ("csv", "text/csv"),
+    "layer": ("nii.gz", NIFTI_MIME),
+}
+FILE_LABELS = {
+    "trk": "Streamlines, TRK",
+    "network": "Network edges, CSV",
+    "layer": "Viewer layer, NIfTI",
+}
 
 
 def _file_stem(block: ResultBlock, index: int) -> str:
@@ -617,7 +632,16 @@ class WebRepl:
         answered = self.app.assistant.last_run
         query = self.app.last_query
         returned = _viewers_returned() if self.html else nullcontext([])
-        with returned as viewers:
+        viewed = []  # whether .view drew the results, not a file
+
+        def results_layers(app, request, layers=nifti.last_results_layers):
+            shown = layers(app, request)
+            viewed.append(shown is not None)
+            return shown
+
+        with returned as viewers, mock.patch.object(
+            nifti, "last_results_layers", results_layers
+        ):
             try:
                 self.app._run_line(text)
             except QuitRepl:
@@ -648,6 +672,8 @@ class WebRepl:
             "squall" if self.app.settings.squall else "datalog",
             self.predicates(), self._rated is not None, self._graph, tokens,
             self.uploads(),
+            [{"title": block.title, **self._downloads_of(block)}
+             for block in self.app.results] if any(viewed) else [],
         )
 
     def uploads(self) -> dict:
@@ -855,12 +881,19 @@ class WebRepl:
         index = next(
             (i for i, b in enumerate(self.app.results) if b is block), 0
         )
+        try:  # nothing that fails here may hide a result
+            files = nifti.block_files(self.app, block)
+        except Exception:
+            files = []
+        files = [{"kind": kind, "label": FILE_LABELS[kind]} for kind in files]
         try:
             columns = nifti.image_columns(self.app, block)
-            return {"block": index, "nifti": columns, "nifti_reason": ""}
-        except Exception as error:  # nothing that fails here may hide a result
+            return {"block": index, "nifti": columns, "nifti_reason": "",
+                    "files": files}
+        except Exception as error:
             reason = str(error) or "no NIfTI image can be made of this result"
-            return {"block": index, "nifti": None, "nifti_reason": reason}
+            return {"block": index, "nifti": None, "nifti_reason": reason,
+                    "files": files}
 
     def upload(self, name: str, data: bytes) -> dict:
         """
@@ -911,7 +944,8 @@ class WebRepl:
         Return the file of kind *kind* of the result *block*, the number the
         table gave: ``csv`` or ``tsv`` with all its rows (the table holds
         at most ``max_rows``), or a ``nifti`` image of the column *value*
-        (the default one when empty), gzipped. A
+        (the default one when empty), gzipped, or one of :data:`FILE_KINDS`
+        (:func:`~.nifti.block_file`). A
         :class:`~.nifti.SaveError` tells why a result has no image.
         """
         try:
@@ -923,6 +957,10 @@ class WebRepl:
             separator, mime = TEXT_FORMATS[kind]
             text = _text(result.frame, separator)
             return Download(f"{stem}.{kind}", mime, text.encode("utf-8"))
+        if kind in FILE_KINDS:
+            extension, mime = FILE_KINDS[kind]
+            suffix, data = nifti.block_file(self.app, result, kind)
+            return Download(f"{stem}{suffix}.{extension}", mime, data)
         if kind != "nifti":
             raise ValueError(f"Unknown kind of file {kind!r}.")
         request = nifti.SaveRequest(Path(f"{stem}.nii.gz"), value or None)

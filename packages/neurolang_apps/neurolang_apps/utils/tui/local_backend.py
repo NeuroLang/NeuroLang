@@ -41,6 +41,7 @@ def reply_payload(reply: web.Reply) -> dict:
         "graph": getattr(reply, "graph", ""),
         "tokens": getattr(reply, "tokens", {}),
         "uploads": getattr(reply, "uploads", {}),
+        "downloads": getattr(reply, "downloads", []),
     }
 
 

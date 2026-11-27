@@ -1698,6 +1698,32 @@ def _result_kind(app, block, request: SaveRequest) -> str:
     return "regions" if points.space == LABEL_SPACE else "voxels"
 
 
+def result_networks(app, block, request: SaveRequest):
+    """
+    Return the networks of the result *block*, of pairs, as (choices,
+    networks): one per value column of its edges, *choices*
+    (:func:`network_value_columns`), else one of the *request*'s
+    ``--value``; a SaveError tells why there is none.
+    """
+    sorts = _engine_sorts(app.settings.engine_name)
+    groups = network_nodes(block.frame, sorts, block.sorts)
+    choices = network_value_columns(
+        block.frame, groups, sorts, request, block.sorts
+    )
+    networks = []
+    for choice in choices or [request.value]:
+        network = result_network(
+            app._nl, block.frame, sorts, groups,
+            request._replace(value=choice), block.sorts,
+        )
+        if not network.edges:
+            raise SaveError(
+                "The result has no pair of two known regions or points."
+            )
+        networks.append(network)
+    return choices, networks
+
+
 def last_result_network(app, block, request: ViewRequest):
     """
     Return the result *block*, of pairs, as a network to view.
@@ -1707,28 +1733,16 @@ def last_result_network(app, block, request: ViewRequest):
     (:func:`~.brain_viewer.connectome_state`); an exception tells why it
     cannot be built.
     """
-    sorts = _engine_sorts(app.settings.engine_name)
-    groups = network_nodes(block.frame, sorts, block.sorts)
-    choices = network_value_columns(
-        block.frame, groups, sorts, request.save, block.sorts
-    )
+    choices, networks = result_networks(app, block, request.save)
     threshold = (
         request.threshold if request.threshold_given else VIEW_THRESHOLD
     )
-    states, networks = [], []
-    for choice in choices or [request.save.value]:
-        network = result_network(
-            app._nl, block.frame, sorts, groups,
-            request.save._replace(value=choice), block.sorts,
-        )
-        if not network.edges:
-            raise SaveError(
-                "The result has no pair of two known regions or points."
-            )
-        networks.append(network)
-        states.append(brain_viewer.connectome_state(
+    states = [
+        brain_viewer.connectome_state(
             network.names, network.coordinates, network.edges, threshold
-        ))
+        )
+        for network in networks
+    ]
     network, connectome = networks[0], states[0]
     if len(states) > 1:  # each value column, for the page to choose
         connectome["value"] = str(choices[0])
@@ -1961,6 +1975,50 @@ def _block_layers(app, block, request: ViewRequest):
         return kind, layers, {}
     masks = all(name == "mask" for name, _ in layers)
     return kind, layers, {"regions": regions._replace(coloured=masks)}
+
+
+def block_files(app, block) -> list:
+    """
+    Return the kinds of the files, besides its rows and NIfTI image, that
+    the result *block* is saved as (:func:`block_file`): ``trk`` and
+    ``layer`` for streamlines, ``network`` and ``layer`` for a network.
+    """
+    kind = _result_kind(app, block, SaveRequest(Path("result.nii.gz")))
+    if kind == "streamlines" and has_streamlines(app._nl):
+        return ["trk", "layer"]
+    return ["network", "layer"] if kind == "network" else []
+
+
+def block_file(app, block, kind: str):
+    """
+    Return the file of kind *kind* of the result *block*, as (suffix,
+    bytes): ``trk``, all its streamlines; ``network``, the CSV of the
+    edges of its network (:func:`result_networks`); ``layer``, the NIfTI
+    image (gzipped) of the layer the viewer draws of it, named by
+    *suffix*. A SaveError tells why it has none.
+    """
+    if kind == "trk":
+        column = streamline_column(block.frame, block.sorts)
+        ids = sorted(int(s) for s in pd.unique(block.frame[column]))
+        return "", brain_viewer.trk_bytes(app._nl.streamline_points(ids))
+    if kind == "network":
+        _, [network, *_] = result_networks(
+            app, block, SaveRequest(Path("result.csv"))
+        )
+        frame = pd.DataFrame(
+            [(network.names[a], network.names[b], w)
+             for a, b, w in network.edges],
+            columns=["source", "target", str(network.value or "value")],
+        )
+        return "-network", frame.to_csv(index=False).encode("utf-8")
+    with app.console.capture():  # what the viewer tells is not a reply's
+        _, layers, _ = _block_layers(
+            app, block, ViewRequest(None, SaveRequest(Path("result.nii.gz")))
+        )
+    [(name, path)] = layers
+    data = path.read_bytes()
+    path.unlink()
+    return f"-{name.replace(' ', '_')}", data
 
 
 def result_regions(app, block, request: SaveRequest):
