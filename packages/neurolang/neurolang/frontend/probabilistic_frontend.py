@@ -1355,12 +1355,16 @@ class NeurolangPDL(QueryBuilderDatalog):
         """
         Build the solver of the post-probabilistic deterministic stratum.
 
-        The relations of ``solution`` become extensional predicates, the
-        builtins of the program are copied, and the rules of
-        ``postprob_idb`` are added.
+        The relations of ``solution`` become extensional predicates, with
+        the empty ones the rules use (a probabilistic query without answer
+        is not in the solution, and the rules reading it, an aggregation
+        among them, need it to be stratified), the builtins of the program
+        are copied, and the rules of ``postprob_idb`` are added.
         """
         solver = RegionFrontendCPLogicSolver()
-        for psymb, relation in solution.items():
+        for psymb, relation in with_empty_relations(
+            solution, postprob_idb, self.program_ir
+        ).items():
             solver.add_extensional_predicate_from_tuples(
                 psymb,
                 relation.value,

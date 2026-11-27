@@ -2,6 +2,7 @@ import functools
 import json
 import os
 import re
+from itertools import chain, combinations
 from typing import Tuple
 
 from lark import Lark, Transformer
@@ -22,9 +23,12 @@ from nl_expr.expressions import (
 )
 from nl_expr.exceptions import NeuroLangFrontendException, ParserError
 from nl_expr.expression_pattern_matching import add_match
-from nl_expr.expression_walker import PatternWalker
+from nl_expr.expression_walker import PatternWalker, ReplaceExpressionWalker
 from nl_expr.logic import Disjunction, ExistentialPredicate
-from nl_expr.logic.expression_processing import extract_logic_free_variables
+from nl_expr.logic.expression_processing import (
+    extract_conjuncts,
+    extract_logic_free_variables,
+)
 from nl_core.probabilistic.expressions import (
     PROB,
     Condition,
@@ -38,6 +42,16 @@ from nl_expr.type_system import Unknown
 from ...utils.interactive_parsing import LarkCompleter
 from ..resampling import RESAMPLE_MARKER
 from .lark_errors import lark_errors_as_neurolang
+
+# The greatest number of conjuncts of the query of PROB[COUNT(x) >= k]: k
+# copies of the event and the comparison of each pair, whose size the
+# transformations of the lifting, which recurse on it, bear to about 240
+# (k = 21 of an atom); its preparation takes some 10 s at k = 20.
+MAX_COUNT_CONJUNCTS = 200
+
+# The greatest count of an event that the lifted solvers do not plan, which
+# model counting solves in a time exponential in it.
+MAX_UNLIFTED_COUNT = 4
 
 # Aggregation function names recognised in rule head arguments.
 AGGREGATION_FUNCS = frozenset(
@@ -160,8 +174,12 @@ predicate.2 : id_application
           | succ_body_predicate
 
 // PROB[pred] = var  or  PROB[pred // cond] = var  —  probability query inside a rule body
+// PROB[COUNT(x) >= k | event] = var  —  the probability that the event holds for at
+// least k values of x (any comparison); "|" is also a disjunction in the event
 prob_body_predicate : "PROB" "[" bracketed_conjunction "]" "=" argument
                     | "PROB" "[" bracketed_conjunction PROB_SEP bracketed_conjunction "]" "=" argument
+                    | "PROB" "[" "COUNT" "(" argument ")" COMPARISON_OPERATOR argument OR_SYMBOL bracketed_conjunction "]" "=" argument -> count_body_predicate
+                    | "PROB" "[" "COUNT" "(" argument ")" COMPARISON_OPERATOR argument OR_SYMBOL bracketed_conjunction PROB_SEP bracketed_conjunction "]" "=" argument -> count_body_predicate
 
 // EXPECT[f | event] = e  —  the expected value of f summed over the answers
 // of the event, EXPECT[f | event // knowing] = e conditioned as PROB is;
@@ -496,7 +514,7 @@ class DatalogTransformer(Transformer):
 
     @staticmethod
     def _extract_special_body_atoms(conjunction):
-        """Separate __PROB__ and __MARG__ marker atoms from regular atoms.
+        """Separate __PROB__, __MARG__ and __COUNT__ marker atoms from regular atoms.
 
         Returns (regular_formulas, prob_specs) where each prob_spec is
         a tuple of (marker_name, args).
@@ -507,7 +525,7 @@ class DatalogTransformer(Transformer):
         for f in formulas:
             if (isinstance(f, FunctionApplication)
                     and isinstance(f.functor, Symbol)
-                    and f.functor.name in ("__PROB__", "__MARG__")):
+                    and f.functor.name in ("__PROB__", "__MARG__", "__COUNT__")):
                 prob_specs.append((f.functor.name, f.args))
             else:
                 regular.append(f)
@@ -664,6 +682,15 @@ class DatalogTransformer(Transformer):
                         outside_var_set.add(arg)
 
         for spec in prob_specs:
+            if spec[0] == "__COUNT__":
+                rules, atom = self._count_rules(
+                    *spec[1], outside_var_set - {spec[1][-1]}
+                )
+                fresh_rules += rules
+                query_body_atoms.append(atom)
+                if spec[1][-1] not in head_args:
+                    head_args.append(spec[1][-1])
+                continue
             # --- unpack spec ---
             if isinstance(spec, tuple) and len(spec) == 2 and isinstance(spec[0], str):
                 marker_name, args = spec
@@ -739,6 +766,123 @@ class DatalogTransformer(Transformer):
         main_fml = Implication(new_head, new_body)
         return Union(tuple(fresh_rules + [main_fml]))
 
+    @staticmethod
+    def _count_rules(x, comparison, k, event, known, result_var, outside):
+        """Rules of ``PROB[COUNT(x) θ k | event // known] = result_var``.
+
+        With the variables of the event that occur *outside* it as the
+        grouping ones g, ``q(j)`` the probability that the event holds
+        for at least ``j`` values of ``x``, that of the query with ``j``
+        copies of it, for pairwise different values of ``x`` and other
+        variables projected in each copy::
+
+            pa_j(g, PROB(g)) :- event(x1), ..., event(xj), x1 != x2, ...
+
+        the result is ``q(k)``, ``q(k + 1)`` or the complements
+        ``1 - q(k)``, ``1 - q(k + 1)``, ``q(k) - q(k + 1)``,
+        ``1 - q(k) + q(k + 1)``, ``q(j) = 1`` for ``j <= 0``, summed by
+        group over tagged terms, so that a missing ``q(j)`` is 0 and that
+        equal terms are not merged. Returns the rules and the atom
+        ``ex(g, result_var)`` for the body.
+        """
+        if not (isinstance(k, Constant) and isinstance(k.value, int)):
+            raise NeuroLangFrontendException(
+                f"COUNT is compared to an integer, not {k}"
+            )
+        free = extract_logic_free_variables(event)
+        known_free = (
+            extract_logic_free_variables(known) if known is not None
+            else set()
+        )
+        if not (isinstance(x, Symbol) and x in free) or x in outside:
+            raise NeuroLangFrontendException(
+                f"COUNT({x}) counts a variable of its event that does not "
+                "occur elsewhere in the rule"
+            )
+        group = tuple(sorted(
+            (free | (known_free & outside)) & outside, key=lambda v: v.name
+        ))
+        projected = free - set(group) - {x}
+        if known_free & ({x} | projected):
+            raise NeuroLangFrontendException(
+                "the variables of what is known are those of the groups: "
+                f"{sorted(v.name for v in known_free & ({x} | projected))}"
+                " are projected or counted by the event"
+            )
+        terms = {
+            ge: ((1, k.value),), gt: ((1, k.value + 1),),
+            lt: ((1, 0), (-1, k.value)), le: ((1, 0), (-1, k.value + 1)),
+            eq: ((1, k.value), (-1, k.value + 1)),
+            ne: ((1, 0), (-1, k.value), (1, k.value + 1)),
+        }[comparison.value]
+        terms = tuple((sign, max(j, 0)) for sign, j in terms)
+
+        def probability(j):
+            if j > MAX_UNLIFTED_COUNT and any(
+                isinstance(f, Disjunction) for f in extract_conjuncts(event)
+            ):
+                raise NeuroLangFrontendException(
+                    f"COUNT up to {j} values of a disjunction: the lifted "
+                    "solvers do not plan it, and model counting is "
+                    f"exponential in the count (at most {MAX_UNLIFTED_COUNT})"
+                )
+            size = j * len(extract_conjuncts(event)) + j * (j - 1) // 2
+            if size > MAX_COUNT_CONJUNCTS:
+                raise NeuroLangFrontendException(
+                    f"COUNT up to {j} values needs a query of {size} "
+                    f"conjuncts, more than the {MAX_COUNT_CONJUNCTS} that "
+                    "the lifting handles"
+                )
+            copies, xs = [event], [x]
+            for _ in range(j - 1):
+                renames = {v: Symbol.fresh() for v in {x} | projected}
+                copies.append(ReplaceExpressionWalker(renames).walk(event))
+                xs.append(renames[x])
+            body = Conjunction(tuple(chain.from_iterable(
+                c.formulas if isinstance(c, Conjunction) else (c,)
+                for c in copies
+            )) + tuple(Constant(ne)(a, b) for a, b in combinations(xs, 2)))
+            if known is not None:
+                body = Condition(body, known)
+            pa = Symbol.fresh()
+            return pa, Implication(
+                pa(*group, FunctionApplication(PROB, group)), body
+            )
+
+        probabilities = {
+            j: probability(j) for j in {j for _, j in terms} | {1}
+            if j >= 1 and (j > 1 or any(j == 0 for _, j in terms) or
+                           len(terms) > 1 or terms[0][1] == 1)
+        }
+        if len(terms) == 1 and terms[0][1] >= 1:
+            pa, rule = probabilities[terms[0][1]]
+            return [rule], pa(*group, result_var)
+        rules = [rule for _, rule in probabilities.values()]
+        anchor = probabilities[1][0]
+        value, weight, tag, total = (Symbol.fresh() for _ in range(4))
+        terms_symbol, sum_symbol = Symbol.fresh(), Symbol.fresh()
+        for index, (sign, j) in enumerate(terms):
+            source = probabilities[j][0] if j >= 1 else anchor
+            scaled = (
+                Constant(mul)(Constant(float(sign)), weight) if j >= 1
+                else Constant(float(sign))
+            )
+            rules.append(Implication(
+                terms_symbol(*group, tag, value),
+                Conjunction((
+                    source(*group, weight),
+                    Constant(eq)(value, scaled),
+                    Constant(eq)(tag, Constant(index)),
+                ))
+            ))
+        rules.append(Implication(
+            sum_symbol(
+                *group, AggregationApplication(Symbol("sum"), (value,))
+            ),
+            Conjunction((terms_symbol(*group, tag, value),))
+        ))
+        return rules, sum_symbol(*group, result_var)
+
     def _build_aggregate_rule(self, head, group_vars, conjunction, agg_fn_call, result_var):
         fresh_pred_sym = Symbol.fresh()
 
@@ -751,6 +895,11 @@ class DatalogTransformer(Transformer):
                     "rule of its own, m(g, e) :- EXPECT[x | a(g, x)] = e, "
                     "and aggregate that rule: "
                     "AGGREGATE[g](m(g, e) @ sum(e)) = n."
+                )
+            if any(spec[0] == "__COUNT__" for spec in prob_specs):
+                raise NeuroLangFrontendException(
+                    "PROB[COUNT(...)] cannot be inside an AGGREGATE: "
+                    "aggregate the values of a rule that holds it"
                 )
             # Separate MARG specs (which need desugaring) from PROB specs
             # (which stay as markers in the conjunction body).
@@ -910,6 +1059,16 @@ class DatalogTransformer(Transformer):
         return FunctionApplication(
             Symbol("__PROB__"),
             (pred, cond_body, result_var)
+        )
+
+    def count_body_predicate(self, ast):
+        # PROB[COUNT(x) θ k | event] = p            → [x, θ, k, OR, event, p]
+        # PROB[COUNT(x) θ k | event // known] = p   → [x, θ, k, OR, event, SEP, known, p]
+        known = ast[6] if len(ast) == 8 else None
+        return FunctionApplication(
+            Symbol("__COUNT__"),
+            (ast[0], Constant(OPERATOR[ast[1].value]), ast[2], ast[4],
+             known, ast[-1])
         )
 
     def expect_body_predicate(self, ast):

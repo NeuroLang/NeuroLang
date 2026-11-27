@@ -7,7 +7,7 @@
 // The words of the Datalog grammar, until highlight.json (which
 // doc/make_repl_bundle.py writes from query_highlight.py) is loaded.
 export const DATALOG_DEFAULTS = {
-  datalog_keywords: ["AGGREGATE", "EXISTS", "EXPECT", "EXPECT_NORM", "MARG", "PROB", "SUCC", "ans", "exists", "False", "True", "lambda", "st"],
+  datalog_keywords: ["AGGREGATE", "COUNT", "EXISTS", "EXPECT", "EXPECT_NORM", "MARG", "PROB", "SUCC", "ans", "exists", "False", "True", "lambda", "st"],
   datalog_operators: [
     ":-", "←", "-:", "→", "~", "¬", "//", "|", "::", ":~:", "^", ":=", "==", "!=", "<",
     "<=", ">", ">=", "=", "&", "∧", "∃",

@@ -1,9 +1,10 @@
 import logging
 import operator
-from collections import Counter
+import functools
+from collections import Counter, defaultdict
 from functools import reduce
+from graphlib import CycleError, TopologicalSorter
 from itertools import chain, combinations, permutations, product
-from math import factorial
 from typing import AbstractSet
 
 import numpy as np
@@ -162,11 +163,6 @@ MQU = MoveQuantifiersUp()
 PQD = PushQuantifiersDown()
 RTO = RemoveTrivialOperations()
 RUP = RemoveUniversalPredicates()
-
-
-# The greatest number of values `k` of `_at_least_plan`, whose plan,
-# for a relation of `n` tuples, takes `O(n^k)` time.
-MAX_AT_LEAST = 4
 
 
 # For an order comparison, the comparison `w ⊲ v` of `_extremum_conjunct`
@@ -729,81 +725,153 @@ def _independent_disjunction_plan(rule, symbol_table):
 
 
 def _at_least_plan(rule, symbol_table):
-    """Plan for `∃x_1 … ∃x_k (R(ū[x_1/x]) ∧ … ∧ R(ū[x_k/x]) ∧ c)`,
-    `x` being the only quantified variable of `R(ū)` and `c` one strict
-    comparison of each pair of variables, satisfied by some order of
-    them, for `2 ≤ k ≤ MAX_AT_LEAST`: there are `k` values of `x` for
-    which `R(ū)` holds, the complement, within there being `k - 1`, the
-    same query with `k - 1` copies and pairwise `≠`, of there being
-    exactly `k - 1`. The latter is `1 / (k - 1)!` of the sum, on the
-    values of `x_1, …, x_{k-1}`, of the probabilities of
-    `R(ū[x_1/x]) ∧ … ∧ x_i ≠ x_j ∧ … ∧ ¬∃w (R(ū[w/x]) ∧ w ≠ x_1 ∧ … ∧
-    w ≠ x_{k-1})`, which holds, in a world of exactly `k - 1` values, for
-    their `(k - 1)!` orders, and in no other world."""
-    shape = _at_least_shape(rule.antecedent)
-    if shape is None:
+    """Plan for `∃x_1 … ∃x_k ∃Y_1 … ∃Y_k (A ∧ ψ(x_1, Y_1) ∧ … ∧
+    ψ(x_k, Y_k) ∧ c)`, the copies `ψ(x_i, Y_i)` being the same conjuncts up
+    to the renaming of `x` and of its own variables `Y`, `x` separating
+    `∃x ∃Y ψ(x, Y)`, `A` the conjuncts without quantified variables
+    sharing no relation with `ψ`, and `c` one strict comparison of each
+    pair of the `x_i`, satisfied by some order of them: `A` holds and
+    `∃Y ψ(a, Y)` holds for at least `k` values `a` of `x`, the events of
+    different values being independent, so that the probability is that
+    of `A` and the tail of the Poisson-binomial distribution of the
+    probabilities of the values. It is that of the separator projection
+    of `A ∧ ∃x ∃Y ψ(x, Y)`, with the projection `ThresholdProjection` for
+    `k`."""
+    parsed = _at_least_copies(rule.antecedent)
+    if parsed is None:
         return None
-    atom, x, xs = shape
-    xs = xs[:-1]
-    fewer = Conjunction(
-        tuple(ReplaceExpressionWalker({x: y}).walk(atom) for y in xs) +
-        tuple(NE(*p) for p in combinations(xs, 2))
+    xs, copies, outside = parsed
+    x, ys, atoms = copies[0]
+    quantified = {x} | ys
+    formula = Conjunction(outside + atoms)
+    return _separator_projection_plan(
+        Implication(rule.consequent, add_existentials_except(
+            formula, extract_logic_free_variables(formula) - quantified
+        )),
+        symbol_table, functools.partial(rap.ThresholdProjection, k=len(xs)),
+        {x}
     )
-    w = Symbol.fresh()
-    exactly = Conjunction(fewer.formulas + (
-        Negation(ExistentialPredicate(w, Conjunction(
-            (ReplaceExpressionWalker({x: w}).walk(atom),) +
-            tuple(NE(w, y) for y in xs)
-        ))),
-    ))
-    plans = _lift_pure((Implication(rule.consequent, add_existentials_except(
-        fewer, extract_logic_free_variables(fewer) - set(xs)
-    )),), symbol_table)
-    exactly_plan = _projected_plan(
-        rule.antecedent, exactly, set(xs), set(), rap.DisjointProjection,
-        symbol_table
-    )
-    if plans is None or exactly_plan is None:
-        return None
-    return rap.Subtraction(plans[0], rap.WeightedNaturalJoin(
-        (exactly_plan,), (Constant[float](1 / factorial(len(xs))),)
-    ))
 
 
 def _at_least_shape(formula):
     """The atom `R(ū)`, its variable `x` and the variables `x_1, …, x_k`
-    of `formula` if it is the query of `_at_least_plan`, or None."""
-    variables, body = _existential_variables_and_body(formula, True)
-    conjuncts = extract_conjuncts(body)
-    comparisons = [f for f in conjuncts if is_comparison(f)]
-    xs = sorted(variables, key=lambda v: v.name)
-    if not (
-        2 <= len(xs) <= MAX_AT_LEAST and
-        len(conjuncts) == len(xs) + len(comparisons) and
-        Counter(frozenset(c.args) for c in comparisons) ==
-        Counter(map(frozenset, combinations(xs, 2))) and
-        all(c.functor.value in STRICT_COMPARISONS for c in comparisons) and
-        any(
-            all(c.functor.value(*map(order.index, c.args))
-                for c in comparisons)
-            for order in permutations(xs)
-        )
-    ):
+    of `formula` if it is `_at_least_plan`'s query with `R(ū)` as the only
+    atom of each copy, `x` its only quantified variable, and no other
+    atom, or None."""
+    parsed = _at_least_copies(formula)
+    if parsed is None:
         return None
-    x, *ys = xs
-    atom = next(
-        (f for f in conjuncts if x in extract_logic_free_variables(f) and
-         f not in comparisons), None
-    )
+    xs, ((x, ys, atoms), *_), outside = parsed
+    if not (outside == () and not ys and len(atoms) == 1):
+        return None
+    atom, = atoms
     if not (
         isinstance(atom, FunctionApplication) and
-        isinstance(atom.functor, Symbol) and
-        variables & set(atom.args) == {x} and
-        all(ReplaceExpressionWalker({x: y}).walk(atom) in conjuncts
-            for y in ys)
+        isinstance(atom.functor, Symbol)
     ):
         return None
     return atom, x, xs
+
+
+def _at_least_copies(formula):
+    """The variables `x_1, …, x_k`, the copies and the atoms outside
+    them of `formula` if it is the query of `_at_least_plan`, or None."""
+    variables, body = _existential_variables_and_body(formula, True)
+    conjuncts = extract_conjuncts(body)
+    comparisons = [
+        f for f in conjuncts if is_comparison(f) and set(f.args) <= variables
+    ]
+    xs = sorted(
+        set(chain.from_iterable(c.args for c in comparisons)),
+        key=lambda v: v.name
+    )
+    if not (
+        len(xs) >= 2 and
+        all(c.functor.value in STRICT_COMPARISONS for c in comparisons) and
+        Counter(frozenset(c.args) for c in comparisons) ==
+        Counter(map(frozenset, combinations(xs, 2))) and
+        _comparisons_have_an_order(comparisons)
+    ):
+        return None
+    copies, outside = _copies_by_quantified_variable(
+        [f for f in conjuncts if f not in comparisons], variables, xs
+    )
+    if copies is None:
+        return None
+    return xs, copies, tuple(outside)
+
+
+MAX_COPY_VARIABLES = 4
+
+
+def _copies_by_quantified_variable(atoms, variables, xs):
+    """The copies of `atoms` by `x` of `xs`, each the `x`, the other
+    `variables` connected to it by the atoms and the atoms, sorted by
+    `x`; and the atoms without `variables`; or None if the atoms are not
+    one copy for each `x`, the same up to the renaming of `x` and its
+    variables (compared by the permutations of the at most
+    `MAX_COPY_VARIABLES` of them)."""
+    root = {v: v for v in variables}
+
+    def find(v):
+        while root[v] != v:
+            root[v] = root[root[v]]
+            v = root[v]
+        return v
+
+    for atom in atoms:
+        first, *others = extract_logic_free_variables(atom) & variables or [
+            None
+        ]
+        for other in others:
+            root[find(other)] = find(first)
+    groups = defaultdict(list)
+    outside = []
+    for atom in atoms:
+        quantified = extract_logic_free_variables(atom) & variables
+        if quantified:
+            groups[find(next(iter(quantified)))].append(atom)
+        else:
+            outside.append(atom)
+    copies = []
+    for x in xs:
+        ys = {v for v in variables if find(v) == find(x)} - {x}
+        if not (ys.isdisjoint(xs) and groups.get(find(x))):
+            return None, None
+        copies.append((x, ys, tuple(groups.pop(find(x)))))
+    if groups:
+        return None, None
+    x0, ys0, atoms0 = copies[0]
+    ys0 = sorted(ys0, key=lambda v: v.name)
+    if len(ys0) > MAX_COPY_VARIABLES or not all(
+        len(ys) == len(ys0) and any(
+            Counter(
+                ReplaceExpressionWalker(
+                    {x: x0, **dict(zip(sorted(ys, key=lambda v: v.name), p))}
+                ).walk(f) for f in fs
+            ) == Counter(atoms0)
+            for p in permutations(ys0)
+        )
+        for x, ys, fs in copies[1:]
+    ):
+        return None, None
+    return copies, tuple(outside)
+
+
+def _comparisons_have_an_order(comparisons):
+    """Whether some total order of their variables satisfies the strict
+    `comparisons` (`≠` always does): the graph of `<` has no cycle."""
+    graph = defaultdict(set)
+    for c in comparisons:
+        if c.functor.value is operator.lt:
+            graph[c.args[1]].add(c.args[0])
+        elif c.functor.value is operator.gt:
+            graph[c.args[0]].add(c.args[1])
+    try:
+        TopologicalSorter(graph).prepare()
+    except CycleError:
+        return False
+    return True
 
 
 def _projection_applies(antecedent, symbol_table):
@@ -881,8 +949,12 @@ def _comparisons_as_relations(projected, quantified, conjuncts, symbol_table):
     return tuple(relations.get(f, f) for f in conjuncts)
 
 
-def _separator_projection_plan(rule, symbol_table):
-    split = _split_separator_projection(rule.antecedent, symbol_table)
+def _separator_projection_plan(
+    rule, symbol_table, projection=rap.IndependentProjection, separators=None
+):
+    split = _split_separator_projection(
+        rule.antecedent, symbol_table, separators
+    )
     if split is None:
         return None
     separator, other_variables, inside, outside = split
@@ -894,7 +966,7 @@ def _separator_projection_plan(rule, symbol_table):
             other_variables - {separator}
         ),
         inside_formula, {separator}, other_variables,
-        rap.IndependentProjection, symbol_table
+        projection, symbol_table
     )
     if plan is None or len(outside) == 0:
         return plan
@@ -969,10 +1041,11 @@ def _split_choice_projection(antecedent, symbol_table):
     return None
 
 
-def _split_separator_projection(antecedent, symbol_table):
+def _split_separator_projection(antecedent, symbol_table, separators=None):
     """A separator variable `v` of the conjuncts `ψ` of `∃X φ` with
     variables of `X`, the other variables of `X`, `ψ` and the other
-    conjuncts, sharing no probabilistic relation with `ψ`, or None.
+    conjuncts, sharing no probabilistic relation with `ψ`, or None. Only
+    the `separators`, if given, are tried.
     """
     variables, body = _existential_variables_and_body(antecedent)
     if len(variables) == 0:
@@ -990,7 +1063,10 @@ def _split_separator_projection(antecedent, symbol_table):
         - deterministic_symbols
     ):
         return None
-    for variable in sorted(variables, key=lambda v: v.name):
+    for variable in sorted(
+        variables if separators is None else variables & separators,
+        key=lambda v: v.name
+    ):
         others = variables - {variable}
         quantified = Conjunction(inside)
         for other in sorted(others, key=lambda v: v.name):
