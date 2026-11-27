@@ -15,6 +15,20 @@ class InvalidMagicSetError(ForbiddenExpressionError):
     pass
 
 
+class PredicateArityInMagicSetsError(InvalidMagicSetError):
+    """
+    A rule uses an intensional predicate with a number of arguments other
+    than the one of its definition. The positions Magic Sets binds, and
+    those of an aggregation it leaves free, are those of the definition,
+    so the program is solved unrewritten, as without Magic Sets.
+
+    Examples
+    -------
+    Q(x, count(y)) :- P(x, y)
+    ans(x) :- R(a, x), Q(x)
+    """
+
+
 class UnstratifiedMagicSetsRewriteError(InvalidMagicSetError):
     """
     The program of the Magic Sets rewrite has an aggregation, or a

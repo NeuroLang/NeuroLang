@@ -25,6 +25,7 @@ from ..exceptions import (
     NegationInMagicSetsRewriteError,
     NewRecursionInMagicSetsRewriteError,
     NoConstantPredicateFoundError,
+    PredicateArityInMagicSetsError,
     UnstratifiedMagicSetsRewriteError,
 )
 from .. import magic_sets
@@ -841,6 +842,29 @@ def test_bound_aggregation_raises_error():
     dl.walk(code)
     dl.walk(edb)
     with raises(BoundAggregationApplicationError):
+        magic_rewrite(q(x), dl)
+
+
+@pytest.mark.parametrize("definition", [
+    Imp_(anc2(x, AGG_COUNT(y)), par(x, y)),
+    Imp_(anc2(x, y), par(x, y)),
+])
+@pytest.mark.parametrize("use, used", [
+    (anc2(x), 1),
+    (anc2(x, y, z), 3),
+])
+def test_a_predicate_used_with_another_arity_than_defined_is_refused(
+    definition, use, used
+):
+    """It was an IndexError (an aggregated predicate used with fewer
+    arguments) or an AttributeError of the chase of the rewritten program."""
+    dl = Datalog()
+    dl.walk(Eb_([
+        F_(par(a, b)),
+        Imp_(q(x), par(a, x) & use),
+        definition,
+    ]))
+    with raises(PredicateArityInMagicSetsError, match=f"anc2 .* {used}"):
         magic_rewrite(q(x), dl)
 
 
