@@ -148,8 +148,10 @@ voxel is active:
 - ``p_image_given_term(t, p)`` conditions it on the studies of each term,
   for every term at once, and ``p_image(q)`` is its probability over all
   the studies;
-- the answer keeps the terms of 30 studies or more, ``term_studies``,
-  since one study of a rare term activating the image makes its lift
+- the answer keeps the terms of 30 studies or more, the engine's
+  ``term_studies(t, n)`` (the number of studies of each term, solved
+  when the engine is built: its ``materialised``), since one study of a
+  rare term activating the image makes its lift
   large, and the concepts of the Cognitive Atlas
   (:doc:`tutorial_cognitive_atlas`) rather than every word of the
   abstracts.  Drop ``cogat_term`` to rank every term of the engine.

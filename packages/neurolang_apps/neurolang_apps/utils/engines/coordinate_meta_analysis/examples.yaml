@@ -951,7 +951,6 @@ assistant_examples:
       image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_image(PROB) :- image_hit(s) & selected_study(s)
-      term_studies(t, count(s)) :- term_in_study(s, t)
       ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
   - question: Decode the tractogram I uploaded from where its streamlines end. Which concepts of the Cognitive Atlas are most associated with the regions near the ends of its streamlines?
     datalog: |-
@@ -959,7 +958,6 @@ assistant_examples:
       image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_image(PROB) :- image_hit(s) & selected_study(s)
-      term_studies(t, count(s)) :- term_in_study(s, t)
       ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
   - question: Decode only the cortex of the image I uploaded, leaving out its subcortical and cerebellar voxels. Which concepts of the Cognitive Atlas have the largest lift?
     datalog: |-
@@ -967,7 +965,6 @@ assistant_examples:
       image_hit(s) :- selected_voxel(i, j, k), cortical_mask(i, j, k), image_active(i, j, k), activated(i, j, k, s)
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_image(PROB) :- image_hit(s) & selected_study(s)
-      term_studies(t, count(s)) :- term_in_study(s, t)
       ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
   - question: Which is the lift of working memory in the mask I uploaded?
     datalog: |-
@@ -982,7 +979,6 @@ assistant_examples:
       image_hit(s) :- selected_voxel(i, j, k), image_active(i, j, k), activated(i, j, k, s)
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_image(PROB) :- image_hit(s) & selected_study(s)
-      term_studies(t, count(s)) :- term_in_study(s, t)
       ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), (lift == a / b)
   - question: Is fear more associated than pain with the image I uploaded? Give a 95% confidence interval of the difference of their lifts.
     datalog: |-
@@ -1008,7 +1004,6 @@ assistant_examples:
       image_hit(s) :- activated(i, j, k, s), image_active(i, j, k)
       p_image_given_term(t, PROB) :- (image_hit(s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_image(PROB) :- image_hit(s) & selected_study(s)
-      term_studies(t, count(s)) :- term_in_study(s, t)
       ans(term, lift, studies) :- p_image_given_term(term, a), p_image(b), term_studies(term, studies), (studies >= 30), cogat_term(concept, term), (lift == a / b)
 
   # An expected number or an expected value over the choice of a study:

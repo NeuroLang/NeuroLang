@@ -183,6 +183,18 @@ may specify the following keys, all of them optional:
   ``[PROBABILISTIC_SOLVER] index_share`` (a tenth) of the view's, reads their entries alone
   rather than the whole view: ``activated`` (``[activated]`` in the
   engines of ``coordinate_meta_analysis``) by the studies of a term.
+- ``materialised`` — deterministic predicates of the engine's rules
+  solved once, in their order, when the engine is built, and stored as
+  relations in place of their rules, marked as having no duplicate rows:
+  a query reads them as it reads a stored relation, rather than deriving
+  them. A build keeps their tables with its tables (``derived_tables``),
+  named from the rules they are solved from and the relations those read.
+  A predicate that depends on a probabilistic one is left a rule. A
+  program cannot add a rule to a materialised predicate, as to any stored
+  relation. The engines of ``coordinate_meta_analysis`` declare
+  ``mentions``, ``term_in_study`` and ``term_studies``, selections and a
+  count of the TF-IDF weights of the terms (10 million on neurostore).
+  Inherited lists are concatenated.
   Kept with the build's tables apart from the views, memory-mapped and
   shared as they are; on neurostore, 4 GB for the 1 billion entries of
   ``activated``

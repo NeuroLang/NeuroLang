@@ -53,6 +53,9 @@ define:
 * ``extends`` — one engine name, or a list of them, whose configuration
   is inherited (see :func:`resolve_engine_config`); engines marked
   ``abstract: true`` only serve as bases and cannot be built or listed;
+* ``materialised`` — deterministic predicates of the engine's rules
+  solved once, when it is built, and stored as relations in place of
+  their rules (see :func:`_phase_materialised`); inherited parent first;
 * ``solver_mixins`` — classes, as ``"module:Class"`` strings, put
   before the solver of the engine's :class:`NeurolangPDL` (the classes of
   ``dimension_type_predicates`` after them), e.g. pattern-matching mixins
@@ -340,7 +343,7 @@ _CONCATENATED_KEYS = frozenset({
     "datalog_init", "builtins", "downloads", "ontologies",
     "dimension_type_predicates", "assistant_examples", "solver_mixins",
     "python_init", "hidden_predicates", "acknowledgements",
-    "assistant_guidance",
+    "assistant_guidance", "materialised",
 })
 # Keys whose value is a list, or a single item standing for a list of one.
 _LIST_KEYS = frozenset({"python_init"})
@@ -1947,6 +1950,69 @@ def _phase_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
         nl.add_tuple_set(df, name=rel_name)
 
 
+def _phase_materialised(nl, cfg):
+    """
+    Solve the predicates of ``materialised``, in their order, and store
+    each as a relation in place of its rules: a query reads it as any
+    stored relation, rather than deriving it again (``mentions`` and
+    ``term_in_study``, selections of the 10 million TF-IDF weights of
+    neurostore, each deduplicated in every query: 5 s of a query's 14).
+
+    A predicate's table is kept with the build's tables (see
+    :func:`~neurolang_apps.utils.engine_cache.keep_table`), named from the
+    rules it is solved from and the stored relations they read; it is a
+    set, so it is marked as having no duplicate rows. A predicate the
+    engine has no rule for is skipped; one depending on a probabilistic
+    predicate cannot be solved deterministically, and is left a rule.
+    """
+    from nl_core.datalog.constraints_representation import reachable_code
+    from nl_core.datalog.expression_processing import extract_logic_atoms
+    from nl_expr.expressions import Symbol
+
+    program = nl.program_ir
+    for name in dict.fromkeys(cfg.get("materialised") or ()):
+        symbol = Symbol(name)
+        rules = program.intensional_database().get(symbol)
+        if rules is None:
+            continue
+        variables = tuple(
+            Symbol(f"x{i}")
+            for i in range(len(rules.formulas[0].consequent.args))
+        )
+        reached = reachable_code(rules.formulas, program)
+        read = sorted({
+            atom.functor for rule in reached.formulas
+            for atom in extract_logic_atoms(rule.antecedent)
+            if isinstance(atom.functor, Symbol)  # not a comparison
+        }, key=lambda s: s.name)
+        if any(f in program.probabilistic_predicate_symbols for f in read):
+            continue
+        stored = program.extensional_database()
+        frames = [
+            stored[f].value.as_pandas_dataframe() for f in read
+            if f in stored
+        ]
+        text = ", ".join(v.name for v in variables)
+
+        def solve(name=name, text=text):
+            with nl.scope:
+                return nl.execute_datalog_program(
+                    f"ans({text}) :- {name}({text})"
+                ).as_pandas_dataframe()
+
+        table = engine_cache.keep_table(
+            program, "materialised", frames,
+            lambda reached=reached, name=name: (
+                name, sorted(str(rule) for rule in reached.formulas)
+            ),
+            solve,
+        )
+        del program.symbol_table[symbol]
+        nl.add_tuple_set(table, name=name)
+        # a set: the views of each query need not drop duplicate rows
+        program.symbol_table[symbol].value.might_have_duplicates = False
+
+
 def _phase_probabilistic_choices(nl, cfg):
     for ch_name, ch_cfg in cfg.get("probabilistic_choice", {}).items():
         source_val = nl.symbols[ch_cfg["source"]]
@@ -2337,6 +2403,7 @@ def build_engine(
             tell(f"Defining the rules of {name}")
         _phase_datalog_init(nl, cfg, data_dir, mask)
         _phase_relations(nl, cfg, name, data_dir, rel_base_dir)
+        _phase_materialised(nl, cfg)
         _phase_text_embeddings(
             nl, cfg, data_dir, name, rel_base_dir, yaml_path
         )

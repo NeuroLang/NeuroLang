@@ -1605,3 +1605,76 @@ class TestSparseViews:
         leaving out a column or of a derived relation is refused."""
         with pytest.raises(ValueError, match=match):
             self._engine(tmp_path, views, body)
+
+
+class TestMaterialised:
+    """Check the predicates of ``materialised`` are solved when the engine
+    is built and stored as relations."""
+
+    @staticmethod
+    def _engine(tmp_path, materialised):
+        from neurolang_apps.utils import engine_registry
+
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "q.csv").write_text(
+            "x,y,w\nu,1,.5\nv,2,.25\nu,2,.75\nv,1,0\n"
+        )
+        path = tmp_path / "engines.yaml"
+        path.write_text(
+            "engines:\n  e:\n"
+            "    relations: {q: q.csv}\n"
+            "    datalog_init: |\n"
+            "      p(x, y) :- q(x, y, w), (w > 0.1)\n"
+            "      c(x, count(y)) :- p(x, y)\n"
+            f"    materialised: {materialised}\n"
+        )
+        return engine_registry.build_engine(
+            "e", tmp_path, yaml_path=path, use_cache=True
+        )
+
+    def test_stored_with_the_answers_of_its_rules(self, tmp_path):
+        """Check p and c, in this order (c reads the stored p), are stored
+        relations, marked as without duplicates, kept with the build's
+        tables, with the answers their rules give; the next build reads
+        them."""
+        from nl_expr.expressions import Symbol
+
+        expected = {}
+        rule = self._engine(tmp_path / "rules", "[]")
+        for name, query in (("p", "ans(x, y) :- p(x, y)"),
+                            ("c", "ans(x, n) :- c(x, n)")):
+            expected[name] = set(rule.execute_datalog_program(query))
+        for build in range(2):
+            nl = self._engine(tmp_path, "[p, c]")
+            program = nl.program_ir
+            for name in ("p", "c"):
+                assert Symbol(name) in program.extensional_database()
+                assert Symbol(name) not in program.intensional_database()
+                value = program.symbol_table[Symbol(name)].value
+                assert not value.might_have_duplicates
+            assert set(nl.execute_datalog_program(
+                "ans(x, y) :- p(x, y)"
+            )) == expected["p"]
+            assert set(nl.execute_datalog_program(
+                "ans(x, n) :- c(x, n)"
+            )) == expected["c"]
+        kept = list((tmp_path / "derived_tables").glob("materialised-*"))
+        assert len(kept) == 2
+
+    def test_a_predicate_without_rules_is_left(self, tmp_path):
+        """Check a declared predicate the engine has no rule for is
+        skipped."""
+        nl = self._engine(tmp_path, "[absent, p]")
+        assert set(nl.execute_datalog_program("ans(x) :- p(x, 2)")) == {
+            ("v",), ("u",)
+        }
+
+    def test_coordinate_engines_declare_the_tfidf_selections(self):
+        """Check the coordinate-based engines materialise the selections
+        of the TF-IDF weights and the studies of each term."""
+        from neurolang_apps.utils import engine_registry
+
+        cfg = engine_registry.get_engine_config("neurosynth")
+        assert cfg["materialised"] == [
+            "mentions", "term_in_study", "term_studies"
+        ]

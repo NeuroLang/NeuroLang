@@ -578,6 +578,7 @@ engines:
       activated(i, j, k, s) :- brain_mask(i, j, k) & peak_reported(i1, j1, k1, s) & (EUCLIDEAN(i, j, k, i1, j1, k1) <= {kernel_radius_voxels})
       p_a(i, j, k, PROB) :- activated(i, j, k, s) & selected_study(s)
       p_term(t, PROB) :- term_in_study(s, t) & selected_study(s)
+      term_studies(t, count(s)) :- term_in_study(s, t)
       p_a_given_t(t, i, j, k, PROB) :- (activated(i, j, k, s) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       p_any_voxel_given_t(t, PROB) :- (activated(i, j, k, s) & selected_voxel(i, j, k) & selected_study(s)) // (term_in_study(s, t) & selected_study(s))
       lift(t, i, j, k, l) :- p_a_given_t(t, i, j, k, pat) & p_a(i, j, k, pa) & (l == pat / pa)
@@ -641,9 +642,6 @@ engines:
       % The probability that any study, chosen at random,
       % hits the image.
       p_{image}(PROB) :- {image}_hit(s) & selected_study(s)
-      % The number of studies of each term: the lift of a
-      % term of few studies is noisy.
-      term_studies(t, count(s)) :- term_in_study(s, t)
       % The lift of each concept of the Cognitive Atlas of
       % 30 studies or more: how many times more often its
       % studies hit the image than the average study does.
@@ -717,6 +715,12 @@ engines:
     # studies (those of a term) reads their voxels alone, not the whole
     # view (2 895 studies of neurostore: 53 M of its 1 billion entries).
     sparse_view_indexes: [activated]
+    # Predicates solved once, when the engine is built, and stored as
+    # relations rather than derived in every query: the selections of the
+    # 10 million TF-IDF weights (deduplicated in every query, 5 s of the
+    # 14 of a query on neurostore) and the number of studies of each term
+    # (term_studies, 4 s of each image decoding).
+    materialised: [mentions, term_in_study, term_studies]
     # The sorts of the entities the predicates relate, declared once: the
     # columns an entity spans and their type.  A sort of N > 1 columns
     # reads ``in ND`` in SQUALL (``every Voxel in 3D``).
