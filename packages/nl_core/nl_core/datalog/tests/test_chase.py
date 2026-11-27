@@ -7,6 +7,7 @@ from pytest import fixture, mark, raises, skip
 
 from nl_expr import expression_walker as ew
 from nl_expr import expressions
+from nl_expr.exceptions import WrongArgumentsInPredicateError
 from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
@@ -1029,3 +1030,68 @@ def test_a_chase_that_ran_is_not_kept(chase_class):
     del dc
     gc.collect()
     assert chase() is None
+
+
+@fixture(params=(ChaseNonRecursive, ChaseNaive, ChaseSemiNaive))
+def named_ra_chase_class(request):
+    class C(request.param, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
+        pass
+
+    return C
+
+
+@mark.parametrize(
+    "body_args, used",
+    [((x,), 1), ((x, y, z), 3)],
+)
+def test_predicate_with_wrong_number_of_arguments(
+    named_ra_chase_class, body_args, used
+):
+    """A predicate used with fewer or more arguments than the columns of
+    its relation is an error, not a match of its leading columns."""
+    datalog_program = DT.walk(Eb_((
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
+        Imp_(S(x), Q(*body_args)),
+    )))
+    dl = Datalog()
+    dl.walk(datalog_program)
+    instance = MapInstance(dl.extensional_database())
+    chase = named_ra_chase_class(dl)
+
+    with raises(WrongArgumentsInPredicateError) as error:
+        chase.chase_step(instance, datalog_program.formulas[-1])
+    assert str(error.value) == f"`Q` has 2 columns but is used with {used}"
+
+
+def test_predicate_with_the_arity_of_its_relation(named_ra_chase_class):
+    datalog_program = DT.walk(Eb_((
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
+        Imp_(S(x), Q(x, y)),
+        Imp_(T(x, y), Q(x, z) & Q(z, y)),
+    )))
+    dl = Datalog()
+    dl.walk(datalog_program)
+    instance = MapInstance(dl.extensional_database())
+    chase = named_ra_chase_class(dl)
+
+    update = chase.chase_step(instance, datalog_program.formulas[-2])
+    assert update == MapInstance({S: C_({C_((C_(1),)), C_((C_(2),))})})
+    update = chase.chase_step(instance, datalog_program.formulas[-1])
+    assert update == MapInstance({T: C_({C_((C_(1), C_(3)))})})
+
+
+def test_empty_relation_is_not_checked_for_its_arity(named_ra_chase_class):
+    """The arity of an empty relation is unknown."""
+    P = S_('P')
+    datalog_program = DT.walk(Eb_((
+        F_(Q(C_(1), C_(2))),
+        Imp_(S(x), Q(x, y) & P(x)),
+    )))
+    dl = Datalog()
+    dl.walk(datalog_program)
+    instance = MapInstance(dl.extensional_database())
+    chase = named_ra_chase_class(dl)
+
+    assert len(chase.chase_step(instance, datalog_program.formulas[-1])) == 0

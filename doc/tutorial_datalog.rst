@@ -121,7 +121,10 @@ followed by parenthesised arguments:
     activates(s, r)
 
 ``region(x)`` refers to the ``region`` EDB (extensional database) relation.
-Arguments are **variables** — they bind to columns of the relation.
+Arguments are **variables** — they bind to columns of the relation. A
+predicate is used with as many arguments as its relation has columns, one
+for each: ``activates(s)`` on the two columns of ``activates`` is an error,
+not the first column. ``_`` stands for a column that is not used.
 
 2.2 Rules and the ``:-`` Operator
 -----------------------------------

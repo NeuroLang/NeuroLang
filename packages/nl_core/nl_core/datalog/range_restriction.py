@@ -17,6 +17,7 @@ from operator import contains, eq
 
 from nl_expr.exceptions import (
     UnboundVariablesError,
+    PredicateArityError,
     WrongArgumentsInPredicateError,
 )
 from nl_expr.expression_walker import (
@@ -219,6 +220,17 @@ def _function(functor, symbol_table):
     if isinstance(value, Constant) and callable(value.value):
         return value.value
     return None
+
+
+def check_predicate_arity(predicate, columns, used):
+    """
+    Raise `PredicateArityError` if the relation *predicate*, which has
+    *columns* columns, is used with *used* arguments.
+
+    A relation with no columns, which is empty or has none, is not checked.
+    """
+    if columns and columns != used:
+        raise PredicateArityError(predicate, columns, used, squall=False)
 
 
 def _check_function_arguments(application, symbol_table):

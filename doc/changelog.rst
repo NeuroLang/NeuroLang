@@ -433,6 +433,16 @@ Unreleased
   the number of columns of a join of hundreds of relations (a join of 200
   atoms that took 5.3 s now takes 3.9 s).
 
+- A predicate used with fewer arguments than the columns of its relation,
+  ``ans(x) :- p(x)`` for a binary ``p``, was solved on its leading columns,
+  while one used with more arguments was an error; it is an error too, on
+  both frontends, for stored relations and for those defined by rules, with
+  a message that names the predicate and the numbers (``"`p` has 2 columns
+  but is used with 1 argument"``). A predicate defined by rules and used with
+  fewer arguments in the query of ``NeurolangPDL`` failed with "Relations
+  must have the same arity". An empty relation has no known arity and is not
+  checked.
+
 - The choice facts of one predicate, ``0.3 ^ choice('a'). 0.7 ^ choice('b').``
   (the example of the tutorial, 10.6), are the alternatives of one choice,
   as the ``::`` facts of a predicate are one relation; the second one used to

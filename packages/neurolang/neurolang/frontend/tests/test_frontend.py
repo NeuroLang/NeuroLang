@@ -246,6 +246,100 @@ def test_query_wrong_head_arguments():
             neurolang.query((e.x, e.y, e.z), e.q(e.x, e.y))
 
 
+ENGINES = (frontend.NeurolangDL, frontend.NeurolangPDL)
+
+
+def _pair_engine(engine_class):
+    neurolang = engine_class()
+    neurolang.add_tuple_set([("a", "b"), ("c", "d")], name="p")
+    return neurolang
+
+
+@pytest.mark.parametrize("engine_class", ENGINES)
+@pytest.mark.parametrize(
+    "program, predicate, used",
+    [
+        ("ans(x) :- p(x)", "p", 1),
+        ("ans(x) :- p(x, y, z)", "p", 3),
+        ("ans() :- p()", "p", 0),
+        ("q(x) :- p(x)\nans(x) :- q(x)", "p", 1),
+        ("q(x, y) :- p(x, y)\nans(x) :- q(x)", "q", 1),
+        ("q(x, y) :- p(x, y)\nans(x) :- q(x, y, z)", "q", 3),
+        ("ans(x) :- p(x, y), ~p(x)", "p", 1),
+    ],
+)
+def test_predicate_with_wrong_number_of_arguments(
+    engine_class, program, predicate, used
+):
+    """
+    An atom with fewer arguments than the columns of its relation was
+    solved on the leading columns; with more, it was an error.
+    """
+    neurolang = _pair_engine(engine_class)
+    with pytest.raises(WrongArgumentsInPredicateError) as error:
+        neurolang.execute_datalog_program(program)
+    assert str(error.value) == (
+        f"`{predicate}` has 2 columns but is used with {used}"
+    )
+    assert (error.value.predicate, error.value.arity) == (predicate, 2)
+    # the suggestions are those of SQUALL; this is not SQUALL
+    assert "noun" not in error.value.suggestion
+
+
+@pytest.mark.parametrize("engine_class", ENGINES)
+def test_predicate_with_wrong_number_of_arguments_in_the_builder(
+    engine_class
+):
+    neurolang = _pair_engine(engine_class)
+    with neurolang.scope as e:
+        e.q[e.x] = e.p[e.x]
+        with pytest.raises(WrongArgumentsInPredicateError, match="`p` has"):
+            neurolang.query((e.x,), e.q[e.x])
+    with neurolang.scope as e:
+        with pytest.raises(WrongArgumentsInPredicateError, match="`p` has"):
+            neurolang.query((e.x,), e.p[e.x])
+
+
+@pytest.mark.parametrize("engine_class", ENGINES)
+def test_predicate_with_the_arity_of_its_relation(engine_class):
+    neurolang = _pair_engine(engine_class)
+    neurolang.add_tuple_set([("a",)], name="d")
+    neurolang.add_tuple_set([], name="e", type_=Tuple[str, str])
+    result = neurolang.execute_datalog_program(
+        "q(x, y) :- p(x, y)\n"
+        "ans(x) :- q(x, y), ~p(y, x), p('a', y)"
+    )
+    assert {tuple(row) for row in result} == {("a",)}
+    # An empty relation has no known arity: it is not checked
+    result = neurolang.execute_datalog_program("ans(x) :- d(x), e(x)")
+    assert len(result) == 0
+    # An anonymous variable stands for one argument
+    result = neurolang.execute_datalog_program("ans(x) :- p(x, _)")
+    assert {tuple(row) for row in result} == {("a",), ("c",)}
+
+
+def test_probabilistic_relations_are_checked_without_their_probability():
+    neurolang = frontend.NeurolangPDL()
+    neurolang.add_probabilistic_facts_from_tuples(
+        [(0.5, "a"), (0.4, "b")], name="item"
+    )
+    neurolang.add_probabilistic_choice_from_tuples(
+        [(0.3, "u"), (0.7, "v")], name="pick"
+    )
+    result = neurolang.execute_datalog_program(
+        "q(x) :- item(x)\nans(x, p) :- PROB[q(x)] = p"
+    )
+    assert {tuple(row) for row in result} == {("a", 0.5), ("b", 0.4)}
+    result = neurolang.execute_datalog_program(
+        "ans(x, p) :- PROB[pick(x)] = p"
+    )
+    assert {tuple(row) for row in result} == {("u", 0.3), ("v", 0.7)}
+    with pytest.raises(WrongArgumentsInPredicateError, match="`item` has"):
+        neurolang.execute_datalog_program(
+            "q(x) :- item(x, y)\nans(x, p) :- PROB[q(x)] = p"
+        )
+
+
 def _squall_voxel_engine(engine_class=frontend.NeurolangDL):
     """Return an engine with neurosynth-like voxel, study and report facts."""
     neurolang = engine_class()

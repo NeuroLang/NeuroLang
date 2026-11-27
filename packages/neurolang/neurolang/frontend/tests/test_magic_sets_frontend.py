@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from nl_core.datalog import magic_sets
 from nl_core.datalog.exceptions import InvalidMagicSetError
+from nl_expr.exceptions import PredicateArityError
 
 from ...frontend import NeurolangDL
 from ...frontend import probabilistic_frontend, query_resolution_datalog
@@ -580,28 +581,32 @@ def test_frontend_similar_study_bound_after_the_rule_restricting_it(
 @pytest.mark.parametrize("definition", [
     "cnt(x, count(y)) :- par(x, y)", "cnt(x, y) :- par(x, y)",
 ])
-def test_frontend_solves_unrewritten_a_predicate_of_another_arity(
+def test_frontend_a_predicate_of_another_arity_is_an_arity_error(
     frontend, definition, monkeypatch
 ):
     """
     ``cnt`` is used with one argument and defined with two: magic sets
     declined it with an IndexError, or the chase of its rewrite failed
-    with an AttributeError. It is solved as it is without magic sets.
+    with an AttributeError. The rewrite is declined and the program
+    solved as it is, which is an arity error naming ``cnt``, with and
+    without magic sets.
     """
     def solve():
         nl = frontend()
         nl.add_tuple_set([("a", "b"), ("b", "c")], name="par")
         return nl.execute_datalog_program(
             f"{definition}\nans(x) :- par('a', x), cnt(x)"
-        ).as_pandas_dataframe().values.tolist()
+        )
 
     def refuse(*args, **kwargs):
         raise InvalidMagicSetError()
 
-    rewritten = solve()
+    with pytest.raises(PredicateArityError, match="`cnt` has 2 columns"):
+        solve()
     monkeypatch.setattr(query_resolution_datalog, "magic_rewrite", refuse)
     monkeypatch.setattr(probabilistic_frontend, "magic_rewrite", refuse)
-    assert rewritten == solve()
+    with pytest.raises(PredicateArityError, match="`cnt` has 2 columns"):
+        solve()
 
 
 @pytest.mark.parametrize("frontend", [NeurolangDL, NeurolangPDL])

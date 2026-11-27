@@ -295,6 +295,9 @@ class PredicateArityError(WrongArgumentsInPredicateError):
         Number of columns of the predicate.
     used : int
         Number of arguments the predicate is used with.
+    squall : bool
+        Whether the predicate is written in SQUALL (the default), for
+        `suggestion` to tell how to write it so.
 
     Notes
     -----
@@ -306,7 +309,7 @@ class PredicateArityError(WrongArgumentsInPredicateError):
     the extra value.
     """
 
-    def __init__(self, predicate, arity, used):
+    def __init__(self, predicate, arity, used, squall=True):
         """Build the message from the predicate name and the counts."""
         columns = "column" if arity == 1 else "columns"
         super().__init__(
@@ -315,6 +318,8 @@ class PredicateArityError(WrongArgumentsInPredicateError):
         self.predicate = predicate
         self.arity = arity
         self.used = used
+        if not squall:
+            return
         if used == 1 and arity > 1:
             self.suggestion = (
                 f"If `{predicate}` is a noun, use `in {arity}D` or a tuple "

@@ -12,6 +12,7 @@ from nl_expr.exceptions import (
 )
 from nl_expr.expressions import Constant, FunctionApplication, Symbol
 from nl_expr.expression_walker import ExpressionWalker, ReplaceSymbolWalker
+from nl_expr.logic.expression_processing import ExtractRelationalAtoms
 from nl_expr.logic.unification import apply_substitution_arguments
 from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
@@ -24,6 +25,7 @@ from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import extract_logic_free_variables
 from ..expressions import Conjunction, Implication
 from ..instance import MapInstance
+from ..range_restriction import check_predicate_arity
 from ..translate_to_named_ra import TranslateToNamedRAWithNaryJoins
 from ..wrapped_collections import (WrappedNamedRelationalAlgebraFrozenSet,
                                    WrappedRelationalAlgebraSet)
@@ -434,6 +436,8 @@ class ChaseNamedRelationalAlgebraMixin:
         if len(predicates) == 0:
             return [{}]
 
+        self._check_predicate_arities(predicates, symbol_table)
+
         ra_code = self.translate_conjunction_to_named_ra(
             Conjunction(predicates), columns
         )
@@ -448,6 +452,22 @@ class ChaseNamedRelationalAlgebraMixin:
         )
 
         return substitutions
+
+    @_cached_in_chase
+    def _relational_atoms(self, predicates):
+        return tuple(ExtractRelationalAtoms().walk(Conjunction(predicates)))
+
+    def _check_predicate_arities(self, predicates, symbol_table):
+        """
+        Raise `WrongArgumentsInPredicateError` for a predicate used with a
+        number of arguments other than the columns of its relation.
+        """
+        for atom in self._relational_atoms(predicates):
+            check_predicate_arity(
+                atom.functor.name,
+                symbol_table[atom.functor].value.arity,
+                len(atom.args),
+            )
 
     @_cached_in_chase
     def translate_conjunction_to_named_ra(self, conjunction, columns=None):
