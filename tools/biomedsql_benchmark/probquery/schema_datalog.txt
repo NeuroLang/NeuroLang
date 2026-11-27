@@ -1,0 +1,38 @@
+The database has twelve tables (columns in order):
+- pd_gwas(UUID, SNP, A1, A2, freq, b, se, p, chr_37, bp_37, chr_38, bp_38, nearestGene): GWAS summary statistics for Parkinson's disease (Nalls et al. 2019, without 23andMe), one row per variant: rsID, effect and other allele, effect-allele frequency, effect size b (beta) and its standard error, p-value, position on GRCh37 and GRCh38, and the nearest gene.
+    e.g. ('PDno23andme_full_gene_notext_1', 'rs11020170', 'C', 'T', 0.0069, -0.1575, 0.1783, 0.3771, 11, 88249377, 11, 88516209, 'GRM5-AS1')
+    e.g. ('PDno23andme_full_gene_notext_2', 'rs11992603', 'A', 'G', 0.2081, -0.0358, 0.0273, 0.1887, 8, 135908647, 8, 134896404, 'LOC101927845;LINC01591')
+- ad_gwas(UUID, SNP, A1, A2, freq, b, se, p, chr_37, bp_37, chr_38, bp_38, nearestGene): GWAS summary statistics for Alzheimer's disease, one row per variant, with the same columns as pd_gwas.
+    e.g. ('AD_combo_gene_notext_UUID_1', 'rs888953847', 'T', 'C', 0.0006, -0.0152, 0.3236, 0.9626, 1, 529825, 1, 594445, '')
+    e.g. ('AD_combo_gene_notext_UUID_2', 'rs1040232850', 'C', 'CTG', 0.0013999999999999, 0.2494, 0.2247, 0.267, 1, 531142, 1, 595762, '')
+- smr(UUID, Omic, Disease, probeID, ProbeChr, Gene, Probe_bp, topSNP, topSNP_chr, topSNP_bp, A1, A2, Freq, b_GWAS, se_GWAS, p_GWAS, b_eQTL, se_eQTL, p_eQTL, b_SMR, se_SMR, p_SMR, p_SMR_multi, p_HEIDI, nsnp_HEIDI, topRSID, Omic_type, Omic_tissue, Disease_name, Source, func_sig): Summary-data-based Mendelian randomisation (SMR) results linking a gene probe in a QTL dataset (Omic, Omic_type, Omic_tissue, Source) to a disease (Disease: AD, PD, ALS, FTD, LBD or PSP): the top variant, GWAS, eQTL and SMR effects and p-values, the multi-SNP SMR p-value p_SMR_multi and the HEIDI heterogeneity p-value p_HEIDI, and the functional significance func_sig.
+    e.g. ('NDD_SMR_genes_all_update_text_1', 'Cerebellum_metaBrain', 'AD', 'ENSG00000261739', 15, 'GOLGA8S', 23354846, '15:23365158:rs139243742:C_T', 15, 23610305, 'C', 'T', 0.766871, -0.0046, 0.0159, 0.7723456, 0.56509, 0.0933077, 1.393747e-09, -0.00814029, 0.0281692, 0.7725977, 0.7725977, -9999.0, -9999.0, 'rs139243742', 'Cerebellum eQTL', 'Cerebellum', "Alzheimer's Disease", 'metaBrain', 'not functionally significant')
+    e.g. ('NDD_SMR_genes_all_update_text_2', 'Cerebellum_metaBrain', 'AD', 'ENSG00000182256', 15, 'GABRG3', 26971181, '15:26989026:rs4887534:G_C', 15, 27234173, 'G', 'C', 0.445808, -0.0104, 0.0084, 0.2156807, -0.445653, 0.0613814, 3.859471e-13, 0.0233365, 0.0191208, 0.2222841, 0.2463802, 0.07827999, 12.0, 'rs4887534', 'Cerebellum eQTL', 'Cerebellum', "Alzheimer's Disease", 'metaBrain', 'not functionally significant')
+- drug(UUID, chemblIdentifier, blackBoxWarning, drugName, drugMolecularType, yearOfFirstApproval, maxClinicalTrialPhase, drugHasBeenWithdrawn, drugIsApproved, tradeNames_string, drugSynonyms_string, linkedDiseasesDrug_string, linkedDiseasesCount, newLinkedTargets_string, numberLinkedTargets, drugDescription, drugActionType, drugMechanismOfAction, tradename_count, synonyms_count): Drug annotations, one row per drug: ChEMBL identifier, name, trade names and synonyms (comma-separated text), molecular type, action type, mechanism of action, year of first approval, highest clinical-trial phase, whether it is approved, withdrawn or has a black-box warning (the text 'True' or 'False'), linked diseases and linked target genes (text), and a description.
+    e.g. ('DrugGeneTargets_v2_1', 'CHEMBL1195', 'False', 'Propoxycaine', 'Small molecule', 1982, 4, 'False', 'True', '', 'Propoxycaine', '', 0, 'SCN1A (ENSG00000144285), SCN5A (ENSG000..., 10, 'Small molecule drug with a maximum clin..., 'blocker', 'Sodium channel alpha subunit blocker', 0, 1)
+    e.g. ('DrugGeneTargets_v2_2', 'CHEMBL1231', 'False', 'Oxybutynin', 'Small molecule', 1975, 4, 'False', 'True', 'Anturol, Contimin 2.5, Contimin 5, Cyst..., 'Ditropan, Oxybutynin', 'Urgency Urinary Incontinence (EFO_00068..., 13, 'CHRM3 (ENSG00000133019), CHRM2 (ENSG000..., 2, 'Small molecule drug with a maximum clin..., 'antagonist', 'Muscarinic acetylcholine receptor M3 an..., 13, 2)
+- drug_indication(UUID, chemblId, drugName, tradeName, drugType, actionType, targetType, target, approvedSymbol, approvedName, yearOfFirstApproval, usan_year, patent_no, max_phase_for_ind, mesh_id, mesh_heading, efo_id, efo_term, tradeNames_list, tradename_count, syns_list, synonyms_count, ct): Drug targets and indications, one row per drug, target and disease: the drug's names (lists as text), type and action type, the target gene (target is an Ensembl id, approvedSymbol its gene symbol and approvedName its name), the disease it is used or tested for (MeSH and EFO ids and terms), the highest clinical-trial phase for that indication (max_phase_for_ind) and its patent number.
+    e.g. ('DrugTargetsIndication121923_text_1', 'CHEMBL428647', 'Paclitaxel', 'Abraxane', 'Small molecule', 'inhibitor', 'protein complex group', 'ENSG00000188229', 'TUBB4B', 'tubulin beta 4B class IVb', 1992, 1993.0, '7923536', 1.0, 'D015451', 'Leukemia, Lymphocytic, Chronic, B-Cell', 'EFO:0000095', 'chronic lymphocytic leukemia', "['Abraxane', 'Pacitaxel', 'Paclitaxel',..., 6, "['(-)-paclitaxel', 'ABI-007', 'ABI-007 ..., 34, 'reached phase 1 clinical trials')
+    e.g. ('DrugTargetsIndication121923_text_2', 'CHEMBL428647', 'Paclitaxel', 'Abraxane', 'Small molecule', 'inhibitor', 'protein complex group', 'ENSG00000188229', 'TUBB4B', 'tubulin beta 4B class IVb', 1992, 1993.0, '7923536', 1.0, 'D006689', 'Hodgkin Disease', 'EFO:0000183', 'Hodgkins lymphoma', "['Abraxane', 'Pacitaxel', 'Paclitaxel',..., 6, "['(-)-paclitaxel', 'ABI-007', 'ABI-007 ..., 34, 'reached phase 1 clinical trials')
+- test_evidence(dataset, gene, disease): probabilistic facts: the QTL dataset's SMR test is evidence that the gene mediates the disease.
+    e.g. ('Basalganglia_metaBrain', 'ADORA2B', 'PD')
+    e.g. ('Basalganglia_metaBrain', 'APOC2', 'AD')
+- dataset_reliable(dataset): probabilistic facts: the QTL dataset is reliable.
+    e.g. ('Basalganglia_metaBrain')
+    e.g. ('Brain_Amygdala')
+- indication_success(drug, mesh_heading): probabilistic facts: the drug succeeds for the indication (a MeSH heading of drug_indication).
+    e.g. ('Abaloparatide', 'Fractures, Bone')
+    e.g. ('Abaloparatide', 'Osteoporosis')
+- snp_causal(snp, gene, disease): probabilistic facts: the GWAS variant (pd_gwas for PD, ad_gwas for AD) is a causal SNP of its nearest gene for the disease.
+    e.g. ('rs10001565', 'BST1', 'PD')
+    e.g. ('rs10003708', 'GPRIN3', 'PD')
+- drug_target(drug, gene): the drug (drugName of drug_indication) targets the gene (approvedSymbol).
+    e.g. ('Paclitaxel', 'TUBB4B')
+    e.g. ('Paclitaxel', 'TUBB1')
+- drug_approved(drug): the drug (drugName of drug) is approved.
+    e.g. ('.Alpha.1-Proteinase Inhibitor Human')
+    e.g. ('Abaloparatide')
+- dataset_organ(dataset, organ): the organ of the QTL dataset's tissue: brain, blood, spinal cord, cerebrospinal fluid, liver, muscle or nerve.
+    e.g. ('Basalganglia_metaBrain', 'brain')
+    e.g. ('Brain_Amygdala', 'brain')
+In the five BiomedSQL tables (pd_gwas, ad_gwas, smr, drug, drug_indication) missing text is the empty string and the booleans are the text 'True' or 'False'.

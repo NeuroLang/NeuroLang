@@ -1,0 +1,8 @@
+# Probe-only LLM config: Sonnet through the Inria Anthropic key.
+# The key is read from the environment, never written here.
+providers:
+  anthropic-inria:
+    api: anthropic
+    base_url: https://api.anthropic.com/v1
+    api_key_env: ANTHROPIC_API_INRIA_KEY
+    model: claude-sonnet-5-5

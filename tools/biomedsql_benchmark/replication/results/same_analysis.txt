@@ -1,0 +1,29 @@
+1437 items, 65 loci, base rate 0.312; answers missing (scored as 0.5): {'L2-full': 0, 'L2-flags': 0, 'L2 direct (earlier)': 0}; forms chosen per fold: {'0': 'E2', '1': 'E2', '2': 'E2', '3': 'E2', '4': 'E2'}
+
+system                  Brier            95% CI  logloss    AUC
+F1                      0.147 [ 0.125,  0.170]    0.465  0.806
+F2                      0.131 [ 0.110,  0.156]    0.418  0.850
+F3                      0.159 [ 0.124,  0.193]    0.532  0.846
+E1                      0.145 [ 0.124,  0.168]    0.456  0.819
+E2                      0.145 [ 0.123,  0.169]    0.453  0.821
+E3                      0.150 [ 0.128,  0.173]    0.472  0.786
+Estar                   0.145 [ 0.123,  0.169]    0.453  0.821
+L2-full                 0.128 [ 0.112,  0.148]    0.402  0.874
+L2-flags                0.143 [ 0.123,  0.166]    0.450  0.824
+L2 direct (earlier)     0.130 [ 0.114,  0.149]    0.408  0.871
+
+paired Brier differences (negative = first better), 95% CI resampling loci
+  F1       - L2-full              +0.0186 [+0.0090, +0.0279]
+  F2       - L2-full              +0.0030 [-0.0048, +0.0128]
+  F3       - L2-full              +0.0309 [-0.0035, +0.0698]
+  Estar    - L2-flags             +0.0016 [-0.0011, +0.0044]
+  E1       - L2-flags             +0.0020 [-0.0013, +0.0053]
+  Estar    - L2-full              +0.0163 [+0.0088, +0.0247]
+  Estar    - F2                   +0.0133 [+0.0095, +0.0168]
+  L2-full  - L2 direct (earlier)  -0.0021 [-0.0048, +0.0009]
+  L2-flags - L2-full              +0.0147 [+0.0077, +0.0229]
+
+readings (PROTOCOL_SAME.md)
+  1. ceiling: no model fitted on the table beats L2-full: 'the engine beats an LLM reading the full evidence' is not the case here
+  2. same evidence: E* vs L2-flags equal (interval contains 0); E1 vs L2-flags equal (interval contains 0)
+  3. parity: E* - L2-full upper bound +0.0247 against margin 0.01: not non-inferior

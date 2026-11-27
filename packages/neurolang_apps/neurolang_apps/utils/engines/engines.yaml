@@ -1605,6 +1605,131 @@ engines:
       HCP's MNI152 space), so that ans(x) :- uf(x, "left") and .view work
       at the prompt.
 
+  biomedsql:
+    description: >
+      The tables of BiomedSQL (NIH-CARD), a text-to-SQL benchmark of the
+      genetics of neurodegenerative diseases and of drugs, with all their
+      columns: GWAS of Parkinson's disease (pd_gwas) and Alzheimer's disease
+      (ad_gwas), Mendelian-randomisation (SMR) tests of genes as mediators
+      of six diseases across 28 QTL datasets (smr), drug annotations (drug)
+      and drug targets and indications (drug_indication). The QTL datasets
+      are also equally likely units of evidence: selected_qtl(q) is a
+      uniform choice of one, and qtl_tested / qtl_significant say which
+      tested a gene for a disease and which found it significant;
+      unit_evidence grades each test by the strength of its p-value.
+    python_init: "neurolang_apps.utils.engines.biomedsql.init"
+    python_init_options:
+      # The weight, against one dataset, of the two imaginary units of
+      # evidence of selected_unit: one always significant, one never. Fitted
+      # by log-loss on the leave-one-dataset-out predictions of 222 genes
+      # (tools/biomedsql_benchmark/replication/fit_prior.py).
+      prior_significant: 0.01
+      prior_none: 0.5
+      # The probability that a QTL dataset's test is evidence (unit_evidence),
+      # by the -log10 p_SMR_multi of its strongest probe: [lowest -log10 p,
+      # probability] in increasing order (5.530178 is BiomedSQL's threshold,
+      # -log10 2.95e-6). Fitted by log-loss on the same predictions, the
+      # prior above fixed
+      # (tools/biomedsql_benchmark/replication/prototype_weighted.py).
+      evidence_strength:
+        - [0.0, 0.0025]
+        - [3.0, 0.0874]
+        - [5.530178, 0.8172]
+        - [8.0, 1.0]
+    builtins: [lcase, str_contains]
+    # The probability that a QTL dataset found a gene significant for a
+    # disease, given that it tested it: the share of the datasets that
+    # tested it that found it significant.
+    datalog_init: |
+      support(g, d, PROB) :- (qtl_significant(q, g, d) & selected_qtl(q)) // (qtl_tested(q, g, d) & selected_qtl(q))
+      support_prior(g, d, PROB) :- (unit_significant(u, g, d) & selected_unit(u)) // (unit_tested(u, g, d) & selected_unit(u))
+      support_graded(g, d, PROB) :- (unit_evidence(u, g, d) & selected_unit(u)) // (unit_tested(u, g, d) & selected_unit(u))
+    acknowledgements:
+      - >-
+        BiomedSQL (https://huggingface.co/datasets/NIH-CARD/BiomedSQL,
+        licence openrail++), NIH Center for Alzheimer's and Related
+        Dementias.
+    sorts:
+      gene:
+        columns: [gene]
+        type: str
+        description: "a gene symbol, e.g. 'GPNMB'"
+      disease:
+        columns: [disease]
+        type: str
+        description: "a disease code: AD, PD, ALS, FTD, LBD or PSP"
+      qtl_dataset:
+        columns: [qtl_dataset]
+        type: str
+        description: "a QTL dataset, e.g. 'brain_mMeta' or 'Whole_Blood'"
+    predicates:
+      pd_gwas:
+        description: >-
+          GWAS summary statistics for Parkinson's disease (Nalls et al. 2019, without 23andMe), one row per variant: rsID, effect and other allele, effect-allele frequency, effect size b (beta) and its standard error, p-value, position on GRCh37 and GRCh38, and the nearest gene
+        columns: [UUID, SNP, A1, A2, freq, b, se, p, chr_37, bp_37, chr_38, bp_38, nearestGene]
+      ad_gwas:
+        description: >-
+          GWAS summary statistics for Alzheimer's disease, one row per variant, with the same columns as pd_gwas
+        columns: [UUID, SNP, A1, A2, freq, b, se, p, chr_37, bp_37, chr_38, bp_38, nearestGene]
+      smr:
+        description: >-
+          Summary-data-based Mendelian randomisation (SMR) results linking a gene probe in a QTL dataset (Omic, Omic_type, Omic_tissue, Source) to a disease (Disease: AD, PD, ALS, FTD, LBD or PSP): the top variant, GWAS, eQTL and SMR effects and p-values, the multi-SNP SMR p-value p_SMR_multi and the HEIDI heterogeneity p-value p_HEIDI, and the functional significance func_sig
+        columns: [UUID, Omic, Disease, probeID, ProbeChr, Gene, Probe_bp, topSNP, topSNP_chr, topSNP_bp, A1, A2, Freq, b_GWAS, se_GWAS, p_GWAS, b_eQTL, se_eQTL, p_eQTL, b_SMR, se_SMR, p_SMR, p_SMR_multi, p_HEIDI, nsnp_HEIDI, topRSID, Omic_type, Omic_tissue, Disease_name, Source, func_sig]
+      drug:
+        description: >-
+          Drug annotations, one row per drug: ChEMBL identifier, name, trade names and synonyms (comma-separated text), molecular type, action type, mechanism of action, year of first approval, highest clinical-trial phase, whether it is approved, withdrawn or has a black-box warning (the text 'True' or 'False'), linked diseases and linked target genes (text), and a description
+        columns: [UUID, chemblIdentifier, blackBoxWarning, drugName, drugMolecularType, yearOfFirstApproval, maxClinicalTrialPhase, drugHasBeenWithdrawn, drugIsApproved, tradeNames_string, drugSynonyms_string, linkedDiseasesDrug_string, linkedDiseasesCount, newLinkedTargets_string, numberLinkedTargets, drugDescription, drugActionType, drugMechanismOfAction, tradename_count, synonyms_count]
+      drug_indication:
+        description: >-
+          Drug targets and indications, one row per drug, target and disease: the drug's names (lists as text), type and action type, the target gene (target is an Ensembl id, approvedSymbol its gene symbol and approvedName its name), the disease it is used or tested for (MeSH and EFO ids and terms), the highest clinical-trial phase for that indication (max_phase_for_ind) and its patent number
+        columns: [UUID, chemblId, drugName, tradeName, drugType, actionType, targetType, target, approvedSymbol, approvedName, yearOfFirstApproval, usan_year, patent_no, max_phase_for_ind, mesh_id, mesh_heading, efo_id, efo_term, tradeNames_list, tradename_count, syns_list, synonyms_count, ct]
+      qtl_dataset:
+        description: >-
+          A QTL dataset of the SMR tests, its tissue, its kind and its organ
+          (brain, blood, spinal cord, cerebrospinal fluid, liver, muscle or
+          nerve)
+        columns: [qtl_dataset, tissue, kind, organ]
+      qtl_tested:
+        description: "The QTL dataset tested the gene as a mediator of the disease"
+        arguments: [qtl_dataset, gene, disease]
+      qtl_significant:
+        description: >-
+          The QTL dataset found the gene significant as a mediator of the
+          disease (p_smr_multi < 2.95e-6 for a probe of the gene)
+        arguments: [qtl_dataset, gene, disease]
+      support:
+        description: >-
+          The probability that a QTL dataset, drawn at random among those that
+          tested the gene for the disease, found the gene significant: its
+          share of significant tests (a probabilistic rule over selected_qtl)
+        columns: [gene, disease, probability]
+      support_prior:
+        description: >-
+          Like support, with a prior: two imaginary datasets, one always
+          significant and one never, weigh in the choice of unit of evidence,
+          so that (k + a) / (n + a + b) of k significant datasets among n:
+          a gene tested in one dataset is not given probability 1
+        columns: [gene, disease, probability]
+      evidence_unit:
+        description: "The 28 QTL datasets and the two imaginary units of the prior"
+        arguments: [qtl_dataset]
+      unit_tested:
+        description: "The unit of evidence tested the gene for the disease (a dataset, or an imaginary unit, which tests every pair)"
+        arguments: [qtl_dataset, gene, disease]
+      unit_significant:
+        description: "The unit of evidence found the gene significant for the disease (a dataset, or the always significant imaginary unit)"
+        arguments: [qtl_dataset, gene, disease]
+      selected_unit:
+        description: >-
+          Probabilistic choice of one unit of evidence: a dataset weighs 1,
+          the imaginary units of the prior their weights
+        arguments: [qtl_dataset]
+      selected_qtl:
+        description: >-
+          Probabilistic choice of one QTL dataset, all equally likely: the
+          QTL datasets as units of evidence
+        arguments: [qtl_dataset]
+
   # Example template usage (commented out — uncomment to enable):
   #
   #   template_demo:

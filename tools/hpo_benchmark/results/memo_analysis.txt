@@ -1,0 +1,10 @@
+A. synthetic patients: 127 (unparsed H0 2)
+  MRR posterior 0.979, Sonnet H0 0.466 (lenient 0.584)
+  Sonnet - posterior, synthetic -0.513 [-0.592, -0.433]; real (union run) +0.137 [+0.057, +0.215]
+  real gap - synthetic gap +0.650 [+0.551, +0.747]
+  Sonnet claims a source paper for 24 of 127 synthetic patients (no such paper exists)
+B. recognition on 184 real patients: claims a source 21, names the right one 1 (0.5%) from 1 papers
+  Sonnet H0 MRR, recognised 1.000 (n=1), not recognised 0.424 (n=183); posterior: 0.037 / 0.291
+  Sonnet - posterior on the not-recognised patients +0.132 [+0.051, +0.211]
+C. post-cutoff cases: 23 from 7 papers (descriptive)
+  MRR posterior 0.635, Sonnet H0 0.620; Sonnet - posterior -0.016 [-0.557, +0.287] (resampling papers)

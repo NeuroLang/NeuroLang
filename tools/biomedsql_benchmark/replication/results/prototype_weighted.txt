@@ -1,0 +1,18 @@
+2763 predictions, 222 genes, base rate 0.407
+P   CV log-loss 0.4126  Brier 0.1319
+G   CV log-loss 0.4084  Brier 0.1312
+O   CV log-loss 0.4644  Brier 0.1544
+GL  CV log-loss 0.4085  Brier 0.1312
+W   CV log-loss 0.4081  Brier 0.1305
+GW  CV log-loss 0.4125  Brier 0.1314
+chosen: G
+fit on all fitting genes: a = 0.0000, b = 0.3460
+  -log10 p >=  0.00: pi = 0.0025
+  -log10 p >=  1.00: pi = 0.0025
+  -log10 p >=  2.00: pi = 0.0025
+  -log10 p >=  3.00: pi = 0.0921
+  -log10 p >=  5.53: pi = 0.7883
+  -log10 p >=  8.00: pi = 1.0000
+  -log10 p >= 12.00: pi = 1.0000
+G with the engine's prior a, b = (0.01, 0.5): CV log-loss 0.4081  Brier 0.1307
+  pi for engines.yaml: [0.0025, 0.0025, 0.0025, 0.0874, 0.8172, 1.0, 1.0]

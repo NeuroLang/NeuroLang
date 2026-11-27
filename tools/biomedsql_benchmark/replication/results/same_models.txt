@@ -1,0 +1,17 @@
+3960 items, 353 genes, 65 loci, out of fold (5 locus-grouped folds)
+model     Brier  95% CI (loci)        log-loss     AUC
+F1      0.1367  [0.1198, 0.1615]    0.4364  0.8577
+F2      0.1270  [0.1104, 0.1522]    0.4012  0.8813
+F3      0.1842  [0.1188, 0.2345]    0.6021  0.8606
+E1      0.1374  [0.1203, 0.1626]    0.4349  0.8582
+E2      0.1348  [0.1169, 0.1621]    0.4216  0.8643
+E3      0.1497  [0.1302, 0.1750]    0.4623  0.8265
+Estar   0.1348  [0.1169, 0.1621]    0.4216  0.8643
+
+Paired Brier differences (first minus second), 95% CI resampling loci:
+  Estar - F2: +0.0078 [+0.0050, +0.0120]
+  Estar - E1: -0.0026 [-0.0049, +0.0011]
+  F3 - F2: +0.0572 [-0.0110, +0.1185]
+  E3 - E2: +0.0149 [+0.0051, +0.0201]
+
+Chosen form per outer fold: fold 0: E2, fold 1: E2, fold 2: E2, fold 3: E2, fold 4: E2

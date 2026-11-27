@@ -1,0 +1,967 @@
+{
+ "seed": 0,
+ "per_template": 4,
+ "source_sha256": "baeed20344cbfdc4c7ae1041a586f6261345dc59c96deaaeb0ce0cd4f6de9b7f",
+ "items": [
+  {
+   "id": "Q1.146",
+   "template": "Q1",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q1.403",
+   "template": "Q1",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q1.660",
+   "template": "Q1",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q1.1052",
+   "template": "Q1",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q2.1774",
+   "template": "Q2",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q2.924",
+   "template": "Q2",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q2.1976",
+   "template": "Q2",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q2.1591",
+   "template": "Q2",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q3.10",
+   "template": "Q3",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID"
+  },
+  {
+   "id": "Q3.169",
+   "template": "Q3",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID"
+  },
+  {
+   "id": "Q3.1015",
+   "template": "Q3",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID"
+  },
+  {
+   "id": "Q3.535",
+   "template": "Q3",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID"
+  },
+  {
+   "id": "Q4.1425",
+   "template": "Q4",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q4.323",
+   "template": "Q4",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q4.139",
+   "template": "Q4",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q4.771",
+   "template": "Q4",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q5.1342",
+   "template": "Q5",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q5.522",
+   "template": "Q5",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q5.331",
+   "template": "Q5",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q5.1339",
+   "template": "Q5",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q6.1949",
+   "template": "Q6",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q6.1008",
+   "template": "Q6",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q6.1253",
+   "template": "Q6",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q6.213",
+   "template": "Q6",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q7.265",
+   "template": "Q7",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q7.195",
+   "template": "Q7",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q7.550",
+   "template": "Q7",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q7.295",
+   "template": "Q7",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q9.1178",
+   "template": "Q9",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q9.293",
+   "template": "Q9",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q9.233",
+   "template": "Q9",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q9.1403",
+   "template": "Q9",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q10.912",
+   "template": "Q10",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q10.1456",
+   "template": "Q10",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q10.353",
+   "template": "Q10",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q10.1010",
+   "template": "Q10",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q11.1900",
+   "template": "Q11",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q11.1462",
+   "template": "Q11",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q11.774",
+   "template": "Q11",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q11.565",
+   "template": "Q11",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q12.1081",
+   "template": "Q12",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q12.39",
+   "template": "Q12",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q12.79",
+   "template": "Q12",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q12.744",
+   "template": "Q12",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q14.884",
+   "template": "Q14",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q14.1575",
+   "template": "Q14",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q14.1489",
+   "template": "Q14",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q14.1021",
+   "template": "Q14",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q15.122",
+   "template": "Q15",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q15.1797",
+   "template": "Q15",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q15.649",
+   "template": "Q15",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q15.1546",
+   "template": "Q15",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q16.567",
+   "template": "Q16",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q16.1470",
+   "template": "Q16",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q16.716",
+   "template": "Q16",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q16.1195",
+   "template": "Q16",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q17.503",
+   "template": "Q17",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q17.491",
+   "template": "Q17",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q17.1901",
+   "template": "Q17",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q17.1789",
+   "template": "Q17",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q19.7",
+   "template": "Q19",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q19.120",
+   "template": "Q19",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q19.86",
+   "template": "Q19",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q19.40",
+   "template": "Q19",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q22.32",
+   "template": "Q22",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q22.7",
+   "template": "Q22",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q22.406",
+   "template": "Q22",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q22.556",
+   "template": "Q22",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q23.179",
+   "template": "Q23",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q23.1386",
+   "template": "Q23",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q23.1324",
+   "template": "Q23",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q23.1353",
+   "template": "Q23",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q25.1144",
+   "template": "Q25",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q25.79",
+   "template": "Q25",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q25.1844",
+   "template": "Q25",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q25.1066",
+   "template": "Q25",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q26.6",
+   "template": "Q26",
+   "split": "test",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q26.4",
+   "template": "Q26",
+   "split": "test",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q26.1",
+   "template": "Q26",
+   "split": "test",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q26.7",
+   "template": "Q26",
+   "split": "test",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q34.883",
+   "template": "Q34",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q34.1577",
+   "template": "Q34",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q34.500",
+   "template": "Q34",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q34.420",
+   "template": "Q34",
+   "split": "test",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q35.1557",
+   "template": "Q35",
+   "split": "dev",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID"
+  },
+  {
+   "id": "Q35.134",
+   "template": "Q35",
+   "split": "dev",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID"
+  },
+  {
+   "id": "Q35.1405",
+   "template": "Q35",
+   "split": "dev",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID"
+  },
+  {
+   "id": "Q35.1180",
+   "template": "Q35",
+   "split": "dev",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID"
+  },
+  {
+   "id": "Q36.1613",
+   "template": "Q36",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q36.463",
+   "template": "Q36",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q36.1447",
+   "template": "Q36",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q36.1991",
+   "template": "Q36",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q38.439",
+   "template": "Q38",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q38.1205",
+   "template": "Q38",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q38.1565",
+   "template": "Q38",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q38.958",
+   "template": "Q38",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q40.1421",
+   "template": "Q40",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q40.1609",
+   "template": "Q40",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q40.1873",
+   "template": "Q40",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q40.922",
+   "template": "Q40",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q42.1300",
+   "template": "Q42",
+   "split": "dev",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q42.1751",
+   "template": "Q42",
+   "split": "dev",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q42.1341",
+   "template": "Q42",
+   "split": "dev",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q42.10",
+   "template": "Q42",
+   "split": "dev",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q45.1958",
+   "template": "Q45",
+   "split": "test",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q45.178",
+   "template": "Q45",
+   "split": "test",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q45.984",
+   "template": "Q45",
+   "split": "test",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q45.1178",
+   "template": "Q45",
+   "split": "test",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q49.48",
+   "template": "Q49",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q49.545",
+   "template": "Q49",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q49.627",
+   "template": "Q49",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q49.772",
+   "template": "Q49",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q50.184",
+   "template": "Q50",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q50.791",
+   "template": "Q50",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q50.1258",
+   "template": "Q50",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q50.1426",
+   "template": "Q50",
+   "split": "dev",
+   "table": "ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q52.1608",
+   "template": "Q52",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q52.630",
+   "template": "Q52",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q52.325",
+   "template": "Q52",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q52.907",
+   "template": "Q52",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q55.1197",
+   "template": "Q55",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q55.1555",
+   "template": "Q55",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q55.775",
+   "template": "Q55",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q55.970",
+   "template": "Q55",
+   "split": "dev",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q58.1408",
+   "template": "Q58",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q58.1061",
+   "template": "Q58",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q58.389",
+   "template": "Q58",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q58.101",
+   "template": "Q58",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q59.616",
+   "template": "Q59",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q59.435",
+   "template": "Q59",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q59.1455",
+   "template": "Q59",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q59.757",
+   "template": "Q59",
+   "split": "dev",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q61.1933",
+   "template": "Q61",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q61.1646",
+   "template": "Q61",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q61.1465",
+   "template": "Q61",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q61.593",
+   "template": "Q61",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q63.318",
+   "template": "Q63",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q63.1023",
+   "template": "Q63",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q63.321",
+   "template": "Q63",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q63.868",
+   "template": "Q63",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q65.853",
+   "template": "Q65",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q65.625",
+   "template": "Q65",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q65.1850",
+   "template": "Q65",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q65.1709",
+   "template": "Q65",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q67.975",
+   "template": "Q67",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q67.396",
+   "template": "Q67",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q67.985",
+   "template": "Q67",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q67.1542",
+   "template": "Q67",
+   "split": "test",
+   "table": "NeurodegenerativeDiseases_SMR_Genes_Full"
+  },
+  {
+   "id": "Q69.837",
+   "template": "Q69",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q69.593",
+   "template": "Q69",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q69.753",
+   "template": "Q69",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q69.257",
+   "template": "Q69",
+   "split": "test",
+   "table": "AlzheimerDisease_CombinedGeneData_UUID+ParkinsonDisease_CompleteGeneData_No23andMe"
+  },
+  {
+   "id": "Q71.8",
+   "template": "Q71",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q71.4",
+   "template": "Q71",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q71.1",
+   "template": "Q71",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q71.6",
+   "template": "Q71",
+   "split": "test",
+   "table": "DrugGeneTargets_ComprehensiveAnnotations_updated"
+  },
+  {
+   "id": "Q80.413",
+   "template": "Q80",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q80.452",
+   "template": "Q80",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q80.218",
+   "template": "Q80",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  },
+  {
+   "id": "Q80.234",
+   "template": "Q80",
+   "split": "dev",
+   "table": "DrugTargets_IndicationsAndTherapeuticUses"
+  }
+ ]
+}

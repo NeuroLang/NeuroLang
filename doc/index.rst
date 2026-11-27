@@ -96,6 +96,7 @@ See :doc:`repl` for the REPL, :doc:`tutorial` for a first walkthrough, and
    tutorial_squall
    tutorial_text_embeddings
    similarity_calibration
+   biomedsql_calibration
    tutorial_neurosynth_tests
    tutorial_cognitive_atlas
    tutorial_decoding

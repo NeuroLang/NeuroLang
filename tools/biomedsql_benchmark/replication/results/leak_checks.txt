@@ -1,0 +1,72 @@
+2763 fitting predictions (222 genes), 1197 evaluation predictions (131 genes)
+shipped prior a=0.01, b=0.5; pi = [0.0025, 0.0025, 0.0025, 0.0874, 0.8172, 1.0, 1.0]
+
+== Sanity: full evaluation, closed forms (published prior 0.147, graded 0.143) ==
+  share            Brier 0.1571
+  support_prior    Brier 0.1468
+  support_graded   Brier 0.1432
+  L2               Brier 0.1290
+  reproduces published: True
+  logistic         Brier 0.1307
+
+== Full evaluation, CI resampling genes (published: graded-prior -0.0036 [-0.0058,-0.0016]; graded-L2 +0.014 [+0.005,+0.024]) ==
+  n = 1197, clusters = 131
+  share            Brier 0.1571  CI [0.1355, 0.1808]  log-loss 0.5120
+  support_prior    Brier 0.1468  CI [0.1267, 0.1691]  log-loss 0.4576
+  support_graded   Brier 0.1432  CI [0.1236, 0.1642]  log-loss 0.4489
+  L2               Brier 0.1290  CI [0.1130, 0.1463]  log-loss 0.4031
+  logistic         Brier 0.1307  CI [0.1115, 0.1511]  log-loss 0.4132
+  Brier support_graded - support_prior: -0.0036 [-0.0059, -0.0016]
+  Brier support_graded - L2: +0.0142 [+0.0060, +0.0234]
+  Brier logistic - L2: +0.0018 [-0.0063, +0.0100]
+
+== Check 1: locus-grouped ==
+position columns: ProbeChr (mode per gene), Probe_bp (median per gene); locus = single linkage within 1000000 bp over the 353 genes of items.json + items_eval.json
+353 genes in 65 loci; 111 of 131 evaluation genes share a locus with a fitting gene, covering 992 of 1197 evaluation predictions
+
+-- clean (locus has no fitting gene) --
+  n = 205, clusters = 13
+  share            Brier 0.1602  CI [0.1112, 0.2364]  log-loss 0.5235
+  support_prior    Brier 0.1520  CI [0.1033, 0.2245]  log-loss 0.4823
+  support_graded   Brier 0.1487  CI [0.1029, 0.2159]  log-loss 0.4701
+  L2               Brier 0.1381  CI [0.1058, 0.1833]  log-loss 0.4287
+  logistic         Brier 0.1373  CI [0.0908, 0.2012]  log-loss 0.4480
+  Brier support_graded - support_prior: -0.0033 [-0.0100, +0.0002]
+  Brier support_graded - L2: +0.0107 [-0.0050, +0.0390]
+  Brier logistic - L2: -0.0007 [-0.0167, +0.0248]
+
+-- contaminated complement --
+  n = 992, clusters = 31
+  share            Brier 0.1565  CI [0.1278, 0.1875]  log-loss 0.5096
+  support_prior    Brier 0.1457  CI [0.1199, 0.1736]  log-loss 0.4525
+  support_graded   Brier 0.1420  CI [0.1176, 0.1689]  log-loss 0.4445
+  L2               Brier 0.1271  CI [0.1062, 0.1492]  log-loss 0.3978
+  logistic         Brier 0.1294  CI [0.1047, 0.1583]  log-loss 0.4060
+  Brier support_graded - support_prior: -0.0036 [-0.0064, -0.0009]
+  Brier support_graded - L2: +0.0150 [+0.0064, +0.0248]
+  Brier logistic - L2: +0.0023 [-0.0070, +0.0144]
+
+-- fully locus-grouped re-split, 5 folds over loci (seed 0), pooled 353 genes --
+  fold 0: 595 predictions, prior a=0.01, b=1
+  fold 1: 412 predictions, prior a=0.01, b=1
+  fold 2: 1729 predictions, prior a=0.25, b=2
+  fold 3: 683 predictions, prior a=0.01, b=0.5
+  fold 4: 541 predictions, prior a=0.01, b=1
+  n = 3960, clusters = 65
+  share            Brier 0.1440  CI [0.1232, 0.1758]  log-loss 0.4640
+  support_prior    Brier 0.1374  CI [0.1203, 0.1626]  log-loss 0.4349
+  support_graded   Brier 0.1348  CI [0.1169, 0.1621]  log-loss 0.4216
+  logistic         Brier 0.1270  CI [0.1104, 0.1522]  log-loss 0.4012
+  Brier support_graded - support_prior: -0.0026 [-0.0049, +0.0011]
+  Brier logistic - support_graded: -0.0078 [-0.0120, -0.0050]
+
+== Check 2: dataset-nested fit ==
+27 held-out datasets in the evaluation
+  support_prior    shipped Brier 0.1468 log-loss 0.4576 | nested Brier 0.1473 log-loss 0.4594 | max |change| 0.16639
+  support_graded   shipped Brier 0.1432 log-loss 0.4489 | nested Brier 0.1448 log-loss 0.4540 | max |change| 0.03238
+  n = 1197, clusters = 131
+  support_prior    Brier 0.1473  CI [0.1272, 0.1697]  log-loss 0.4594
+  support_graded   Brier 0.1448  CI [0.1250, 0.1660]  log-loss 0.4540
+  L2               Brier 0.1290  CI [0.1130, 0.1463]  log-loss 0.4031
+  Brier support_graded - support_prior: -0.0026 [-0.0048, -0.0007]
+  Brier support_graded - L2: +0.0158 [+0.0074, +0.0250]

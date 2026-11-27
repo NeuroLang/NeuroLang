@@ -1,0 +1,32 @@
+# Merged into the entry of biomedsql in ../engines.yaml (see doc/engine_configuration.rst).
+# The conventions of BiomedSQL's gold queries (tools/biomedsql_benchmark/guidance.txt), then the
+# probabilistic use of the QTL datasets.
+assistant_guidance: 'Answer a question with the rows that hold what it asks and the evidence behind it:
+  the entity, and the values that support the answer, as the columns of the answer. A yes/no question
+  is answered with the supporting rows, never with a bare true or false (ans() with no columns). A drug
+  named in a question is matched ignoring case, by substring, against its name, its trade names and its
+  synonyms: three alternatives, one rule each, joined through a helper rule on the UUID; in drug the columns
+  are drugName, tradeNames_string and drugSynonyms_string, in drug_indication drugName, tradeNames_list
+  and syns_list. The drugs that act on a gene: in drug, newLinkedTargets_string lists the targets as ''SYMBOL
+  (ENSG...)'', so the gene symbol followed by a space matches as a substring. A drug approved for a disease:
+  in drug_indication the disease matches efo_term or mesh_heading, ignoring case, and max_phase_for_ind
+  = 4.0 means approved for it. The mechanism of action of a drug is drugMechanismOfAction, a text; drugActionType
+  is its short category (inhibitor, agonist...). In smr, only a significant SMR signal is a signal to
+  report: keep the rows with p_SMR_multi < 2.95e-6, and when none passes the answer is empty. The top
+  SNP of a gene or of a tissue is topRSID of the row with the smallest p_SMR_multi among the significant
+  signals that also have p_HEIDI > 0.01: take the smallest with best(m) :- AGGREGATE[](rel(...) @ min(p))
+  = m and join it back to rel. A tissue is matched through lcase(Omic_tissue), the kind of QTL data through
+  lcase(Omic_type). A question about a variant or a gene in a disease''s GWAS (pd_gwas, ad_gwas) is answered
+  with all the variants, not only the best one, with their p-value p and effect size b, the smallest p
+  first; a gene is matched on nearestGene as a substring. In the language: ans is the one answer of a
+  program, so a union is written through a helper predicate that ans then reads; lcase(x) == ''c'' cannot
+  be compared directly, bind it first (v == lcase(x)), then compare v. A question asking how consistently,
+  how strongly or with what probability the evidence supports a gene as a mediator of a disease, or what
+  share of the QTL datasets agree, is answered with the QTL datasets as equally likely units of evidence:
+  the probability that a dataset found the gene significant, given that it tested it, PROB[(qtl_significant(q,
+  g, d) & selected_qtl(q)) // (qtl_tested(q, g, d) & selected_qtl(q))] = p; restrict the datasets (to
+  the brain ones, say) with a rule of its own, brain(q) :- qtl_dataset(q, t, k, ''brain''), added on both
+  sides of //: the probabilistic query takes no function or comparison itself. To predict whether a QTL
+  dataset not yet seen would find the gene significant, prefer support_prior(g, d, PROB), the same share
+  with a prior of two imaginary datasets: a gene tested in one dataset is not given probability 1; support
+  is the plain share.'

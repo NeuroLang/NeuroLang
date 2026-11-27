@@ -1,0 +1,23 @@
+1. Never answer with an empty-head `ans()`. Return the supporting rows with the table's descriptive columns (drug name, approval status, targets, max phase, SNP, p, b, and so on), because a bare true/false is graded as wrong whenever the gold table is non-empty.
+
+2. For "Is X a druggable gene?", return one row per drug that targets X, with drug name, approval flag, linked targets and max clinical trial phase. Take the rows from the drug table, matching X as a whole symbol in the targets string. Do not return a boolean, and do not rely on the indication table's target column.
+
+3. For "Is drug D approved to treat disease Z?", return the indication rows for D and Z with all descriptive columns: trade names, synonyms, target, symbol, name, MeSH heading, EFO term, first approval year and max phase for the indication. Do not filter on phase == 4 or on approval, because the answer must show the actual phase, even when it is below 4.
+
+4. Match disease and indication names case-insensitively and loosely, for example with str_contains on the EFO term or MeSH heading. Do not insert a different heading than the one the user asked about.
+
+5. For "What Small molecule therapies are approved to treat Z?", filter on the indication table's molecule type, the exact indication, and max phase 4. Do not join to the drug table's approved flag, which broadens the result. An empty result is correct when no drug meets those conditions.
+
+6. For "What is <trade name>?", look up the drug table by trade name with str_contains. Return the full profile: trade names, drug name, molecular type, action type, mechanism of action, linked diseases, linked targets, max phase, approval year and approval flag. Do not query the indication table by trade name.
+
+7. For "Is SNP S significant in disease D?", return the SNP, p and b from the disease's GWAS table for that SNP, with no p-value threshold in the query. Let the returned p-value show significance, since a filter removes the row and leaves nothing to report.
+
+8. For "Do mutations in gene G increase the risk of disease D?" or "Is there an association between G and D?", query the GWAS table for variants whose gene field matches G. Return SNP, p and b, ordered by p and limited to 100 rows, and do not filter on sign or threshold. Do not use SMR or prior-probability tables for these questions.
+
+9. For SMR questions such as "top SNP", "most significantly associated" or "association signals", apply the significance threshold (p_SMR_multi below the threshold, and consider HEIDI) so that the result is empty when nothing is significant. Never return the minimum p-value when it is not significant.
+
+10. When ranking SMR hits, order by p_SMR_multi, the adjusted multi-SNP p-value, rather than the single-SNP p. Return topRSID, disease, tissue or omic type, p_SMR_multi, p_HEIDI, alleles, frequency and the functional-significance label, filtering on the exact tissue and omic dataset named in the question.
+
+11. Map tissue and dataset phrases from the question to the database's own values by checking the actual tissue and omic names. Use the disease abbreviations the database uses, such as AD, PD, LBD, PSP and ALS. Gene-specific SMR questions should return all matching rows for the gene, not only a single minimum.
+
+12. For "nearest gene to SNP", query the nearest-gene table or tables for that SNP and return source_table and nearestGene. Always produce a valid, non-empty query, and use all relevant tables where the data is split across them.

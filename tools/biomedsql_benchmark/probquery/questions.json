@@ -1,0 +1,2486 @@
+[
+ {
+  "id": "P1a-0",
+  "level": "P1",
+  "template": "P1a",
+  "params": {
+   "d": "brain_mMeta",
+   "g": "XXbac-BPG249D20.9",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the SMR test of gene XXbac-BPG249D20.9 in the QTL dataset brain_mMeta is evidence that XXbac-BPG249D20.9 mediates Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1a-1",
+  "level": "P1",
+  "template": "P1a",
+  "params": {
+   "d": "Muscle_Skeletal",
+   "g": "KANSL1",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the SMR test of gene KANSL1 in the QTL dataset Muscle_Skeletal is evidence that KANSL1 mediates Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1a-2",
+  "level": "P1",
+  "template": "P1a",
+  "params": {
+   "d": "psychEncode_prefrontal_cortex",
+   "g": "RP11-46C24.7",
+   "dis": "FTD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the SMR test of gene RP11-46C24.7 in the QTL dataset psychEncode_prefrontal_cortex is evidence that RP11-46C24.7 mediates frontotemporal dementia (FTD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1a-3",
+  "level": "P1",
+  "template": "P1a",
+  "params": {
+   "d": "multiancestry",
+   "g": "TIFA",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the SMR test of gene TIFA in the QTL dataset multiancestry is evidence that TIFA mediates Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1a-4",
+  "level": "P1",
+  "template": "P1a",
+  "params": {
+   "d": "brain_mMeta",
+   "g": "OR2J3",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the SMR test of gene OR2J3 in the QTL dataset brain_mMeta is evidence that OR2J3 mediates Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1a-5",
+  "level": "P1",
+  "template": "P1a",
+  "params": {
+   "d": "Whole_Blood",
+   "g": "EARS2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the SMR test of gene EARS2 in the QTL dataset Whole_Blood is evidence that EARS2 mediates Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1a-6",
+  "level": "P1",
+  "template": "P1a",
+  "params": {
+   "d": "Brain_Hypothalamus",
+   "g": "SNX31",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the SMR test of gene SNX31 in the QTL dataset Brain_Hypothalamus is evidence that SNX31 mediates Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1a-7",
+  "level": "P1",
+  "template": "P1a",
+  "params": {
+   "d": "Brain_Cerebellum",
+   "g": "GPNMB",
+   "dis": "PD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the SMR test of gene GPNMB in the QTL dataset Brain_Cerebellum is evidence that GPNMB mediates Parkinson's disease (PD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1b-0",
+  "level": "P1",
+  "template": "P1b",
+  "params": {
+   "x": "Doxycycline",
+   "m": "Blepharitis"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Doxycycline succeeds for the indication 'Blepharitis'? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1b-1",
+  "level": "P1",
+  "template": "P1b",
+  "params": {
+   "x": "Binimetinib",
+   "m": "Carcinoma, Non-Small-Cell Lung"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Binimetinib succeeds for the indication 'Carcinoma, Non-Small-Cell Lung'? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1b-2",
+  "level": "P1",
+  "template": "P1b",
+  "params": {
+   "x": "Lenalidomide",
+   "m": "Waldenstrom Macroglobulinemia"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Lenalidomide succeeds for the indication 'Waldenstrom Macroglobulinemia'? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1b-3",
+  "level": "P1",
+  "template": "P1b",
+  "params": {
+   "x": "Baricitinib",
+   "m": "Myositis"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Baricitinib succeeds for the indication 'Myositis'? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1b-4",
+  "level": "P1",
+  "template": "P1b",
+  "params": {
+   "x": "Sirolimus",
+   "m": "Acute Lung Injury"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Sirolimus succeeds for the indication 'Acute Lung Injury'? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1b-5",
+  "level": "P1",
+  "template": "P1b",
+  "params": {
+   "x": "Fentanyl",
+   "m": "Fractures, Bone"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Fentanyl succeeds for the indication 'Fractures, Bone'? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1b-6",
+  "level": "P1",
+  "template": "P1b",
+  "params": {
+   "x": "Cannabidiol",
+   "m": "Lung Neoplasms"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Cannabidiol succeeds for the indication 'Lung Neoplasms'? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1b-7",
+  "level": "P1",
+  "template": "P1b",
+  "params": {
+   "x": "Cannabidiol",
+   "m": "Hepatitis, Autoimmune"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Cannabidiol succeeds for the indication 'Hepatitis, Autoimmune'? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1c-0",
+  "level": "P1",
+  "template": "P1c",
+  "params": {
+   "s": "rs17573858",
+   "g": "MAPT",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the GWAS variant rs17573858 is a causal SNP of gene MAPT for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1c-1",
+  "level": "P1",
+  "template": "P1c",
+  "params": {
+   "s": "rs541864622",
+   "g": "PLEKHM1",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the GWAS variant rs541864622 is a causal SNP of gene PLEKHM1 for Parkinson's disease (PD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1c-2",
+  "level": "P1",
+  "template": "P1c",
+  "params": {
+   "s": "rs10948375",
+   "g": "ADGRF2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the GWAS variant rs10948375 is a causal SNP of gene ADGRF2 for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1c-3",
+  "level": "P1",
+  "template": "P1c",
+  "params": {
+   "s": "rs11505847",
+   "g": "LAMTOR4",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the GWAS variant rs11505847 is a causal SNP of gene LAMTOR4 for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1c-4",
+  "level": "P1",
+  "template": "P1c",
+  "params": {
+   "s": "rs75001386",
+   "g": "CLNK",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the GWAS variant rs75001386 is a causal SNP of gene CLNK for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1c-5",
+  "level": "P1",
+  "template": "P1c",
+  "params": {
+   "s": "rs74402838",
+   "g": "MMRN1",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the GWAS variant rs74402838 is a causal SNP of gene MMRN1 for Parkinson's disease (PD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1c-6",
+  "level": "P1",
+  "template": "P1c",
+  "params": {
+   "s": "rs10749562",
+   "g": "DYDC2",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the GWAS variant rs10749562 is a causal SNP of gene DYDC2 for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P1c-7",
+  "level": "P1",
+  "template": "P1c",
+  "params": {
+   "s": "rs28399654",
+   "g": "BCAM",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the GWAS variant rs28399654 is a causal SNP of gene BCAM for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2a-0",
+  "level": "P2",
+  "template": "P2a",
+  "params": {
+   "g": "PRSS36",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene PRSS36 has evidence for Alzheimer's disease (AD) in at least one brain QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2a-1",
+  "level": "P2",
+  "template": "P2a",
+  "params": {
+   "g": "WDR18",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene WDR18 has evidence for Alzheimer's disease (AD) in at least one brain QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2a-2",
+  "level": "P2",
+  "template": "P2a",
+  "params": {
+   "g": "RP11-521O16.2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene RP11-521O16.2 has evidence for Alzheimer's disease (AD) in at least one brain QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2a-3",
+  "level": "P2",
+  "template": "P2a",
+  "params": {
+   "g": "RP11-259G18.2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene RP11-259G18.2 has evidence for Alzheimer's disease (AD) in at least one brain QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2a-4",
+  "level": "P2",
+  "template": "P2a",
+  "params": {
+   "g": "RPL3",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene RPL3 has evidence for Alzheimer's disease (AD) in at least one brain QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2a-5",
+  "level": "P2",
+  "template": "P2a",
+  "params": {
+   "g": "ERC2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene ERC2 has evidence for Alzheimer's disease (AD) in at least one brain QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2a-6",
+  "level": "P2",
+  "template": "P2a",
+  "params": {
+   "g": "CTD-2020K17.1",
+   "dis": "PD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene CTD-2020K17.1 has evidence for Parkinson's disease (PD) in at least one brain QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2a-7",
+  "level": "P2",
+  "template": "P2a",
+  "params": {
+   "g": "MTG1",
+   "dis": "FTD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene MTG1 has evidence for frontotemporal dementia (FTD) in at least one brain QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2b-0",
+  "level": "P2",
+  "template": "P2b",
+  "params": {
+   "x": "Telotristat Ethyl"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Telotristat Ethyl succeeds for at least one of its indications? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2b-1",
+  "level": "P2",
+  "template": "P2b",
+  "params": {
+   "x": "Paroxetine Mesylate"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Paroxetine Mesylate succeeds for at least one of its indications? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2b-2",
+  "level": "P2",
+  "template": "P2b",
+  "params": {
+   "x": "Eliglustat"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Eliglustat succeeds for at least one of its indications? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2b-3",
+  "level": "P2",
+  "template": "P2b",
+  "params": {
+   "x": "Dexmedetomidine Hydrochloride"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Dexmedetomidine Hydrochloride succeeds for at least one of its indications? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2b-4",
+  "level": "P2",
+  "template": "P2b",
+  "params": {
+   "x": "Buprenorphine Hydrochloride"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Buprenorphine Hydrochloride succeeds for at least one of its indications? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2b-5",
+  "level": "P2",
+  "template": "P2b",
+  "params": {
+   "x": "Varenicline Tartrate"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Varenicline Tartrate succeeds for at least one of its indications? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2b-6",
+  "level": "P2",
+  "template": "P2b",
+  "params": {
+   "x": "Ketotifen Fumarate"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Ketotifen Fumarate succeeds for at least one of its indications? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2b-7",
+  "level": "P2",
+  "template": "P2b",
+  "params": {
+   "x": "Bepotastine"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Bepotastine succeeds for at least one of its indications? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2c-0",
+  "level": "P2",
+  "template": "P2c",
+  "params": {
+   "g": "GALNT6",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene GALNT6 has at least one causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2c-1",
+  "level": "P2",
+  "template": "P2c",
+  "params": {
+   "g": "NFYA",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene NFYA has at least one causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2c-2",
+  "level": "P2",
+  "template": "P2c",
+  "params": {
+   "g": "SIPA1L2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene SIPA1L2 has at least one causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2c-3",
+  "level": "P2",
+  "template": "P2c",
+  "params": {
+   "g": "KANSL1-AS1",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene KANSL1-AS1 has at least one causal SNP for Parkinson's disease (PD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2c-4",
+  "level": "P2",
+  "template": "P2c",
+  "params": {
+   "g": "LILRA2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene LILRA2 has at least one causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2c-5",
+  "level": "P2",
+  "template": "P2c",
+  "params": {
+   "g": "APOE",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene APOE has at least one causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2c-6",
+  "level": "P2",
+  "template": "P2c",
+  "params": {
+   "g": "CACNA1E",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene CACNA1E has at least one causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P2c-7",
+  "level": "P2",
+  "template": "P2c",
+  "params": {
+   "g": "ZNF664-RFLNA",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene ZNF664-RFLNA has at least one causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3a-0",
+  "level": "P3",
+  "template": "P3a",
+  "params": {
+   "x": "Osimertinib Mesylate",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Osimertinib Mesylate targets at least one gene that has evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3a-1",
+  "level": "P3",
+  "template": "P3a",
+  "params": {
+   "x": "Selpercatinib",
+   "dis": "LBD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Selpercatinib targets at least one gene that has evidence for Lewy body dementia (LBD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3a-2",
+  "level": "P3",
+  "template": "P3a",
+  "params": {
+   "x": "Entrectinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Entrectinib targets at least one gene that has evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3a-3",
+  "level": "P3",
+  "template": "P3a",
+  "params": {
+   "x": "Tucatinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Tucatinib targets at least one gene that has evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3a-4",
+  "level": "P3",
+  "template": "P3a",
+  "params": {
+   "x": "Osimertinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Osimertinib targets at least one gene that has evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3a-5",
+  "level": "P3",
+  "template": "P3a",
+  "params": {
+   "x": "Carfilzomib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Carfilzomib targets at least one gene that has evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3a-6",
+  "level": "P3",
+  "template": "P3a",
+  "params": {
+   "x": "Fesoterodine Fumarate",
+   "dis": "FTD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Fesoterodine Fumarate targets at least one gene that has evidence for frontotemporal dementia (FTD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3a-7",
+  "level": "P3",
+  "template": "P3a",
+  "params": {
+   "x": "Neratinib Maleate",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Neratinib Maleate targets at least one gene that has evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3b-0",
+  "level": "P3",
+  "template": "P3b",
+  "params": {
+   "x": "Pralsetinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Pralsetinib targets at least one gene that has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3b-1",
+  "level": "P3",
+  "template": "P3b",
+  "params": {
+   "x": "Metformin Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Metformin Hydrochloride targets at least one gene that has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3b-2",
+  "level": "P3",
+  "template": "P3b",
+  "params": {
+   "x": "Belinostat",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Belinostat targets at least one gene that has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3b-3",
+  "level": "P3",
+  "template": "P3b",
+  "params": {
+   "x": "Esketamine Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Esketamine Hydrochloride targets at least one gene that has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3b-4",
+  "level": "P3",
+  "template": "P3b",
+  "params": {
+   "x": "Amifampridine Phosphate",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Amifampridine Phosphate targets at least one gene that has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3b-5",
+  "level": "P3",
+  "template": "P3b",
+  "params": {
+   "x": "Afatinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Afatinib targets at least one gene that has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3b-6",
+  "level": "P3",
+  "template": "P3b",
+  "params": {
+   "x": "Amantadine Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Amantadine Hydrochloride targets at least one gene that has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3b-7",
+  "level": "P3",
+  "template": "P3b",
+  "params": {
+   "x": "Ticagrelor",
+   "dis": "PD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Ticagrelor targets at least one gene that has a causal SNP for Parkinson's disease (PD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3c-0",
+  "level": "P3",
+  "template": "P3c",
+  "params": {
+   "g": "METTL13",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene METTL13 has evidence for Parkinson's disease (PD) in at least one reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3c-1",
+  "level": "P3",
+  "template": "P3c",
+  "params": {
+   "g": "RNF111",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene RNF111 has evidence for Alzheimer's disease (AD) in at least one reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3c-2",
+  "level": "P3",
+  "template": "P3c",
+  "params": {
+   "g": "RP11-179B15.5",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene RP11-179B15.5 has evidence for Alzheimer's disease (AD) in at least one reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3c-3",
+  "level": "P3",
+  "template": "P3c",
+  "params": {
+   "g": "PYCARD",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene PYCARD has evidence for Parkinson's disease (PD) in at least one reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3c-4",
+  "level": "P3",
+  "template": "P3c",
+  "params": {
+   "g": "ASF1A",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene ASF1A has evidence for Parkinson's disease (PD) in at least one reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3c-5",
+  "level": "P3",
+  "template": "P3c",
+  "params": {
+   "g": "CIT",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene CIT has evidence for Alzheimer's disease (AD) in at least one reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3c-6",
+  "level": "P3",
+  "template": "P3c",
+  "params": {
+   "g": "STBD1",
+   "dis": "PD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene STBD1 has evidence for Parkinson's disease (PD) in at least one reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P3c-7",
+  "level": "P3",
+  "template": "P3c",
+  "params": {
+   "g": "HAGH",
+   "dis": "PD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene HAGH has evidence for Parkinson's disease (PD) in at least one reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4a-0",
+  "level": "P4",
+  "template": "P4a",
+  "params": {
+   "x": "Memantine Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Memantine Hydrochloride has both evidence for Alzheimer's disease (AD) in some QTL dataset and a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4a-1",
+  "level": "P4",
+  "template": "P4a",
+  "params": {
+   "x": "Carfilzomib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Carfilzomib has both evidence for Alzheimer's disease (AD) in some QTL dataset and a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4a-2",
+  "level": "P4",
+  "template": "P4a",
+  "params": {
+   "x": "Amantadine Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Amantadine Hydrochloride has both evidence for Alzheimer's disease (AD) in some QTL dataset and a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4a-3",
+  "level": "P4",
+  "template": "P4a",
+  "params": {
+   "x": "Midostaurin",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Midostaurin has both evidence for Alzheimer's disease (AD) in some QTL dataset and a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4a-4",
+  "level": "P4",
+  "template": "P4a",
+  "params": {
+   "x": "Gabapentin",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Gabapentin has both evidence for Alzheimer's disease (AD) in some QTL dataset and a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4a-5",
+  "level": "P4",
+  "template": "P4a",
+  "params": {
+   "x": "Pralsetinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Pralsetinib has both evidence for Alzheimer's disease (AD) in some QTL dataset and a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4a-6",
+  "level": "P4",
+  "template": "P4a",
+  "params": {
+   "x": "Ixazomib",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Ixazomib has both evidence for Alzheimer's disease (AD) in some QTL dataset and a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4a-7",
+  "level": "P4",
+  "template": "P4a",
+  "params": {
+   "x": "Bortezomib",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Bortezomib has both evidence for Alzheimer's disease (AD) in some QTL dataset and a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4b-0",
+  "level": "P4",
+  "template": "P4b",
+  "params": {
+   "x": "Pregabalin",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which at least one target gene of the drug Pregabalin has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4b-1",
+  "level": "P4",
+  "template": "P4b",
+  "params": {
+   "x": "Metformin Hydrochloride",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which at least one target gene of the drug Metformin Hydrochloride has evidence for Parkinson's disease (PD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4b-2",
+  "level": "P4",
+  "template": "P4b",
+  "params": {
+   "x": "Solifenacin Succinate",
+   "dis": "FTD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which at least one target gene of the drug Solifenacin Succinate has evidence for frontotemporal dementia (FTD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4b-3",
+  "level": "P4",
+  "template": "P4b",
+  "params": {
+   "x": "Midostaurin",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which at least one target gene of the drug Midostaurin has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4b-4",
+  "level": "P4",
+  "template": "P4b",
+  "params": {
+   "x": "Entrectinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which at least one target gene of the drug Entrectinib has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4b-5",
+  "level": "P4",
+  "template": "P4b",
+  "params": {
+   "x": "Teriparatide",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which at least one target gene of the drug Teriparatide has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4b-6",
+  "level": "P4",
+  "template": "P4b",
+  "params": {
+   "x": "Fesoterodine Fumarate",
+   "dis": "FTD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which at least one target gene of the drug Fesoterodine Fumarate has evidence for frontotemporal dementia (FTD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4b-7",
+  "level": "P4",
+  "template": "P4b",
+  "params": {
+   "x": "Donepezil Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which at least one target gene of the drug Donepezil Hydrochloride has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4c-0",
+  "level": "P4",
+  "template": "P4c",
+  "params": {
+   "g1": "NDUFS2",
+   "g2": "NDUFS3",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which both gene NDUFS2 and gene NDUFS3 have evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4c-1",
+  "level": "P4",
+  "template": "P4c",
+  "params": {
+   "g1": "PSMB9",
+   "g2": "PSMC6",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which both gene PSMB9 and gene PSMC6 have evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4c-2",
+  "level": "P4",
+  "template": "P4c",
+  "params": {
+   "g1": "EGFR",
+   "g2": "EPHA1",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which both gene EGFR and gene EPHA1 have evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4c-3",
+  "level": "P4",
+  "template": "P4c",
+  "params": {
+   "g1": "EPHA1",
+   "g2": "EPHB4",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which both gene EPHA1 and gene EPHB4 have evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4c-4",
+  "level": "P4",
+  "template": "P4c",
+  "params": {
+   "g1": "NDUFAB1",
+   "g2": "NDUFS2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which both gene NDUFAB1 and gene NDUFS2 have evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4c-5",
+  "level": "P4",
+  "template": "P4c",
+  "params": {
+   "g1": "PSMC3",
+   "g2": "PSMC6",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which both gene PSMC3 and gene PSMC6 have evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4c-6",
+  "level": "P4",
+  "template": "P4c",
+  "params": {
+   "g1": "NDUFAF2",
+   "g2": "NDUFB10",
+   "dis": "PD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which both gene NDUFAF2 and gene NDUFB10 have evidence for Parkinson's disease (PD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4c-7",
+  "level": "P4",
+  "template": "P4c",
+  "params": {
+   "g1": "EPHB4",
+   "g2": "ERBB2",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that there is a reliable QTL dataset in which both gene EPHB4 and gene ERBB2 have evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5a-0",
+  "level": "P5",
+  "template": "P5a",
+  "params": {
+   "g": "LIMK2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene LIMK2 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in a reliable QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5a-1",
+  "level": "P5",
+  "template": "P5a",
+  "params": {
+   "g": "ACHE",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene ACHE has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in a reliable QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5a-2",
+  "level": "P5",
+  "template": "P5a",
+  "params": {
+   "g": "IFNAR2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene IFNAR2 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in a reliable QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5a-3",
+  "level": "P5",
+  "template": "P5a",
+  "params": {
+   "g": "PVRL2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene PVRL2 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in a reliable QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5a-4",
+  "level": "P5",
+  "template": "P5a",
+  "params": {
+   "g": "RP11-333E1.2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene RP11-333E1.2 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in a reliable QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5a-5",
+  "level": "P5",
+  "template": "P5a",
+  "params": {
+   "g": "FBXO15",
+   "dis": "ALS"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene FBXO15 has evidence for amyotrophic lateral sclerosis (ALS) in a brain QTL dataset, or has evidence for amyotrophic lateral sclerosis (ALS) in a reliable QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5a-6",
+  "level": "P5",
+  "template": "P5a",
+  "params": {
+   "g": "PPP2R2D",
+   "dis": "ALS"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene PPP2R2D has evidence for amyotrophic lateral sclerosis (ALS) in a brain QTL dataset, or has evidence for amyotrophic lateral sclerosis (ALS) in a reliable QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5a-7",
+  "level": "P5",
+  "template": "P5a",
+  "params": {
+   "g": "RP11-1E4.1",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene RP11-1E4.1 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in a reliable QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5b-0",
+  "level": "P5",
+  "template": "P5b",
+  "params": {
+   "g1": "PSMC3",
+   "g2": "PSMC6",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene PSMC3 or gene PSMC6 (or both) has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5b-1",
+  "level": "P5",
+  "template": "P5b",
+  "params": {
+   "g1": "PSMB9",
+   "g2": "PSMC6",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene PSMB9 or gene PSMC6 (or both) has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5b-2",
+  "level": "P5",
+  "template": "P5b",
+  "params": {
+   "g1": "NDUFAB1",
+   "g2": "NDUFS3",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene NDUFAB1 or gene NDUFS3 (or both) has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5b-3",
+  "level": "P5",
+  "template": "P5b",
+  "params": {
+   "g1": "EPHB4",
+   "g2": "ERBB2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene EPHB4 or gene ERBB2 (or both) has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5b-4",
+  "level": "P5",
+  "template": "P5b",
+  "params": {
+   "g1": "NDUFS2",
+   "g2": "NDUFS3",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene NDUFS2 or gene NDUFS3 (or both) has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5b-5",
+  "level": "P5",
+  "template": "P5b",
+  "params": {
+   "g1": "NDUFAF2",
+   "g2": "NDUFB10",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene NDUFAF2 or gene NDUFB10 (or both) has evidence for Parkinson's disease (PD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5b-6",
+  "level": "P5",
+  "template": "P5b",
+  "params": {
+   "g1": "PSMB8",
+   "g2": "PSMB9",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene PSMB8 or gene PSMB9 (or both) has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5b-7",
+  "level": "P5",
+  "template": "P5b",
+  "params": {
+   "g1": "EPHA1",
+   "g2": "ERBB2",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that gene EPHA1 or gene ERBB2 (or both) has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5c-0",
+  "level": "P5",
+  "template": "P5c",
+  "params": {
+   "x": "Afatinib Dimaleate",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Afatinib Dimaleate targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset, or targets a gene with evidence for Alzheimer's disease (AD) in a blood QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5c-1",
+  "level": "P5",
+  "template": "P5c",
+  "params": {
+   "x": "Nitisinone",
+   "dis": "ALS"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Nitisinone targets a gene with evidence for amyotrophic lateral sclerosis (ALS) in a reliable QTL dataset, or targets a gene with evidence for amyotrophic lateral sclerosis (ALS) in a blood QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5c-2",
+  "level": "P5",
+  "template": "P5c",
+  "params": {
+   "x": "Pralsetinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Pralsetinib targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset, or targets a gene with evidence for Alzheimer's disease (AD) in a blood QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5c-3",
+  "level": "P5",
+  "template": "P5c",
+  "params": {
+   "x": "Teriparatide",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Teriparatide targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset, or targets a gene with evidence for Alzheimer's disease (AD) in a blood QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5c-4",
+  "level": "P5",
+  "template": "P5c",
+  "params": {
+   "x": "Fostamatinib Disodium",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Fostamatinib Disodium targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset, or targets a gene with evidence for Alzheimer's disease (AD) in a blood QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5c-5",
+  "level": "P5",
+  "template": "P5c",
+  "params": {
+   "x": "Solifenacin Succinate",
+   "dis": "FTD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Solifenacin Succinate targets a gene with evidence for frontotemporal dementia (FTD) in a reliable QTL dataset, or targets a gene with evidence for frontotemporal dementia (FTD) in a blood QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5c-6",
+  "level": "P5",
+  "template": "P5c",
+  "params": {
+   "x": "Neratinib Maleate",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Neratinib Maleate targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset, or targets a gene with evidence for Alzheimer's disease (AD) in a blood QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5c-7",
+  "level": "P5",
+  "template": "P5c",
+  "params": {
+   "x": "Esketamine Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Esketamine Hydrochloride targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset, or targets a gene with evidence for Alzheimer's disease (AD) in a blood QTL dataset (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6a-0",
+  "level": "P6",
+  "template": "P6a",
+  "params": {
+   "x": "Ixazomib Citrate",
+   "g0": "PSMC6",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene PSMC6, a target of the drug Ixazomib Citrate, has evidence for Alzheimer's disease (AD) in some blood QTL dataset, what is the probability that Ixazomib Citrate targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6a-1",
+  "level": "P6",
+  "template": "P6a",
+  "params": {
+   "x": "Bortezomib",
+   "g0": "PSMB9",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene PSMB9, a target of the drug Bortezomib, has evidence for Alzheimer's disease (AD) in some blood QTL dataset, what is the probability that Bortezomib targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6a-2",
+  "level": "P6",
+  "template": "P6a",
+  "params": {
+   "x": "Pralsetinib",
+   "g0": "KIF5B",
+   "dis": "PSP"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene KIF5B, a target of the drug Pralsetinib, has evidence for progressive supranuclear palsy (PSP) in some blood QTL dataset, what is the probability that Pralsetinib targets a gene with evidence for progressive supranuclear palsy (PSP) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6a-3",
+  "level": "P6",
+  "template": "P6a",
+  "params": {
+   "x": "Ixazomib",
+   "g0": "PSMB9",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene PSMB9, a target of the drug Ixazomib, has evidence for Alzheimer's disease (AD) in some blood QTL dataset, what is the probability that Ixazomib targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6a-4",
+  "level": "P6",
+  "template": "P6a",
+  "params": {
+   "x": "Trametinib Dimethyl Sulfoxide",
+   "g0": "MAP2K1",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene MAP2K1, a target of the drug Trametinib Dimethyl Sulfoxide, has evidence for Alzheimer's disease (AD) in some blood QTL dataset, what is the probability that Trametinib Dimethyl Sulfoxide targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6a-5",
+  "level": "P6",
+  "template": "P6a",
+  "params": {
+   "x": "Tirofiban Hydrochloride",
+   "g0": "ITGA2B",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene ITGA2B, a target of the drug Tirofiban Hydrochloride, has evidence for Parkinson's disease (PD) in some blood QTL dataset, what is the probability that Tirofiban Hydrochloride targets a gene with evidence for Parkinson's disease (PD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6a-6",
+  "level": "P6",
+  "template": "P6a",
+  "params": {
+   "x": "Enalapril Maleate",
+   "g0": "ACE",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene ACE, a target of the drug Enalapril Maleate, has evidence for Alzheimer's disease (AD) in some blood QTL dataset, what is the probability that Enalapril Maleate targets a gene with evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6a-7",
+  "level": "P6",
+  "template": "P6a",
+  "params": {
+   "x": "Tofacitinib Citrate",
+   "g0": "TYK2",
+   "dis": "LBD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene TYK2, a target of the drug Tofacitinib Citrate, has evidence for Lewy body dementia (LBD) in some blood QTL dataset, what is the probability that Tofacitinib Citrate targets a gene with evidence for Lewy body dementia (LBD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6b-0",
+  "level": "P6",
+  "template": "P6b",
+  "params": {
+   "x": "Lifitegrast",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Lifitegrast targets at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset, and that none of its target genes has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6b-1",
+  "level": "P6",
+  "template": "P6b",
+  "params": {
+   "x": "Regorafenib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Regorafenib targets at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset, and that none of its target genes has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6b-2",
+  "level": "P6",
+  "template": "P6b",
+  "params": {
+   "x": "Cangrelor Tetrasodium",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Cangrelor Tetrasodium targets at least one gene with evidence for Parkinson's disease (PD) in some QTL dataset, and that none of its target genes has a causal SNP for Parkinson's disease (PD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6b-3",
+  "level": "P6",
+  "template": "P6b",
+  "params": {
+   "x": "Ticagrelor",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Ticagrelor targets at least one gene with evidence for Parkinson's disease (PD) in some QTL dataset, and that none of its target genes has a causal SNP for Parkinson's disease (PD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6b-4",
+  "level": "P6",
+  "template": "P6b",
+  "params": {
+   "x": "Sodium Oxybate",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Sodium Oxybate targets at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset, and that none of its target genes has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6b-5",
+  "level": "P6",
+  "template": "P6b",
+  "params": {
+   "x": "Tirofiban Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Tirofiban Hydrochloride targets at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset, and that none of its target genes has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6b-6",
+  "level": "P6",
+  "template": "P6b",
+  "params": {
+   "x": "Amantadine Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Amantadine Hydrochloride targets at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset, and that none of its target genes has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6b-7",
+  "level": "P6",
+  "template": "P6b",
+  "params": {
+   "x": "Bortezomib",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the probability that the drug Bortezomib targets at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset, and that none of its target genes has a causal SNP for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6c-0",
+  "level": "P6",
+  "template": "P6c",
+  "params": {
+   "g": "EME2",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene EME2 has evidence for Parkinson's disease (PD) in some brain QTL dataset, what is the probability that EME2 has evidence for Parkinson's disease (PD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6c-1",
+  "level": "P6",
+  "template": "P6c",
+  "params": {
+   "g": "AC005082.1",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene AC005082.1 has evidence for Parkinson's disease (PD) in some brain QTL dataset, what is the probability that AC005082.1 has evidence for Parkinson's disease (PD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6c-2",
+  "level": "P6",
+  "template": "P6c",
+  "params": {
+   "g": "ERCC8",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene ERCC8 has evidence for Parkinson's disease (PD) in some brain QTL dataset, what is the probability that ERCC8 has evidence for Parkinson's disease (PD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6c-3",
+  "level": "P6",
+  "template": "P6c",
+  "params": {
+   "g": "MAP1LC3A",
+   "dis": "ALS"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene MAP1LC3A has evidence for amyotrophic lateral sclerosis (ALS) in some brain QTL dataset, what is the probability that MAP1LC3A has evidence for amyotrophic lateral sclerosis (ALS) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6c-4",
+  "level": "P6",
+  "template": "P6c",
+  "params": {
+   "g": "MS4A6A",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene MS4A6A has evidence for Alzheimer's disease (AD) in some brain QTL dataset, what is the probability that MS4A6A has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6c-5",
+  "level": "P6",
+  "template": "P6c",
+  "params": {
+   "g": "RP1-62O9.3",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene RP1-62O9.3 has evidence for Alzheimer's disease (AD) in some brain QTL dataset, what is the probability that RP1-62O9.3 has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6c-6",
+  "level": "P6",
+  "template": "P6c",
+  "params": {
+   "g": "NOD2",
+   "dis": "ALS"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene NOD2 has evidence for amyotrophic lateral sclerosis (ALS) in some brain QTL dataset, what is the probability that NOD2 has evidence for amyotrophic lateral sclerosis (ALS) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6c-7",
+  "level": "P6",
+  "template": "P6c",
+  "params": {
+   "g": "MGC57346",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Given that gene MGC57346 has evidence for Alzheimer's disease (AD) in some brain QTL dataset, what is the probability that MGC57346 has evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7a-0",
+  "level": "P7",
+  "template": "P7a",
+  "params": {
+   "m": "Ascites",
+   "dis": "PD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Consider the approved drugs that have 'Ascites' among their indications (whether or not they succeed for it). What is the expected number of these drugs that target at least one gene with evidence for Parkinson's disease (PD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7a-1",
+  "level": "P7",
+  "template": "P7a",
+  "params": {
+   "m": "Glioma",
+   "dis": "ALS"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Consider the approved drugs that have 'Glioma' among their indications (whether or not they succeed for it). What is the expected number of these drugs that target at least one gene with evidence for amyotrophic lateral sclerosis (ALS) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7a-2",
+  "level": "P7",
+  "template": "P7a",
+  "params": {
+   "m": "Muscle Rigidity",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Consider the approved drugs that have 'Muscle Rigidity' among their indications (whether or not they succeed for it). What is the expected number of these drugs that target at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7a-3",
+  "level": "P7",
+  "template": "P7a",
+  "params": {
+   "m": "Sarcoma, Ewing",
+   "dis": "ALS"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Consider the approved drugs that have 'Sarcoma, Ewing' among their indications (whether or not they succeed for it). What is the expected number of these drugs that target at least one gene with evidence for amyotrophic lateral sclerosis (ALS) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7a-4",
+  "level": "P7",
+  "template": "P7a",
+  "params": {
+   "m": "Carcinoma, Hepatocellular",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Consider the approved drugs that have 'Carcinoma, Hepatocellular' among their indications (whether or not they succeed for it). What is the expected number of these drugs that target at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7a-5",
+  "level": "P7",
+  "template": "P7a",
+  "params": {
+   "m": "Pancreatic Neoplasms",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Consider the approved drugs that have 'Pancreatic Neoplasms' among their indications (whether or not they succeed for it). What is the expected number of these drugs that target at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7a-6",
+  "level": "P7",
+  "template": "P7a",
+  "params": {
+   "m": "Depressive Disorder",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Consider the approved drugs that have 'Depressive Disorder' among their indications (whether or not they succeed for it). What is the expected number of these drugs that target at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7a-7",
+  "level": "P7",
+  "template": "P7a",
+  "params": {
+   "m": "Hemangiosarcoma",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "Consider the approved drugs that have 'Hemangiosarcoma' among their indications (whether or not they succeed for it). What is the expected number of these drugs that target at least one gene with evidence for Alzheimer's disease (AD) in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7b-0",
+  "level": "P7",
+  "template": "P7b",
+  "params": {
+   "x": "Solifenacin Succinate",
+   "dis": "FTD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of target genes of the drug Solifenacin Succinate that have evidence for frontotemporal dementia (FTD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7b-1",
+  "level": "P7",
+  "template": "P7b",
+  "params": {
+   "x": "Enalapril Maleate",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of target genes of the drug Enalapril Maleate that have evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7b-2",
+  "level": "P7",
+  "template": "P7b",
+  "params": {
+   "x": "Selpercatinib",
+   "dis": "LBD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of target genes of the drug Selpercatinib that have evidence for Lewy body dementia (LBD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7b-3",
+  "level": "P7",
+  "template": "P7b",
+  "params": {
+   "x": "Tofacitinib Citrate",
+   "dis": "LBD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of target genes of the drug Tofacitinib Citrate that have evidence for Lewy body dementia (LBD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7b-4",
+  "level": "P7",
+  "template": "P7b",
+  "params": {
+   "x": "Osimertinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of target genes of the drug Osimertinib that have evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7b-5",
+  "level": "P7",
+  "template": "P7b",
+  "params": {
+   "x": "Donepezil Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of target genes of the drug Donepezil Hydrochloride that have evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7b-6",
+  "level": "P7",
+  "template": "P7b",
+  "params": {
+   "x": "Tucatinib",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of target genes of the drug Tucatinib that have evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7b-7",
+  "level": "P7",
+  "template": "P7b",
+  "params": {
+   "x": "Afatinib",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of target genes of the drug Afatinib that have evidence for Alzheimer's disease (AD) in a reliable QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7c-0",
+  "level": "P7",
+  "template": "P7c",
+  "params": {
+   "x": "Osimertinib Mesylate",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of QTL datasets that are reliable and in which at least one target gene of the drug Osimertinib Mesylate has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7c-1",
+  "level": "P7",
+  "template": "P7c",
+  "params": {
+   "x": "Ixazomib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of QTL datasets that are reliable and in which at least one target gene of the drug Ixazomib has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7c-2",
+  "level": "P7",
+  "template": "P7c",
+  "params": {
+   "x": "Lapatinib Ditosylate",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of QTL datasets that are reliable and in which at least one target gene of the drug Lapatinib Ditosylate has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7c-3",
+  "level": "P7",
+  "template": "P7c",
+  "params": {
+   "x": "Dacomitinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of QTL datasets that are reliable and in which at least one target gene of the drug Dacomitinib has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7c-4",
+  "level": "P7",
+  "template": "P7c",
+  "params": {
+   "x": "Baclofen",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of QTL datasets that are reliable and in which at least one target gene of the drug Baclofen has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7c-5",
+  "level": "P7",
+  "template": "P7c",
+  "params": {
+   "x": "Brigatinib",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of QTL datasets that are reliable and in which at least one target gene of the drug Brigatinib has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7c-6",
+  "level": "P7",
+  "template": "P7c",
+  "params": {
+   "x": "Cobimetinib",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of QTL datasets that are reliable and in which at least one target gene of the drug Cobimetinib has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P7c-7",
+  "level": "P7",
+  "template": "P7c",
+  "params": {
+   "x": "Tirofiban Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": false,
+  "engine_refused": false,
+  "question": "What is the expected number of QTL datasets that are reliable and in which at least one target gene of the drug Tirofiban Hydrochloride has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4d-0",
+  "level": "P4",
+  "template": "P4d",
+  "params": {
+   "x": "Ixazomib Citrate",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that some target gene of the drug Ixazomib Citrate has evidence for Alzheimer's disease (AD) both in a brain QTL dataset and in a blood QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4d-1",
+  "level": "P4",
+  "template": "P4d",
+  "params": {
+   "x": "Metformin Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that some target gene of the drug Metformin Hydrochloride has evidence for Alzheimer's disease (AD) both in a brain QTL dataset and in a blood QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4d-2",
+  "level": "P4",
+  "template": "P4d",
+  "params": {
+   "x": "Pralsetinib",
+   "dis": "LBD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that some target gene of the drug Pralsetinib has evidence for Lewy body dementia (LBD) both in a brain QTL dataset and in a blood QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4d-3",
+  "level": "P4",
+  "template": "P4d",
+  "params": {
+   "x": "Amantadine Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that some target gene of the drug Amantadine Hydrochloride has evidence for Alzheimer's disease (AD) both in a brain QTL dataset and in a blood QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4d-4",
+  "level": "P4",
+  "template": "P4d",
+  "params": {
+   "x": "Topotecan Hydrochloride",
+   "dis": "ALS"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that some target gene of the drug Topotecan Hydrochloride has evidence for amyotrophic lateral sclerosis (ALS) both in a brain QTL dataset and in a blood QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4d-5",
+  "level": "P4",
+  "template": "P4d",
+  "params": {
+   "x": "Tirofiban Hydrochloride",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that some target gene of the drug Tirofiban Hydrochloride has evidence for Alzheimer's disease (AD) both in a brain QTL dataset and in a blood QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4d-6",
+  "level": "P4",
+  "template": "P4d",
+  "params": {
+   "x": "Solifenacin Succinate",
+   "dis": "FTD"
+  },
+  "split": "dev",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that some target gene of the drug Solifenacin Succinate has evidence for frontotemporal dementia (FTD) both in a brain QTL dataset and in a blood QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4d-7",
+  "level": "P4",
+  "template": "P4d",
+  "params": {
+   "x": "Upadacitinib",
+   "dis": "LBD"
+  },
+  "split": "dev",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that some target gene of the drug Upadacitinib has evidence for Lewy body dementia (LBD) both in a brain QTL dataset and in a blood QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4e-0",
+  "level": "P4",
+  "template": "P4e",
+  "params": {
+   "x": "Lifitegrast"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Lifitegrast has both evidence for Parkinson's disease (PD) and evidence for Alzheimer's disease (AD), each in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P4e-1",
+  "level": "P4",
+  "template": "P4e",
+  "params": {
+   "x": "Tirofiban Hydrochloride"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": false,
+  "question": "What is the probability that some target gene of the drug Tirofiban Hydrochloride has both evidence for Parkinson's disease (PD) and evidence for Alzheimer's disease (AD), each in some QTL dataset? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5d-0",
+  "level": "P5",
+  "template": "P5d",
+  "params": {
+   "g": "ZSCAN12",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that gene ZSCAN12 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in at least two QTL datasets (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5d-1",
+  "level": "P5",
+  "template": "P5d",
+  "params": {
+   "g": "AP3B2",
+   "dis": "ALS"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that gene AP3B2 has evidence for amyotrophic lateral sclerosis (ALS) in a brain QTL dataset, or has evidence for amyotrophic lateral sclerosis (ALS) in at least two QTL datasets (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5d-2",
+  "level": "P5",
+  "template": "P5d",
+  "params": {
+   "g": "LRRFIP2",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that gene LRRFIP2 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in at least two QTL datasets (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5d-3",
+  "level": "P5",
+  "template": "P5d",
+  "params": {
+   "g": "RNF138",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that gene RNF138 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in at least two QTL datasets (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5d-4",
+  "level": "P5",
+  "template": "P5d",
+  "params": {
+   "g": "ZNF423",
+   "dis": "AD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that gene ZNF423 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in at least two QTL datasets (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5d-5",
+  "level": "P5",
+  "template": "P5d",
+  "params": {
+   "g": "PVRL2",
+   "dis": "LBD"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that gene PVRL2 has evidence for Lewy body dementia (LBD) in a brain QTL dataset, or has evidence for Lewy body dementia (LBD) in at least two QTL datasets (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5d-6",
+  "level": "P5",
+  "template": "P5d",
+  "params": {
+   "g": "GRB10",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that gene GRB10 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in at least two QTL datasets (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P5d-7",
+  "level": "P5",
+  "template": "P5d",
+  "params": {
+   "g": "FNBP4",
+   "dis": "AD"
+  },
+  "split": "dev",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that gene FNBP4 has evidence for Alzheimer's disease (AD) in a brain QTL dataset, or has evidence for Alzheimer's disease (AD) in at least two QTL datasets (or both)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6d-0",
+  "level": "P6",
+  "template": "P6d",
+  "params": {
+   "x": "Lifitegrast"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that the drug Lifitegrast targets at least one gene with evidence for Parkinson's disease (PD) in some QTL dataset, and that none of its target genes has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6d-1",
+  "level": "P6",
+  "template": "P6d",
+  "params": {
+   "x": "Tirofiban Hydrochloride"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that the drug Tirofiban Hydrochloride targets at least one gene with evidence for Parkinson's disease (PD) in some QTL dataset, and that none of its target genes has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ },
+ {
+  "id": "P6d-2",
+  "level": "P6",
+  "template": "P6d",
+  "params": {
+   "x": "Amifampridine Phosphate"
+  },
+  "split": "scored",
+  "restored": true,
+  "engine_refused": true,
+  "question": "What is the probability that the drug Amifampridine Phosphate targets at least one gene with evidence for Parkinson's disease (PD) in some QTL dataset, and that none of its target genes has evidence for Alzheimer's disease (AD)? Each row of test_evidence, dataset_reliable, indication_success and snp_causal is an independent event that holds with probability prob."
+ }
+]
