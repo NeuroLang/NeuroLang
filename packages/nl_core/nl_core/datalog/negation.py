@@ -22,7 +22,10 @@ from .basic_representation import (
     check_head_is_a_predicate,
 )
 from .expression_processing import extract_logic_free_variables
-from .range_restriction import check_range_restriction
+from .range_restriction import (
+    check_range_restriction,
+    unbound_head_variables_error,
+)
 
 
 class NegativeFact(Implication):
@@ -67,7 +70,9 @@ class DatalogProgramNegationMixin(NegationOfTruthValueMixin):
         consequent_symbols = consequent._symbols - consequent.functor._symbols
 
         if not consequent_symbols.issubset(antecedent._symbols):
-            raise NeuroLangException(
+            raise unbound_head_variables_error(
+                expression
+            ) or NeuroLangException(
                 "All variables on the consequent need to be on the antecedent"
             )
         check_range_restriction(expression, self.symbol_table)

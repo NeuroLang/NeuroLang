@@ -297,6 +297,25 @@ def test_unbound_variables_rejected():
     assert generated in dl.symbol_table
 
 
+def test_head_variable_missing_from_body_named():
+    """A variable of the head absent from the body is reported with the
+    rule and the variables of the body, not as a generic error."""
+    dl = Datalog()
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    with pytest.raises(exceptions.UnboundVariablesError) as exc_info:
+        dl.walk(Imp_(Q(x, y), R(x)))
+    error = exc_info.value
+    assert (error.rule, error.variables, error.occurrences) == (
+        'Q', ('y',), ()
+    )
+    assert str(error).startswith("In Q: the variable y of the head")
+    assert "the variables of the body (x)" in error.suggestion
+
+
 def test_function_arguments_checked_against_its_signature():
     dl = Datalog()
     Q = S_('Q')  # noqa: N806

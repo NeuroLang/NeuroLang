@@ -67,6 +67,22 @@ def test_unbound_variables_suggestion_and_attributes():
     assert restored.suggestion == exc.suggestion
 
 
+def test_unbound_head_variables_message_and_suggestion():
+    exc = exceptions.UnboundVariablesError(
+        None, ("streamline",), (), "x", query=True
+    )
+    assert str(exc).startswith(
+        "In the query: the variable streamline of the head does not occur"
+    )
+    assert exc.suggestion == (
+        "Use in the head the variables of the body (x), or add a predicate "
+        "over streamline to the body."
+    )
+    restored = pickle.loads(pickle.dumps(exc))  # nosec B301
+    assert str(restored) == str(exc)
+    assert restored.suggestion == exc.suggestion
+
+
 class TestParserError:
     """ParserError already has line/column — ensure compatibility."""
 

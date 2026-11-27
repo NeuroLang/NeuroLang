@@ -47,7 +47,10 @@ from .expressions import (
     Union,
     predicate_identity,
 )
-from .range_restriction import check_range_restriction
+from .range_restriction import (
+    check_range_restriction,
+    unbound_head_variables_error,
+)
 from .wrapped_collections import WrappedRelationalAlgebraSet
 
 __all__ = [
@@ -245,7 +248,9 @@ class DatalogProgramMixin(TypedSymbolTableMixin, PatternWalker):
         consequent_symbols = consequent._symbols - consequent.functor._symbols
 
         if not consequent_symbols.issubset(antecedent._symbols):
-            raise NeuroLangException(
+            raise unbound_head_variables_error(
+                Implication(consequent, antecedent)
+            ) or NeuroLangException(
                 "All variables on the consequent need to be on the antecedent"
             )
 

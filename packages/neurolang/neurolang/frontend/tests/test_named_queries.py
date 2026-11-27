@@ -78,7 +78,9 @@ class TestSeveralQueries:
         assert rows(answer) == [(4,), (5,)]
 
     def test_an_unbound_variable_is_reported(self, nl):
-        with pytest.raises(NeuroLangException, match="consequent|nbound"):
+        with pytest.raises(
+            NeuroLangException, match="consequent|nbound|of the head"
+        ):
             nl.execute_datalog_program(
                 "ans[a](x) :- edge(x, y)\nans[b](z) :- edge(x, y)"
             )
