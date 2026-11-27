@@ -1,0 +1,57 @@
+# The budgets of the plans of test_plan_cost.py: a query fails when one of
+# its costs is more than factor x its baseline + slack. The baselines are
+# rewritten by running the test with NEUROLANG_UPDATE_PLAN_COST=1
+# (doc/contributing.rst).
+# slack is in rows (or calls), for the small counts: the studies are 300,
+# the streamlines 316.
+factor: 2.0
+slack: 100
+cases:
+  af:
+    magic_rows: 8
+    max_rows: 988
+    similarity_calls: 0
+  bayes_factor:
+    magic_rows: 14
+    max_rows: 674
+    similarity_calls: 0
+  coactivation:
+    magic_rows: 2
+    max_rows: 674
+    similarity_calls: 0
+  cst:
+    magic_rows: 0
+    max_rows: 3298
+    similarity_calls: 0
+  ec:
+    magic_rows: 436
+    max_rows: 988
+    similarity_calls: 0
+  forward_inference:
+    magic_rows: 2
+    max_rows: 674
+    similarity_calls: 0
+  ilf:
+    magic_rows: 96
+    max_rows: 632
+    similarity_calls: 0
+  negation_aggregation:
+    magic_rows: 300
+    max_rows: 600
+    similarity_calls: 0
+  resampling:
+    magic_rows: 2
+    max_rows: 2000
+    similarity_calls: 0
+  similar_study_bound:
+    magic_rows: 7
+    max_rows: 2100
+    similarity_calls: 2100
+  slf_i:
+    magic_rows: 0
+    max_rows: 3298
+    similarity_calls: 0
+  uf:
+    magic_rows: 521
+    max_rows: 988
+    similarity_calls: 0
