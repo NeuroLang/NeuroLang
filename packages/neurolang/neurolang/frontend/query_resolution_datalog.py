@@ -6,6 +6,7 @@ as well as Region and Neurosynth capabilities
 """
 import warnings
 from collections import defaultdict
+from nl_core.datalog.constant_restriction import restrict_to_constants_used
 from nl_core.datalog.magic_sets import magic_rewrite
 from nl_core.datalog.range_restriction import (
     check_range_restriction,
@@ -539,7 +540,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             if self._handle_rewritten_output(goals, show_rewritten, dry_run):
                 return None
             solution = self.chase_class(
-                self.program_ir, rules=rules
+                self.program_ir, rules=self._restricted_rules(rules, goals)
             ).build_chase_solution()
             return [
                 self._query_answer(head, goal, solution)
@@ -547,6 +548,21 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             ]
         finally:
             self.program_ir.symbol_table = self.symbol_table.enclosing_scope
+
+    @staticmethod
+    def _restricted_rules(rules, goals, readers=(), kept=()):
+        """
+        Return the Union of *rules* of the *goals*, the predicates read
+        with constants alone computed for them (see
+        :func:`~nl_core.datalog.constant_restriction.restrict_to_constants_used`):
+        the vocabulary of tract queries that magic sets leave unbound.
+        *readers* are other rules reading them, not restricted; the
+        predicates *kept*, as those of the goals, are not restricted.
+        """
+        return logic.Union(restrict_to_constants_used(
+            rules.formulas, readers,
+            kept=(*kept, *(goal.consequent.functor for goal in goals)),
+        ))
 
     @staticmethod
     def _union_of_rules(unions):
@@ -1354,7 +1370,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 solution_set = ir.Constant(WrappedRelationalAlgebraFrozenSet())
             else:
                 solution = self.chase_class(
-                    self.program_ir, rules=reachable_rules
+                    self.program_ir, rules=self._restricted_rules(
+                        reachable_rules, (magic_query_expression,)
+                    )
                 ).build_chase_solution()
 
                 solution_set = solution.get(

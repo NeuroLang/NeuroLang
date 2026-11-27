@@ -781,3 +781,50 @@ def test_frontend_binds_a_similarity_with_a_large_relation(close):
     }
     expected = len(similar & {0, 1, 3}) / len(similar)
     assert res.as_pandas_dataframe().p.tolist() == pytest.approx([expected])
+
+
+@pytest.mark.parametrize("restricted", [True, False])
+def test_frontend_predicate_read_with_constants_computed_for_them(
+    restricted, monkeypatch
+):
+    """
+    ``before`` is read with the regions 'b' and, negated, 'c' only: it is
+    computed for them (as endpoint_anterior_of of the tract queries), not
+    for every region, with the same answers as when it is not. The query
+    is not rewritten with magic sets, as those of the tract queries are
+    not.
+    """
+    from nl_core.datalog.exceptions import NoConstantPredicateFoundError
+    from nl_expr.expressions import Symbol
+
+    def refused(*args, **kwargs):
+        raise NoConstantPredicateFoundError("not rewritten")
+
+    for module in (probabilistic_frontend, query_resolution_datalog):
+        monkeypatch.setattr(module, "magic_rewrite", refused)
+    if not restricted:
+        monkeypatch.setattr(
+            query_resolution_datalog, "restrict_to_constants_used",
+            lambda rules, *args, **kwargs: tuple(rules),
+        )
+    nl = NeurolangPDL()
+    solved = {}
+    build = nl.chase_class.build_chase_solution
+
+    def recording(self):
+        solution = build(self)
+        solved.update(solution)
+        return solution
+
+    monkeypatch.setattr(nl.chase_class, "build_chase_solution", recording)
+    nl.add_tuple_set([(x, x) for x in range(6)], name="coord")
+    nl.add_tuple_set(
+        [(r, b) for r, b in zip("abcdefgh", range(8))], name="box"
+    )
+    res = nl.execute_datalog_program(
+        "before(x, r) :- coord(x, v), box(r, b), (v > b)\n"
+        "ans(x) :- before(x, 'b'), ~before(x, 'c')"
+    )
+    assert set(res) == {(2,)}
+    regions = {r for _, r in solved[Symbol("before")].value.unwrap()}
+    assert regions == (set("bc") if restricted else set("abcde"))
