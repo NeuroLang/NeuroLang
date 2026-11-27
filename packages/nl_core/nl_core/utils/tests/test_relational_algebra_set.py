@@ -1,6 +1,10 @@
 from typing import AbstractSet, Tuple
 import pytest
 
+from nl_expr.exceptions import (
+    IncompatibleJoinColumnsError, RelationalAlgebraError,
+)
+
 from ..relational_algebra_set import (
     RelationalAlgebraColumnInt,
     RelationalAlgebraColumnStr,
@@ -1765,3 +1769,73 @@ def test_naturaljoin_cut_by_the_smaller_relation(small, large, monkeypatch):
     )
     assert join(10, 1) == plain
     assert cuts and cut_rows[0] < len(large[1])
+
+
+def _text_and_numbers(ra_module):
+    named = ra_module.NamedRelationalAlgebraFrozenSet
+    return named(("s", "t"), [(0, "a"), (1, "b")]), named(("t",), [(1,), (2,)])
+
+
+@pytest.mark.parametrize("operation", [
+    lambda a, b: a.naturaljoin(b),
+    lambda a, b: b.naturaljoin(a),
+    lambda a, b: a.left_naturaljoin(b),
+    lambda a, b: b.left_naturaljoin(a),
+], ids=["join", "join-reversed", "left", "left-reversed"])
+def test_a_column_of_text_and_one_of_numbers_are_not_compared(
+    ra_module, operation
+):
+    """
+    A text is never equal to a number: the backends refused them with
+    their own errors (pandas' ValueError, polars' SchemaError), now one
+    error of the relational algebra that names the column.
+    """
+    a, b = _text_and_numbers(ra_module)
+    with pytest.raises(IncompatibleJoinColumnsError, match="'t'") as error:
+        operation(a, b)
+    assert isinstance(error.value, RelationalAlgebraError)
+    # the wording does not depend on which relation holds the text
+    assert "one relation holds text and the other numbers" in str(error.value)
+
+
+def test_a_difference_of_text_and_numbers(ra_module):
+    """
+    The named difference of pandas, as its joins, refuses them; polars'
+    keeps every row of the first relation, nothing being equal.
+    """
+    named = ra_module.NamedRelationalAlgebraFrozenSet
+    text = named(("t",), [("a",), ("b",)])
+    numbers = named(("t",), [(1,), (2,)])
+    if ra_module is pandas:
+        with pytest.raises(IncompatibleJoinColumnsError, match="'t'"):
+            text - numbers
+        with pytest.raises(IncompatibleJoinColumnsError, match="'t'"):
+            numbers - text
+    else:
+        assert sorted(text - numbers) == [("a",), ("b",)]
+
+
+def test_columns_of_numbers_of_different_types_are_still_joined(ra_module):
+    named = ra_module.NamedRelationalAlgebraFrozenSet
+    ints = named(("s", "t"), [(0, 1), (1, 2)])
+    floats = named(("t",), [(1.0,), (3.0,)])
+    assert sorted(ints.naturaljoin(floats)) == [(0, 1.0)]
+
+
+def test_a_join_with_an_empty_relation_of_numbers_and_one_of_text(ra_module):
+    """
+    pandas' merge does not compare the types when a set is empty, as a
+    relation of numbers emptied by a selection is, and joins them to
+    nothing; polars' join compares the schemas, and refused them already.
+    """
+    named = ra_module.NamedRelationalAlgebraFrozenSet
+    text = named(("s", "t"), [(0, "a"), (1, "b")])
+    numbers = named(("t",), [(1,), (2,)])
+    emptied = numbers.selection(lambda row: False)
+    if ra_module is pandas:
+        assert len(text.naturaljoin(emptied)) == 0
+        assert len(emptied.naturaljoin(text)) == 0
+        assert len(text.left_naturaljoin(emptied)) == 2
+    else:
+        with pytest.raises(IncompatibleJoinColumnsError):
+            text.naturaljoin(emptied)

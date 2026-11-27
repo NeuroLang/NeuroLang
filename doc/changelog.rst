@@ -394,6 +394,16 @@ Unreleased
 
 **Bug fixes:**
 
+- A join or a left join (and, with pandas, a difference) on a variable that
+  one relation holds as text and another as numbers (the identifier ``'1'``
+  and the number 1) used to fail with the backend's own error, a bare
+  ``ValueError`` of pandas ("You are trying to merge on str and int64
+  columns") or a ``SchemaError`` of polars; it is now one
+  ``IncompatibleJoinColumnsError`` that names the variable and says what to
+  check. Numbers of different types are joined as before, a relation with no
+  row is not compared (as pandas did), and the comparison ``(t == 1)`` of a
+  text is still false.
+
 - The choice facts of one predicate, ``0.3 ^ choice('a'). 0.7 ^ choice('b').``
   (the example of the tutorial, 10.6), are the alternatives of one choice,
   as the ``::`` facts of a predicate are one relation; the second one used to

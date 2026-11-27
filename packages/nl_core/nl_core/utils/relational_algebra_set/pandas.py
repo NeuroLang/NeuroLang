@@ -6,6 +6,7 @@ from uuid import uuid1
 import numpy as np
 import pandas as pd
 from nl_expr.config import config
+from nl_expr.exceptions import IncompatibleJoinColumnsError
 
 from . import abstract as abc
 from .abstract import count_distinct, row_type
@@ -59,6 +60,14 @@ _COMBINED_REDUCTIONS = {
 # Python's reductions, which pandas runs per group in Python, and the
 # pandas reductions computing the same on columns of numbers.
 _BUILTIN_REDUCTIONS = {sum: "sum", max: "max", min: "min"}
+
+
+def _is_text(dtype):
+    """Whether *dtype* is a text dtype, not the object dtype of any value."""
+    return (
+        pd.api.types.is_string_dtype(dtype)
+        and not pd.api.types.is_object_dtype(dtype)
+    )
 
 
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
@@ -440,6 +449,22 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         )
         return output
 
+    def _check_joinable(self, other, on):
+        """
+        Raise if a column of *on* is text in one set, numbers in the other:
+        pandas' merge does not compare the types when a set is empty.
+        """
+        if self.is_empty() or other.is_empty():
+            return
+        for col in on:
+            s_dtype = self._container[col].dtype
+            o_dtype = other._container[col].dtype
+            if s_dtype != o_dtype and (
+                _is_text(s_dtype) and pd.api.types.is_numeric_dtype(o_dtype)
+                or _is_text(o_dtype) and pd.api.types.is_numeric_dtype(s_dtype)
+            ):
+                raise IncompatibleJoinColumnsError(col, s_dtype, o_dtype)
+
     def _extract_unified_column_types(self, other):
         col_types = dict()
         for col in self._container.columns.intersection(other._container.columns):
@@ -769,6 +794,7 @@ class NamedRelationalAlgebraFrozenSet(
         if len(on) == 0:
             return self.cross_product(other)
 
+        self._check_joinable(other, on)
         new_columns = self.columns + tuple(
             c for c in other.columns if c not in self.columns
         )
@@ -922,6 +948,7 @@ class NamedRelationalAlgebraFrozenSet(
             else:
                 return self.cross_product(other)
         else:
+            self._check_joinable(other, on)
             col_types = self._extract_unified_column_types(other)
             new_container = (
                 self._container.astype(col_types)
@@ -1400,6 +1427,7 @@ class NamedRelationalAlgebraFrozenSet(
         self._drop_duplicates_if_needed()
         other._drop_duplicates_if_needed()
 
+        self._check_joinable(other, list(self.columns))
         col_types = self._extract_unified_column_types(other)
 
         new_container = (

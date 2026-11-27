@@ -20,6 +20,8 @@ import polars as pl
 import numpy as np
 import pandas as pd
 
+from nl_expr.exceptions import IncompatibleJoinColumnsError
+
 from . import abstract as abc
 from .abstract import count_distinct
 
@@ -1080,6 +1082,7 @@ class NamedRelationalAlgebraFrozenSet(
         if sc is None or oc is None:
             return type(self)(new_columns)
 
+        self._check_joinable(sc, oc, on)
         sc, oc = self._unify_join_types(sc, oc, on)
         new_container = sc.join(
             oc, on=on, how="inner", maintain_order="left_right"
@@ -1093,6 +1096,21 @@ class NamedRelationalAlgebraFrozenSet(
             ),
             columns=new_columns,
         )
+
+    @staticmethod
+    def _check_joinable(sc, oc, on):
+        """Raise if a column of *on* is text in one frame, numbers in the other."""
+        sc_schema = sc.collect_schema()
+        oc_schema = oc.collect_schema()
+        for col in on:
+            s_dtype, o_dtype = sc_schema.get(col), oc_schema.get(col)
+            if s_dtype is None or o_dtype is None:
+                continue
+            if (
+                s_dtype == pl.String and o_dtype.is_numeric()
+                or o_dtype == pl.String and s_dtype.is_numeric()
+            ):
+                raise IncompatibleJoinColumnsError(col, s_dtype, o_dtype)
 
     @staticmethod
     def _unify_join_types(sc, oc, on):
@@ -1153,6 +1171,7 @@ class NamedRelationalAlgebraFrozenSet(
                     if c not in self.columns:
                         new_container = new_container.with_columns(pl.lit(None).alias(c))
             else:
+                self._check_joinable(sc, oc, on)
                 sc, oc = self._unify_join_types(sc, oc, on)
                 new_container = sc.join(
                     oc, on=on, how="left", maintain_order="left_right"
