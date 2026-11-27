@@ -451,6 +451,125 @@ Either side of ``//`` may be a conjunction, in parentheses or not:
 ``PROB[(a(x, s), (x < y)) // (b(s), c(s))] = p`` is
 ``PROB[a(x, s), (x < y) // b(s), c(s)] = p``.
 
+5.2.1 PROB[COUNT] — Probability of a Count
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``PROB[COUNT(x) >= k | a(g, x)] = p`` is the probability that ``a(g, x)``
+holds for at least ``k`` values of ``x``. The comparison is any of ``>=``,
+``>``, ``==``, ``!=``, ``<``, ``<=``; ``k`` is an integer; the separator of
+the count and the event ``a`` is ``|`` (which is also a disjunction inside
+``a``: ``PROB[COUNT(x) >= 2 | a(x) | b(x)]`` counts the values of ``a`` or
+``b``), and ``//`` conditions as in ``PROB``. In a
+possible world, the count is the number of distinct values :math:`x` for
+which :math:`a(g, x)` holds, and the answer is
+
+.. math::
+
+    P[N_g \,\theta\, k], \qquad
+    N_g = \big|\{x : a(g, x) \text{ holds}\}\big|,
+
+with one row per group :math:`g`, the variables of ``a`` that occur
+elsewhere in the rule, as for ``PROB``; the other variables of ``a`` are
+projected, as in ``PROB`` too: :math:`x`
+counts the values for which *some* value of the others makes the event
+hold.
+
+.. nl-repl::
+
+    0.9 :: seen('u', 1).
+    0.6 :: seen('u', 2).
+    0.3 :: seen('u', 3).
+    0.5 :: seen('v', 1).
+    0.5 :: seen('v', 2).
+    ans[two_or_more](g, p) :- PROB[COUNT(x) >= 2 | seen(g, x)] = p
+    ans[exactly_one](g, p) :- PROB[COUNT(x) == 1 | seen(g, x)] = p
+    ans[fewer_than_two](g, p) :- PROB[COUNT(x) < 2 | seen(g, x)] = p
+
+For ``u``, the distribution of the count is :math:`P(0) = 0.028`,
+:math:`P(1) = 0.306`, :math:`P(2) = 0.504`, :math:`P(3) = 0.162`, so the
+three answers are 0.666, 0.306 and 0.334; for ``v``, :math:`P(0, 1, 2) =
+0.25, 0.5, 0.25` give 0.25, 0.5 and 0.75.
+
+**What it counts.** The count includes the worlds where no value holds:
+``COUNT(x) < k`` is :math:`1 - P[N_g \ge k]`, :math:`N_g = 0` included
+(for ``k`` greater than 0). This differs from SQL's ``HAVING``, whose
+groups are those with at least one row. A group has a row when ``a`` has an answer of
+positive probability for it; groups without one have none, as for
+``PROB``, whatever the comparison. A row of a comparison that is a
+complement (``<``, ``<=``, ``==``, ``!=``) may have the probability 0,
+or a value off by the rounding of floating-point numbers, where ``PROB``
+leaves out the rows of probability 0.
+
+**Correctness.** The count is the sum of the indicators :math:`I_a` of
+:math:`a(g, x{=}a)`. When the indicators are independent, :math:`T_{i,j}`,
+the probability that at least :math:`j` of the first :math:`i` hold,
+satisfies, by conditioning on the :math:`i`-th,
+:math:`T_{i,j} = (1 - p_i)\, T_{i-1,j} + p_i\, T_{i-1,j-1}` with
+:math:`T_{i,0} = 1` and :math:`T_{0,j} = 0` for :math:`j > 0`, and
+:math:`P[N_g \ge k] = T_{n,k}` takes :math:`O(nk)` time for the
+:math:`n` values, the Poisson-binomial tail, for any ``k``. The other
+comparisons are complements of it,
+
+.. math::
+
+    P[N > k] = T_{k+1}, \quad P[N < k] = 1 - T_k, \quad
+    P[N \le k] = 1 - T_{k+1}, \quad P[N = k] = T_k - T_{k+1}, \quad
+    P[N \ne k] = 1 - T_k + T_{k+1},
+
+with :math:`T_j = 1` for :math:`j \le 0`; :math:`T_1` is the probability
+that ``a`` holds for some ``x``, which needs no count.
+
+**When the indicators are independent.** The event is rewritten, as the
+``HAVING COUNT(*) >= k`` of Ré and Suciu [Re2009]_ is, into the query with
+``k`` copies of ``a`` for pairwise different values of ``x``,
+
+.. code-block:: neurolang
+
+    q(g, PROB) :- a(g, x1), a(g, x2), ..., a(g, xk), (x1 != x2), ...
+
+for which the lifted solvers have a plan when ``x`` is a *separator*
+variable of ``a``: it is in every probabilistic atom, none of which is a
+choice, so different values of ``x`` use different tuples and the events
+are independent (see :ref:`probabilistic-lifting`, *At least k*). Write
+the count with ``COUNT``, not as this self-join: written by hand, the
+query is still lifted, but from ``k = 3`` it does not reach the
+:math:`O(nk)` plan of ``COUNT`` (for ``k = 3``, 0.39 s for 1000 tuples
+and 20 s for 10000, against about 0.1 s). The event can have deterministic atoms, comparisons, constants, variables
+projected in each copy (``exists(y; a(x, y))``, or ``a(x, y)`` with ``y``
+nowhere else), and conjuncts of other relations that do not depend on
+``x``; so can a probabilistic choice with independent tuples of what is
+chosen, as in ``PROB[COUNT(x) >= 2 | sel(s), inside(s, x)]``, whose count is
+that of the chosen ``s``. Declined by the lifted solvers, and answered by
+model counting on the default engine (the right probability, in a time
+exponential in ``k``), are an event in which ``x`` is not a separator,
+such as :math:`\exists y\, (R(x) \land S(x, y) \land T(y))`, whose events
+share ``T``, a disjunction (``k`` is then at most 4), and a conditioning
+that shares a relation with the event; with the lifted solvers only they
+are an error. For a probabilistic choice alone, a world has at most one
+tuple: the count is 0 or 1, and its probability of at least 2 is 0.
+The number ``k`` is at most about 19: the query has
+:math:`k` copies and :math:`k (k - 1) / 2` comparisons, and the lifting
+transformations, which recurse on the conjuncts, bear 200 of them; its
+preparation takes some 1 s at ``k = 10`` and 10 s at ``k = 20``, whatever
+the data, the rest, :math:`O(nk)`, being linear in the data.
+
+Counting values chosen by a probabilistic choice, such as the studies of
+``selected_study``, is better done before the probability: the count is
+then a function of the selected study,
+
+.. code-block:: neurolang
+
+    n_terms(s, n) :- AGGREGATE[s](mentions(s, t) @ count(t)) = n
+    many(s) :- n_terms(s, n), (n >= 10), selected_study(s)
+    ans(p) :- PROB[many(s)] = p
+
+and ``COUNT`` counts uncertain tuples, such as the probabilistic facts of
+a relation of coverages:
+
+.. code-block:: neurolang
+
+    ans(label, p) :- PROB[COUNT(s) >= 10 | schaefer400_covered(label, s)] = p
+
 5.3 MARG — Marginal Probability of a Conjunction
 --------------------------------------------------
 

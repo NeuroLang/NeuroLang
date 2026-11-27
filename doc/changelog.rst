@@ -19,6 +19,14 @@ Unreleased
 
 **New features:**
 
+- ``PROB[COUNT(x) >= k | a(g, x)] = p``: the probability that an event
+  holds for at least (or ``>``, ``==``, ``!=``, ``<``, ``<=``) ``k``
+  values of ``x``, per group; ``//`` conditions as in ``PROB``. The lifted
+  solvers compute the tail of the Poisson-binomial distribution of the
+  values in time linear in the data for any ``k`` (the plan of at least
+  ``k`` values was ``O(n^k)`` for ``k`` at most 4, of a single atom); it
+  now covers events of several atoms, deterministic ones and comparisons.
+
 - ``EXPECT[f | a] = e`` and ``EXPECT_NORM[f | a] = e``, the expected value
   of ``f`` summed over the answers of a probabilistic query,
   :math:`\sum_x f(g, x)\,P[a(g, x)]` per group :math:`g` (``//`` conditions
@@ -401,6 +409,12 @@ Unreleased
   formula as the argument of ``and_``; the free variables of an application
   now include those of its logic-operator arguments, bound variables
   excluded. This also failed the tests of ``nl.expect`` on master.
+
+- An aggregation (or any rule reading it) over a ``PROB`` query without
+  answer failed with ``NoValidChaseClassForStratumException``: the empty
+  result was not in the solution of the probabilistic stratum, and the
+  rules reading it could not be stratified.
+
 - A join or a left join (and, with pandas, a difference) on a variable that
   one relation holds as text and another as numbers (the identifier ``'1'``
   and the number 1) used to fail with the backend's own error, a bare

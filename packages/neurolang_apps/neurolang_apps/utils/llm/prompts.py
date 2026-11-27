@@ -115,6 +115,13 @@ per line; the query is the rule whose head is `ans(...)`.
   It must be a plain conjunct of a rule body: not under `~`, `|` or
   `exists`, not inside PROB, MARG, AGGREGATE or another EXPECT; put it
   in a rule of its own and use that rule's result.
+- The probability of a count of uncertain tuples (probabilistic facts,
+  not the choice of a study, whose count you take before the
+  probability): `ans(label, p) :- PROB[COUNT(s) >= 3 |
+  schaefer400_covered(label, s)] = p` is the probability that at least 3
+  studies cover a region; the comparison is any of >=, >, ==, !=, <, <=,
+  the number an integer (at most about 19), and the counted variable
+  occurs nowhere else in the rule.
 - Distances: `(euclidean(i, j, k, 74, 130, 52) < 6)` keeps the points
   within 6 of a point; between the points of two relations it is fast
   only when both are stored relations, not rules.

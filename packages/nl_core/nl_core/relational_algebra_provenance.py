@@ -1,5 +1,8 @@
+import functools
 import math
 import operator
+
+import numpy
 
 from nl_expr.exceptions import RelationalAlgebraError
 from nl_expr.expression_walker import PatternWalker, add_match
@@ -190,6 +193,36 @@ class DisjointProjection(LiftedPlanProjection):
         return "disj-π_[{}]({})".format(attributes_repr, repr(self.relation))
 
 
+class ThresholdProjection(LiftedPlanProjection):
+    """The probability that at least `k` of the independent events of the
+    rows of each group hold: the tail of their Poisson-binomial
+    distribution. The rows of a group are independent events when the
+    plan is that of a separator variable, as for `IndependentProjection`,
+    which is `k = 1`.
+    """
+    def __init__(self, relation, attributes, k):
+        super().__init__(relation, attributes)
+        self.k = k
+
+    def __repr__(self) -> str:
+        attributes_repr = ",".join(repr(attr) for attr in self.attributes)
+        return "≥{}-π_[{}]({})".format(
+            self.k, attributes_repr, repr(self.relation)
+        )
+
+
+def probability_of_at_least(probabilities, k):
+    """Probability that at least `k` of independent events of the given
+    `probabilities` hold, in `O(len(probabilities) * k)` time: `tail[j]`
+    is that of at least `j` of the events so far, and a new event of
+    probability `p` makes it `(1 - p) tail[j] + p tail[j - 1]`."""
+    tail = numpy.zeros(k + 1)
+    tail[0] = 1.
+    for p in probabilities:
+        tail[1:] += p * (tail[:-1] - tail[1:])
+    return tail[k]
+
+
 class WeightedNaturalJoinSolverMixin(PatternWalker):
     @add_match(
         WeightedNaturalJoin,
@@ -363,6 +396,28 @@ class IndependentDisjointProjectionsAndUnionMixin(PatternWalker):
         )
         res = ProvenanceAlgebraSet(operation, prov_col)
         return res
+
+    @add_match(ThresholdProjection(ProvenanceAlgebraSet, ..., ...))
+    def threshold_projection(self, proj_op):
+        prov_col = proj_op.relation.provenance_column
+        return ProvenanceAlgebraSet(
+            GroupByAggregation(
+                proj_op.relation.relation,
+                proj_op.attributes,
+                [FunctionApplicationListMember(
+                    FunctionApplication(
+                        Constant(
+                            functools.partial(
+                                probability_of_at_least, k=proj_op.k
+                            )
+                        ),
+                        (prov_col,)
+                    ),
+                    prov_col,
+                )],
+            ),
+            prov_col
+        )
 
     @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
     def union_rap(self, union):

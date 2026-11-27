@@ -526,20 +526,102 @@ def test_at_least_four():
     ((x, y, z), (NE(x, y), NE(y, z))),
     ((x, y, z), (LT(x, y), LT(y, z))),
     ((x, y, z), (LT(x, y), LT(y, z), LT(z, x))),
-    (
-        (x, y, z, u, v),
-        tuple(NE(*p) for p in itertools.combinations((x, y, z, u, v), 2))
-    ),
 ])
 def test_at_least_k_not_lifted(variables, comparisons):
     """Without a strict comparison of each pair, satisfied by an order
-    of the variables, the query is not at least k values of R; beyond
-    MAX_AT_LEAST values, it is not lifted either."""
+    of the variables, the query is not at least k values of R."""
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(R, R4)
     query = Implication(
         ans(), Conjunction(tuple(R(v) for v in variables) + comparisons)
     )
+    with pytest.raises(NonLiftableException):
+        dalvi_suciu_lift.solve_succ_query(query, cpl)
+
+
+R7 = {(0.9, 1), (0.8, 2), (0.7, 3), (0.6, 4), (0.5, 5), (0.4, 6), (0.3, 7)}
+S7 = {(0.9, "a", 1), (0.8, "a", 2), (0.7, "a", 3), (0.6, "a", 4),
+      (0.5, "a", 5), (0.4, "b", 1), (0.3, "b", 2), (0.5, "b", 3)}
+
+
+def pairwise_distinct(variables):
+    return tuple(NE(*p) for p in itertools.combinations(variables, 2))
+
+
+@pytest.mark.parametrize("k", [5, 6, 7, 8])
+def test_at_least_more_than_four_values(k):
+    """The Poisson-binomial tail, for k beyond the former limit of 4, and
+    for k greater than the number of tuples, where it is 0."""
+    variables = tuple(Symbol(f"x{i}") for i in range(k))
+    check(
+        {R: R7}, {}, [],
+        Implication(ans(), Conjunction(
+            tuple(R(v) for v in variables) + pairwise_distinct(variables)
+        )),
+        lambda db: {()} if len(db[R]) >= k else set(),
+    )
+
+
+@pytest.mark.parametrize("k", [2, 3, 5])
+def test_at_least_k_per_answer_with_a_deterministic_atom(k):
+    """Every copy has a deterministic atom, the answer variable is free."""
+    variables = tuple(Symbol(f"x{i}") for i in range(k))
+    even = {(a, c) for _, a, c in S7 if c % 2 == 1 or a == "b"}
+    check(
+        {S: S7}, {D: even}, [],
+        Implication(ans(t), Conjunction(
+            tuple(S(t, v) for v in variables) +
+            tuple(D(t, v) for v in variables) + pairwise_distinct(variables)
+        )),
+        lambda db: {
+            (a,) for a, _ in db[S]
+            if len({c for b, c in db[S] if b == a and (b, c) in db[D]}) >= k
+        },
+    )
+
+
+def test_at_least_k_with_an_independent_conjunct():
+    """P[T(t) ∧ at least three values] = P[T(t)] P[at least three]."""
+    variables = (x, y, z)
+    check(
+        {S: S7, T: {(0.5, "a"), (0.25, "b")}}, {}, [],
+        Implication(ans(t), Conjunction(
+            (T(t),) + tuple(S(t, v) for v in variables) +
+            pairwise_distinct(variables)
+        )),
+        lambda db: {
+            (a,) for a, in db[T]
+            if len({c for b, c in db[S] if b == a}) >= 3
+        },
+    )
+
+
+def test_at_least_k_with_comparisons_in_the_copies():
+    variables = (x, y, z)
+    check(
+        {R: R7}, {}, [],
+        Implication(ans(), Conjunction(
+            tuple(R(v) for v in variables) +
+            tuple(Constant(operator.gt)(v, Constant(2)) for v in variables) +
+            (LT(x, y), LT(y, z), NE(x, z))
+        )),
+        lambda db: {()} if len({c for c, in db[R] if c > 2}) >= 3 else set(),
+    )
+
+
+def test_at_least_k_of_dependent_events_not_lifted():
+    """The events of two values of x share T(y): the tail of the
+    Poisson-binomial distribution would be wrong."""
+    variables, ys = (x, y), (u, v)
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(R, R1)
+    cpl.add_probabilistic_facts_from_tuples(S, {(0.5, "a", "a")})
+    cpl.add_probabilistic_facts_from_tuples(T, T1)
+    query = Implication(ans(), Conjunction(
+        tuple(R(a) for a in variables) +
+        tuple(S(a, b) for a, b in zip(variables, ys)) +
+        tuple(T(b) for b in ys) + (NE(x, y),)
+    ))
     with pytest.raises(NonLiftableException):
         dalvi_suciu_lift.solve_succ_query(query, cpl)
 
