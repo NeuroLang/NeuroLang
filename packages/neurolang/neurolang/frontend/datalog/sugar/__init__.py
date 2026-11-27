@@ -15,7 +15,10 @@ from nl_core.datalog.expression_processing import (
     extract_logic_free_variables,
     order_conjunction_by_shared_variables,
 )
-from nl_core.datalog.expressions import AdornedSymbol
+from nl_core.datalog.expressions import (
+    AdornedSymbol,
+    AggregationApplication,
+)
 from nl_expr.exceptions import ForbiddenExpressionError, SymbolNotFoundError
 from nl_expr.expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from nl_expr.expression_walker import (
@@ -28,9 +31,11 @@ from nl_expr.logic.transformations import ExtractBoundVariables
 from nl_core.probabilistic.expressions import (
     PROB,
     Condition,
+    Expectation,
     ProbabilisticFact,
     ProbabilisticChoice,
     ProbabilisticQuery,
+    contains_expectation,
 )
 from nl_expr.type_system import (
     Unknown,
@@ -413,6 +418,142 @@ def delegate_to_next_match(walker, expression, skip_action):
         ):
             return action(walker, expression)
     raise NeuroLangPatternMatchingNoMatch(f"No match for {expression}")
+
+
+class RefuseExpectationMixin(ew.PatternWalker):
+    """
+    Refuse an ``EXPECT`` in the rules of an engine without a
+    probabilistic layer, which has no relation to take an expectation of.
+    """
+
+    @ew.add_match(
+        Implication,
+        lambda implication: contains_expectation(implication.antecedent),
+    )
+    def refuse_expectation(self, implication):
+        raise ForbiddenExpressionError(
+            "EXPECT needs probabilistic relations and this engine has "
+            "none, so an expected value cannot be computed here. For plain "
+            "data sum, count or average a value with AGGREGATE, e.g. "
+            "ans(total) :- AGGREGATE[](item(x, v) @ sum(v)) = total."
+        )
+
+
+class TranslateExpectationMixin(ew.PatternWalker):
+    """
+    Translate a rule with ``EXPECT[f | a // c] = e`` in its body: the
+    expected value of ``f`` summed over the answers of the event ``a``.
+
+    The variables of ``a`` that occur elsewhere in the rule are its grouping
+    variables ``g``, the others ``x`` are summed, and the expectation is
+    the sum over ``x`` of ``f * p``, ``p`` the probability, knowing ``c``,
+    of the answer ``(g, x)``, by linearity of the expectation. The rule
+
+        P(g, e) :- B(g) & EXPECT[f(g, x) | a(g, x)] = e
+
+    is translated to
+
+        F1(g, x, PROB(g, x)) :- a(g, x)
+        F2(g, sum(v)) :- F1(g, x, p) & (v == f(g, x) * p)
+        P(g, e) :- B(g) & F2(g, e)
+
+    and, for ``EXPECT_NORM``, ``F2(g, sum(v), sum(p))`` is divided,
+    ``e == n / d``, when ``d > 0``.
+    """
+
+    @ew.add_match(
+        Implication(..., Conjunction),
+        lambda implication: any(
+            isinstance(formula, Expectation)
+            for formula in implication.antecedent.formulas
+        ),
+    )
+    def rewrite_expectation(self, implication):
+        head = implication.consequent
+        formulas = implication.antecedent.formulas
+        others = tuple(f for f in formulas if not isinstance(f, Expectation))
+        outside = {
+            arg
+            for atom in (head,) + others
+            if isinstance(atom, FunctionApplication)
+            for arg in atom.args
+            if isinstance(arg, Symbol)
+        }
+        rules, atoms = [], []
+        for expectation in formulas:
+            if isinstance(expectation, Expectation):
+                new_rules, atom = self._expectation_rules(
+                    expectation, outside - {expectation.result}
+                )
+                rules += new_rules
+                atoms.append(atom)
+        rules.append(Implication(head, Conjunction(others + tuple(atoms))))
+        return tuple(self.walk(rule) for rule in rules)
+
+    @staticmethod
+    def _expectation_rules(expectation, outside):
+        f, event, known = (
+            expectation.function, expectation.event, expectation.known
+        )
+        variables = extract_logic_free_variables(event)
+        # a group that only what is known has is a group all the same
+        variables |= extract_logic_free_variables(known) & outside
+        unbound = extract_logic_free_variables(f) - variables
+        if contains_expectation(event) or contains_expectation(known):
+            raise ForbiddenExpressionError(
+                "EXPECT cannot be inside the event of another EXPECT, which "
+                "must be a probabilistic query. Compute each EXPECT in a "
+                "rule of its own, m(e) :- EXPECT[x | a(x)] = e, and "
+                "combine their results in a rule that reads them."
+            )
+        if not variables:
+            raise ForbiddenExpressionError(
+                "The event of EXPECT has no variable to sum over: write it "
+                "with the variable of the answers to sum, e.g. "
+                "EXPECT[1 | a(x)] = n, or use PROB[a('c')] = p for the "
+                "probability of a closed event."
+            )
+        if unbound:
+            raise ForbiddenExpressionError(
+                "EXPECT sums f over the answers of its event, so the event "
+                "must bind every variable of f: f uses "
+                f"{', '.join(repr(v.name) for v in sorted(unbound, key=lambda v: v.name))}"
+                ", which the event does not bind. Add an atom that binds "
+                "it to the event, e.g. EXPECT[x + z | a(x), b(x, z)] = e."
+            )
+        variables = tuple(sorted(variables, key=lambda v: v.name))
+        group = tuple(v for v in variables if v in outside)
+        pa, ex, p, v = (Symbol.fresh() for _ in range(4))
+        rules = [Implication(
+            pa(*variables, FunctionApplication(PROB, variables)),
+            event if known == TRUE else Condition(event, known),
+        )]
+        weighted = Conjunction((
+            pa(*variables, p), Constant(op.eq)(v, Constant(op.mul)(f, p))
+        ))
+        total = AggregationApplication(Symbol("sum"), (v,))
+        result = expectation.result
+        if not expectation.normalised.value:
+            rules.append(Implication(ex(*group, total), weighted))
+            return rules, ex(*group, result)
+        sums, n, d = Symbol.fresh(), Symbol.fresh(), Symbol.fresh()
+        rules += [
+            Implication(
+                sums(
+                    *group, total, AggregationApplication(Symbol("sum"), (p,))
+                ),
+                weighted,
+            ),
+            Implication(
+                ex(*group, result),
+                Conjunction((
+                    sums(*group, n, d),
+                    Constant(op.gt)(d, Constant(0.)),
+                    Constant(op.eq)(result, Constant(op.truediv)(n, d)),
+                )),
+            ),
+        ]
+        return rules, ex(*group, result)
 
 
 class TranslateProbabilisticQueryMixin(ew.PatternWalker):

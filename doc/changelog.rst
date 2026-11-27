@@ -19,6 +19,15 @@ Unreleased
 
 **New features:**
 
+- ``EXPECT[f | a] = e`` and ``EXPECT_NORM[f | a] = e``, the expected value
+  of ``f`` summed over the answers of a probabilistic query,
+  :math:`\sum_x f(g, x)\,P[a(g, x)]` per group :math:`g` (``//`` conditions
+  as in ``PROB``; ``EXPECT_NORM`` divides by :math:`\sum_x P[a(g, x)]`). It
+  is sugar for a ``PROB`` rule and an aggregation, solved by the lifted
+  solvers; the query assistant's bank has two examples of it, and
+  ``NeurolangPDL.expect(f, event, result)`` builds it from Python. A rule that
+  calls a relation inside an expression now fails with an error that says so.
+
 - Brain viewer: the streamlines of a result with one other column, such
   as ``ans(x, side) :- uncinate(x, side)``, can be coloured by bundle, a
   colour per value of the column, which a legend names, or by direction,

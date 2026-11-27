@@ -474,6 +474,224 @@ compatibility, but these atoms are currently discarded before execution.
 Use ``PROB`` instead.
 
 
+5.5 EXPECT — Expected Values
+------------------------------
+
+``EXPECT[f | a] = e`` binds ``e`` to the expected value of ``f`` summed over
+the tuples of the probabilistic query ``a``. ``f`` is any deterministic
+expression of the variables of ``a`` (arithmetic, a function such as
+``log(w)``, a constant); ``a`` is a query over probabilistic and deterministic relations, as the
+argument of ``PROB`` (the lifted solvers plan it as the ``PROB`` rule it is
+rewritten to, see below).
+The separator of ``f`` and ``a`` is ``|``, which is a disjunction inside
+``a`` (``EXPECT[f | a | b]`` is the expectation over ``a`` or ``b``).
+
+The variables of ``a`` that occur elsewhere in the rule (in its head or as
+an argument of another positive atom of its body) are its *grouping
+variables* :math:`g`; the others, :math:`x`, can be several variables and
+are the ones summed:
+
+.. math::
+
+    \mathbb{E}[f(g, x) \mid a(g, x)] \;=\; \sum_{x} f(g, x)\,
+    P[a(g, x)]
+
+with one row per value of :math:`g`. This differs from ``PROB``, which
+marginalises the variables of its argument that occur nowhere else in the
+rule: ``EXPECT`` sums them. A variable that is not to be summed is
+written under an ``exists`` (``EXPECT[w | exists(y; a(x, y)), score(x, w)]``
+sums over the :math:`x` alone). The result variable joins the head of the
+rule, as the probability of ``PROB`` does.
+
+.. nl-repl::
+
+    ans(n) :- EXPECT[1 | selected_study(s), mentions(s, t)] = n
+
+Exactly one study is selected in each possible world, so this is the
+expected number of terms the selected study mentions, the mean over the
+studies of their number of terms. The sum is over the pairs
+:math:`(s, t)`; with :math:`f = 1` it is the expected size of the answers of
+``a``.
+
+**Grouping.** ``r`` is in the head, so there is one expectation per region:
+
+.. nl-repl::
+
+    ans(r, n) :- EXPECT[1 | selected_study(s), mentions(s, t), destrieux_activated(r, s)] = n
+
+**Why it is right.** Let :math:`S_g(W) = \{x : W \models a(g, x)\}` be the
+random set of answers of ``a`` in a possible world :math:`W`, and
+:math:`\mathbf 1_{g,x}(W)` the indicator that :math:`x \in S_g(W)`. Then
+:math:`\sum_{x \in S_g(W)} f(g, x) = \sum_x f(g, x)\, \mathbf 1_{g,x}(W)`
+and, by the linearity of the expectation,
+
+.. math::
+
+    \mathbb{E}\Big[\sum_{x \in S_g} f(g, x)\Big]
+    = \sum_x f(g, x)\,\mathbb{E}[\mathbf 1_{g,x}]
+    = \sum_x f(g, x)\, P[a(g, x)].
+
+Linearity needs no independence: the formula holds whether the tuples of
+``a`` come from a probabilistic choice, where exactly one :math:`x` holds
+and the sum is the expected value of :math:`f` of the chosen :math:`x`;
+from independent probabilistic facts, where it is the expected sum of
+:math:`f` over the random set; or from any join of them, however the
+tuples depend on each other. The groups :math:`g` are separate sums, one
+per row of the answer; a group in which no :math:`x` has a positive
+probability has no row, as with ``PROB`` and ``AGGREGATE``.
+
+**Rewriting.** ``EXPECT`` is sugar: the probabilistic engine rewrites, as it
+rewrites a conditional query, the rule
+
+.. code-block:: neurolang
+
+    ans(g, e) :- EXPECT[f(g, x) | a(g, x)] = e
+
+into one ``PROB`` rule, which the lifted solvers plan as any other, and
+one aggregation over its answers (an ``ans`` query reads a rule that holds
+the ``EXPECT``, as it does for an aggregation),
+
+.. code-block:: neurolang
+
+    p_a(g, x, PROB(g, x)) :- a(g, x)
+    ex(g, sum(v)) :- p_a(g, x, p), (v == (f(g, x) * p))
+    ans(g, e) :- ex(g, e)
+
+The aggregation sums over the rows of the body, which keep :math:`x`, so two
+tuples with the same value of :math:`f \cdot p` both count. An ``EXPECT``
+that cannot be rewritten is refused with an error that says what to write
+instead: ``f`` uses a variable that ``a`` does not bind (``a`` must
+range-restrict ``f``), ``a`` has no variable to sum, an ``EXPECT`` is not a
+conjunct of a rule body (under ``~``, ``|`` or ``exists``) or is inside
+``PROB``, ``MARG``, ``AGGREGATE`` or the event of another ``EXPECT`` (write
+it in a rule of its own and use that rule's result), or the engine has no
+probabilistic layer (``NeurolangDL``: sum with ``AGGREGATE`` instead). The
+one inside ``PROB``, ``MARG`` or ``AGGREGATE`` is refused when the program
+is read, the others when the rule is added. ``f`` is deterministic: it is
+built of the variables, constants,
+arithmetic and builtin functions; a relation, probabilistic or not, called
+in ``f`` (``EXPECT[score(x) | a(x)]`` with ``score`` a relation) is refused
+when the program is solved, with an error that says that a relation cannot
+be called inside an expression. For the value of a relation write it in the
+event, ``EXPECT[v | a(x), score(x, v)]``. From Python, ``nl.expect(f, a, e)``
+builds the same expectation (:doc:`tutorial_python`); the head of its rule
+is the one written, the result does not join it.
+
+**Conditioning.** ``//`` conditions as in ``PROB``: for each
+:math:`(g, x)`,
+
+.. math::
+
+    \mathbb{E}[f \mid a \,/\!/\, c] = \sum_x f(g, x)\,
+    P[a(g, x) \mid c] = \sum_x f(g, x)\,
+    \frac{P[a(g, x) \wedge c]}{P[c]},
+
+the expected sum over the answers of ``a`` knowing ``c``:
+
+.. nl-repl::
+
+    ans(r, n) :- EXPECT[1 | selected_study(s), destrieux_activated(r, s) // selected_study(u), mentions(u, 'face')] = n
+
+A variable that ``c`` shares with ``a`` is a variable of the answer, and
+it is the event of each :math:`(g, x)` that conditions its own term, as in
+``PROB``; a variable of ``c`` that ``a`` does not have is projected,
+unless it occurs elsewhere in the rule as above, where it is a grouping
+variable (``ans(r, e) :- EXPECT[w | sel(s), size(s, w) // sel(t), act(t,
+r)] = e`` has one expectation per ``r``). To know an event about the
+same random outcome without tying the values, name the variables of
+``c`` apart: in ``EXPECT[1 | active(l, s) // close('fear', t)]`` the
+study ``s`` of the answers is the chosen study and ``close('fear', t)`` says that the chosen study is close to fear, so the
+expectation is the expected number of regions that the chosen study
+activates, knowing it is close to fear.
+
+**Normalised expectation.** ``EXPECT_NORM[f | a] = e`` is the average of
+``f`` under the distribution of :math:`x` that ``a`` defines,
+
+.. math::
+
+    \mathbb{E}[f \mid a]_{\mathrm{norm}} \;=\;
+    \frac{\sum_x f(g, x)\, P[a(g, x)]}{\sum_x P[a(g, x)]}.
+
+It differs from ``EXPECT`` by the denominator, the expected number of
+answers :math:`\sum_x P[a(g, x)]`. For a probabilistic choice, exactly one
+:math:`x` satisfies ``a`` when it does at all, so :math:`\sum_x P[a(g, x)]`
+is the probability that one does and ``EXPECT_NORM`` is the expected value
+of :math:`f` knowing that ``a`` holds, whereas ``EXPECT`` is
+:math:`\mathbb E[f\,\mathbf 1_a]`, smaller by that probability. For
+independent tuples ``EXPECT_NORM`` is the mean of ``f`` over the tuples
+weighted by their probabilities, not the expected mean over the random set.
+With ``//`` the weights are the conditional probabilities. A group whose
+weights sum to zero has no row. It desugars to the same ``PROB`` rule and
+the aggregation of ``f`` * ``p`` divided by the aggregation of ``p``.
+
+A choice of three values and an event on them make the difference visible:
+
+.. nl-repl::
+
+    value(1, 0.2).
+    value(2, 0.3).
+    value(4, 0.5).
+    roll(x) ^ p :- value(x, p).
+    ans[mean](e) :- EXPECT[x | roll(x)] = e
+    ans[above](e) :- EXPECT[x | roll(x), (x > 1)] = e
+    ans[above_norm](e) :- EXPECT_NORM[x | roll(x), (x > 1)] = e
+
+The three answers are :math:`0.2 + 0.6 + 2.0 = 2.8`, :math:`0.6 + 2.0 =
+2.6` and :math:`2.6 / 0.8 = 3.25`, the expected value of the roll knowing
+that it is above 1. With independent facts the sum is the expected sum:
+
+.. nl-repl::
+
+    0.5 :: item(1).
+    0.5 :: item(2).
+    0.5 :: item(3).
+    ans(e) :- EXPECT[x | item(x)] = e
+
+is :math:`0.5 (1 + 2 + 3) = 3`, and ``EXPECT[1 | item(x)]`` is the expected
+number of items, 1.5.
+
+**Worked example: expected number of approved drugs.** On the tables of the
+probabilistic-query benchmark (BiomedSQL-style: ``drug_target(drug, gene)``
+and ``drug_approved(drug)`` are deterministic, ``test_evidence(dataset, gene,
+disease)`` is a probabilistic relation of the strength of the evidence),
+"how many drugs approved for a mesh heading are expected to have a target
+with evidence for PD?" was written as a sum over a ``PROB`` rule, with the
+projected variables left implicit in the body:
+
+.. code-block:: neurolang
+
+    p(u, PROB) :- listed(u) & drug_approved(u) & drug_target(u, g) &
+                  test_evidence(d, g, 'PD')
+    ans(s) :- AGGREGATE[](p(u, q) @ sum(q)) = s
+
+With ``EXPECT`` the two rules are one, the unit ``u`` is the summed
+variable and the projected ones are written under an ``exists``:
+
+.. code-block:: neurolang
+
+    ans(s) :- EXPECT[1 | listed(u), drug_approved(u),
+                     exists(g, d; drug_target(u, g), test_evidence(d, g, 'PD'))] = s
+
+(``listed`` is the deterministic rule of the drugs of the mesh heading.)
+Without the ``exists`` the sum would be over the triples ``(u, g, d)``, the
+expected number of drug-target-dataset triples with evidence. Both
+programs are solved by the lifted solvers alone, and ``test_expectation.py``
+checks, on a table of the same schema, that the two programs of P7a agree
+and that P7a and P7b equal the enumeration of the possible worlds.
+
+**Variance.** The variance is not a further construct. For the
+normalised expectation it is :math:`\mathbb E[f^2] - \mathbb E[f]^2`,
+written with two of them,
+
+.. code-block:: neurolang
+
+    ans(g, v) :- EXPECT_NORM[f(g, x) * f(g, x) | a(g, x)] = m2,
+                 EXPECT_NORM[f(g, x) | a(g, x)] = m1, (v == (m2 - m1 * m1))
+
+For ``EXPECT`` over independent tuples the variance of the sum is
+:math:`\sum_x f^2\,P(1 - P)`, which is a different quantity (it needs the
+tuples to be independent), so it has no sugar.
+
 Part 6: Connectives
 =====================
 

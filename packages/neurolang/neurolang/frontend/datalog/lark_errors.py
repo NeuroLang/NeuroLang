@@ -7,7 +7,12 @@ exception types, with 1-based line and column numbers.
 
 from contextlib import contextmanager
 
-from lark.exceptions import LarkError, UnexpectedCharacters, UnexpectedToken
+from lark.exceptions import (
+    LarkError,
+    UnexpectedCharacters,
+    UnexpectedToken,
+    VisitError,
+)
 
 from nl_expr.exceptions import (
     NeuroLangException,
@@ -24,8 +29,9 @@ def lark_errors_as_neurolang(message_prefix=""):
     ``UnexpectedToken`` and ``UnexpectedCharacters`` become
     :class:`UnexpectedTokenError` and :class:`UnexpectedCharactersError`;
     any other ``LarkError`` becomes a :class:`NeuroLangException` whose
-    message is *message_prefix* followed by the Lark message. The original
-    Lark error is kept as ``__cause__``.
+    message is *message_prefix* followed by the Lark message, except a
+    :class:`NeuroLangException` raised by the transformer, which is raised
+    as it is. The original Lark error is kept as ``__cause__``.
     """
     try:
         yield
@@ -37,5 +43,9 @@ def lark_errors_as_neurolang(message_prefix=""):
         raise UnexpectedCharactersError(
             str(e), line=e.line, column=e.column
         ) from e
+    except VisitError as e:
+        if isinstance(e.orig_exc, NeuroLangException):
+            raise e.orig_exc from e
+        raise NeuroLangException(f"{message_prefix}{e}") from e
     except LarkError as e:
         raise NeuroLangException(f"{message_prefix}{e}") from e

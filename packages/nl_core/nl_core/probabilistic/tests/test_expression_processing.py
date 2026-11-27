@@ -337,3 +337,35 @@ def test_negated_choice_atom_of_several_columns_is_another_tuple():
             C(f, g), Constant(operator.ne)(tuple_(f, g), tuple_(x, one))
         ))
     ))
+
+
+def test_contains_expectation_does_not_read_constants():
+    """It looks through logic operators and the arguments of applications,
+    not into the (possibly huge) contents of a constant."""
+    from nl_core.probabilistic.expressions import (
+        contains_expectation,
+        expectation,
+    )
+
+    class Unreadable(frozenset):
+        armed = False
+
+        def __iter__(self):
+            if Unreadable.armed:
+                raise AssertionError("the constant was read")
+            return super().__iter__()
+
+    x, e, roll = Symbol("x"), Symbol("e"), Symbol("roll")
+    event = Conjunction((roll(x),))
+    held = expectation(x, event, e)
+    big = Constant(Unreadable({(1, 2)}))
+    plain, with_big = Conjunction((roll(big),)), Conjunction((roll(big), held))
+    Unreadable.armed = True
+    try:
+        assert not contains_expectation(plain)
+        assert contains_expectation(with_big)
+    finally:
+        Unreadable.armed = False
+    assert contains_expectation(Negation(held))
+    assert contains_expectation(Conjunction((roll(x), Negation(held))))
+    assert not contains_expectation(event)

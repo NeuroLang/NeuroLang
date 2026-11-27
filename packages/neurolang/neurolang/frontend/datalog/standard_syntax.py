@@ -28,6 +28,9 @@ from nl_expr.logic.expression_processing import extract_logic_free_variables
 from nl_core.probabilistic.expressions import (
     PROB,
     Condition,
+    Expectation,
+    contains_expectation,
+    expectation,
     ProbabilisticChoice,
     ProbabilisticFact,
 )
@@ -150,6 +153,8 @@ predicate.2 : id_application
           | "(" parenthesised_disjunction ")"
           | logical_constant
           | prob_body_predicate
+          | expect_body_predicate
+          | expect_norm_body_predicate
           | resample_body_predicate
           | marg_body_predicate
           | succ_body_predicate
@@ -157,6 +162,13 @@ predicate.2 : id_application
 // PROB[pred] = var  or  PROB[pred // cond] = var  —  probability query inside a rule body
 prob_body_predicate : "PROB" "[" bracketed_conjunction "]" "=" argument
                     | "PROB" "[" bracketed_conjunction PROB_SEP bracketed_conjunction "]" "=" argument
+
+// EXPECT[f | event] = e  —  the expected value of f summed over the answers
+// of the event, EXPECT[f | event // knowing] = e conditioned as PROB is;
+// EXPECT_NORM divides by the sum of their probabilities. The "|" after f is
+// that of a disjunction in the event.
+expect_body_predicate : "EXPECT" "[" argument OR_SYMBOL bracketed_conjunction [PROB_SEP bracketed_conjunction] "]" "=" argument
+expect_norm_body_predicate : "EXPECT_NORM" "[" argument OR_SYMBOL bracketed_conjunction [PROB_SEP bracketed_conjunction] "]" "=" argument
 
 // Inside PROB[...] and MARG[...], a formula may be in parentheses, as in
 // a rule's condition: PROB[(a(x), (x < y)) // (b(x), c(x))] = p
@@ -513,6 +525,14 @@ class DatalogTransformer(Transformer):
             return self._ans_main_rule_as_query(head, result)
 
         if isinstance(body_or_cond, Conjunction):
+            expectations = [
+                f for f in body_or_cond.formulas if isinstance(f, Expectation)
+            ]
+            if expectations:
+                # the expectations join the head, as the probability of PROB
+                head = head.functor(*head.args, *(
+                    e.result for e in expectations if e.result not in head.args
+                ))
             regular, prob_specs = self._extract_special_body_atoms(
                 body_or_cond
             )
@@ -520,6 +540,10 @@ class DatalogTransformer(Transformer):
                 new_body = Conjunction(regular) if regular else Constant(True)
                 result = self._build_prob_rule(head, prob_specs, new_body)
                 return self._ans_main_rule_as_query(head, result)
+            if expectations:
+                return self._ans_main_rule_as_query(
+                    head, Implication(head, body_or_cond)
+                )
 
         if is_query_head(head):
             return Query(ast[0], body_or_cond)
@@ -532,7 +556,8 @@ class DatalogTransformer(Transformer):
         PROB and AGGREGATE body desugaring produce an Implication for the
         main formula, alone or last in a Union. Wrap it as Query when the
         head is ans so that execute_datalog_program can dispatch it as a
-        query. A query head cannot hold an aggregation, so a main formula
+        query. A query head cannot hold an aggregation, nor can a query
+        body an EXPECT, which only rules rewrite, so a main formula
         ``ans(t, count(s)) :- body`` becomes ``fresh(t, count(s)) :- body``
         queried as ``ans(t, n) :- fresh(t, n)``.
         """
@@ -544,16 +569,21 @@ class DatalogTransformer(Transformer):
         main = formulas[-1]
         if not isinstance(main, Implication):
             return result
-        if any(
+        aggregation = any(
             isinstance(arg, AggregationApplication)
             for arg in main.consequent.args
+        )
+        if aggregation or any(
+            isinstance(f, Expectation)
+            for f in getattr(main.antecedent, "formulas", ())
         ):
+            answer = head if aggregation else main.consequent
             fresh_pred_sym = Symbol.fresh()
             formulas[-1] = Implication(
                 fresh_pred_sym(*main.consequent.args), main.antecedent
             )
             formulas.append(
-                Query(head, Conjunction((fresh_pred_sym(*head.args),)))
+                Query(answer, Conjunction((fresh_pred_sym(*answer.args),)))
             )
         else:
             formulas[-1] = Query(main.consequent, main.antecedent)
@@ -749,6 +779,13 @@ class DatalogTransformer(Transformer):
         fresh_rules = []
         if isinstance(conjunction, Conjunction):
             regular, prob_specs = self._extract_special_body_atoms(conjunction)
+            if any(isinstance(f, Expectation) for f in regular):
+                raise NeuroLangFrontendException(
+                    "EXPECT cannot be inside an AGGREGATE: compute it in a "
+                    "rule of its own, m(g, e) :- EXPECT[x | a(g, x)] = e, "
+                    "and aggregate that rule: "
+                    "AGGREGATE[g](m(g, e) @ sum(e)) = n."
+                )
             # Separate MARG specs (which need desugaring) from PROB specs
             # (which stay as markers in the conjunction body).
             marg_specs = []
@@ -882,6 +919,16 @@ class DatalogTransformer(Transformer):
             return rv
         return None
 
+    @staticmethod
+    def _refuse_expectation_in_prob(*events):
+        if any(e is not None and contains_expectation(e) for e in events):
+            raise NeuroLangFrontendException(
+                "EXPECT cannot be inside PROB or MARG, which take a "
+                "probabilistic event: compute the expectation in a rule of "
+                "its own, m(e) :- EXPECT[x | a(x)] = e, and use m in the "
+                "rule."
+            )
+
     def prob_body_predicate(self, ast):
         # PROB[pred] = var              → ast = [predicate, argument] (2 elements)
         # PROB[pred // body] = var      → ast = [predicate, SEP_token, body, argument] (4)
@@ -893,10 +940,21 @@ class DatalogTransformer(Transformer):
             pred = ast[0]
             cond_body = None
             result_var = ast[1]
+        self._refuse_expectation_in_prob(pred, cond_body)
         return FunctionApplication(
             Symbol("__PROB__"),
             (pred, cond_body, result_var)
         )
+
+    def expect_body_predicate(self, ast):
+        # EXPECT[f | event // known] = e → [f, OR, event, SEP, known, e],
+        # SEP and known None without "//"
+        f, _, event, _, known, result = ast
+        return expectation(f, event, result, known)
+
+    def expect_norm_body_predicate(self, ast):
+        f, _, event, _, known, result = ast
+        return expectation(f, event, result, known, normalised=True)
 
     def resample_body_predicate(self, ast):
         # RESAMPLE[boot](pred(x)) = b → ast = [boot, pred(x), b]
@@ -905,6 +963,7 @@ class DatalogTransformer(Transformer):
     def marg_body_predicate(self, ast):
         # MARG[pred] = var              → ast = [conjunction, argument] (2 elements)
         # MARG[pred // body] = var      → ast = [conjunction, SEP_token, body, argument] (4)
+        self._refuse_expectation_in_prob(ast[0], *ast[2:3])
         if len(ast) == 4:
             pred = ast[0]
             cond_body = ast[2]

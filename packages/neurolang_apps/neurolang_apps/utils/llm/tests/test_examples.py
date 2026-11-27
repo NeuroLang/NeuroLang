@@ -105,6 +105,18 @@ def test_bank_answers_name_their_columns(engine):
     assert not short, "\n".join(short)
 
 
+@pytest.mark.parametrize("engine", BANK_ENGINES)
+def test_bank_queries_parse(engine):
+    """Every Datalog example is written in the syntax the parser reads (the
+    engine-level check below needs the data of the engines)."""
+    from neurolang.frontend.datalog.standard_syntax import parser
+
+    for example in load_examples(engine):
+        query = example.query("datalog")
+        if query:
+            parser(query.replace("{kernel_radius_mm}", "6"))
+
+
 def test_engines_without_bank():
     assert load_examples("") == []
     assert load_examples("no-such-engine") == []
