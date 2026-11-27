@@ -383,7 +383,14 @@ Plans of many components
    optimise and solve a plan recurse once per level of its tree, and a chain
    of about 250 joins exceeded the limit of the recursion. For at most 16
    components, and where a component shares no column with the one before
-   it, the plan is the chain, where a chunk would be a cross product.
+   it, the plan is the chain, where a chunk would be a cross product. When
+   the runs of components that share columns share none with each other,
+   which is the case of independent components of different variables, their
+   join is a product whatever the tree, and the runs are joined in chunks
+   too. Otherwise the runs stay in a chain, except in the translation of a
+   rule body to relational algebra, whose runs, when more than 16, are the
+   operands of one n-ary join evaluated in the order of the chain (the
+   solver of the plans takes no n-ary join).
 
 Separator variable
    A variable :math:`z` is a separator variable of :math:`\exists z\,Q(z)`

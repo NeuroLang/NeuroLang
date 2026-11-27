@@ -17,6 +17,7 @@ from ...relational_algebra import (
     ExtendedProjection,
     FunctionApplicationListMember,
     NameColumns,
+    NaryNaturalJoin,
     NaturalJoin,
     Product,
     Projection,
@@ -32,7 +33,10 @@ from ...utils.relational_algebra_set import (
     RelationalAlgebraFrozenSet,
 )
 from ..expressions import Conjunction, Negation
-from ..translate_to_named_ra import TranslateToNamedRA
+from ..translate_to_named_ra import (
+    TranslateToNamedRA,
+    TranslateToNamedRAWithNaryJoins,
+)
 
 C_ = Constant
 S_ = Symbol
@@ -1270,3 +1274,35 @@ def test_conjunction_of_many_atoms_translates_to_a_shallow_join(shape):
     joined, depth = _shape_of_the_joins(result)
     assert joined == 299
     assert depth < 64
+
+
+@pytest.mark.parametrize("shape", ["disjoint", "star"])
+def test_conjunction_of_atoms_sharing_nothing_with_the_last_is_a_flat_join(
+    shape
+):
+    """No binary tree of a centre and its leaves, which share columns with
+    the centre only, is free of cross products but the chain, as deep as
+    they are many, which the walkers recurse on: the join is one n-ary
+    join of the runs of atoms that share columns."""
+    xs = [S_(f"x{i}") for i in range(301)]
+    if shape == "disjoint":
+        atoms = tuple(S_("R")(x) for x in xs)
+    else:
+        atoms = (S_("C")(*xs),) + tuple(S_("L")(x) for x in xs)
+
+    result = TranslateToNamedRAWithNaryJoins().walk(Conjunction(atoms))
+
+    joins = [
+        node for _, node in expression_iterator(result)
+        if isinstance(node, NaryNaturalJoin)
+    ]
+    assert len(joins) == 1
+    assert len(joins[0].relations) > 64
+    assert _shape_of_the_joins(result)[1] < 64
+
+    # the translation of the solvers of the plans builds none
+    assert not any(
+        isinstance(node, NaryNaturalJoin) for _, node in expression_iterator(
+            TranslateToNamedRA().walk(Conjunction(atoms))
+        )
+    )

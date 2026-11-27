@@ -56,6 +56,11 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
        (Addison Wesley, 1995), Addison-Wesley.
     """
 
+    # Whether the runs of atoms joined are the operands of one n-ary join,
+    # when they are many (see :func:`join_in_chunks`): the optimisers of
+    # the chase take it, the solvers of the probabilistic plans do not.
+    nary_joins = False
+
     @add_match(FunctionApplication(EQ_pattern, (Constant, Symbol)))
     def translate_eq_c_s(self, expression):
         return self.walk(EQ(*expression.args[::-1]))
@@ -381,8 +386,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             and formula.args[0] == formula.args[1]
         )
 
-    @staticmethod
-    def process_positive_formulas(classified_formulas):
+    def process_positive_formulas(self, classified_formulas):
         pos_formulas = classified_formulas["pos_formulas"]
         if len(pos_formulas) == 0:
             return Constant[AbstractSet](NamedRelationalAlgebraFrozenSet([]))
@@ -390,17 +394,13 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             TranslateToNamedRA.split_computed_join_columns(classified_formulas)
         )
         if len(new_columns) == 0:
-            return TranslateToNamedRA.natural_join(pos_formulas)
-        return TranslateToNamedRA.join_on_computed_columns(
-            sources, targets, new_columns
-        )
+            return self.natural_join(pos_formulas)
+        return self.join_on_computed_columns(sources, targets, new_columns)
 
-    @staticmethod
-    def natural_join(formulas):
-        return join_in_chunks(formulas)
+    def natural_join(self, formulas):
+        return join_in_chunks(formulas, nary=self.nary_joins)
 
-    @staticmethod
-    def join_on_computed_columns(sources, targets, new_columns):
+    def join_on_computed_columns(self, sources, targets, new_columns):
         """
         Join ``targets`` with ``sources`` extended by ``new_columns``.
 
@@ -417,9 +417,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         )
         return NaturalJoin(
             ExtendedProjection(
-                TranslateToNamedRA.natural_join(sources), extended_projections
+                self.natural_join(sources), extended_projections
             ),
-            TranslateToNamedRA.natural_join(targets),
+            self.natural_join(targets),
         )
 
     @staticmethod
@@ -725,3 +725,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 to_keep.append(selection)
         classified_formulas["selection_formulas"] = to_keep
         return output
+
+
+class TranslateToNamedRAWithNaryJoins(TranslateToNamedRA):
+    """The translation of the chase, whose optimisers take n-ary joins."""
+
+    nary_joins = True

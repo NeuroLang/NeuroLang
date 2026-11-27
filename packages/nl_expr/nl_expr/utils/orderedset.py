@@ -10,8 +10,10 @@ class OrderedSet(MutableSet, Sequence):
         it1, it2 = tee(iterable)
         self._set = set(it1)
         self._list = []
+        pending = set(self._set)
         for i in it2:
-            if i not in self._list:
+            if i in pending:
+                pending.discard(i)
                 self._list.append(i)
 
     def add(self, value):

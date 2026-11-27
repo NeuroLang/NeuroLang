@@ -725,7 +725,7 @@ def _independent_disjunction_plan(rule, symbol_table):
     plans = _lift_pure(tuple(
         Implication(rule.consequent, component) for component in components
     ), symbol_table)
-    return None if plans is None else reduce(rap.Union, plans)
+    return None if plans is None else join_in_chunks(plans, rap.Union)
 
 
 def _at_least_plan(rule, symbol_table):
@@ -1674,7 +1674,7 @@ def different_free_variables_plan(rule, symbol_table):
                 break
             plans.append(plan)
         else:
-            plan = reduce(rap.Union, plans)
+            plan = join_in_chunks(plans, rap.Union)
             if bound:
                 plan = rap.IndependentProjection(plan, tuple(
                     str2columnstr_constant(v.name)
@@ -2230,11 +2230,10 @@ def disjoint_separator(query, symbol_table):
             deterministic, sorted(kept, key=lambda v: v.name), symbol_table
         )
         if deterministic_atom is not None:
-            plan = reduce(
-                rap.NaturalJoin,
-                (TranslateToNamedRA().walk(atom) for atom in choice_atoms),
+            plan = join_in_chunks([
                 TranslateToNamedRA().walk(deterministic_atom),
-            )
+                *(TranslateToNamedRA().walk(atom) for atom in choice_atoms),
+            ])
             return True, rap.DisjointProjection(plan, attributes)
         # Otherwise D(a) is given by its support, the choice atoms in it
         # being replaced by their support, so that every label in D is 0
@@ -2251,11 +2250,7 @@ def disjoint_separator(query, symbol_table):
             deterministic_plan,
             tuple(str2columnstr_constant(v.name) for v in kept),
         ))
-        plan = reduce(
-            rap.NaturalJoin,
-            choice_plans.values(),
-            support,
-        )
+        plan = join_in_chunks([support, *choice_plans.values()])
         return True, rap.DisjointProjection(plan, attributes)
     if equalities:
         # The equalities are only translated in a deterministic rest.
@@ -2282,13 +2277,12 @@ def disjoint_separator(query, symbol_table):
             symbol_table[padding[atom.functor]] = DeterministicFactSet(
                 relation
             )
-        plan = reduce(
-            rap.NaturalJoin,
-            (TranslateToNamedRA().walk(atom) for atom in choice_atoms),
+        plan = join_in_chunks([
             dalvi_suciu_lift(
                 ReplaceExpressionWalker(padding).walk(body), symbol_table
             ),
-        )
+            *(TranslateToNamedRA().walk(atom) for atom in choice_atoms),
+        ])
     return True, rap.DisjointProjection(plan, attributes)
 
 
@@ -3269,11 +3263,7 @@ def components_plan(
         complemented_negative_formulas = [
             unary_negative_operation(f) for f in negative_formulas
         ]
-        output = reduce(
-            operation,
-            complemented_negative_formulas[1:],
-            complemented_negative_formulas[0]
-        )
+        output = join_in_chunks(complemented_negative_formulas, operation)
     return output
 
 

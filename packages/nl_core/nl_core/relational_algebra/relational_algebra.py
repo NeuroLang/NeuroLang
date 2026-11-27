@@ -1,5 +1,6 @@
 import math
 import operator
+from itertools import chain
 from typing import AbstractSet, Callable, SupportsFloat, Tuple
 
 import numpy
@@ -130,12 +131,10 @@ def _get_columns_for_RA_or_constant(expression):
 class NAryRelationalAlgebraOperation(RelationalAlgebraOperation):
     def columns(self):
         if not hasattr(self, '_columns'):
-            self._columns = _get_columns_for_RA_or_constant(self.relations[0])
-            for r in self.relations[1:]:
-                self._columns = (
-                    self._columns |
-                    _get_columns_for_RA_or_constant(r)
-                )
+            # One union, not one per relation: the columns are hashed once.
+            self._columns = OrderedSet(chain.from_iterable(
+                _get_columns_for_RA_or_constant(r) for r in self.relations
+            ))
         return self._columns
 
 

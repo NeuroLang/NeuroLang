@@ -16,7 +16,11 @@ from ..relational_algebra import (
     RenameColumns,
     Selection
 )
-from .columns import _project_onto_operand, _ra_columns
+from .columns import (
+    _project_onto_operand,
+    _ra_columns,
+    _ra_columns_or_none,
+)
 
 
 class ProductSimplification(ew.PatternWalker):
@@ -94,7 +98,9 @@ def _flatten_joins(expr, with_products=False):
 JOIN_CHUNK = 16
 
 
-def join_in_chunks(operands, join=NaturalJoin, chunk=JOIN_CHUNK):
+def join_in_chunks(
+    operands, join=NaturalJoin, chunk=JOIN_CHUNK, nary=False
+):
     """
     Join ``operands`` in order, without a tree as deep as they are many.
 
@@ -109,10 +115,14 @@ def join_in_chunks(operands, join=NaturalJoin, chunk=JOIN_CHUNK):
     A run ends at an operand sharing no column with the one before it, or
     whose columns are not known. Such an operand is joined to the others
     through the operands before it, and a chunk of operands not sharing
-    columns would be a cross product. The runs are joined in a chain,
-    which keeps its depth where it is the only order without a cross
-    product. Joins being associative and commutative, the result is that
-    of the chain.
+    columns would be a cross product. When the joins of the runs are
+    more than ``chunk``, they are joined in a :class:`NaryNaturalJoin`,
+    in the order of the chain, if ``nary`` (no binary tree of them is
+    free of cross products in general: a centre joined to leaves that
+    share columns with it only); else in chunks if the runs share no
+    column, their join being the product of independent operands whatever
+    the tree; else in a chain. Joins being associative and commutative,
+    the result is that of the chain.
 
     A walker recurses once per level of the tree: a chain of 250 joins
     or more exceeds the limit of the recursion.
@@ -120,22 +130,39 @@ def join_in_chunks(operands, join=NaturalJoin, chunk=JOIN_CHUNK):
     operands = list(operands)
     if len(operands) <= chunk:
         return reduce(join, operands)
-    columns = list(map(_columns_or_none, operands))
-    runs = [[operands[0]]]
+    columns = list(map(_ra_columns_or_none, operands))
+    runs, run_columns = [[operands[0]]], [columns[0]]
     for i, operand in enumerate(operands[1:]):
-        if columns[i] & columns[i + 1]:
+        if _share_columns(columns[i], columns[i + 1]):
             runs[-1].append(operand)
+            run_columns[-1] = _union_or_none(run_columns[-1], columns[i + 1])
         else:
             runs.append([operand])
-    return reduce(join, (_join_run(run, join, chunk) for run in runs))
+            run_columns.append(columns[i + 1])
+    joins = [_join_run(run, join, chunk) for run in runs]
+    if len(joins) <= chunk:
+        return reduce(join, joins)
+    if nary:
+        return NaryNaturalJoin(tuple(joins))
+    if _are_independent(run_columns):
+        return _join_run(joins, join, chunk)
+    return reduce(join, joins)
 
 
-def _columns_or_none(operand):
-    """The columns of ``operand``, none when they are not known."""
-    try:
-        return set(_ra_columns(operand))
-    except NotImplementedError:
-        return set()
+def _share_columns(columns, other):
+    """Whether two known sets of columns share one."""
+    return columns is not None and other is not None and bool(columns & other)
+
+
+def _union_or_none(columns, other):
+    return None if columns is None or other is None else columns | other
+
+
+def _are_independent(column_sets):
+    """Whether the column sets are all known and share no column."""
+    return None not in column_sets and sum(map(len, column_sets)) == len(
+        set().union(*column_sets)
+    )
 
 
 def _join_run(run, join, chunk):

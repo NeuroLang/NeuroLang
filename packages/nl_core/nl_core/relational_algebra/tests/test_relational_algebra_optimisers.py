@@ -1939,3 +1939,105 @@ def test_greedy_join_ordering_of_many_operands_joins_as_the_chain_does():
     result = GreedyJoinOrderingWalker().walk(reduce(NaturalJoin, operands))
 
     assert RelationalAlgebraSolver().walk(result).value == _joined(operands)
+
+
+def _nary_operands(columns):
+    return [_sized_constant(c, 3) for c in columns]
+
+
+def test_join_in_chunks_of_runs_is_a_nary_join_where_asked():
+    """A centre joined to leaves that share columns with it only: no binary
+    tree of them but the chain is free of cross products, which a flat
+    join does not make deeper."""
+    centre = _sized_constant(tuple(f"x{i}" for i in range(40)), 3)
+    operands = [centre] + [_sized_constant((f"x{i}",), 3) for i in range(40)]
+    result = join_in_chunks(operands, nary=True)
+
+    assert isinstance(result, NaryNaturalJoin)
+    assert len(result.relations) == 40
+    assert result.relations[0].relation_left is centre
+    assert RelationalAlgebraSolver().walk(result).value == RelationalAlgebraSolver().walk(
+        join_in_chunks(operands)
+    ).value
+
+
+def test_join_in_chunks_is_the_same_chain_for_nary_with_few_runs():
+    operands = _nary_operands(
+        [("x", f"y{i}") for i in range(JOIN_CHUNK)]
+    )
+    assert join_in_chunks(operands, nary=True) == join_in_chunks(operands)
+    assert isinstance(join_in_chunks(operands, nary=True), NaturalJoin)
+
+
+def test_join_in_chunks_of_independent_operands_is_a_shallow_tree():
+    """Operands sharing no column: a product, whatever the tree."""
+    operands = _nary_operands([(f"x{i}",) for i in range(300)])
+    result = join_in_chunks(operands)
+
+    assert _left_deep_depth(result) < 4 * JOIN_CHUNK
+    assert _tree_operands(result) == operands
+
+
+def test_join_in_chunks_of_independent_operands_computes_their_product():
+    operands = [_sized_constant((f"x{i}",), 1) for i in range(3 * JOIN_CHUNK)]
+    expected = reduce(
+        lambda left, right: left.naturaljoin(right),
+        (operand.value for operand in operands),
+    )
+
+    assert RelationalAlgebraSolver().walk(
+        join_in_chunks(operands)
+    ).value == expected
+
+
+def test_join_in_chunks_keeps_the_chain_of_operands_that_do_not_all_share():
+    """Runs that are not independent are joined in a chain, as before."""
+    centre = _sized_constant(tuple(f"x{i}" for i in range(40)), 3)
+    operands = [centre] + [_sized_constant((f"x{i}",), 3) for i in range(40)]
+
+    assert _left_deep_operands(join_in_chunks(operands)) == operands
+
+
+def test_the_columns_of_a_nary_join_are_those_of_its_operands_in_order():
+    operands = _nary_operands(
+        [(f"x{i % 7}", f"y{i}") for i in range(300)]
+    )
+    columns = NaryNaturalJoin(tuple(operands)).columns()
+
+    expected = []
+    for operand in operands:
+        for column in operand.value.columns:
+            if column not in expected:
+                expected.append(column)
+    assert [str(c.value) for c in columns] == expected
+
+
+def _tree_operands(expression):
+    operands, to_visit = [], [expression]
+    while to_visit:
+        node = to_visit.pop()
+        if isinstance(node, NaturalJoin):
+            to_visit.extend((node.relation_right, node.relation_left))
+        else:
+            operands.append(node)
+    return operands
+
+
+def _left_deep_depth(expression):
+    depth, to_visit = 0, [(expression, 1)]
+    while to_visit:
+        node, level = to_visit.pop()
+        depth = max(depth, level)
+        if isinstance(node, NaturalJoin):
+            to_visit.append((node.relation_left, level + 1))
+            to_visit.append((node.relation_right, level + 1))
+    return depth
+
+
+def test_join_in_chunks_keeps_the_chain_of_operands_of_unknown_columns():
+    """The columns of a symbol are not known: operands that may share
+    columns are not taken for independent, and joined in chunks."""
+    operands = [Symbol[AbstractSet](f"R{i}") for i in range(40)]
+    result = join_in_chunks(operands)
+
+    assert _left_deep_operands(result) == operands

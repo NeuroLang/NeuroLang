@@ -23,3 +23,27 @@ def test_ordered_set():
     b.replace(1, 0)
     assert len(b) == len(os) - 1
     assert not b.issubset(os)
+
+
+def test_ordered_set_does_not_compare_its_elements_one_by_one():
+    """Dropping the repeated elements takes their hashes, not a scan of
+    the list of those before them, which compares expressions one by one."""
+    comparisons = []
+
+    class Element:
+        def __init__(self, value):
+            self.value = value
+
+        def __hash__(self):
+            return hash(self.value)
+
+        def __eq__(self, other):
+            comparisons.append(self.value)
+            return self.value == other.value
+
+    values = list(range(300)) + list(range(300))
+    os = OrderedSet(Element(v) for v in values)
+
+    assert [e.value for e in os] == list(range(300))
+    assert len(os) == 300
+    assert len(comparisons) <= len(values)
