@@ -28,6 +28,19 @@ The functional connectivity, over the cortical parcels of ``a`` then the
   ``tsv/<a>_tian_functional.tsv.gz`` (``region  tian_region  r``),
   ``tsv/tian_functional.tsv.gz`` (two of Tian's regions), to 6 decimals.
 
+The partial functional connectivity of the cortical voxels with the 400
+parcels of Schaefer 2018 (voxel_functional.py), the voxels' centres in MNI
+millimetres:
+
+- ``parquet/<KEY>_functional_mean.parquet`` (the group's regression of the
+  subjects' Fisher z on age and sex, read at the mean age and both sexes,
+  family-weighted, tanh; the index ``x y z``, the columns the parcels);
+- ``parquet/<KEY>_functional_connectivity.parquet`` (``x y z label r``,
+  the pairs whose |r| is above a threshold, sorted), the engine's table;
+- and, beside the parts, not in DATASET, ``PARTS/subjects.parquet``: the
+  subjects with their family, weight, age and sex, HCP restricted data,
+  which is not to be redistributed.
+
 And the linear gradients of the cortex of each (gradients.py):
 ``parquet/<a>[_functional]_gradients.parquet``, ``...
 _gradient_variance.parquet``, and their ``tsv/...tsv.gz``.
@@ -126,6 +139,49 @@ def functional(work: Path, tian_names: list, parts: Path,
                   .explained[:3]), flush=True)
     engine_tables(dataset)
     print(f"{len(subjects)} subjects")
+
+
+CUTOFFS = (0.02, 0.03, 0.05, 0.1, 0.15, 0.2, 0.3)
+
+
+def voxel_functional(work: Path, parts: Path, dataset: Path,
+                     threshold: float) -> None:
+    """The group partial connectivity of the voxels with the parcels
+    (voxel_functional.py): the matrix, the subjects and the pairs whose |r|
+    is above *threshold*, the anticorrelations too (see the module's
+    docstring); the number of pairs above some cutoffs is printed, to
+    choose the threshold."""
+    from .voxel_functional import KEY, GroupSums, centres, schaefer_volume
+
+    labels, affine, names = schaefer_volume(work / "atlases")
+    _, mm = centres(labels, affine)
+    sums = GroupSums.of(parts)
+    r = sums.adjusted()
+    (dataset / "parquet").mkdir(parents=True, exist_ok=True)
+    write_matrix(pd.DataFrame(
+        r, index=pd.MultiIndex.from_arrays(mm.T, names=["x", "y", "z"]),
+        columns=names), dataset / "parquet" / f"{KEY}_functional_mean.parquet")
+    pd.DataFrame({"subject": sums.subjects, "family": sums.families,
+                  "weight": sums.weights, "age": sums.ages,
+                  "male": sums.male}).sort_values("subject").to_parquet(
+        parts / "subjects.parquet", index=False)  # restricted: not DATASET
+    for cutoff in CUTOFFS:
+        print(f"r > {cutoff}: {int((r > cutoff).sum())} rows; "
+              f"r < -{cutoff}: {int((r < -cutoff).sum())}", flush=True)
+    print(f"{int((sums.n_valid == 0).sum())} voxels without signal in any "
+          f"subject, {int((sums.n_valid < len(sums.subjects)).sum())} "
+          "without it in some")
+    voxel, parcel = np.nonzero(np.abs(r) > threshold)
+    pd.DataFrame({"x": mm[voxel, 0].astype(np.float32),
+                  "y": mm[voxel, 1].astype(np.float32),
+                  "z": mm[voxel, 2].astype(np.float32),
+                  "label": pd.Categorical(np.asarray(names)[parcel]),
+                  "r": r[voxel, parcel]}).sort_values(
+        ["x", "y", "z", "label"]).to_parquet(
+        dataset / "parquet" / f"{KEY}_functional_connectivity.parquet",
+        compression="zstd", index=False)
+    print(f"{len(sums.subjects)} subjects; {len(voxel)} rows of |r| above "
+          f"{threshold}")
 
 
 def tractography(work: Path, parts: Path, dataset: Path) -> None:

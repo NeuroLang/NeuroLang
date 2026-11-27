@@ -64,6 +64,10 @@ def main(argv=None) -> None:
                   "STAGING into OUT", "work", "staging", "out"), False)
     tasks(command("functional", "a task of the functional connectivity of "
                   "the HCP_DIR subjects into OUT", "work", "hcp", "out"), True)
+    tasks(command("voxel-functional", "a task of the partial functional "
+                  "connectivity of the cortical voxels of the HCP_DIR "
+                  "subjects with Schaefer's parcels into OUT", "work", "hcp",
+                  "out"), True)
     command("volume-atlas", "the atlas in MNI space, for tractography "
             "(WORK/atlases; needs the internet)", "work")
     sub = command("tractography", "a task of the tractography of the HCP_DIR "
@@ -79,9 +83,13 @@ def main(argv=None) -> None:
     sub = command("combine", "the group connectivity of the parts of PARTS, "
                   "its tables and gradients, in DATASET")
     sub.add_argument("kind", choices=["structural", "functional",
-                                      "tractography"])
+                                      "tractography", "voxel-functional"])
     for path in ("work", "parts", "dataset"):
         sub.add_argument(path, type=Path)
+    sub.add_argument("--threshold", type=float, default=0.01,
+                     help="voxel-functional: the engine table keeps the "
+                     "pairs whose |r| is above it (the counts at some "
+                     "cutoffs are printed)")
     sub = command("population", "the connectivity of the cortex and the "
                   "subcortex from a population tractogram, into OUT "
                   "(WORK: its atlases; needs the internet)", "work", "out")
@@ -123,6 +131,9 @@ def main(argv=None) -> None:
     elif args.command == "functional":
         from .functional import run
         run(args.work, args.hcp, args.out, args.task, args.tasks)
+    elif args.command == "voxel-functional":
+        from .voxel_functional import run
+        run(args.work, args.hcp, args.out, args.task, args.tasks)
     elif args.command == "volume-atlas":
         from .tractography import volume_atlas
         volume_atlas(args.work / "atlases")
@@ -136,6 +147,9 @@ def main(argv=None) -> None:
             combine.structural(args.work, args.parts, args.dataset)
         elif args.kind == "tractography":
             combine.tractography(args.work, args.parts, args.dataset)
+        elif args.kind == "voxel-functional":
+            combine.voxel_functional(args.work, args.parts, args.dataset,
+                                     args.threshold)
         else:
             from .atlases import tian_names
             combine.functional(args.work, tian_names(args.work / "atlases"),

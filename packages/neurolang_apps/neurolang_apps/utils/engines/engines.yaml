@@ -433,8 +433,10 @@ engines:
       the subcortex of two atlases: the 400 Schaefer parcels and Tian's 32
       subcortical regions (schaefer400_tian_functional_connectivity), and
       the 148 Destrieux parcels and Tian's regions
-      (destrieux_tian_functional_connectivity), with the atlases of the
-      MNI brain. Functional, not structural.
+      (destrieux_tian_functional_connectivity), and the partial
+      correlation of each cortical voxel with each Schaefer parcel
+      (schaefer400_voxel_partial_functional_connectivity), with the atlases
+      of the MNI brain. Functional, not structural.
     requires_mni_mask: true
     use_base_symbols: true
     builtins: [exp, log, startswith, t_pvalue, fdr_threshold]
@@ -445,6 +447,10 @@ engines:
       destrieux_tian_functional_connectivity:
         file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.4/tsv/destrieux_tian_functional_connectivity.tsv.gz
         md5: 8bb4dfa8856f0639422e72840e30ff3c
+      # Parquet (x, y, z, label, r), the pairs whose |r| > 0.01.
+      schaefer400_voxel_partial_functional_connectivity:
+        file: https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity/-/raw/v2.5/parquet/schaefer400_17_voxel_partial_functional_connectivity.parquet
+        md5: 506de97fa50579fb5bba569d6c712971
     acknowledgements:
       - >-
         Resting-state functional connectivity
@@ -478,12 +484,44 @@ engines:
         that support the NIH Blueprint for Neuroscience Research; and by
         the McDonnell Center for Systems Neuroscience at Washington
         University.
+      - >-
+        Voxel-to-parcel partial functional connectivity
+        (schaefer400_voxel_partial_functional_connectivity): the HCP Young
+        Adult resting-state fMRI of the subjects with the four runs, on the
+        volumetric ICA-FIX data (rfMRI_REST1/2, LR and RL; MNINonLinear,
+        2 mm, no global signal regression), computed by NeuroLang
+        (tools/hcp_connectivity/voxel_functional.py; the dataset:
+        https://gitlab.inria.fr/dwasserm/neurolang-hcp-connectivity) as
+        follows. For each run, the time series of the voxels of the
+        Schaefer 400 parcels (17 networks) and the mean series of each
+        parcel; for each voxel, the partial correlation with each parcel,
+        controlling for the other 399 parcels, the voxel left out of its
+        own parcel's mean, from the correlations of the voxel and the
+        parcels shrunk by the Ledoit-Wolf coefficient of the parcels'
+        correlations (one per run). The Fisher z of the partial
+        correlations are averaged over the four runs, then over the
+        subjects, each voxel over those with signal in it, the subjects of
+        a family weighted so that each family counts once, and adjusted for
+        age and sex by a regression of z on them across the subjects, read
+        at the mean age and an equal mix of the sexes, and turned back
+        into a correlation (tanh); the pairs whose |r| is above 0.01 are
+        kept. Ledoit O, Wolf M. A well-conditioned
+        estimator for large-dimensional covariance matrices. Journal of
+        Multivariate Analysis 88:365-411 (2004).
+        doi:10.1016/S0047-259X(03)00096-4.
     sorts:
       correlation:
         columns: [r]
         type: float
         description: >-
           a Pearson correlation of resting-state fMRI time series, -1 to 1
+      partial_correlation:
+        columns: [r]
+        type: float
+        description: >-
+          a partial correlation of resting-state fMRI time series, of a
+          voxel and a parcel controlling for the other parcels: -0.03 to
+          0.18 in the relation, whose |r| is above 0.01
     predicates:
       schaefer400_tian_functional_connectivity:
         description: >-
@@ -517,6 +555,29 @@ engines:
           - destrieux_tian_label
           - destrieux_tian_label
           - correlation
+      schaefer400_voxel_partial_functional_connectivity:
+        description: >-
+          Resting-state functional connectivity of each cortical voxel with
+          each of the 400 Schaefer parcels (17 networks): the partial
+          correlation r of the voxel's spontaneous fMRI activity and the
+          parcel's, controlling for the other 399 parcels (the voxel left
+          out of its own parcel's signal), over the HCP subjects' volumetric
+          data, adjusted for age and sex, each family counted once
+          (.credits). The voxel is the centre (x, y, z), in MNI
+          millimetres, of a 2 mm voxel of the Schaefer atlas, the parcel
+          its label (schaefer400(l, r)), 966 subjects. Only the pairs whose
+          |r| is above 0.01 are stored (237,073): an absent pair is near 0,
+          not tested. Partial correlations are far smaller than the full
+          ones of schaefer400_tian_functional_connectivity: a voxel and its
+          own parcel 0.02 to 0.09 (most of the stored pairs), a voxel and
+          another parcel rarely above 0.05 (3,068 pairs) and at most 0.13;
+          the negative r, anticorrelations, are few (1,716) and at least
+          -0.03. Functional, not structural nor the co-activation of task
+          studies
+        arguments:
+          - mni
+          - schaefer400_label
+          - partial_correlation
 
   coordinate_meta_analysis:
     abstract: true

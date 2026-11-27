@@ -560,8 +560,9 @@ def _fake_relations(nl, cfg, engine_name, data_dir, rel_base_dir):
             if atlas:
                 first = atlas if isinstance(atlas, str) else atlas[0]
                 row.append(_FAKE_ATLASES[first])
-            else:
-                row.append({"int": 1, "float": 0.5}.get(argument.type, "L"))
+            else:  # a value for each column of the sort (mni: x, y, z)
+                row.extend([{"int": 1, "float": 0.5}.get(argument.type, "L")]
+                           * len(argument.columns))
         nl.add_tuple_set(pd.DataFrame([row]), name=name)
 
 
