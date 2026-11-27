@@ -14,7 +14,7 @@ from collections import defaultdict
 import pytest
 
 from nl_core.probabilistic import dalvi_suciu_lift
-from nl_expr.exceptions import NeuroLangException
+from nl_expr.exceptions import NeuroLangException, UnboundVariablesError
 from ...frontend import NeurolangDL, NeurolangPDL
 
 # probabilistic choices: name -> {value: probability}
@@ -767,4 +767,59 @@ def test_python_refusals():
         with pytest.raises(NeuroLangException, match="must be a conjunct"):
             e.q[e.g, e.e] = e.groups[e.g] & ~nl.expect(
                 e.x, e.roll[e.x], e.e
+            )
+
+
+def _query_rows(build):
+    nl = _engine_with_groups()
+    with nl.scope as e:
+        return {r[:-1]: r[-1] for r in map(tuple, build(nl, e))}
+
+
+def test_python_queries_with_groups_whatever_the_order_of_the_conjuncts():
+    expected = _expectation(_items, lambda g, x: x)
+    for build in (
+        lambda nl, e: nl.query(
+            (e.g, e.m), nl.expect(e.x, e.item[e.g, e.x], e.m) & e.groups[e.g]
+        ),
+        lambda nl, e: nl.query(
+            (e.g, e.m),
+            e.groups[e.g] & nl.expect(e.x, e.item[e.g, e.x], e.m)
+            & e.groups[e.g],
+        ),
+    ):
+        _assert_close(_query_rows(build), expected)
+
+
+def test_python_queries_with_groups_normalised_and_knowing():
+    _assert_close(
+        _query_rows(lambda nl, e: nl.query(
+            (e.g, e.m),
+            e.groups[e.g] & nl.expect(
+                e.x, e.item[e.g, e.x], e.m, normalised=True
+            ),
+        )),
+        _expectation(_items, lambda g, x: x, normalised=True),
+    )
+    _assert_close(
+        _query_rows(lambda nl, e: nl.query(
+            (e.g, e.m),
+            e.groups[e.g] & nl.expect(
+                e.x, e.item[e.g, e.x], e.m, known=e.flag[e.t]
+            ),
+        )),
+        _expectation(
+            _items, lambda g, x: x,
+            knowing=lambda c, w: any(n == "flag" for n, _ in w),
+        ),
+    )
+
+
+def test_python_a_variable_of_the_head_the_query_does_not_bind_is_named():
+    nl = _engine_with_groups()
+    with nl.scope as e:
+        with pytest.raises(UnboundVariablesError, match=r"\bz\b"):
+            nl.query(
+                (e.g, e.z),
+                e.groups[e.g] & nl.expect(e.x, e.item[e.g, e.x], e.m),
             )

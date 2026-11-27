@@ -162,3 +162,24 @@ def test_rules_added_without_a_query_do_not_warn():
             "ans(s) :- far(s), study(s)."
         )
     assert len(result) == 208
+
+
+def test_a_query_of_an_atom_and_a_quantified_formula():
+    """``atom & nl.exists(...)`` is a query of both frontends: the check
+    of the variables of the head reads the formula under ``and_``."""
+    from neurolang.frontend import NeurolangDL, NeurolangPDL
+
+    for frontend in (NeurolangDL, NeurolangPDL):
+        nl = frontend()
+        nl.add_tuple_set([(1,), (2,)], name="a")
+        nl.add_tuple_set([(1, 5), (3, 6)], name="b")
+        with nl.scope as e:
+            result = nl.query(
+                (e.x,), e.a[e.x] & nl.exists(e.y, e.b[e.x, e.y])
+            )
+        assert [tuple(row) for row in result] == [(1,)]
+        with nl.scope as e:
+            result = nl.query(
+                (e.x,), e.a[e.x] & ~nl.exists(e.y, e.b[e.x, e.y])
+            )
+        assert [tuple(row) for row in result] == [(2,)]

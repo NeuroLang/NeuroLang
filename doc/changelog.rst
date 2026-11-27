@@ -394,6 +394,13 @@ Unreleased
 
 **Bug fixes:**
 
+- A query of the Python query builder whose body holds a formula under
+  ``&``, ``nl.exists(...)`` or ``nl.expect(...)`` (``nl.query((e.x,), e.a[e.x]
+  & nl.exists(e.y, e.b[e.x, e.y]))``) failed with "Not a Datalog function
+  application", since the check of the variables of its head read the
+  formula as the argument of ``and_``; the free variables of an application
+  now include those of its logic-operator arguments, bound variables
+  excluded. This also failed the tests of ``nl.expect`` on master.
 - A join or a left join (and, with pandas, a difference) on a variable that
   one relation holds as text and another as numbers (the identifier ``'1'``
   and the number 1) used to fail with the backend's own error, a bare

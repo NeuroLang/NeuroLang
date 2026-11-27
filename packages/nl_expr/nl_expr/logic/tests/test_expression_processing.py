@@ -5,7 +5,8 @@ from .. import Conjunction, Disjunction, ExistentialPredicate, Negation
 from ..expression_processing import (
     ExtractConjunctAtoms,
     ExtractExistentialPrefix,
-    ExtractRelationalAtoms
+    ExtractRelationalAtoms,
+    extract_logic_free_variables
 )
 
 P = Symbol("P")
@@ -15,6 +16,18 @@ X = Symbol("X")
 Y = Symbol("Y")
 Z = Symbol("Z")
 NE = Constant(operator.ne)
+
+
+def test_free_variables_of_a_conjunction_applied_to_logic_operands():
+    """``a(x) & <formula>`` of the query builder holds the formula as an
+    argument of ``and_``; its quantified variables are not free."""
+    conjunction = operator.and_
+    assert set(extract_logic_free_variables(
+        Constant(conjunction)(P(X), Conjunction((Q(X, Y),)))
+    )) == {X, Y}
+    assert set(extract_logic_free_variables(
+        Constant(conjunction)(P(X), ExistentialPredicate(Y, Q(X, Y)))
+    )) == {X}
 
 
 def test_extract_conjunct_atoms():

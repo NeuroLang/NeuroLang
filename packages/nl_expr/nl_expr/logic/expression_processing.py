@@ -222,7 +222,7 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
         for a in args:
             if isinstance(a, Symbol):
                 variables.add(a)
-            elif isinstance(a, FunctionApplication):
+            elif isinstance(a, (FunctionApplication, LogicOperator)):
                 variables |= self.walk(a)
             elif isinstance(a, Constant):
                 pass
