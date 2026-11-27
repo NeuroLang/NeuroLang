@@ -90,6 +90,62 @@ def _flatten_joins(expr, with_products=False):
     ]
 
 
+# Operands joined in a left-deep chain; above it, in chunks of this size.
+JOIN_CHUNK = 16
+
+
+def join_in_chunks(operands, join=NaturalJoin, chunk=JOIN_CHUNK):
+    """
+    Join ``operands`` in order, without a tree as deep as they are many.
+
+    The join of at most ``chunk`` operands is the left-deep chain
+    ``join(join(o1, o2), o3)...``. Beyond it, a run of operands each
+    sharing columns with the one before it is joined in chunks of
+    ``chunk`` consecutive operands, each chunk a left-deep chain, and so
+    on with the results: a tree of depth ``chunk`` times the logarithm in
+    base ``chunk`` of their number, whose joins are all through shared
+    columns, as those of the chain are.
+
+    A run ends at an operand sharing no column with the one before it, or
+    whose columns are not known. Such an operand is joined to the others
+    through the operands before it, and a chunk of operands not sharing
+    columns would be a cross product. The runs are joined in a chain,
+    which keeps its depth where it is the only order without a cross
+    product. Joins being associative and commutative, the result is that
+    of the chain.
+
+    A walker recurses once per level of the tree: a chain of 250 joins
+    or more exceeds the limit of the recursion.
+    """
+    operands = list(operands)
+    if len(operands) <= chunk:
+        return reduce(join, operands)
+    columns = list(map(_columns_or_none, operands))
+    runs = [[operands[0]]]
+    for i, operand in enumerate(operands[1:]):
+        if columns[i] & columns[i + 1]:
+            runs[-1].append(operand)
+        else:
+            runs.append([operand])
+    return reduce(join, (_join_run(run, join, chunk) for run in runs))
+
+
+def _columns_or_none(operand):
+    """The columns of ``operand``, none when they are not known."""
+    try:
+        return set(_ra_columns(operand))
+    except NotImplementedError:
+        return set()
+
+
+def _join_run(run, join, chunk):
+    while len(run) > chunk:
+        run = [
+            reduce(join, run[i:i + chunk]) for i in range(0, len(run), chunk)
+        ]
+    return reduce(join, run)
+
+
 def _overlap_degrees(col_sets):
     """Return, for each column set, its total overlap with all the others."""
     return [
@@ -460,16 +516,18 @@ def _has_eliminable_cross_product(operands):
     return any(overlaps) and not all(overlaps)
 
 
-def _is_left_deep_join_of(expression, operands):
-    """Check whether ``expression`` is the left-deep join of ``operands``."""
-    for operand in reversed(operands[1:]):
-        if (
-            not isinstance(expression, NaturalJoin)
-            or expression.relation_right is not operand
-        ):
-            return False
-        expression = expression.relation_left
-    return expression is operands[0]
+def _is_join_of(expression, operands):
+    """Check whether ``expression`` is the join of ``operands`` as
+    :func:`join_in_chunks` makes it."""
+    return _same_join_tree(expression, join_in_chunks(operands))
+
+
+def _same_join_tree(expression, other):
+    if isinstance(expression, NaturalJoin) and isinstance(other, NaturalJoin):
+        return _same_join_tree(
+            expression.relation_left, other.relation_left
+        ) and _same_join_tree(expression.relation_right, other.relation_right)
+    return expression is other
 
 
 def _degenerate_natural_join(expression):
@@ -582,7 +640,9 @@ class GreedyJoinOrdering(ew.PatternWalker):
     eliminated, the guards no longer match.
 
     Emits nested NaturalJoin trees (not NaryNaturalJoin) for connected
-    groups and Product for disconnected groups.
+    groups, left-deep chains of the operands in the order chosen, in chunks
+    when they are more than a chunk (see :func:`join_in_chunks`), and
+    Product for disconnected groups.
 
     Operand sizes, estimated with :func:`_estimated_size`, drive the order
     within connected groups when known: the smallest operands sharing
@@ -622,8 +682,9 @@ class GreedyJoinOrdering(ew.PatternWalker):
         Reorder a NaturalJoin chain using estimated operand sizes.
 
         A chain of more than two operands, at least two of known size, is
-        rebuilt as a left-deep NaturalJoin tree ordered by
-        :func:`_sort_join_operands`. Otherwise, only its operands are
+        rebuilt as a NaturalJoin tree of the operands ordered by
+        :func:`_sort_join_operands`, a left-deep chain of them, in chunks
+        when they are many (:func:`join_in_chunks`). Otherwise, only its operands are
         walked.
         """
         operands = _flatten_joins(expression)
@@ -633,9 +694,9 @@ class GreedyJoinOrdering(ew.PatternWalker):
         ordered = [
             self.walk(op) for op in _sort_join_operands(operands, sizes)
         ]
-        if _is_left_deep_join_of(expression, ordered):
+        if _is_join_of(expression, ordered):
             return expression
-        return reduce(NaturalJoin, ordered)
+        return join_in_chunks(ordered)
 
     def resolve_relation(self, expression):
         """
@@ -664,7 +725,7 @@ class GreedyJoinOrdering(ew.PatternWalker):
     def _build_reordered(self, operands):
         operands = [self.walk(op) for op in operands]
         groups = _group_operands_by_overlap(operands, self._sizes(operands))
-        join_groups = [reduce(NaturalJoin, g) for g in groups if len(g) > 1]
+        join_groups = [join_in_chunks(g) for g in groups if len(g) > 1]
         singletons = [g[0] for g in groups if len(g) == 1]
         if len(join_groups) == 1 and not singletons:
             return join_groups[0]

@@ -81,6 +81,7 @@ from ..relational_algebra import (
     int2columnint_constant,
     str2columnstr_constant
 )
+from ..relational_algebra.optimisers import join_in_chunks
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from nl_expr.utils.orderedset import OrderedSet
 from nl_expr.utils.various import log_performance
@@ -3246,7 +3247,7 @@ def components_plan(
             positive_formulas.append(formula)
 
     if len(positive_formulas) > 0:
-        output = reduce(operation, positive_formulas[1:], positive_formulas[0])
+        output = join_in_chunks(positive_formulas, operation)
 
     if (
         len(positive_formulas) > 0 and

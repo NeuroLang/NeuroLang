@@ -1,5 +1,6 @@
 import contextlib
 import operator
+from functools import reduce
 from typing import AbstractSet, Tuple
 
 import pytest
@@ -9,6 +10,7 @@ from nl_expr.expression_walker import ExpressionWalker
 from nl_expr.expressions import Constant, FunctionApplication, Symbol
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..optimisers import (
+    JOIN_CHUNK,
     EliminateTrivialProjections,
     FlattenAndReorderJoins,
     GreedyJoinOrdering,
@@ -19,6 +21,7 @@ from ..optimisers import (
     RenameOptimizations,
     RewriteSelections,
     SimplifyExtendedProjectionsWithConstants,
+    join_in_chunks,
     _estimated_size,
     _ra_columns,
     _sort_join_operands
@@ -1826,3 +1829,113 @@ def test_projection_of_a_join_of_joins_is_ordered_as_one_join():
     assert isinstance(join, NaryNaturalJoin)
     assert join.relations[0] is small
     assert _same_result(tree, result)
+
+
+def _join_depth(expression):
+    """Depth of the nesting of the NaturalJoins of *expression*, iteratively."""
+    depth, to_visit = 0, [(expression, 1)]
+    while to_visit:
+        node, level = to_visit.pop()
+        depth = max(depth, level)
+        if isinstance(node, NaturalJoin):
+            to_visit.append((node.relation_left, level + 1))
+            to_visit.append((node.relation_right, level + 1))
+    return depth
+
+
+def _join_operands(expression):
+    """Operands of the NaturalJoin tree *expression*, in order, iteratively."""
+    operands, to_visit = [], [expression]
+    while to_visit:
+        node = to_visit.pop()
+        if isinstance(node, NaturalJoin):
+            to_visit.append(node.relation_right)
+            to_visit.append(node.relation_left)
+        else:
+            operands.append(node)
+    return operands
+
+
+def _joined(operands):
+    """The relation the join of the constants *operands* computes."""
+    return reduce(
+        lambda left, right: left.naturaljoin(right),
+        (operand.value for operand in operands)
+    )
+
+
+def _operands_sharing_a_column(n):
+    return [_sized_constant(("x", f"y{i}"), 2 + i % 3) for i in range(n)]
+
+
+def test_join_in_chunks_is_the_left_deep_chain_of_a_few_operands():
+    operands = _operands_sharing_a_column(JOIN_CHUNK)
+    result = join_in_chunks(operands)
+    assert _join_depth(result) == JOIN_CHUNK
+    assert _left_deep_operands(result) == operands
+
+
+def test_join_in_chunks_keeps_a_tree_of_many_operands_shallow():
+    operands = _operands_sharing_a_column(300)
+    result = join_in_chunks(operands)
+
+    assert _join_operands(result) == operands
+    assert _join_depth(result) < 4 * JOIN_CHUNK
+    assert not _has_cross_product(result)
+
+
+def test_join_in_chunks_joins_as_the_chain_does():
+    operands = _operands_sharing_a_column(3 * JOIN_CHUNK)
+    result = join_in_chunks(operands)
+
+    assert RelationalAlgebraSolver().walk(result).value == _joined(operands)
+    assert (
+        RelationalAlgebraSolver().walk(RelationalAlgebraOptimiser().walk(
+            result
+        )).value == _joined(operands)
+    )
+
+
+def test_join_in_chunks_keeps_the_chain_where_chunks_would_be_cross_products():
+    """The operands joined to the first one only: no tree but the chain
+    joins them without a cross product."""
+    centre = _sized_constant(tuple(f"x{i}" for i in range(40)), 3)
+    operands = [centre] + [_sized_constant((f"x{i}",), 3) for i in range(40)]
+    result = join_in_chunks(operands)
+
+    assert _left_deep_operands(result) == operands
+    assert not _has_cross_product(result)
+
+
+def test_join_in_chunks_keeps_the_chain_around_operands_of_unknown_columns():
+    """The columns of a symbol are not known: no chunk is made across it,
+    and it does not fail."""
+    operands = _operands_sharing_a_column(40)
+    operands[20] = Symbol[AbstractSet]("R")
+    result = join_in_chunks(operands)
+
+    assert _join_operands(result) == operands
+    # (the operands before it joined) ⋈ it, then ⋈ (those after it joined)
+    assert result.relation_left.relation_right is operands[20]
+
+
+def test_greedy_join_ordering_keeps_the_tree_of_many_operands_shallow():
+    operands = [
+        _sized_constant(("x", f"y{i}"), 3 + (7 * i) % 11) for i in range(100)
+    ]
+    result = GreedyJoinOrderingWalker().walk(reduce(NaturalJoin, operands))
+
+    assert sorted(map(id, _join_operands(result))) == sorted(map(id, operands))
+    assert _join_depth(result) < 4 * JOIN_CHUNK
+    assert not _has_cross_product(result)
+    assert GreedyJoinOrderingWalker().walk(result) is result
+
+
+def test_greedy_join_ordering_of_many_operands_joins_as_the_chain_does():
+    operands = [
+        _sized_constant(("x", f"y{i}"), 3 + (7 * i) % 11)
+        for i in range(3 * JOIN_CHUNK)
+    ]
+    result = GreedyJoinOrderingWalker().walk(reduce(NaturalJoin, operands))
+
+    assert RelationalAlgebraSolver().walk(result).value == _joined(operands)

@@ -21,7 +21,9 @@ from .join_ordering import (
     DegenerateNaturalJoinToProduct,
     FlattenAndReorderJoins,
     GreedyJoinOrdering,
+    JOIN_CHUNK,
     ProductSimplification,
+    join_in_chunks,
     _estimated_size,
     _sort_join_operands
 )
@@ -47,6 +49,7 @@ __all__ = [
     "EliminateTrivialProjections",
     "FlattenAndReorderJoins",
     "GreedyJoinOrdering",
+    "JOIN_CHUNK",
     "ProductSimplification",
     "PushInSelections",
     "PushProjectionThroughProduct",
@@ -56,6 +59,7 @@ __all__ = [
     "RenameOptimizations",
     "RewriteSelections",
     "SimplifyExtendedProjectionsWithConstants",
+    "join_in_chunks",
     "_estimated_size",
     "_ra_columns",
     "_sort_join_operands",

@@ -1238,3 +1238,35 @@ def test_existential():
     result = TranslateToNamedRA().walk(conjunction)
     expected = Projection(p_translated, (C_(ColumnStr("x")),))
     assert result == expected
+
+
+def _shape_of_the_joins(expression):
+    """Number of NaturalJoins and depth of their nesting, iteratively."""
+    depth, to_visit, joined = 0, [(expression, 1)], 0
+    while to_visit:
+        node, level = to_visit.pop()
+        depth = max(depth, level)
+        if isinstance(node, NaturalJoin):
+            joined += 1
+            to_visit.append((node.relation_left, level + 1))
+            to_visit.append((node.relation_right, level + 1))
+    return joined, depth
+
+
+@pytest.mark.parametrize("shape", ["chain", "star"])
+def test_conjunction_of_many_atoms_translates_to_a_shallow_join(shape):
+    """The join of a conjunction of hundreds of atoms is not a tree as
+    deep as they are many: the walkers that optimise and solve it recurse
+    on one level per join."""
+    R = S_("R")
+    xs = [S_(f"x{i}") for i in range(301)]
+    atoms = tuple(
+        R(xs[i], xs[i + 1]) if shape == "chain" else R(xs[0], xs[i + 1])
+        for i in range(300)
+    )
+
+    result = TranslateToNamedRA().walk(Conjunction(atoms))
+
+    joined, depth = _shape_of_the_joins(result)
+    assert joined == 299
+    assert depth < 64

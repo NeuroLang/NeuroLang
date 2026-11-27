@@ -372,6 +372,19 @@ Independent disjunction
 
       P[Q_1 \lor Q_2] = 1 - (1 - P[Q_1])(1 - P[Q_2]).
 
+Plans of many components
+   The plan of :math:`n` independent components is the join (the union) of
+   their plans, whose probabilities multiply (:math:`1 - \prod_i (1 - p_i)`
+   for the union): tuple by tuple these operations are associative and
+   commutative, so that any bracketing of the :math:`n` plans gives the same
+   probabilities, and the plan joins them in chunks of 16 consecutive
+   components that share columns (``join_in_chunks``, also used by the
+   greedy ordering of the joins) instead of in a chain: the walkers that
+   optimise and solve a plan recurse once per level of its tree, and a chain
+   of about 250 joins exceeded the limit of the recursion. For at most 16
+   components, and where a component shares no column with the one before
+   it, the plan is the chain, where a chunk would be a cross product.
+
 Separator variable
    A variable :math:`z` is a separator variable of :math:`\exists z\,Q(z)`
    if it occurs in every atom and, for each relation, in the same position
