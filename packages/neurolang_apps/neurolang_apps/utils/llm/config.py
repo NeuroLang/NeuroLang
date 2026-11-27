@@ -11,9 +11,11 @@ shipped with NeuroLang is used.
 A provider speaks the OpenAI chat completions API (``api: openai``:
 OpenRouter, Albert, vLLM, Ollama…), the Anthropic messages API
 (``api: anthropic``) or is a local command reading the conversation on
-its standard input (``api: command``, e.g. ``claude -p``). Its API key
-is read from the environment variable named by ``api_key_env``: keys
-are never written in the file.
+its standard input (``api: command``, e.g. ``claude -p``), or is Claude
+Code itself (``api: claude-code``, run by the Agent SDK with the user's
+own sign-in to the ``claude`` CLI, no key). Its API key is read from the
+environment variable named by ``api_key_env``: keys are never written in
+the file.
 """
 
 import os
@@ -32,7 +34,11 @@ DEFAULTS = yaml.safe_load(DEFAULTS_FILE.read_text(encoding="utf-8"))
 _PROVIDER = DEFAULTS["provider"]
 _ASSISTANT = DEFAULTS["assistant"]
 
-APIS = ("openai", "anthropic", "command")
+APIS = ("openai", "anthropic", "command", "claude-code")
+# "1" in the sessions of a shared server (neurolang-repl-serve --users): the
+# sign-in to Claude of whoever runs it is not theirs, the provider
+# claude-code is refused there.
+MULTI_USER_ENV = "NEUROLANG_REPL_USERS"
 TOOL_CALLING = ("text", "native")
 STRATEGIES = ("react", "icl")
 LANGUAGES = ("auto", "squall", "datalog")
@@ -73,6 +79,12 @@ class ProviderConfig:
 
     def api_key(self) -> Optional[str]:
         """Return the API key of the provider, read from the environment."""
+        if self.api == "claude-code" and os.environ.get(MULTI_USER_ENV) == "1":
+            raise LLMConfigError(
+                f"The LLM provider {self.name!r} uses the sign-in of the "
+                "user who runs it: it is not allowed on a shared server "
+                "unless an admin allows it to you (--claude-code)."
+            )
         if not self.api_key_env:
             return None
         key = os.environ.get(self.api_key_env)
@@ -193,9 +205,9 @@ def _provider(name: str, entry) -> ProviderConfig:
             f"Provider {name!r} has an inline api_key: put the key in an "
             "environment variable and name it with api_key_env."
         )
-    required = ("command",) if entry.get("api") == "command" else (
-        "base_url", "model"
-    )
+    required = {
+        "command": ("command",), "claude-code": ("model",),
+    }.get(entry.get("api"), ("base_url", "model"))
     missing = [key for key in required if not entry.get(key)]
     if missing:
         raise LLMConfigError(
@@ -208,6 +220,8 @@ def _provider(name: str, entry) -> ProviderConfig:
             f"Provider {name!r} has unknown keys: {', '.join(unknown)}."
         )
     entry = {"api": "openai", "model": "", **entry}
+    if entry["api"] == "claude-code":
+        entry = {"tool_calling": "native", **entry}
     if entry.get("command"):
         entry["command"] = tuple(str(arg) for arg in entry["command"])
     provider = ProviderConfig(name=name, **entry)
@@ -221,7 +235,24 @@ def _provider(name: str, entry) -> ProviderConfig:
             f"Provider {name!r} is a command: it supports only "
             "tool_calling: text."
         )
+    if provider.api == "claude-code":
+        _check_claude_code(provider)
     return provider
+
+
+def _check_claude_code(provider: ProviderConfig) -> None:
+    """Raise LLMConfigError if the ``claude-code`` *provider* is invalid."""
+    name = provider.name
+    if provider.tool_calling != "native":
+        raise LLMConfigError(
+            f"Provider {name!r} is Claude Code: it supports only "
+            "tool_calling: native."
+        )
+    if provider.base_url or provider.command or provider.api_key_env:
+        raise LLMConfigError(
+            f"Provider {name!r} is Claude Code: it uses your sign-in to "
+            "claude and takes no base_url, command nor api_key_env."
+        )
 
 
 def _assistant(entry) -> AssistantConfig:

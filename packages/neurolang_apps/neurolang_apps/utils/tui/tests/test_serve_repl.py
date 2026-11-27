@@ -2163,6 +2163,27 @@ def test_without_guests_there_are_none(serve, console):
         == "guest:abc"
 
 
+def test_the_sessions_of_a_shared_server_say_so(serve, tmp_path):
+    """The sign-in to Claude of whoever runs the server is not theirs."""
+    from neurolang_apps.utils.llm.config import MULTI_USER_ENV
+
+    assert serve.MULTI_USER_ENV == MULTI_USER_ENV
+    users = _users(serve, tmp_path, ann=("a", ["admin"]))
+    users.change("ann", env={"TEST_LLM_KEY": "k-1"})
+    os.environ["SERVER_KEY"] = "s-1"
+    try:
+        env, groups = serve.session_identity(users, "ann", ["SERVER_KEY"])
+        assert env == {"SERVER_KEY": "s-1", "TEST_LLM_KEY": "k-1",
+                       MULTI_USER_ENV: "1"}
+        assert groups == "admin"
+    finally:
+        del os.environ["SERVER_KEY"]
+    env, group = serve.session_identity(users, "guest:abc", ["SERVER_KEY"])
+    assert env == {"SERVER_KEY": None, serve.BRING_KEY_ENV: "1",
+                   MULTI_USER_ENV: "1"}
+    assert group == "guest"
+
+
 def test_a_guests_sessions_have_no_key_of_the_server(serve):
     env, group = serve.guest_identity(["ALBERT_API_KEY"])
     assert env == {"ALBERT_API_KEY": None, serve.BRING_KEY_ENV: "1"}
@@ -3443,3 +3464,60 @@ def test_mcp_needs_users_and_local(serve, tmp_path, monkeypatch):
     assert "--mcp" in command
     assert dict(zip(command, command[1:]))["--mcp-results-dir"].endswith(
         "repl-mcp")
+
+
+def test_claude_code_is_off_unless_an_admin_allows_it(
+    serve, tmp_path, monkeypatch
+):
+    users = _users(serve, tmp_path, ann=("a", ["lab"]), bob=("b", ["lab"]),
+                   eve=("e", []))
+    assert not any(users.claude_code(n) for n in ("ann", "bob", "eve"))
+    env, _ = serve.session_identity(users, "ann")
+    assert env[serve.MULTI_USER_ENV] == "1"
+    # A group allows its users; a user's own setting wins.
+    users.change_group("lab", claude_code=True)
+    users.change("bob", claude_code=False)
+    assert users.claude_code("ann") and not users.claude_code("bob")
+    assert not users.claude_code("eve")
+    env, _ = serve.session_identity(users, "ann")
+    assert serve.MULTI_USER_ENV not in env
+    env, _ = serve.session_identity(users, "bob")
+    assert env[serve.MULTI_USER_ENV] == "1"
+    users.change("bob", claude_code="inherit")
+    assert users.claude_code("bob")
+    users.change("eve", claude_code=True)
+    assert users.claude_code("eve")
+    # It is kept in the file, and a guest never has it.
+    again = serve.Users(users.path)
+    assert again.claude_code("ann") and again.claude_code("eve")
+    assert again.group_status("lab")["claude_code"]
+    assert again.status("eve")["claude_code"]
+    env, _ = serve.session_identity(again, "guest:abc")
+    assert env[serve.MULTI_USER_ENV] == "1"
+
+
+def test_the_command_line_allows_claude_code(
+    serve, tmp_path, monkeypatch, capsys
+):
+    users = _users(serve, tmp_path, ann=("a", ["admin"]), bob=("b", ["lab"]))
+    path = str(users.path)
+    serve.main(["--users", path, "--claude-code", "group:lab", "yes"])
+    serve.main(["--users", path, "--claude-code", "ann", "yes"])
+    users = serve.Users(users.path)
+    assert users.claude_code("bob") and users.claude_code("ann")
+    capsys.readouterr()
+    serve.main(["--users", path, "--list-users"])
+    assert capsys.readouterr().out.count("claude code") == 3
+    serve.main(["--users", path, "--claude-code", "ann", "inherit"])
+    assert not serve.Users(users.path).claude_code("ann")
+    with pytest.raises(SystemExit):
+        serve.main(["--users", path, "--claude-code", "group:lab", "inherit"])
+
+
+def test_a_users_file_rejects_a_claude_code_that_is_not_a_boolean(
+    serve, tmp_path
+):
+    path = tmp_path / "users.yaml"
+    path.write_text("users:\n  ann:\n    password: x\n    claude_code: maybe\n")
+    with pytest.raises(SystemExit):
+        serve.Users(path)

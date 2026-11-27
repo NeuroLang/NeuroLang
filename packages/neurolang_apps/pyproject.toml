@@ -51,6 +51,12 @@ tui = [
 llm = [
     "httpx>=0.27",
 ]
+# The assistant on Claude Code (api: claude-code in llm.yaml), which runs
+# the `claude` CLI: the user's sign-in to it, or an API key.
+claude = [
+    "httpx>=0.27",
+    "claude-agent-sdk>=0.2",
+]
 # The dashboard of neurolang-repl-serve --dashboard: Datasette on the
 # activity log, and its charts.
 dashboard = [

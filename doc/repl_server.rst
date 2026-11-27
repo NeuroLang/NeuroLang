@@ -282,7 +282,8 @@ Managing the users
 ~~~~~~~~~~~~~~~~~~
 
 ``--list-users``, ``--add-user``, ``--set-password``, ``--set-groups``,
-``--set-llm``, ``--set-group-llm``, ``--own-key``, ``--set-key``,
+``--set-llm``, ``--set-group-llm``, ``--own-key``, ``--claude-code``,
+``--set-key``,
 ``--set-group-key``, ``--remove-user`` and ``--hash-password`` change the
 users file from the command line (see `Managing users`_).
 
@@ -421,6 +422,67 @@ never show one; a session has its user's key in the environment of its own
 process only.  An admin who wants to know which key a user has looks at the
 console's *AI assistant* column: theirs, their group's (which group), the
 server's, or none.
+
+
+Claude Code as the assistant
+----------------------------
+
+The ``claude-code`` provider (see :doc:`query_assistant`) has Claude Code
+run the assistant's agent, with the sign-in to ``claude`` of a person's
+Anthropic account, no API key: for someone whose account has none.  The
+server runs it on the engine of the session, in the server's process; the
+sign-in is that of the *user running the server*, so what it needs, and who
+may use it, depends on how the server runs.
+
+**On your own machine** (``--local``, no ``--users``): the one who runs the
+server is the one who asks.
+
+1. Install Claude Code and sign in once, in a terminal: ``claude``.
+2. Install the extra: ``pip install "neurolang[claude]"`` (in a checkout,
+   ``uv run --extra apps --extra claude``).
+3. In :file:`~/.config/neurolang/llm.yaml`, a provider of ``api:
+   claude-code`` as the default (the example file has it as
+   ``claude-agent``)::
+
+      default_provider: claude-agent
+      providers:
+        claude-agent:
+          api: claude-code
+          model: sonnet
+
+4. Serve, and ask in the page as usual::
+
+      neurolang-repl-serve --local
+
+   The page is that of the REPL's ``.ask``: the same configuration, the
+   same provider.  To start with another provider, change ``default_provider``;
+   a user's own key in the page, or their ``llm``, still comes first (see
+   `The AI assistant's keys`_).
+
+**On a shared server** (``--users``): the provider is refused to everyone,
+since the sign-in would be the operator's, not the user's.  An admin allows
+it, to a user or a group, knowing that those sessions then run on the
+sign-in of the account of whoever runs the server, and on the terms of
+Anthropic's service for it::
+
+   neurolang-repl-serve --users users.yaml --claude-code group:lab yes
+   neurolang-repl-serve --users users.yaml --claude-code bob no        # or inherit
+
+or in the admin console: the *Claude Code* menu of the user's and of the
+group's form, and the column showing the result.  A user's own setting wins
+over their groups'; one allowing group is enough; guests never have it.
+Then the server's configuration has the provider as above and the users
+allowed have it as their assistant (step 4 of `The AI assistant's keys`_);
+the others have their key, or are asked for one.
+
+Where it runs as a service (see `Running as a service`_), the sign-in is
+that of the service's user: sign in as that user (``sudo -u SERVICE_USER
+claude``), and make sure ``claude`` is on the service's ``PATH``.  The
+server checks the sign-in before each question and answers with an error that
+says what to do if there is none, or if it is an API key (use the
+``anthropic`` provider for one).  It runs without the key variables
+``ANTHROPIC_API_KEY`` and ``ANTHROPIC_AUTH_TOKEN``, which the CLI would use
+before the sign-in.  Only POSIX systems are supported.
 
 
 The admin console
@@ -647,10 +709,19 @@ with ``uv run --extra apps`` in a checkout)::
    neurolang-repl-serve --users users.yaml --set-llm bob anthropic claude-sonnet-5-5   # empty key: removes it
    neurolang-repl-serve --users users.yaml --set-group-llm lab openrouter anthropic/claude-sonnet-5.5
    neurolang-repl-serve --users users.yaml --own-key group:lab no       # or NAME yes|no|inherit
+   neurolang-repl-serve --users users.yaml --claude-code group:lab yes  # or NAME yes|no|inherit
    neurolang-repl-serve --users users.yaml --set-key bob ALBERT_API_KEY # a variable of env
    neurolang-repl-serve --users users.yaml --set-group-key lab ALBERT_API_KEY
    neurolang-repl-serve --users users.yaml --remove-user bob
    neurolang-repl-serve --users users.yaml --list-users                 # no secrets
+
+``--claude-code`` (and the *Claude Code* column and menus of the admin
+console) decides who may use the ``claude-code`` provider of the query
+assistant, which runs on the sign-in to ``claude`` of whoever runs the
+server, not of the user. It is off for everyone, and for guests always,
+unless an admin allows it to a user, or to a group (a user's own setting
+wins over their groups'; of several groups, one allowing is enough). It
+is an admin's decision, on the terms of Anthropic's service.
 
 ``--hash-password`` prints the hash of a password, for a file written by
 hand.

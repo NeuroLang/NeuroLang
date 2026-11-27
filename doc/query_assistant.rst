@@ -11,7 +11,7 @@ in the prompt, where it can be read, edited and run:
 .. code-block:: text
 
     nl(neurosynth:SQ)> .ask Which voxels are reported by studies about decision-making?
-    Asking claude-code (sonnet, react)...
+    Asking claude-agent (sonnet, react)...
       I need to check how the term for decision-making is stored.
       → search_values(predicate='term', column='term', pattern='decision')
         Values of term.term matching 'decision': 'decision', 'decisions',
@@ -261,12 +261,9 @@ order:
         api_key_env: ANTHROPIC_API_KEY
         model: claude-sonnet-5-5
         tool_calling: native
-      claude-code:                    # Claude Code with its own login
-        api: command
-        command: [claude, -p, --model, sonnet, --tools, "",
-                  --no-session-persistence, --setting-sources, "",
-                  --system-prompt, "{system}"]
-        tool_calling: text
+      claude-agent:                   # Claude Code, with its own login
+        api: claude-code
+        model: sonnet
     assistant:
       strategy: react        # or icl
       language: auto         # the REPL's .mode, or squall, or datalog
@@ -299,6 +296,32 @@ The ``api`` of a provider is one of:
     A local command that reads the conversation on its standard input
     and writes the reply on its standard output. ``{system}`` in its
     arguments is replaced by the system prompt.
+``claude-code``
+    Claude Code runs the agent, through the Claude Agent SDK (``pip install
+    "neurolang[claude]"``, and Claude Code, ``claude``, installed): one
+    conversation per question, with native tool calls on the engine's
+    tools, which run in the REPL's process, on its engine; Claude Code's
+    own tools and its settings (``CLAUDE.md``, hooks) are off. It needs
+    ``model`` (an alias such as ``sonnet``, or a model name) and uses the
+    sign-in you made with ``claude`` on this machine: no API key, and no
+    ``api_key_env``. NeuroLang has no login of its own, run ``claude`` in a
+    terminal to sign in. The CLI is run without ``ANTHROPIC_API_KEY`` and
+    ``ANTHROPIC_AUTH_TOKEN``, which it would use before your sign-in, and a
+    sign-in that is an API key is refused. It is for your own use, on your
+    machine: Anthropic does not allow a product to offer claude.ai sign-in
+    without its approval, so ``neurolang-repl-serve --users`` refuses it
+    (use an API key provider there).
+
+    It replaces the ``claude-code`` entry of the example configuration, an
+    ``api: command`` provider running ``claude -p``, which is deprecated: it
+    starts a process for each step, sends the whole conversation again each
+    time and only speaks the text tool protocol. (``api: command`` itself,
+    for any local command, stays.)
+
+    With ``default_provider: claude-agent`` in ``llm.yaml``, the page of
+    ``neurolang-repl-serve --local`` uses it too, as it uses the machine's
+    configuration. The ``icl`` strategy, the comments on the rules and the
+    check of the answers make one request of the same provider each.
 
 API keys are only read from the environment variable that
 ``api_key_env`` names: the file rejects an inline key.

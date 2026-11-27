@@ -82,7 +82,9 @@ providers:
     tool_calling: native
     max_tokens: 16000           # its thinking counts in max_tokens
 
-  # Claude Code in print mode, using its own login: no API key here.
+  # Deprecated: use claude-agent below. Claude Code in print mode, using its
+  # own login: no API key here, but one `claude -p` process per step, the
+  # whole conversation sent again each time, and only the text tool protocol.
   claude-code:
     api: command
     command: [claude, -p, --model, sonnet, --tools, "",
@@ -90,6 +92,15 @@ providers:
               --system-prompt, "{system}"]
     model: sonnet
     tool_calling: text
+
+  # Claude Code itself runs the agent (api: claude-code, extra claude): one
+  # conversation per question, native tool calls on the engine's tools. It
+  # uses the sign-in you made with `claude` on this machine, no key; for
+  # your own use only (neurolang-repl-serve --users refuses it). NeuroLang
+  # has no login of its own: run `claude` in a terminal to sign in.
+  claude-agent:
+    api: claude-code
+    model: sonnet               # an alias of the CLI, or a model name
 
   # Any server with an OpenAI-compatible API, here Ollama.
   local:
